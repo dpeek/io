@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "keys": {
+    "app:company": "n25kpj5f1vg5",
+    "app:company:foundedYear": "cgfniw9vjav7",
+    "app:company:status": "517tav1cu3y8",
+    "app:company:tags": "mii28qszmx7r",
+    "app:company:website": "n7dpyvqo06uy",
+    "app:block": "4saoc08mq5e8",
+    "app:block:collapsed": "i17n7z9hrq2l",
+    "app:block:order": "jd5yzgwl11nh",
+    "app:block:parent": "ntjcjlceqfhh",
+    "app:block:text": "6zce5jjfcu9g",
+    "app:person": "qb6fs5dx2470",
+    "app:person:worksAt": "ac4bvm5cwfvr",
+    "app:status": "3t92rcqlkt15",
+    "app:status.active": "qlyee8htas5a",
+    "app:status.paused": "jjcmjq06t2dj"
+  }
+}

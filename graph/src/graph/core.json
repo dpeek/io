@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "keys": {
+    "core:boolean": "nzs7tjuvydkt",
+    "core:cardinality": "6ej4spvzn8s2",
+    "core:cardinality.many": "rhbnsxgzducc",
+    "core:cardinality.one": "x3l8a3vvo6sp",
+    "core:cardinality.oneOptional": "uvr6juk6rzl9",
+    "core:date": "eqms7z3il7nl",
+    "core:enum": "a9v5f28hndt3",
+    "core:enum:member": "bnka91oggshl",
+    "core:node": "zrrwbowt36hh",
+    "core:node:createdAt": "mccg8efzph1w",
+    "core:node:description": "an9tx7xhn230",
+    "core:node:label": "0bwa6re7jebb",
+    "core:node:name": "le9bbqaprrup",
+    "core:node:type": "w59bz69jynt7",
+    "core:node:updatedAt": "e9u0yywv4q5d",
+    "core:number": "16t1g899xyu3",
+    "core:predicate": "fb9bypvcwdzf",
+    "core:predicate:cardinality": "i97ldcbhzj5r",
+    "core:predicate:key": "l4hfxtf8d3dr",
+    "core:predicate:range": "p57dk74w75h1",
+    "core:string": "0g623czsll6y",
+    "core:type": "n0j2x4p8q6vk",
+    "core:url": "ur6f0cxstzro"
+  }
+}

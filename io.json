@@ -1,0 +1,32 @@
+{
+  "brews": [
+    "fzf",
+    "ripgrep",
+    "bat",
+    "starship",
+    "fd",
+    "eza",
+    "btop",
+    "gh",
+    "node",
+    "pnpm",
+    "tailscale",
+    "dicklesworthstone/tap/cass",
+    "--cask codex",
+    "--cask codex-app",
+    "--cask github",
+    "--cask 1password",
+    "--cask 1password-cli",
+    "--cask tailscale-app",
+    "--cask raycast",
+    "--cask orbstack",
+    "--cask cursor",
+    "--cask google-chrome",
+    "--cask ghostty",
+    "--cask figma",
+    "--cask slack",
+    "--cask linear-linear",
+    "--cask claude",
+    "--cask claude-code"
+  ]
+}

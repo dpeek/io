@@ -1,0 +1,15 @@
+{
+  "name": "@io/core",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "cli",
+    "graph",
+    "agent",
+    "lib"
+  ],
+  "type": "module",
+  "devDependencies": {
+    "@io/dev": "workspace:"
+  }
+}

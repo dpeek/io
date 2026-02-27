@@ -1,0 +1,32 @@
+{
+  "name": "@io/cli",
+  "version": "1.0.0",
+  "private": true,
+  "bin": {
+    "io": "./src/cli.ts"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "clean": "rm -rf out",
+    "build": "tsgo",
+    "format": "oxfmt",
+    "lint": "oxlint",
+    "types": "tsgo --noEmit",
+    "dev": "tsgo --watch"
+  },
+  "dependencies": {
+    "@io/lib": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.9",
+    "@types/node": "^25.3.2",
+    "@typescript/native-preview": "^7.0.0-dev.20260226.1",
+    "bun": "1.3.9",
+    "oxfmt": "^0.35.0",
+    "oxlint": "^1.50.0"
+  }
+}
