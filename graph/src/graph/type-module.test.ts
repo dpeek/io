@@ -23,6 +23,7 @@ describe("type-module authoring contract", () => {
     expect(app.company.fields.status.meta.display.kind).toBe("badge");
     expect(app.company.fields.status.filter.defaultOperator).toBe("is");
     expect(Object.keys(app.company.fields.status.filter.operators)).toEqual(["is"]);
+    expect(app.company.fields.tags.meta.collection?.kind).toBe("unordered");
     expect(app.company.fields.tags.meta.editor.kind).toBe("token-list");
     expect(app.company.fields.tags.meta.editor.placeholder).toBe("Enter text");
     expect(app.company.fields.website.meta.display.kind).toBe("external-link");

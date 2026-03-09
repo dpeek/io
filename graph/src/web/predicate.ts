@@ -4,6 +4,7 @@ import type { PredicateRangeTypeOf, PredicateRef, PredicateValueOf } from "../gr
 import { isEnumType, type AnyTypeOutput, type EdgeOutput } from "../graph/schema.js";
 
 export type PredicateFieldMeta<T extends EdgeOutput> = T extends { meta: infer Meta } ? Meta : never;
+export type PredicateCollectionKind = "ordered" | "unordered";
 
 export type PredicateFieldBinding<
   T extends EdgeOutput,
@@ -15,6 +16,7 @@ export type PredicateFieldBinding<
   meta: PredicateFieldMeta<T> | undefined;
   displayKind: string | undefined;
   editorKind: string | undefined;
+  collectionKind: PredicateCollectionKind | undefined;
   value: PredicateValueOf<T, Defs>;
 };
 
@@ -74,6 +76,14 @@ export function getPredicateEditorKind<T extends EdgeOutput>(field: T): string |
 export function getPredicateEditorPlaceholder<T extends EdgeOutput>(field: T): string | undefined {
   const meta = getPredicateFieldMeta(field) as { editor?: { placeholder?: string } } | undefined;
   return meta?.editor?.placeholder;
+}
+
+export function getPredicateCollectionKind<T extends EdgeOutput>(
+  field: T,
+): PredicateCollectionKind | undefined {
+  if (field.cardinality !== "many") return undefined;
+  const meta = getPredicateFieldMeta(field) as { collection?: { kind?: PredicateCollectionKind } } | undefined;
+  return meta?.collection?.kind ?? "ordered";
 }
 
 function getPredicateDisplayFormatter<T extends EdgeOutput>(
@@ -160,6 +170,7 @@ export function usePredicateField<
   const meta = getPredicateFieldMeta(predicate.field);
   const displayKind = getPredicateDisplayKind(predicate.field);
   const editorKind = getPredicateEditorKind(predicate.field);
+  const collectionKind = getPredicateCollectionKind(predicate.field);
   const rangeType = predicate.rangeType;
 
   return useMemo(
@@ -170,8 +181,9 @@ export function usePredicateField<
       meta,
       displayKind,
       editorKind,
+      collectionKind,
       value,
     }),
-    [displayKind, editorKind, meta, predicate, rangeType, value],
+    [collectionKind, displayKind, editorKind, meta, predicate, rangeType, value],
   );
 }

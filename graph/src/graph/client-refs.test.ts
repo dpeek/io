@@ -129,6 +129,8 @@ describe("typed refs", () => {
     companyRef.fields.foundedYear.clear();
     expect(companyRef.fields.foundedYear.get()).toBeUndefined();
 
+    expect(companyRef.fields.tags.collection.kind).toBe("unordered");
+
     companyRef.fields.tags.add("ai");
     expect(companyRef.fields.tags.get()).toEqual(["enterprise", "saas", "ai"]);
 
@@ -140,6 +142,36 @@ describe("typed refs", () => {
 
     companyRef.fields.tags.clear();
     expect(companyRef.fields.tags.get()).toEqual([]);
+  });
+
+  it("treats token-list many fields as unordered collections", () => {
+    const { graph, companyId } = setupGraph();
+    const companyRef = graph.company.ref(companyId);
+    const updatedAtBefore = companyRef.fields.updatedAt.get();
+    let notifications = 0;
+
+    expect(companyRef.fields.tags.collection.kind).toBe("unordered");
+
+    companyRef.fields.tags.subscribe(() => {
+      notifications += 1;
+    });
+
+    companyRef.fields.tags.replace(["saas", "enterprise", "enterprise"]);
+    expect(companyRef.fields.tags.get()).toEqual(["enterprise", "saas"]);
+    expect(notifications).toBe(0);
+    expect(companyRef.fields.updatedAt.get()?.getTime()).toBe(updatedAtBefore?.getTime());
+
+    companyRef.fields.tags.add("enterprise");
+    expect(companyRef.fields.tags.get()).toEqual(["enterprise", "saas"]);
+    expect(notifications).toBe(0);
+
+    companyRef.fields.tags.add("ai");
+    expect(companyRef.fields.tags.get()).toEqual(["enterprise", "saas", "ai"]);
+    expect(notifications).toBe(1);
+
+    companyRef.fields.tags.remove("saas");
+    expect(companyRef.fields.tags.get()).toEqual(["enterprise", "ai"]);
+    expect(notifications).toBe(2);
   });
 
   it("runs lifecycle-managed updates when mutating through predicate refs", async () => {

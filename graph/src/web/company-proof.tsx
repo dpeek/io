@@ -6,7 +6,7 @@ import { PredicateFieldEditor } from "./bindings.js";
 
 type CompanyRef = EntityRef<typeof app.company, typeof app & typeof core>;
 
-const companyFieldOrder = ["name", "status", "website", "foundedYear"] as const;
+const companyFieldOrder = ["name", "status", "website", "foundedYear", "tags"] as const;
 
 type CompanyFieldKey = (typeof companyFieldOrder)[number];
 
@@ -133,6 +133,11 @@ function CompanyFieldRow({
       className="grid gap-2 rounded-2xl border border-slate-300/80 bg-white/80 p-4 shadow-sm shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/70"
       data-proof-field={field.id}
       onChangeCapture={() => {
+        store.beginCheck(field.id);
+      }}
+      onClickCapture={(event) => {
+        const target = event.target as { getAttribute?: (name: string) => string | null };
+        if (!target.getAttribute?.("data-proof-mutation")) return;
         store.beginCheck(field.id);
       }}
     >
@@ -262,7 +267,8 @@ export function CompanyProofSurface({
                 <h1 className="text-2xl font-semibold tracking-tight">Company editor</h1>
                 <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
                   Generated from typed predicate refs for <code>name</code>, <code>status</code>,{" "}
-                  <code>website</code>, and optional <code>foundedYear</code>.
+                  <code>website</code>, optional <code>foundedYear</code>, and unordered{" "}
+                  <code>tags</code>.
                 </p>
               </div>
               <div className="flex gap-2 text-xs text-slate-500 dark:text-slate-400">

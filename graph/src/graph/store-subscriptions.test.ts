@@ -66,6 +66,19 @@ describe("predicate slot subscriptions", () => {
     expect(notifications).toBe(1);
   });
 
+  it("ignores unordered tag replacements when membership is unchanged", () => {
+    const { store, graph, companyId } = setupCompanyGraph();
+    const tagsPredicateId = edgeId(app.company.fields.tags);
+    let notifications = 0;
+
+    store.subscribePredicateSlot(companyId, tagsPredicateId, () => {
+      notifications += 1;
+    });
+
+    graph.company.update(companyId, { tags: ["saas", "enterprise", "enterprise"] });
+    expect(notifications).toBe(0);
+  });
+
   it("ignores raw edge churn when the logical slot value is unchanged", () => {
     const { store, companyId } = setupCompanyGraph();
     const namePredicateId = edgeId(app.company.fields.name);

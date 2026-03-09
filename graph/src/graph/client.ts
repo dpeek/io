@@ -154,6 +154,10 @@ type RefTree<T, Defs extends Record<string, AnyTypeOutput>> = T extends EdgeOutp
     ? FieldGroupRef<T, Defs>
     : never;
 
+export type PredicateCollectionSemantics = {
+  kind: PredicateCollectionKind;
+};
+
 export type PredicateRef<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput> = CoreDefs,
@@ -167,6 +171,7 @@ export type PredicateRef<
   batch<TResult>(fn: () => TResult): TResult;
 } & (T["cardinality"] extends "many"
   ? {
+      collection: PredicateCollectionSemantics;
       replace(values: PredicateValueOf<T, Defs>): void;
       add(value: PredicateItemOf<T, Defs>): void;
       remove(value: PredicateItemOf<T, Defs>): void;
@@ -206,6 +211,11 @@ type ReadPredicateValueOptions = {
 };
 const clearFieldValue = Symbol("clearFieldValue");
 type ClearFieldValue = typeof clearFieldValue;
+type PredicateCollectionKind = "ordered" | "unordered";
+type EncodedPredicateValue = {
+  encoded: string;
+  decoded: unknown;
+};
 
 function isEdgeOutput(value: unknown): value is EdgeOutput {
   const candidate = value as Partial<EdgeOutput>;
@@ -214,6 +224,49 @@ function isEdgeOutput(value: unknown): value is EdgeOutput {
 
 function isTree(value: unknown): value is FieldsOutput {
   return isFieldsOutput(value);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object") return false;
+  return Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function sameLogicalValue(left: unknown, right: unknown): boolean {
+  if (left instanceof Date && right instanceof Date) return left.getTime() === right.getTime();
+  if (left instanceof URL && right instanceof URL) return left.toString() === right.toString();
+
+  if (Array.isArray(left) && Array.isArray(right)) {
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1) {
+      if (!sameLogicalValue(left[index], right[index])) return false;
+    }
+    return true;
+  }
+
+  if (isPlainObject(left) && isPlainObject(right)) {
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    if (leftKeys.length !== rightKeys.length) return false;
+    for (const key of leftKeys) {
+      if (!(key in right)) return false;
+      if (!sameLogicalValue(left[key], right[key])) return false;
+    }
+    return true;
+  }
+
+  return Object.is(left, right);
+}
+
+function getPredicateCollectionKind(field: EdgeOutput): PredicateCollectionKind {
+  const meta = field as EdgeOutput & {
+    meta?: {
+      collection?: {
+        kind?: PredicateCollectionKind;
+      };
+    };
+  };
+  if (field.cardinality !== "many") return "ordered";
+  return meta.meta?.collection?.kind === "unordered" ? "unordered" : "ordered";
 }
 
 function flattenPredicates(tree: FieldsOutput | undefined): FlatPredicateEntry[] {
@@ -345,6 +398,168 @@ function decodeForRange(
   return raw;
 }
 
+function readEncodedPredicateValues(
+  store: Store,
+  id: string,
+  predicate: EdgeOutput,
+  scalarByKey: Map<string, ScalarTypeOutput<any>>,
+  typeByKey: Map<string, AnyTypeOutput>,
+): EncodedPredicateValue[] {
+  return store.facts(id, edgeId(predicate)).map((edge) => ({
+    encoded: edge.o,
+    decoded: decodeForRange(edge.o, predicate.range, scalarByKey, typeByKey),
+  }));
+}
+
+function uniqueEncodedPredicateValues(values: EncodedPredicateValue[]): EncodedPredicateValue[] {
+  const seen = new Set<string>();
+  const out: EncodedPredicateValue[] = [];
+
+  for (const value of values) {
+    if (seen.has(value.encoded)) continue;
+    seen.add(value.encoded);
+    out.push(value);
+  }
+
+  return out;
+}
+
+function readLogicalManyValues(
+  store: Store,
+  id: string,
+  predicate: EdgeOutput,
+  scalarByKey: Map<string, ScalarTypeOutput<any>>,
+  typeByKey: Map<string, AnyTypeOutput>,
+): EncodedPredicateValue[] {
+  const values = readEncodedPredicateValues(store, id, predicate, scalarByKey, typeByKey);
+  if (getPredicateCollectionKind(predicate) === "unordered") {
+    return uniqueEncodedPredicateValues(values);
+  }
+  return values;
+}
+
+function normalizeRequestedManyValues(
+  predicate: EdgeOutput,
+  values: unknown[],
+  scalarByKey: Map<string, ScalarTypeOutput<any>>,
+  typeByKey: Map<string, AnyTypeOutput>,
+  enumValuesByRange: Map<string, Set<string>>,
+): EncodedPredicateValue[] {
+  const requested = values.map((value) => {
+    const encoded = encodeForRange(value, predicate.range, scalarByKey, typeByKey, enumValuesByRange);
+    return {
+      encoded,
+      decoded: decodeForRange(encoded, predicate.range, scalarByKey, typeByKey),
+    };
+  });
+
+  if (getPredicateCollectionKind(predicate) === "unordered") {
+    return uniqueEncodedPredicateValues(requested);
+  }
+
+  return requested;
+}
+
+function planManyValues(
+  current: EncodedPredicateValue[],
+  requested: EncodedPredicateValue[],
+  predicate: EdgeOutput,
+): EncodedPredicateValue[] {
+  if (getPredicateCollectionKind(predicate) === "ordered") {
+    return requested;
+  }
+
+  const requestedIds = new Set(requested.map((value) => value.encoded));
+  const currentIds = new Set(current.map((value) => value.encoded));
+
+  return [
+    ...current.filter((value) => requestedIds.has(value.encoded)),
+    ...requested.filter((value) => !currentIds.has(value.encoded)),
+  ];
+}
+
+function removeManyValue(
+  current: unknown[],
+  predicate: EdgeOutput,
+  target: unknown,
+  scalarByKey: Map<string, ScalarTypeOutput<any>>,
+  typeByKey: Map<string, AnyTypeOutput>,
+  enumValuesByRange: Map<string, Set<string>>,
+): unknown[] {
+  const encodedTarget = encodeForRange(
+    target,
+    predicate.range,
+    scalarByKey,
+    typeByKey,
+    enumValuesByRange,
+  );
+
+  if (getPredicateCollectionKind(predicate) === "unordered") {
+    return current.filter(
+      (value) =>
+        encodeForRange(value, predicate.range, scalarByKey, typeByKey, enumValuesByRange) !==
+        encodedTarget,
+    );
+  }
+
+  const index = current.findIndex(
+    (value) =>
+      encodeForRange(value, predicate.range, scalarByKey, typeByKey, enumValuesByRange) ===
+      encodedTarget,
+  );
+
+  if (index < 0) return current;
+  return current.filter((_, currentIndex) => currentIndex !== index);
+}
+
+function collectLogicalChangedPredicateKeys(
+  input: Record<string, unknown>,
+  entries: FlatPredicateEntry[],
+  store: Store,
+  id: string,
+  scalarByKey: Map<string, ScalarTypeOutput<any>>,
+  typeByKey: Map<string, AnyTypeOutput>,
+  enumValuesByRange: Map<string, Set<string>>,
+): Set<string> {
+  const changed = new Set<string>();
+
+  for (const entry of entries) {
+    if (!hasNestedValue(input, entry.path, entry.field)) continue;
+
+    const nextValue = getNestedValue(input, entry.path, entry.field);
+    const previous = readPredicateValue(store, id, entry.predicate, scalarByKey, typeByKey);
+
+    if (nextValue === clearFieldValue) {
+      if (previous !== undefined) changed.add(entry.predicate.key);
+      continue;
+    }
+
+    if (entry.predicate.cardinality === "many") {
+      if (!Array.isArray(nextValue)) {
+        changed.add(entry.predicate.key);
+        continue;
+      }
+
+      const current = readLogicalManyValues(store, id, entry.predicate, scalarByKey, typeByKey);
+      const requested = normalizeRequestedManyValues(
+        entry.predicate,
+        nextValue,
+        scalarByKey,
+        typeByKey,
+        enumValuesByRange,
+      );
+      const planned = planManyValues(current, requested, entry.predicate).map((value) => value.decoded);
+
+      if (!sameLogicalValue(previous, planned)) changed.add(entry.predicate.key);
+      continue;
+    }
+
+    if (!sameLogicalValue(previous, nextValue)) changed.add(entry.predicate.key);
+  }
+
+  return changed;
+}
+
 function readPredicateValue(
   store: Store,
   id: string,
@@ -353,10 +568,12 @@ function readPredicateValue(
   typeByKey: Map<string, AnyTypeOutput>,
   options: ReadPredicateValueOptions = {},
 ): PredicateValue {
-  const facts = store.facts(id, edgeId(predicate));
   if (predicate.cardinality === "many") {
-    return facts.map((edge) => decodeForRange(edge.o, predicate.range, scalarByKey, typeByKey));
+    return readLogicalManyValues(store, id, predicate, scalarByKey, typeByKey).map(
+      (value) => value.decoded,
+    );
   }
+  const facts = store.facts(id, edgeId(predicate));
   if (!facts[0]) {
     if (options.strictRequired && predicate.cardinality === "one") {
       throw new Error(`Missing required predicate "${predicate.key}" for entity "${id}"`);
@@ -374,9 +591,21 @@ function applyLifecycleHooks(
   nodeId: string,
   scalarByKey: Map<string, ScalarTypeOutput<any>>,
   typeByKey: Map<string, AnyTypeOutput>,
+  enumValuesByRange: Map<string, Set<string>>,
 ): Set<string> {
   const now = new Date();
-  const changedPredicateKeys = collectChangedPredicateKeys(input, entries);
+  const changedPredicateKeys =
+    event === "update"
+      ? collectLogicalChangedPredicateKeys(
+          input,
+          entries,
+          store,
+          nodeId,
+          scalarByKey,
+          typeByKey,
+          enumValuesByRange,
+        )
+      : collectChangedPredicateKeys(input, entries);
   for (const entry of entries) {
     const hook = event === "create" ? entry.predicate.onCreate : entry.predicate.onUpdate;
     if (!hook) continue;
@@ -445,7 +674,16 @@ function createEntity<T extends TypeOutput>(
     const nodeTypePredicateId = edgeId(nodeTypePredicate);
     const id = store.newNode();
     const input = cloneInput(data as Record<string, unknown>);
-    applyLifecycleHooks("create", input, entries, store, id, scalarByKey, typeByKey);
+    applyLifecycleHooks(
+      "create",
+      input,
+      entries,
+      store,
+      id,
+      scalarByKey,
+      typeByKey,
+      enumValuesByRange,
+    );
     store.assert(id, nodeTypePredicateId, typeId(typeDef));
 
     for (const entry of entries) {
@@ -462,7 +700,26 @@ function createEntity<T extends TypeOutput>(
       if (entry.predicate.cardinality === "many") {
         if (!Array.isArray(value))
           throw new Error(`Field "${[...entry.path, entry.field].join(".")}" must be an array`);
-        assertMany(store, id, entry.predicate, value, scalarByKey, typeByKey, enumValuesByRange);
+        const normalized = planManyValues(
+          [],
+          normalizeRequestedManyValues(
+            entry.predicate,
+            value,
+            scalarByKey,
+            typeByKey,
+            enumValuesByRange,
+          ),
+          entry.predicate,
+        ).map((candidate) => candidate.decoded);
+        assertMany(
+          store,
+          id,
+          entry.predicate,
+          normalized,
+          scalarByKey,
+          typeByKey,
+          enumValuesByRange,
+        );
         continue;
       }
       assertOne(store, id, entry.predicate, value, scalarByKey, typeByKey, enumValuesByRange);
@@ -480,13 +737,7 @@ function projectEntity<T extends TypeOutput>(
 ): EntityOfType<T, Record<string, AnyTypeOutput>> {
   const out: Record<string, unknown> = { id };
   for (const entry of flattenPredicates(typeDef.fields)) {
-    const facts = store.facts(id, edgeId(entry.predicate));
-    const value =
-      entry.predicate.cardinality === "many"
-        ? facts.map((edge) => decodeForRange(edge.o, entry.predicate.range, scalarByKey, typeByKey))
-        : facts[0]
-          ? decodeForRange(facts[0].o, entry.predicate.range, scalarByKey, typeByKey)
-          : undefined;
+    const value = readPredicateValue(store, id, entry.predicate, scalarByKey, typeByKey);
     setNestedValue(out, entry.path, entry.field, value);
   }
   return out as EntityOfType<T, Record<string, AnyTypeOutput>>;
@@ -512,7 +763,19 @@ function createPredicateRef<T extends EdgeOutput, Defs extends Record<string, An
       }) as PredicateValueOf<T, Defs>;
     },
     subscribe(listener: PredicateSlotListener) {
-      return store.subscribePredicateSlot(subjectId, edgeId(field), listener);
+      let previous = readPredicateValue(store, subjectId, field, scalarByKey, typeByKey, {
+        strictRequired: true,
+      });
+
+      return store.subscribePredicateSlot(subjectId, edgeId(field), () => {
+        const next = readPredicateValue(store, subjectId, field, scalarByKey, typeByKey, {
+          strictRequired: true,
+        });
+
+        if (sameLogicalValue(previous, next)) return;
+        previous = next;
+        listener();
+      });
     },
     batch<TResult>(fn: () => TResult) {
       return store.batch(fn);
@@ -520,8 +783,10 @@ function createPredicateRef<T extends EdgeOutput, Defs extends Record<string, An
   };
 
   if (field.cardinality === "many") {
+    const collection = { kind: getPredicateCollectionKind(field) } satisfies PredicateCollectionSemantics;
     return {
       ...base,
+      collection,
       replace(values: PredicateValueOf<T, Defs>) {
         applyMutation(values);
       },
@@ -530,24 +795,16 @@ function createPredicateRef<T extends EdgeOutput, Defs extends Record<string, An
         applyMutation([...currentValues, value]);
       },
       remove(value: PredicateItemOf<T, Defs>) {
-        const encoded = encodeForRange(
+        const currentValues = base.get() as unknown as PredicateItemOf<T, Defs>[];
+        const nextValues = removeManyValue(
+          currentValues,
+          field,
           value,
-          field.range,
           scalarByKey,
           typeByKey,
           enumValuesByRange,
         );
-        let removed = false;
-        const nextValues = store
-          .facts(subjectId, edgeId(field))
-          .flatMap((edge) => {
-            if (!removed && edge.o === encoded) {
-              removed = true;
-              return [];
-            }
-            return [decodeForRange(edge.o, field.range, scalarByKey, typeByKey)];
-          });
-        if (!removed) return;
+        if (sameLogicalValue(currentValues, nextValues)) return;
         applyMutation(nextValues);
       },
       clear() {
@@ -692,17 +949,56 @@ function updateEntity<T extends TypeOutput>(
   return store.batch(() => {
     const entries = flattenPredicates(typeDef.fields);
     const input = cloneInput(patch);
-    applyLifecycleHooks("update", input, entries, store, id, scalarByKey, typeByKey);
+    applyLifecycleHooks(
+      "update",
+      input,
+      entries,
+      store,
+      id,
+      scalarByKey,
+      typeByKey,
+      enumValuesByRange,
+    );
     for (const entry of entries) {
       if (!hasNestedValue(input, entry.path, entry.field)) continue;
       const nextValue = getNestedValue(input, entry.path, entry.field);
-      retractPredicateFacts(store, id, entry.predicate);
-      if (nextValue === clearFieldValue) continue;
+      const previous = readPredicateValue(store, id, entry.predicate, scalarByKey, typeByKey);
+
+      if (nextValue === clearFieldValue) {
+        if (previous === undefined) continue;
+        retractPredicateFacts(store, id, entry.predicate);
+        continue;
+      }
+
       if (entry.predicate.cardinality === "many") {
         if (!Array.isArray(nextValue))
           throw new Error(`Field "${[...entry.path, entry.field].join(".")}" must be an array`);
-        assertMany(store, id, entry.predicate, nextValue, scalarByKey, typeByKey, enumValuesByRange);
+        const current = readLogicalManyValues(store, id, entry.predicate, scalarByKey, typeByKey);
+        const requested = normalizeRequestedManyValues(
+          entry.predicate,
+          nextValue,
+          scalarByKey,
+          typeByKey,
+          enumValuesByRange,
+        );
+        const planned = planManyValues(current, requested, entry.predicate).map(
+          (value) => value.decoded,
+        );
+
+        if (sameLogicalValue(previous, planned)) continue;
+        retractPredicateFacts(store, id, entry.predicate);
+        assertMany(
+          store,
+          id,
+          entry.predicate,
+          planned,
+          scalarByKey,
+          typeByKey,
+          enumValuesByRange,
+        );
       } else {
+        if (sameLogicalValue(previous, nextValue)) continue;
+        retractPredicateFacts(store, id, entry.predicate);
         assertOne(store, id, entry.predicate, nextValue, scalarByKey, typeByKey, enumValuesByRange);
       }
     }

@@ -323,25 +323,101 @@ describe("web predicate bindings", () => {
           <PredicateFieldEditor predicate={companyRef.fields.foundedYear} />
           <PredicateFieldEditor predicate={companyRef.fields.website} />
           <PredicateFieldEditor predicate={companyRef.fields.status} />
+          <PredicateFieldEditor predicate={companyRef.fields.tags} />
         </Fragment>,
       );
     });
 
     const inputs = renderer?.root.findAllByType("input") ?? [];
     const select = renderer?.root.findByType("select");
+    const tagsInput = renderer?.root.find(
+      (node) => node.type === "input" && node.props["data-web-field-kind"] === "token-list-input",
+    );
+    const addTagButton = renderer?.root.find(
+      (node) => node.type === "button" && node.props["data-web-field-action"] === "add-token",
+    );
+    const removeTagButton = renderer?.root.find(
+      (node) =>
+        node.type === "button" &&
+        node.props["data-web-field-action"] === "remove-token" &&
+        node.props["data-web-token-value"] === "saas",
+    );
 
     act(() => {
       inputs[0]?.props.onChange({ target: { value: "Acme Labs" } });
       inputs[1]?.props.onChange({ target: { value: "1999" } });
       inputs[2]?.props.onChange({ target: { value: "https://labs.acme.com" } });
       select?.props.onChange({ target: { value: app.status.values.paused.id } });
+      tagsInput?.props.onChange({ target: { value: "ai" } });
+    });
+
+    act(() => {
+      addTagButton?.props.onClick();
+      removeTagButton?.props.onClick();
     });
 
     expect(companyRef.fields.name.get()).toBe("Acme Labs");
     expect(companyRef.fields.foundedYear.get()).toBe(1999);
     expect(companyRef.fields.website.get().toString()).toBe("https://labs.acme.com/");
     expect(companyRef.fields.status.get()).toBe(app.status.values.paused.id);
+    expect(companyRef.fields.tags.get()).toEqual(["enterprise", "ai"]);
     expect(select?.props.value).toBe(app.status.values.paused.id);
+
+    act(() => {
+      renderer?.unmount();
+    });
+  });
+
+  it("keeps token-list editor rerenders scoped to its predicate slot", () => {
+    const { graph, companyId } = setupGraph();
+    const companyRef = graph.company.ref(companyId);
+    const renders = { container: 0, name: 0, tags: 0 };
+
+    function onRender(id: string) {
+      if (id === "name") renders.name += 1;
+      if (id === "tags") renders.tags += 1;
+    }
+
+    function CompanyFields() {
+      renders.container += 1;
+      return (
+        <Fragment>
+          <Profiler id="name" onRender={onRender}>
+            <PredicateFieldEditor predicate={companyRef.fields.name} />
+          </Profiler>
+          <Profiler id="tags" onRender={onRender}>
+            <PredicateFieldEditor predicate={companyRef.fields.tags} />
+          </Profiler>
+        </Fragment>
+      );
+    }
+
+    let renderer: ReturnType<typeof create> | undefined;
+    act(() => {
+      renderer = create(<CompanyFields />);
+    });
+
+    expect(renders).toEqual({ container: 1, name: 1, tags: 1 });
+
+    const tagsInput = renderer?.root.find(
+      (node) => node.type === "input" && node.props["data-web-field-kind"] === "token-list-input",
+    );
+    const addTagButton = renderer?.root.find(
+      (node) => node.type === "button" && node.props["data-web-field-action"] === "add-token",
+    );
+
+    act(() => {
+      tagsInput?.props.onChange({ target: { value: "ai" } });
+    });
+
+    act(() => {
+      addTagButton?.props.onClick();
+    });
+
+    expect(renders.container).toBe(1);
+    expect(renders.name).toBe(1);
+    expect(renders.tags).toBeGreaterThan(1);
+    expect(companyRef.fields.tags.get()).toEqual(["enterprise", "saas", "ai"]);
 
     act(() => {
       renderer?.unmount();

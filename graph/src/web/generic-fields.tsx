@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { PredicateRef } from "../graph/client.js";
 import { isEnumType } from "../graph/schema.js";
@@ -26,6 +26,18 @@ function setPredicateValue(predicate: AnyPredicate, value: unknown): void {
 function clearPredicateValue(predicate: AnyPredicate): boolean {
   if (typeof (predicate as { clear?: unknown }).clear !== "function") return false;
   (predicate as { clear(): void }).clear();
+  return true;
+}
+
+function addPredicateValue(predicate: AnyPredicate, value: unknown): boolean {
+  if (typeof (predicate as { add?: unknown }).add !== "function") return false;
+  (predicate as { add(nextValue: unknown): void }).add(value);
+  return true;
+}
+
+function removePredicateValue(predicate: AnyPredicate, value: unknown): boolean {
+  if (typeof (predicate as { remove?: unknown }).remove !== "function") return false;
+  (predicate as { remove(nextValue: unknown): void }).remove(value);
   return true;
 }
 
@@ -239,6 +251,75 @@ function SelectFieldEditor({ predicate }: AnyFieldProps) {
   );
 }
 
+function TokenListFieldEditor({ predicate }: AnyFieldProps) {
+  const { collectionKind, value } = usePredicateField(predicate);
+  const placeholder = getPredicateEditorPlaceholder(predicate.field);
+  const [draft, setDraft] = useState("");
+  const draftRef = useRef(draft);
+
+  if (!Array.isArray(value) || collectionKind !== "unordered") {
+    return <span data-web-field-status="unsupported">unsupported-editor-kind:token-list</span>;
+  }
+
+  const tokens = value.map((item) => normalizeTextValue(item)).filter((item) => item.length > 0);
+
+  function commitDraft(): void {
+    const nextToken = draftRef.current.trim();
+    if (!nextToken) return;
+    addPredicateValue(predicate, nextToken);
+    draftRef.current = "";
+    setDraft("");
+  }
+
+  return (
+    <div data-web-field-kind="token-list">
+      <div data-web-field-tokens="">
+        {tokens.map((token) => (
+          <button
+            data-proof-mutation="collection"
+            data-web-field-action="remove-token"
+            data-web-token-value={token}
+            key={token}
+            onClick={() => {
+              removePredicateValue(predicate, token);
+            }}
+            type="button"
+          >
+            {token}
+          </button>
+        ))}
+      </div>
+      <div>
+        <input
+          data-web-field-kind="token-list-input"
+          onChange={(event) => {
+            draftRef.current = event.target.value;
+            setDraft(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            commitDraft();
+          }}
+          placeholder={placeholder}
+          type="text"
+          value={draft}
+        />
+        <button
+          data-proof-mutation="collection"
+          data-web-field-action="add-token"
+          onClick={() => {
+            commitDraft();
+          }}
+          type="button"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export const genericWebFieldViewCapabilities = [
   { kind: "text", Component: TextFieldView },
   { kind: "number", Component: NumberFieldView },
@@ -253,4 +334,5 @@ export const genericWebFieldEditorCapabilities = [
   { kind: "number", Component: NumberFieldEditor },
   { kind: "url", Component: UrlFieldEditor },
   { kind: "select", Component: SelectFieldEditor },
+  { kind: "token-list", Component: TokenListFieldEditor },
 ] satisfies readonly PredicateFieldEditorCapability<any, any>[];

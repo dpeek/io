@@ -44,6 +44,9 @@ export const company = defineType({
       cardinality: "many",
       meta: {
         label: "Tags",
+        collection: {
+          kind: "unordered",
+        },
         editor: {
           kind: "token-list",
         },

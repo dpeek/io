@@ -65,6 +65,7 @@ describe("company proof surface", () => {
     const statusRow = findByProofProp(renderer!, "data-proof-field", "status");
     const websiteRow = findByProofProp(renderer!, "data-proof-field", "website");
     const foundedYearRow = findByProofProp(renderer!, "data-proof-field", "foundedYear");
+    const tagsRow = findByProofProp(renderer!, "data-proof-field", "tags");
 
     const nameInput = renderer!.root.find(
       (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
@@ -78,6 +79,18 @@ describe("company proof surface", () => {
     const foundedYearInput = renderer!.root.find(
       (node) => node.type === "input" && node.props["data-web-field-kind"] === "number",
     );
+    const tagsInput = renderer!.root.find(
+      (node) => node.type === "input" && node.props["data-web-field-kind"] === "token-list-input",
+    );
+    const addTagButton = renderer!.root.find(
+      (node) => node.type === "button" && node.props["data-web-field-action"] === "add-token",
+    );
+    const removeTagButton = renderer!.root.find(
+      (node) =>
+        node.type === "button" &&
+        node.props["data-web-field-action"] === "remove-token" &&
+        node.props["data-web-token-value"] === "saas",
+    );
 
     await act(async () => {
       nameRow.props.onChangeCapture();
@@ -88,6 +101,22 @@ describe("company proof surface", () => {
       websiteInput.props.onChange({ target: { value: "https://labs.acme.com" } });
       foundedYearRow.props.onChangeCapture();
       foundedYearInput.props.onChange({ target: { value: "1999" } });
+      tagsInput.props.onChange({ target: { value: "ai" } });
+    });
+
+    await act(async () => {
+      tagsRow.props.onClickCapture({
+        target: {
+          getAttribute: (name: string) => (name === "data-proof-mutation" ? "collection" : null),
+        },
+      });
+      addTagButton.props.onClick();
+      tagsRow.props.onClickCapture({
+        target: {
+          getAttribute: (name: string) => (name === "data-proof-mutation" ? "collection" : null),
+        },
+      });
+      removeTagButton.props.onClick();
       await waitForInstrumentation();
     });
 
@@ -95,6 +124,7 @@ describe("company proof surface", () => {
     expect(company.fields.status.get()).toBe(app.status.values.paused.id);
     expect(company.fields.website.get().toString()).toBe("https://labs.acme.com/");
     expect(company.fields.foundedYear.get()).toBe(1999);
+    expect(company.fields.tags.get()).toEqual(["enterprise", "ai"]);
     expect(statusSelect.props.value).toBe(app.status.values.paused.id);
 
     act(() => {
@@ -117,25 +147,40 @@ describe("company proof surface", () => {
       status: 1,
       website: 1,
       foundedYear: 1,
+      tags: 1,
     });
 
-    const nameRow = findByProofProp(renderer!, "data-proof-field", "name");
-    const nameInput = renderer!.root.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const tagsRow = findByProofProp(renderer!, "data-proof-field", "tags");
+    const tagsInput = renderer!.root.find(
+      (node) => node.type === "input" && node.props["data-web-field-kind"] === "token-list-input",
+    );
+    const addTagButton = renderer!.root.find(
+      (node) => node.type === "button" && node.props["data-web-field-action"] === "add-token",
     );
 
     await act(async () => {
-      nameRow.props.onChangeCapture();
-      nameInput.props.onChange({ target: { value: "Acme 2" } });
+      tagsInput.props.onChange({ target: { value: "ai" } });
+    });
+
+    const draftCounts = readProofCounts(renderer!);
+
+    await act(async () => {
+      tagsRow.props.onClickCapture({
+        target: {
+          getAttribute: (name: string) => (name === "data-proof-mutation" ? "collection" : null),
+        },
+      });
+      addTagButton.props.onClick();
       await waitForInstrumentation();
     });
 
     const nextCounts = readProofCounts(renderer!);
-    expect(nextCounts.surface).toBe(initialCounts.surface);
-    expect(nextCounts.name ?? 0).toBeGreaterThan(initialCounts.name ?? 0);
-    expect(nextCounts.status).toBe(initialCounts.status);
-    expect(nextCounts.website).toBe(initialCounts.website);
-    expect(nextCounts.foundedYear).toBe(initialCounts.foundedYear);
+    expect(nextCounts.surface).toBe(draftCounts.surface);
+    expect(nextCounts.name).toBe(draftCounts.name);
+    expect(nextCounts.status).toBe(draftCounts.status);
+    expect(nextCounts.website).toBe(draftCounts.website);
+    expect(nextCounts.foundedYear).toBe(draftCounts.foundedYear);
+    expect(nextCounts.tags ?? 0).toBeGreaterThan(draftCounts.tags ?? 0);
 
     const lastCheck = renderer!.root.find(
       (node) => typeof node.props["data-proof-last-check"] === "string",
@@ -145,7 +190,7 @@ describe("company proof surface", () => {
     );
 
     expect(lastCheck.props["data-proof-last-check"]).toBe("holds");
-    expect(changed.props["data-proof-changed"]).toBe("name");
+    expect(changed.props["data-proof-changed"]).toBe("tags");
 
     act(() => {
       renderer?.unmount();

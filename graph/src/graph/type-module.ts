@@ -62,6 +62,9 @@ export type TypeModuleMeta<
   group?: string;
   priority?: number;
   searchable?: boolean;
+  collection?: {
+    kind: "ordered" | "unordered";
+  };
   summary?: {
     kind: "value" | "count";
     format?: (value: Decoded) => string;
