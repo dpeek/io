@@ -219,7 +219,9 @@ function summarizeToolCall(item: Record<string, unknown>) {
   const server = asString(item.server) ?? "tool";
   const tool = asString(item.tool) ?? "call";
   const argumentsText =
-    item.arguments && typeof item.arguments === "object" ? ` ${JSON.stringify(item.arguments)}` : "";
+    item.arguments && typeof item.arguments === "object"
+      ? ` ${JSON.stringify(item.arguments)}`
+      : "";
   return `${server}.${tool}${argumentsText}`;
 }
 
@@ -505,7 +507,12 @@ export class CodexAppServerRunner {
       stdout: "pipe",
     });
     const queue = new MessageQueue();
-    const state: PendingTurnState = { display: displayState, inputRequired: false, stderr: [], stdout: [] };
+    const state: PendingTurnState = {
+      display: displayState,
+      inputRequired: false,
+      stderr: [],
+      stdout: [],
+    };
     this.#log.info("session.starting", {
       issueIdentifier: options.issue.identifier,
       workspace: options.workspace.path,
@@ -733,7 +740,10 @@ export class CodexAppServerRunner {
         const response = buildAutomaticUserInputResponse(message.params);
         if (!response) {
           state.inputRequired = true;
-          return JSON.stringify({ id: requestId, result: { answers: {} } satisfies ToolRequestUserInputResponse });
+          return JSON.stringify({
+            id: requestId,
+            result: { answers: {} } satisfies ToolRequestUserInputResponse,
+          });
         }
         return JSON.stringify({ id: requestId, result: response });
       }
