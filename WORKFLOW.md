@@ -6,7 +6,7 @@ tracker:
   active_states:
     - Todo
 workspace:
-  root: $SYMPHONY_WORKSPACE_ROOT
+  root: $AGENT_WORKSPACE_ROOT
 hooks:
   after_create: |
     bun install

@@ -5,7 +5,7 @@ import { parseWorkflow, renderPrompt } from "./workflow.js";
 test("parseWorkflow normalizes front matter and env-backed values", () => {
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "project-slug";
-  process.env.SYMPHONY_WORKSPACE_ROOT = "/tmp/workspace";
+  process.env.AGENT_WORKSPACE_ROOT = "/tmp/workspace";
 
   const result = parseWorkflow(`---
 tracker:
@@ -13,7 +13,7 @@ tracker:
   api_key: $LINEAR_API_KEY
   project_slug: $LINEAR_PROJECT_SLUG
 workspace:
-  root: $SYMPHONY_WORKSPACE_ROOT
+  root: $AGENT_WORKSPACE_ROOT
 agent:
   max_turns: 1
 ---

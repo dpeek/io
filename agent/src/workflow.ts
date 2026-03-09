@@ -136,7 +136,7 @@ const workflowSchema = z
     }),
     workspace: z.object({
       origin: z.string().optional(),
-      root: z.string().default("$SYMPHONY_WORKSPACE_ROOT"),
+      root: z.string().default("$AGENT_WORKSPACE_ROOT"),
     }),
   })
   .passthrough();
@@ -213,7 +213,9 @@ function buildWorkflow(frontMatter: WorkflowFrontMatter, promptTemplate: string)
       terminalStates: normalizeStates(frontMatter.tracker.terminal_states),
     },
     workspace: {
-      origin: frontMatter.workspace.origin ? expandPathValue(frontMatter.workspace.origin) : undefined,
+      origin: frontMatter.workspace.origin
+        ? expandPathValue(frontMatter.workspace.origin)
+        : undefined,
       root: workspaceRoot,
     },
   };

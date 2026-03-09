@@ -85,7 +85,7 @@ Bootstrap asserts schema graph metadata into the store:
 
 ## Typed Client
 
-Source: `src/client.ts`
+Source: `./graph/src/client.ts`
 
 `createTypeClient(store, appNamespace)` exposes typed CRUD handles per entity type:
 
@@ -105,8 +105,8 @@ Source: `src/client.ts`
 
 Sources:
 
-- `src/runtime.ts` example graph bootstrapping and sample data.
-- `web/server.ts` explorer API/UI for browsing schema + nodes.
+- `./graph/src/runtime.ts` example graph bootstrapping and sample data.
+- `./graphweb/server.ts` explorer API/UI for browsing schema + nodes.
 
 Explorer intentionally surfaces human-readable keys where helpful (`key` when available, fallback to id), but all internal querying uses resolved IDs.
 

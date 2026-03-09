@@ -7,10 +7,10 @@ import { readIssueRuntimeState } from "./workspace.js";
 
 function printHelp() {
   console.log(`Usage:
-  surf agent start [workflowPath] [--once] [--worker-id ID] [--worker-count N] [--worker-index N]
-  surf agent worker <workerId> [workflowPath] [--once] [--worker-count N] [--worker-index N]
-  surf agent tail <issue> [workflowPath]
-  surf agent validate [workflowPath]
+  io agent start [workflowPath] [--once] [--worker-id ID] [--worker-count N] [--worker-index N]
+  io agent worker <workerId> [workflowPath] [--once] [--worker-count N] [--worker-index N]
+  io agent tail <issue> [workflowPath]
+  io agent validate [workflowPath]
   `);
 }
 
