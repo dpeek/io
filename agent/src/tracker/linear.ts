@@ -27,6 +27,15 @@ query AgentCandidateIssues(
       updatedAt
       state { name }
       labels { nodes { name } }
+      inverseRelations(first: 50) {
+        nodes {
+          type
+          relatedIssue {
+            id
+            state { name }
+          }
+        }
+      }
     }
     pageInfo {
       hasNextPage
@@ -57,6 +66,15 @@ interface CandidateIssueNode {
   description?: string | null;
   id: string;
   identifier: string;
+  inverseRelations?: {
+    nodes?: Array<
+      | {
+          relatedIssue?: { id: string; state?: { name?: string | null } | null } | null;
+          type?: string | null;
+        }
+      | null
+    > | null;
+  } | null;
   labels?: { nodes?: Array<{ name?: string | null } | null> | null } | null;
   priority?: number | null;
   state?: { name?: string | null } | null;
@@ -76,7 +94,27 @@ interface CandidateIssuePage {
 
 export function normalizeLinearIssue(node: CandidateIssueNode): AgentIssue {
   return {
-    blockedBy: [],
+    blockedBy: (node.inverseRelations?.nodes ?? [])
+      .filter(
+        (
+          relation,
+        ): relation is {
+          relatedIssue?: { id: string; state?: { name?: string | null } | null } | null;
+          type?: string | null;
+        } => !!relation,
+      )
+      .filter((relation) => relation.type?.trim().toLowerCase() === "blocks")
+      .map((relation) => relation.relatedIssue)
+      .filter(
+        (
+          relatedIssue,
+        ): relatedIssue is {
+          id: string;
+          state?: { name?: string | null } | null;
+        } => !!relatedIssue,
+      )
+      .filter((relatedIssue) => relatedIssue.state?.name?.trim().toLowerCase() !== "done")
+      .map((relatedIssue) => relatedIssue.id),
     createdAt: node.createdAt,
     description: node.description ?? "",
     id: node.id,

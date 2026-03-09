@@ -12,6 +12,22 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
     description: null,
     id: "1",
     identifier: "OS-7",
+    inverseRelations: {
+      nodes: [
+        {
+          relatedIssue: { id: "2", state: { name: "In Review" } },
+          type: "blocks",
+        },
+        {
+          relatedIssue: { id: "3", state: { name: "Done" } },
+          type: "blocks",
+        },
+        {
+          relatedIssue: { id: "4", state: { name: "Todo" } },
+          type: "related",
+        },
+      ],
+    },
     labels: { nodes: [{ name: "Bug" }, { name: " P1 " }, null] },
     priority: 2,
     state: { name: "Todo" },
@@ -20,7 +36,7 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   });
   expect(issue.labels).toEqual(["bug", "p1"]);
   expect(issue.description).toBe("");
-  expect(issue.blockedBy).toEqual([]);
+  expect(issue.blockedBy).toEqual(["2"]);
 });
 
 test("pickCandidateIssues prefers unblocked todo issues by priority", () => {

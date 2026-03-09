@@ -414,15 +414,20 @@ export class CheckoutManager {
   }
 
   async #deleteLocalBranch(cwd: string, branchName: string) {
+    if (!(await this.#localBranchExists(cwd, branchName))) {
+      return false;
+    }
     await this.#runCommand(["git", "branch", "-D", branchName], cwd, this.#hooks.timeoutMs);
+    return true;
   }
 
   async #deleteRemoteBranch(cwd: string, branchName: string) {
-    await this.#runCommand(
-      ["git", "push", "origin", "--delete", branchName],
-      cwd,
-      this.#hooks.timeoutMs,
-    );
+    const remoteBranchExists = await this.#remoteHeadExists(cwd, branchName);
+    if (!remoteBranchExists) {
+      return false;
+    }
+    await this.#runOrThrow(["git", "push", "origin", "--delete", branchName], cwd);
+    return true;
   }
 
   async #ensureRemote(cwd: string, name: string, remotePath: string) {
@@ -448,15 +453,29 @@ export class CheckoutManager {
   }
 
   async #finalizeTerminalIssue(issue: IssueRuntimeState, linearState: string) {
+    this.#reportIssueProgress(issue, `finalizing terminal issue from ${linearState}`);
     if (normalizeStateName(linearState) === "done") {
       await this.#mergeIssueBranch(issue);
     }
+    if (!(await this.#hasIssueCommitLandedOnMain(issue))) {
+      this.#reportIssueProgress(issue, `preserving ${issue.branchName}; commit not yet on main`);
+      return;
+    }
     if (existsSync(issue.worktreePath)) {
       await this.runHook("beforeRemove", this.#hooks.beforeRemove, issue.worktreePath, false);
+      this.#reportIssueProgress(issue, `removing worktree ${issue.worktreePath}`);
       await this.#removeWorktree(issue.controlPath, issue.worktreePath, true);
     }
-    await this.#deleteLocalBranch(issue.controlPath, issue.branchName);
-    await this.#deleteRemoteBranch(issue.controlPath, issue.branchName);
+    if (await this.#deleteLocalBranch(issue.controlPath, issue.branchName)) {
+      this.#reportIssueProgress(issue, `deleted local branch ${issue.branchName}`);
+    }
+    const deletedRemoteBranch = await this.#deleteRemoteBranch(issue.controlPath, issue.branchName);
+    this.#reportIssueProgress(
+      issue,
+      deletedRemoteBranch
+        ? `deleted origin/${issue.branchName}`
+        : `origin/${issue.branchName} already absent`,
+    );
     await rm(issue.runtimePath, { force: true, recursive: true });
     const workerState = await this.#readState();
     if (workerState?.activeIssue?.identifier === issue.issueIdentifier) {
@@ -523,6 +542,21 @@ export class CheckoutManager {
     return result.exitCode === 0;
   }
 
+  async #remoteHeadExists(cwd: string, branchName: string) {
+    const result = await this.#runCommand(
+      ["git", "ls-remote", "--exit-code", "--heads", "origin", branchName],
+      cwd,
+      this.#hooks.timeoutMs,
+    );
+    if (result.exitCode === 0) {
+      return true;
+    }
+    if (result.exitCode === 2) {
+      return false;
+    }
+    throw new Error(result.stderr.trim() || result.stdout.trim() || `origin/${branchName} lookup failed`);
+  }
+
   async #isCommitOnMain(cwd: string, commitSha: string) {
     const result = await this.#runCommand(
       ["git", "merge-base", "--is-ancestor", commitSha, "main"],
@@ -554,6 +588,18 @@ export class CheckoutManager {
   }
 
   async #canFinalizeWithoutBranch(issue: IssueRuntimeState) {
+    const alreadyMerged = await this.#hasIssueCommitLandedOnMain(issue);
+    if (alreadyMerged) {
+      this.#log.info("issue.finalize.already_merged", {
+        branchName: issue.branchName,
+        commitSha: issue.commitSha,
+        issueIdentifier: issue.issueIdentifier,
+      });
+    }
+    return alreadyMerged;
+  }
+
+  async #hasIssueCommitLandedOnMain(issue: IssueRuntimeState) {
     if (!issue.commitSha) {
       return false;
     }
@@ -566,15 +612,7 @@ export class CheckoutManager {
     if (!repoPath) {
       return false;
     }
-    const alreadyMerged = await this.#isCommitOnMain(repoPath, issue.commitSha);
-    if (alreadyMerged) {
-      this.#log.info("issue.finalize.already_merged", {
-        branchName: issue.branchName,
-        commitSha: issue.commitSha,
-        issueIdentifier: issue.issueIdentifier,
-      });
-    }
-    return alreadyMerged;
+    return await this.#isCommitOnMain(repoPath, issue.commitSha);
   }
 
   async #ensureIssueWorktree(issue: IssueRuntimeState) {
@@ -643,7 +681,9 @@ export class CheckoutManager {
     if (!existsSync(issue.worktreePath)) {
       return false;
     }
+    this.#reportIssueProgress(issue, `rebasing ${issue.branchName} onto main`);
     await this.#runOrThrow(["git", "rebase", "main"], issue.worktreePath);
+    this.#reportIssueProgress(issue, `rebased ${issue.branchName} onto main`);
     return true;
   }
 
@@ -662,9 +702,11 @@ export class CheckoutManager {
   }
 
   async #mergeIntoControlRepo(issue: IssueRuntimeState) {
+    this.#reportIssueProgress(issue, `merging ${issue.branchName} into main via control repo`);
     await this.#runOrThrow(["git", "checkout", "main"], issue.controlPath);
     await this.#runOrThrow(["git", "merge", "--no-edit", issue.branchName], issue.controlPath);
     await this.#runOrThrow(["git", "push", "origin", "main"], issue.controlPath);
+    this.#reportIssueProgress(issue, "pushed merged main to origin");
   }
 
   async #mergeIntoSourceRepo(issue: IssueRuntimeState) {
@@ -678,6 +720,7 @@ export class CheckoutManager {
     await this.#runOrThrow(["git", "worktree", "prune"], repoPath);
     await this.#runOrThrow(["git", "worktree", "add", "--detach", mergePath, "main"], repoPath);
     try {
+      this.#reportIssueProgress(issue, `merging ${issue.branchName} into local main`);
       await this.#runOrThrow(["git", "switch", "-c", mergeBranch], mergePath);
       await this.#runOrThrow(["git", "merge", "--no-edit", issue.branchName], mergePath);
       const mergedSha = await this.#revParseHead(mergePath);
@@ -690,6 +733,7 @@ export class CheckoutManager {
       } else {
         await this.#runOrThrow(["git", "update-ref", "refs/heads/main", mergedSha], repoPath);
       }
+      this.#reportIssueProgress(issue, `updated local main to ${mergedSha}`);
     } finally {
       if (existsSync(mergePath)) {
         await this.#runCommand(
@@ -704,6 +748,7 @@ export class CheckoutManager {
 
   async #mergeIssueBranch(issue: IssueRuntimeState) {
     if (!(await this.#refreshMainAndRebaseIssueBranch(issue))) {
+      this.#reportIssueProgress(issue, `${issue.branchName} already merged into main`);
       return;
     }
     if (issue.sourceRepoPath && issue.controlPath === issue.sourceRepoPath) {
@@ -759,6 +804,18 @@ export class CheckoutManager {
       return result;
     }
     throw new Error(result.stderr.trim() || result.stdout.trim() || `${command.join(" ")} failed`);
+  }
+
+  #reportIssueProgress(
+    issue: Pick<IssueRuntimeState, "branchName" | "issueIdentifier">,
+    message: string,
+  ) {
+    this.#log.info("issue.finalize.progress", {
+      branchName: issue.branchName,
+      issueIdentifier: issue.issueIdentifier,
+      message,
+    });
+    process.stdout.write(`${issue.issueIdentifier}: ${message}\n`);
   }
 
   #usesControlClone() {
