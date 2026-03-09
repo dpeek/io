@@ -17,7 +17,7 @@ type CommandRunner = (command: string[], cwd: string, timeoutMs?: number) => Pro
 
 type WorkerStatus = "blocked" | "idle" | "running";
 
-type IssueRuntimeStatus = "blocked" | "completed" | "running";
+type IssueRuntimeStatus = "blocked" | "completed" | "finalized" | "running";
 
 type ControlRepo = {
   createdNow: boolean;
@@ -47,6 +47,8 @@ export interface IssueRuntimeState {
   branchName: string;
   commitSha?: string;
   controlPath: string;
+  finalizedAt?: string;
+  finalizedLinearState?: string;
   issueId: string;
   issueIdentifier: string;
   issueTitle: string;
@@ -262,9 +264,22 @@ export class CheckoutManager {
   }
 
   async reconcileTerminalIssues(tracker: IssueStateTracker, terminalStates: string[]) {
-    const retainedIssues = (await this.#listIssueStates()).filter(
-      (issue) => issue.status !== "running",
-    );
+    const retainedIssues: IssueRuntimeState[] = [];
+    for (const issue of await this.#listIssueStates()) {
+      if (issue.status !== "running") {
+        retainedIssues.push(issue);
+        continue;
+      }
+      if (await this.#isIssueWorkerActive(issue)) {
+        continue;
+      }
+      this.#log.info("issue.runtime.stale", {
+        issueIdentifier: issue.issueIdentifier,
+        workerId: issue.workerId,
+      });
+      this.#reportIssueProgress(issue, `recovering stale ${issue.branchName} worker state`);
+      retainedIssues.push(issue);
+    }
     if (!retainedIssues.length) {
       return;
     }
@@ -476,7 +491,11 @@ export class CheckoutManager {
         ? `deleted origin/${issue.branchName}`
         : `origin/${issue.branchName} already absent`,
     );
-    await rm(issue.runtimePath, { force: true, recursive: true });
+    await this.#updateIssueRuntimeState(issue, {
+      finalizedAt: new Date().toISOString(),
+      finalizedLinearState: linearState,
+      status: "finalized",
+    });
     const workerState = await this.#readState();
     if (workerState?.activeIssue?.identifier === issue.issueIdentifier) {
       await this.#writeState(this.createIdleWorkspace(), "idle");
@@ -600,6 +619,7 @@ export class CheckoutManager {
   }
 
   async #hasIssueCommitLandedOnMain(issue: IssueRuntimeState) {
+    await this.#ensureIssueCommitSha(issue);
     if (!issue.commitSha) {
       return false;
     }
@@ -683,6 +703,7 @@ export class CheckoutManager {
     }
     this.#reportIssueProgress(issue, `rebasing ${issue.branchName} onto main`);
     await this.#runOrThrow(["git", "rebase", "main"], issue.worktreePath);
+    await this.#ensureIssueCommitSha(issue, true);
     this.#reportIssueProgress(issue, `rebased ${issue.branchName} onto main`);
     return true;
   }
@@ -767,6 +788,15 @@ export class CheckoutManager {
     }
   }
 
+  async #readWorkerState(workerId: string): Promise<WorkerState | undefined> {
+    try {
+      const text = await readFile(resolve(this.#rootDir, "workers", workerId, "worker-state.json"), "utf8");
+      return JSON.parse(text) as WorkerState;
+    } catch {
+      return undefined;
+    }
+  }
+
   async #removeWorktree(controlPath: string, path: string, force: boolean) {
     const args = ["git", "worktree", "remove"];
     if (force) {
@@ -806,6 +836,56 @@ export class CheckoutManager {
     throw new Error(result.stderr.trim() || result.stdout.trim() || `${command.join(" ")} failed`);
   }
 
+  async #ensureIssueCommitSha(issue: IssueRuntimeState, preferWorktree = false) {
+    if (issue.commitSha && !preferWorktree) {
+      return issue.commitSha;
+    }
+    const refs = [
+      preferWorktree && existsSync(issue.worktreePath)
+        ? { cwd: issue.worktreePath, ref: "HEAD" }
+        : undefined,
+      existsSync(issue.worktreePath) ? { cwd: issue.worktreePath, ref: "HEAD" } : undefined,
+      existsSync(issue.controlPath) ? { cwd: issue.controlPath, ref: issue.branchName } : undefined,
+      existsSync(issue.controlPath) ? { cwd: issue.controlPath, ref: `origin/${issue.branchName}` } : undefined,
+    ].filter((value): value is { cwd: string; ref: string } => Boolean(value));
+    for (const candidate of refs) {
+      try {
+        const commitSha = await this.#revParse(candidate.cwd, candidate.ref);
+        await this.#updateIssueRuntimeState(issue, { commitSha });
+        return commitSha;
+      } catch {
+        continue;
+      }
+    }
+    return issue.commitSha;
+  }
+
+  #isPidAlive(pid: number) {
+    if (!Number.isInteger(pid) || pid <= 0) {
+      return false;
+    }
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async #isIssueWorkerActive(issue: IssueRuntimeState) {
+    const workerState = await this.#readWorkerState(issue.workerId);
+    if (!workerState) {
+      return false;
+    }
+    if (workerState.status !== "running") {
+      return false;
+    }
+    if (workerState.activeIssue?.identifier !== issue.issueIdentifier) {
+      return false;
+    }
+    return this.#isPidAlive(workerState.pid);
+  }
+
   #reportIssueProgress(
     issue: Pick<IssueRuntimeState, "branchName" | "issueIdentifier">,
     message: string,
@@ -833,6 +913,8 @@ export class CheckoutManager {
       branchName: workspace.branchName,
       commitSha: options.commitSha,
       controlPath: workspace.controlPath,
+      finalizedAt: undefined,
+      finalizedLinearState: undefined,
       issueId: issue.id,
       issueIdentifier: issue.identifier,
       issueTitle: issue.title,
@@ -845,8 +927,25 @@ export class CheckoutManager {
       workerId: workspace.workerId,
       worktreePath: workspace.path,
     };
-    await mkdir(runtimePath, { recursive: true });
-    await writeFile(resolve(runtimePath, "issue-state.json"), JSON.stringify(state, null, 2));
+    await this.#writeIssueRuntimeState(state);
+  }
+
+  async #updateIssueRuntimeState(
+    issue: IssueRuntimeState,
+    updates: Partial<Pick<IssueRuntimeState, "commitSha" | "finalizedAt" | "finalizedLinearState" | "status">>,
+  ) {
+    const state: IssueRuntimeState = {
+      ...issue,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    Object.assign(issue, state);
+    await this.#writeIssueRuntimeState(state);
+  }
+
+  async #writeIssueRuntimeState(state: IssueRuntimeState) {
+    await mkdir(state.runtimePath, { recursive: true });
+    await writeFile(resolve(state.runtimePath, "issue-state.json"), JSON.stringify(state, null, 2));
   }
 
   async #writeState(workspace: PreparedWorkspace, status: WorkerStatus, issue?: AgentIssue) {

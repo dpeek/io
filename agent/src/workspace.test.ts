@@ -72,6 +72,18 @@ async function commitAll(cwd: string, message: string) {
   return await run(["git", "rev-parse", "HEAD"], cwd);
 }
 
+async function writeWorkerState(
+  rootDir: string,
+  workerId: string,
+  state: Record<string, unknown>,
+) {
+  await mkdir(resolve(rootDir, "workers", workerId), { recursive: true });
+  await writeFile(
+    resolve(rootDir, "workers", workerId, "worker-state.json"),
+    JSON.stringify(state, null, 2),
+  );
+}
+
 function issue(identifier: string, title = "Example") {
   return {
     blockedBy: [],
@@ -246,7 +258,11 @@ test("WorkspaceManager merges done branches into main and cleans up worktree art
       "",
     );
     expect(existsSync(workspace.path)).toBe(false);
-    expect(existsSync(resolve(runtimeRoot, "issues", "ope-43"))).toBe(false);
+    expect(await readIssueRuntimeState(runtimeRoot, "OPE-43")).toMatchObject({
+      finalizedLinearState: "Done",
+      issueIdentifier: "OPE-43",
+      status: "finalized",
+    });
     expect(writes.some((entry) => entry.includes("rebasing ope-43 onto main"))).toBe(true);
     expect(writes.some((entry) => entry.includes("merging ope-43 into local main"))).toBe(true);
     expect(writes.some((entry) => entry.includes("origin/ope-43 already absent"))).toBe(true);
@@ -284,7 +300,11 @@ test("WorkspaceManager recreates a missing worktree before merging a done branch
     expect(await readFile(resolve(repoRoot, "README.md"), "utf8")).toBe("merged after recreate\n");
     expect(existsSync(workspace.path)).toBe(false);
     expect(await run(["git", "branch", "--list", "ope-43"], repoRoot)).toBe("");
-    expect(await readIssueRuntimeState(runtimeRoot, "OPE-43")).toBeUndefined();
+    expect(await readIssueRuntimeState(runtimeRoot, "OPE-43")).toMatchObject({
+      finalizedLinearState: "Done",
+      issueIdentifier: "OPE-43",
+      status: "finalized",
+    });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -321,7 +341,11 @@ test("WorkspaceManager cleans up a done issue when its commit is already on main
 
     expect(await readFile(resolve(repoRoot, "README.md"), "utf8")).toBe("already merged\n");
     expect(await run(["git", "--git-dir", remoteRoot, "branch", "--list", "ope-43"], root)).toBe("");
-    expect(await readIssueRuntimeState(runtimeRoot, "OPE-43")).toBeUndefined();
+    expect(await readIssueRuntimeState(runtimeRoot, "OPE-43")).toMatchObject({
+      finalizedLinearState: "Done",
+      issueIdentifier: "OPE-43",
+      status: "finalized",
+    });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -368,7 +392,11 @@ test("WorkspaceManager continues reconciling when one done issue can no longer b
       issueIdentifier: "OPE-43",
       status: "completed",
     });
-    expect(await readIssueRuntimeState(runtimeRoot, "OPE-44")).toBeUndefined();
+    expect(await readIssueRuntimeState(runtimeRoot, "OPE-44")).toMatchObject({
+      finalizedLinearState: "Done",
+      issueIdentifier: "OPE-44",
+      status: "finalized",
+    });
     expect(await readFile(resolve(repoRoot, "healthy.txt"), "utf8")).toBe("healthy\n");
   } finally {
     await rm(root, { force: true, recursive: true });
@@ -488,6 +516,58 @@ test("WorkspaceManager preserves terminal issue branches until the commit lands 
       issueIdentifier: "OPE-43",
       status: "completed",
       worktreePath: workspace.path,
+    });
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("WorkspaceManager reconciles stale running issues using durable issue records", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
+  const runtimeRoot = resolve(root, "runtime");
+  try {
+    const { repoRoot } = await createSourceRepo(root);
+    const manager = new WorkspaceManager({
+      hooks,
+      repoRoot,
+      rootDir: runtimeRoot,
+      workerId: "worker-1",
+    });
+    const activeIssue = issue("OPE-43", "Add Worker Checkout");
+    const workspace = await manager.prepare(activeIssue);
+
+    await writeFile(join(workspace.path, "feature.txt"), "issue change\n");
+    const commitSha = await commitAll(workspace.path, "OPE-43 Add Worker Checkout");
+    await writeWorkerState(runtimeRoot, "worker-1", {
+      activeIssue: { identifier: "OPE-43", title: "Add Worker Checkout" },
+      branchName: "ope-43",
+      checkoutPath: workspace.path,
+      controlPath: repoRoot,
+      issueRuntimePath: workspace.runtimePath,
+      originPath: repoRoot,
+      outputPath: workspace.outputPath,
+      pid: 999999,
+      sourceRepoPath: repoRoot,
+      status: "running",
+      updatedAt: new Date().toISOString(),
+      workerId: "worker-1",
+    });
+
+    await manager.reconcileTerminalIssues(
+      {
+        fetchIssueStatesByIds: async () => new Map([[activeIssue.id, "Done"]]),
+      },
+      ["Done"],
+    );
+
+    expect(await readFile(resolve(repoRoot, "feature.txt"), "utf8")).toBe("issue change\n");
+    expect(existsSync(workspace.path)).toBe(false);
+    expect(await run(["git", "branch", "--list", "ope-43"], repoRoot)).toBe("");
+    expect(await readIssueRuntimeState(runtimeRoot, "OPE-43")).toMatchObject({
+      commitSha,
+      finalizedLinearState: "Done",
+      issueIdentifier: "OPE-43",
+      status: "finalized",
     });
   } finally {
     await rm(root, { force: true, recursive: true });
