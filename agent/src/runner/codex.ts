@@ -1,6 +1,6 @@
 import { createLogger, type Logger } from "@io/lib";
 import { appendFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import type {
   CommandExecutionRequestApprovalResponse,
@@ -135,13 +135,17 @@ function uniquePaths(paths: Array<string | undefined>) {
 }
 
 export function createDefaultTurnSandbox(workspace: PreparedWorkspace) {
+  const originGitPath =
+    basename(workspace.originPath) === ".git" || workspace.originPath.endsWith(".git")
+      ? undefined
+      : join(workspace.originPath, ".git");
   return {
     excludeSlashTmp: false,
     excludeTmpdirEnvVar: false,
     networkAccess: true,
     readOnlyAccess: { type: "fullAccess" } as const,
     type: "workspaceWrite" as const,
-    writableRoots: uniquePaths([workspace.path, workspace.originPath]),
+    writableRoots: uniquePaths([workspace.path, workspace.originPath, originGitPath]),
   };
 }
 

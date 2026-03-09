@@ -179,6 +179,7 @@ test("default turn sandbox includes checkout and local origin", () => {
     writableRoots: [
       "/Users/dpeek/code/io/tmp/workspace/workers/worker-1/repo",
       "/Users/dpeek/code/io",
+      "/Users/dpeek/code/io/.git",
     ],
   });
 });
