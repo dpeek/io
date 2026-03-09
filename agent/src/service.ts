@@ -214,7 +214,7 @@ export class AgentService {
       return;
     }
     const workspaceManager = this.#createWorkspaceManager(workflow);
-    const { path } = await workspaceManager.ensureCheckout();
+    const { path } = await workspaceManager.ensureSessionStartState();
     const workspace = workspaceManager.createIdleWorkspace();
     await workspaceManager.cleanup(workspace);
     process.stdout.write(`${this.#workerId}: ready at ${path}\n`);

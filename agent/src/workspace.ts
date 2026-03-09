@@ -138,6 +138,25 @@ export class CheckoutManager {
     return { createdNow, path };
   }
 
+  async ensureSessionStartState() {
+    const checkout = await this.ensureCheckout();
+    const dirty = await this.#isDirty(checkout.path);
+    if (dirty) {
+      const currentBranch = await this.#currentBranch(checkout.path);
+      throw new Error(`worker_checkout_dirty_on_start:${this.#workerId}:${currentBranch || "unknown"}`);
+    }
+    const checkoutMain = await this.#runCommand(
+      ["git", "checkout", "main"],
+      checkout.path,
+      this.#hooks.timeoutMs,
+    );
+    if (checkoutMain.exitCode !== 0) {
+      await this.#runOrThrow(["git", "checkout", "-B", "main", "origin/main"], checkout.path);
+    }
+    await this.#runOrThrow(["git", "pull", "--ff-only", "origin", "main"], checkout.path);
+    return checkout;
+  }
+
   async cleanup(workspace: PreparedWorkspace) {
     await this.#writeState(workspace, "idle");
   }

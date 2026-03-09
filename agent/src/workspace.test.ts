@@ -147,3 +147,51 @@ test("WorkspaceManager checkout can push issue branches to local origin", async 
     await rm(root, { force: true, recursive: true });
   }
 });
+
+test("WorkspaceManager session start checks out main and fast-forwards from origin", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
+  try {
+    const repoRoot = await createSourceRepo(root);
+    const manager = new WorkspaceManager({ hooks, repoRoot, rootDir: resolve(root, "runtime"), workerId: "worker-1" });
+    const workspace = await manager.prepare(issue("OPE-43"));
+
+    await run(["git", "checkout", "main"], workspace.path);
+    await writeFile(resolve(repoRoot, "README.md"), "hello from origin\n");
+    await run(["git", "add", "README.md"], repoRoot);
+    await run(
+      [
+        "git",
+        "-c",
+        "user.name=Agent Test",
+        "-c",
+        "user.email=agent@example.com",
+        "commit",
+        "-m",
+        "update main",
+      ],
+      repoRoot,
+    );
+
+    await manager.ensureSessionStartState();
+
+    expect(await run(["git", "branch", "--show-current"], workspace.path)).toBe("main");
+    expect(await readFile(resolve(workspace.path, "README.md"), "utf8")).toBe("hello from origin\n");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("WorkspaceManager session start aborts if checkout is dirty", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
+  try {
+    const repoRoot = await createSourceRepo(root);
+    const manager = new WorkspaceManager({ hooks, repoRoot, rootDir: resolve(root, "runtime"), workerId: "worker-1" });
+    const workspace = await manager.prepare(issue("OPE-43"));
+
+    await writeFile(join(workspace.path, "notes.txt"), "local change\n");
+
+    await expect(manager.ensureSessionStartState()).rejects.toThrow("worker_checkout_dirty_on_start");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});

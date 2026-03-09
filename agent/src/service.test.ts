@@ -165,6 +165,10 @@ Issue {{ issue.identifier }}
             workerId: 'igor',
           }),
           ensureCheckout: async () => ({ createdNow: true, path: resolve(root, 'workspace', 'workers', 'igor', 'repo') }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, 'workspace', 'workers', 'igor', 'repo'),
+          }),
         }) as unknown as never,
     });
 
