@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   buildAutomaticUserInputResponse,
+  createDefaultTurnSandbox,
   renderCodexSessionMessage,
   type SessionDisplayState,
 } from "./codex.js";
@@ -22,6 +23,7 @@ function renderMessages(messages: Array<Record<string, unknown>>) {
       issueTitle: "Add predicate-slot subscriptions to graph runtime",
       message,
       state,
+      workerId: "worker-1",
       writeDisplay: (text) => {
         chunks.push(text);
       },
@@ -55,7 +57,7 @@ test("renders agent message deltas as streamed session text", () => {
   ]);
 
   expect(output).toBe(
-    "=== OPE-41 Add predicate-slot subscriptions to graph runtime ===\n" +
+    "=== worker-1 OPE-41 Add predicate-slot subscriptions to graph runtime ===\n" +
       "I’m checking the current branch.\n",
   );
 });
@@ -86,7 +88,7 @@ test("renders command executions and output in a readable transcript", () => {
   ]);
 
   expect(output).toBe(
-    "=== OPE-41 Add predicate-slot subscriptions to graph runtime ===\n" +
+    "=== worker-1 OPE-41 Add predicate-slot subscriptions to graph runtime ===\n" +
       "$ git status --short --branch\n" +
       "| ## main\n" +
       "|  M agent/src/runner/codex.ts\n",
@@ -132,7 +134,7 @@ test("renders approval prompts and tool failures", () => {
   ]);
 
   expect(output).toBe(
-    "=== OPE-41 Add predicate-slot subscriptions to graph runtime ===\n" +
+    "=== worker-1 OPE-41 Add predicate-slot subscriptions to graph runtime ===\n" +
       'Approval required: Approve app tool call?: The linear MCP server wants to run the tool "Save issue", which may modify or delete data. Allow this action?\n' +
       'Tool: linear.save_issue {"id":"OPE-41","state":"In Progress"}\n' +
       "Tool failed: user cancelled MCP tool call\n",
@@ -159,5 +161,24 @@ test("auto-approves requestUserInput prompts for the session", () => {
         answers: ["Approve this Session"],
       },
     },
+  });
+});
+
+test("default turn sandbox includes checkout and local origin", () => {
+  const sandbox = createDefaultTurnSandbox({
+    branchName: "ope-43",
+    createdNow: false,
+    originPath: "/Users/dpeek/code/io",
+    path: "/Users/dpeek/code/io/tmp/workspace/workers/worker-1/repo",
+    sourceRepoPath: "/Users/dpeek/code/io",
+    workerId: "worker-1",
+  });
+
+  expect(sandbox).toMatchObject({
+    type: "workspaceWrite",
+    writableRoots: [
+      "/Users/dpeek/code/io/tmp/workspace/workers/worker-1/repo",
+      "/Users/dpeek/code/io",
+    ],
   });
 });

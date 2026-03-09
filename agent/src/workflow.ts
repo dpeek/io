@@ -135,6 +135,7 @@ const workflowSchema = z
       ]),
     }),
     workspace: z.object({
+      origin: z.string().optional(),
       root: z.string().default("$SYMPHONY_WORKSPACE_ROOT"),
     }),
   })
@@ -176,6 +177,7 @@ function expandPathValue(value: string) {
 }
 
 function buildWorkflow(frontMatter: WorkflowFrontMatter, promptTemplate: string): Workflow {
+  const workspaceRoot = expandPathValue(frontMatter.workspace.root);
   return {
     agent: {
       maxConcurrentAgents: frontMatter.agent.max_concurrent_agents,
@@ -211,7 +213,8 @@ function buildWorkflow(frontMatter: WorkflowFrontMatter, promptTemplate: string)
       terminalStates: normalizeStates(frontMatter.tracker.terminal_states),
     },
     workspace: {
-      root: expandPathValue(frontMatter.workspace.root),
+      origin: frontMatter.workspace.origin ? expandPathValue(frontMatter.workspace.origin) : undefined,
+      root: workspaceRoot,
     },
   };
 }

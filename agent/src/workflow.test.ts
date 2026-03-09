@@ -28,6 +28,7 @@ Issue {{ issue.identifier }}: {{ issue.title }}
   expect(result.value.tracker.apiKey).toBe("linear-token");
   expect(result.value.tracker.projectSlug).toBe("project-slug");
   expect(result.value.workspace.root).toBe("/tmp/workspace");
+  expect(result.value.workspace.origin).toBeUndefined();
   expect(result.value.agent.maxTurns).toBe(1);
 });
 

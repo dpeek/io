@@ -130,14 +130,18 @@ function toNotification(method: string, params?: unknown) {
   return JSON.stringify(params === undefined ? { method } : { method, params });
 }
 
-function createDefaultTurnSandbox(workspace: PreparedWorkspace) {
+function uniquePaths(paths: Array<string | undefined>) {
+  return Array.from(new Set(paths.filter((value): value is string => Boolean(value))));
+}
+
+export function createDefaultTurnSandbox(workspace: PreparedWorkspace) {
   return {
     excludeSlashTmp: false,
     excludeTmpdirEnvVar: false,
     networkAccess: true,
     readOnlyAccess: { type: "fullAccess" } as const,
     type: "workspaceWrite" as const,
-    writableRoots: [workspace.path],
+    writableRoots: uniquePaths([workspace.path, workspace.originPath]),
   };
 }
 
@@ -320,11 +324,13 @@ export function renderCodexSessionMessage(options: {
   issueTitle: string;
   message: JsonRpcMessage;
   state: SessionDisplayState;
+  workerId?: string;
   writeDisplay: (text: string) => void;
 }) {
-  const { issueIdentifier, issueTitle, message, state, writeDisplay } = options;
+  const { issueIdentifier, issueTitle, message, state, workerId, writeDisplay } = options;
   if (!state.headerPrinted) {
-    renderSessionLine(`=== ${issueIdentifier} ${issueTitle} ===`, state, writeDisplay);
+    const titlePrefix = workerId ? `${workerId} ` : "";
+    renderSessionLine(`=== ${titlePrefix}${issueIdentifier} ${issueTitle} ===`, state, writeDisplay);
     state.headerPrinted = true;
   }
   switch (message.method) {
@@ -534,6 +540,7 @@ export class CodexAppServerRunner {
             issueTitle: options.issue.title,
             message,
             state: state.display,
+            workerId: options.workspace.workerId,
             writeDisplay: (text) => {
               logs.writeDisplay(text);
               process.stdout.write(text);

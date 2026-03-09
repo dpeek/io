@@ -60,13 +60,22 @@ export interface Workflow {
   promptTemplate: string;
   tracker: TrackerConfig;
   workspace: {
+    origin?: string;
     root: string;
   };
+}
+
+export interface WorkerContext {
+  count: number;
+  id: string;
+  index: number;
 }
 
 export interface RenderContext {
   attempt?: number;
   issue: AgentIssue;
+  worker?: WorkerContext;
+  workspace?: PreparedWorkspace;
 }
 
 export interface ValidationError {
@@ -79,8 +88,10 @@ export type ValidationResult<T> = { ok: true; value: T } | { errors: ValidationE
 export interface PreparedWorkspace {
   branchName: string;
   createdNow: boolean;
+  originPath: string;
   path: string;
-  workspaceKey: string;
+  sourceRepoPath?: string;
+  workerId: string;
 }
 
 export interface IssueRunResult {
