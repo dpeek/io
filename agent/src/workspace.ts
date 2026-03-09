@@ -1,7 +1,7 @@
 import { createLogger, type Logger } from "@io/lib";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import type { AgentIssue, HookConfig, PreparedWorkspace } from "./types.js";
 
@@ -278,7 +278,15 @@ export class CheckoutManager {
       if (!state || !terminalStateSet.has(normalizeStateName(state))) {
         continue;
       }
-      await this.#finalizeTerminalIssue(issue, state);
+      try {
+        await this.#finalizeTerminalIssue(issue, state);
+      } catch (error) {
+        this.#log.error("terminal_issue_finalize.failed", {
+          error: error instanceof Error ? error : new Error(String(error)),
+          issueIdentifier: issue.issueIdentifier,
+          linearState: state,
+        });
+      }
     }
   }
 
@@ -516,10 +524,65 @@ export class CheckoutManager {
     return result.exitCode === 0;
   }
 
+  async #isCommitOnMain(cwd: string, commitSha: string) {
+    const result = await this.#runCommand(
+      ["git", "merge-base", "--is-ancestor", commitSha, "main"],
+      cwd,
+      this.#hooks.timeoutMs,
+    );
+    return result.exitCode === 0;
+  }
+
+  async #ensureIssueControlRepo(issue: IssueRuntimeState) {
+    if (existsSync(issue.controlPath)) {
+      return;
+    }
+    if (issue.sourceRepoPath && issue.controlPath === issue.sourceRepoPath) {
+      throw new Error(`issue_control_repo_missing_for_finalize:${issue.issueIdentifier}:${issue.controlPath}`);
+    }
+    this.#log.info("issue.control_repo.recreate", {
+      branchName: issue.branchName,
+      controlPath: issue.controlPath,
+      issueIdentifier: issue.issueIdentifier,
+      originPath: issue.originPath,
+    });
+    await mkdir(dirname(issue.controlPath), { recursive: true });
+    await this.#runOrThrow(["git", "clone", issue.originPath, issue.controlPath], dirname(issue.controlPath));
+    await this.#ensureRemote(issue.controlPath, "origin", issue.originPath);
+    if (issue.sourceRepoPath && issue.originPath !== issue.sourceRepoPath) {
+      await this.#ensureRemote(issue.controlPath, "upstream", issue.sourceRepoPath);
+    }
+  }
+
+  async #canFinalizeWithoutBranch(issue: IssueRuntimeState) {
+    if (!issue.commitSha) {
+      return false;
+    }
+    const repoPath =
+      issue.sourceRepoPath && existsSync(issue.sourceRepoPath)
+        ? issue.sourceRepoPath
+        : existsSync(issue.controlPath)
+          ? issue.controlPath
+          : undefined;
+    if (!repoPath) {
+      return false;
+    }
+    const alreadyMerged = await this.#isCommitOnMain(repoPath, issue.commitSha);
+    if (alreadyMerged) {
+      this.#log.info("issue.finalize.already_merged", {
+        branchName: issue.branchName,
+        commitSha: issue.commitSha,
+        issueIdentifier: issue.issueIdentifier,
+      });
+    }
+    return alreadyMerged;
+  }
+
   async #ensureIssueWorktree(issue: IssueRuntimeState) {
     if (existsSync(issue.worktreePath)) {
       return;
     }
+    await this.#ensureIssueControlRepo(issue);
     this.#log.info("issue.worktree.recreate", {
       branchName: issue.branchName,
       issueIdentifier: issue.issueIdentifier,
@@ -551,6 +614,9 @@ export class CheckoutManager {
       );
       return;
     }
+    if (await this.#canFinalizeWithoutBranch(issue)) {
+      return;
+    }
     throw new Error(`issue_branch_missing_for_finalize:${issue.issueIdentifier}:${issue.branchName}`);
   }
 
@@ -571,10 +637,15 @@ export class CheckoutManager {
     if (issue.sourceRepoPath && issue.controlPath === issue.sourceRepoPath) {
       await this.#refreshSourceRepoMain(issue.sourceRepoPath);
     } else {
+      await this.#ensureIssueControlRepo(issue);
       await this.#refreshControlRepoMain(issue.controlPath);
     }
     await this.#ensureIssueWorktree(issue);
+    if (!existsSync(issue.worktreePath)) {
+      return false;
+    }
     await this.#runOrThrow(["git", "rebase", "main"], issue.worktreePath);
+    return true;
   }
 
   async #refreshSourceRepoMain(repoPath: string) {
@@ -633,7 +704,9 @@ export class CheckoutManager {
   }
 
   async #mergeIssueBranch(issue: IssueRuntimeState) {
-    await this.#refreshMainAndRebaseIssueBranch(issue);
+    if (!(await this.#refreshMainAndRebaseIssueBranch(issue))) {
+      return;
+    }
     if (issue.sourceRepoPath && issue.controlPath === issue.sourceRepoPath) {
       await this.#mergeIntoSourceRepo(issue);
       return;

@@ -280,6 +280,93 @@ test("WorkspaceManager recreates a missing worktree before merging a done branch
   }
 });
 
+test("WorkspaceManager cleans up a done issue when its commit is already on main", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
+  const runtimeRoot = resolve(root, "runtime");
+  try {
+    const { remoteRoot, repoRoot } = await createSourceRepo(root);
+    const manager = new WorkspaceManager({
+      hooks,
+      repoRoot,
+      rootDir: runtimeRoot,
+      workerId: "worker-1",
+    });
+    const activeIssue = issue("OPE-43", "Add Worker Checkout");
+    const workspace = await manager.prepare(activeIssue);
+
+    await writeFile(join(workspace.path, "README.md"), "already merged\n");
+    await manager.complete(workspace, activeIssue);
+    await run(["git", "checkout", "main"], repoRoot);
+    await run(["git", "merge", "--no-edit", "ope-43"], repoRoot);
+    await run(["git", "push", "origin", "main"], repoRoot);
+    await run(["git", "worktree", "remove", "--force", workspace.path], repoRoot);
+    await run(["git", "branch", "-D", "ope-43"], repoRoot);
+    await run(["git", "push", "origin", "--delete", "ope-43"], repoRoot);
+
+    await manager.reconcileTerminalIssues(
+      {
+        fetchIssueStatesByIds: async () => new Map([[activeIssue.id, "Done"]]),
+      },
+      ["Done"],
+    );
+
+    expect(await readFile(resolve(repoRoot, "README.md"), "utf8")).toBe("already merged\n");
+    expect(await run(["git", "--git-dir", remoteRoot, "branch", "--list", "ope-43"], root)).toBe("");
+    expect(await readIssueRuntimeState(runtimeRoot, "OPE-43")).toBeUndefined();
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("WorkspaceManager continues reconciling when one done issue can no longer be merged", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
+  const runtimeRoot = resolve(root, "runtime");
+  try {
+    const { repoRoot } = await createSourceRepo(root);
+    const manager = new WorkspaceManager({
+      hooks,
+      repoRoot,
+      rootDir: runtimeRoot,
+      workerId: "worker-1",
+    });
+
+    const staleIssue = issue("OPE-43", "Stale Branch");
+    const staleWorkspace = await manager.prepare(staleIssue);
+    await writeFile(join(staleWorkspace.path, "stale.txt"), "stale\n");
+    await manager.complete(staleWorkspace, staleIssue);
+    await run(["git", "worktree", "remove", "--force", staleWorkspace.path], repoRoot);
+    await run(["git", "branch", "-D", "ope-43"], repoRoot);
+    await run(["git", "push", "origin", "--delete", "ope-43"], repoRoot);
+
+    const activeIssue = issue("OPE-44", "Healthy Branch");
+    const activeWorkspace = await manager.prepare(activeIssue);
+    await writeFile(join(activeWorkspace.path, "healthy.txt"), "healthy\n");
+    await manager.complete(activeWorkspace, activeIssue);
+
+    await expect(
+      manager.reconcileTerminalIssues(
+        {
+          fetchIssueStatesByIds: async () =>
+            new Map([
+              [staleIssue.id, "Done"],
+              [activeIssue.id, "Done"],
+            ]),
+        },
+        ["Done"],
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(await readIssueRuntimeState(runtimeRoot, "OPE-43")).toMatchObject({
+      issueIdentifier: "OPE-43",
+      status: "completed",
+    });
+    expect(await readIssueRuntimeState(runtimeRoot, "OPE-44")).toBeUndefined();
+    expect(await readFile(resolve(repoRoot, "healthy.txt"), "utf8")).toBe("healthy\n");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("WorkspaceManager rebases a done branch onto the latest main before merging", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
   const runtimeRoot = resolve(root, "runtime");
@@ -347,7 +434,7 @@ test("WorkspaceManager preserves worktree state when rebasing a done branch conf
         },
         ["Done"],
       ),
-    ).rejects.toThrow();
+    ).resolves.toBeUndefined();
 
     expect(await readFile(resolve(repoRoot, "README.md"), "utf8")).toBe("main side\n");
     expect(existsSync(workspace.path)).toBe(true);
