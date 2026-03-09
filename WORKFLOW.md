@@ -66,18 +66,17 @@ Execution rules:
 - do not force push, hard reset, or overwrite user changes
 - if committing or pushing the issue branch would be unsafe, stop and report the blocker
 
-Git flow:
+Do no interact with git, the harness will do it.
+
+Workflow:
 
 1. inspect the current branch and workspace state
 2. move the issue to `In Progress`
 3. implement the change
-4. run `bun check`
-5. commit with first line `{{ issue.identifier }} {{ issue.title }}`
-6. do not push to origin
-7. move the issue to `In Review`
+4. run `bun check` and fix any issues
+5. move the issue to `In Review`
 
 Output:
 
 - summary of what changed
 - validation result
-- commit SHA

@@ -250,7 +250,7 @@ export class CheckoutManager {
   }
 
   async complete(workspace: PreparedWorkspace, issue: AgentIssue) {
-    const commitSha = await this.#commitAndPush(workspace, issue);
+    const commitSha = await this.#commit(workspace, issue);
     await this.#writeIssueState(workspace, issue, "completed", { commitSha });
     await this.#writeState(workspace, "idle");
     return { commitSha };
@@ -371,7 +371,7 @@ export class CheckoutManager {
     return resolve(this.#rootDir, "worktrees", branchName);
   }
 
-  async #commitAndPush(workspace: PreparedWorkspace, issue: AgentIssue) {
+  async #commit(workspace: PreparedWorkspace, issue: AgentIssue) {
     const dirty = await this.#isDirty(workspace.path);
     if (dirty) {
       await this.#runOrThrow(["git", "add", "-A"], workspace.path);
@@ -385,7 +385,6 @@ export class CheckoutManager {
       commitArgs.push("commit", "-m", `${issue.identifier} ${issue.title}`);
       await this.#runOrThrow(commitArgs, workspace.path);
     }
-    await this.#runOrThrow(["git", "push", "-u", "origin", "HEAD"], workspace.path);
     return await this.#revParseHead(workspace.path);
   }
 

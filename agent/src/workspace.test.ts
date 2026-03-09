@@ -169,7 +169,7 @@ test("WorkspaceManager blocks switching issues when a worktree is dirty", async 
   }
 });
 
-test("WorkspaceManager can commit and push an issue branch from its worktree", async () => {
+test("WorkspaceManager can commit an issue branch from its worktree without pushing", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
   const runtimeRoot = resolve(root, "runtime");
   try {
@@ -187,9 +187,8 @@ test("WorkspaceManager can commit and push an issue branch from its worktree", a
     const completion = await manager.complete(workspace, activeIssue);
 
     expect(completion.commitSha).toHaveLength(40);
-    expect(
-      await run(["git", "--git-dir", remoteRoot, "branch", "--list", "ope-43"], root),
-    ).toContain("ope-43");
+    expect(await run(["git", "branch", "--list", "ope-43"], repoRoot)).toContain("ope-43");
+    expect(await run(["git", "--git-dir", remoteRoot, "branch", "--list", "ope-43"], root)).toBe("");
 
     const workerState = JSON.parse(
       await readFile(resolve(runtimeRoot, "workers", "worker-1", "worker-state.json"), "utf8"),
@@ -301,7 +300,6 @@ test("WorkspaceManager cleans up a done issue when its commit is already on main
     await run(["git", "push", "origin", "main"], repoRoot);
     await run(["git", "worktree", "remove", "--force", workspace.path], repoRoot);
     await run(["git", "branch", "-D", "ope-43"], repoRoot);
-    await run(["git", "push", "origin", "--delete", "ope-43"], repoRoot);
 
     await manager.reconcileTerminalIssues(
       {
@@ -336,7 +334,6 @@ test("WorkspaceManager continues reconciling when one done issue can no longer b
     await manager.complete(staleWorkspace, staleIssue);
     await run(["git", "worktree", "remove", "--force", staleWorkspace.path], repoRoot);
     await run(["git", "branch", "-D", "ope-43"], repoRoot);
-    await run(["git", "push", "origin", "--delete", "ope-43"], repoRoot);
 
     const activeIssue = issue("OPE-44", "Healthy Branch");
     const activeWorkspace = await manager.prepare(activeIssue);
@@ -410,7 +407,7 @@ test("WorkspaceManager preserves worktree state when rebasing a done branch conf
   const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
   const runtimeRoot = resolve(root, "runtime");
   try {
-    const { remoteRoot, repoRoot } = await createSourceRepo(root);
+    const { repoRoot } = await createSourceRepo(root);
     const manager = new WorkspaceManager({
       hooks,
       repoRoot,
@@ -440,9 +437,6 @@ test("WorkspaceManager preserves worktree state when rebasing a done branch conf
     expect(existsSync(workspace.path)).toBe(true);
     expect(await run(["git", "status", "--short"], workspace.path)).toContain("README.md");
     expect(await run(["git", "branch", "--list", "ope-43"], repoRoot)).toContain("ope-43");
-    expect(await run(["git", "--git-dir", remoteRoot, "branch", "--list", "ope-43"], root)).toBe(
-      "ope-43",
-    );
     expect(await readIssueRuntimeState(runtimeRoot, "OPE-43")).toMatchObject({
       issueIdentifier: "OPE-43",
       status: "completed",

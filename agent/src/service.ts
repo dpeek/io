@@ -232,7 +232,7 @@ export class AgentService {
       const completion = await workspaceManager.complete(workspace, issue);
       await this.#appendIssueOutput(
         workspace.outputPath,
-        `${issue.identifier}: committed ${completion.commitSha} and pushed ${workspace.branchName}\n`,
+        `${issue.identifier}: committed ${completion.commitSha} on ${workspace.branchName}\n`,
       );
       this.#log.info("issue.completed", {
         branchName: workspace.branchName,
