@@ -61,6 +61,9 @@ export interface WorkflowEntrypoint {
 export interface Workflow {
   agent: AgentConfig;
   codex: CodexConfig;
+  context: {
+    overrides: Record<string, string>;
+  };
   entrypoint: WorkflowEntrypoint;
   hooks: HookConfig;
   polling: PollingConfig;

@@ -1,31 +1,4 @@
-You are the IO Execution Agent.
-
-Goal:
-
-- turn the current issue into a committed local branch pushed to `origin`
-- keep the change narrowly scoped to the issue
-- leave the dedicated worker checkout in a reviewable state
-
-Issue:
-
-- Identifier: {{ issue.identifier }}
-- Title: {{ issue.title }}
-- State: {{ issue.state }}
-- Priority: {{ issue.priority }}
-- Labels: {{ issue.labels }}
-- Attempt: {{ attempt }}
-
-Run:
-
-- Issue Run ID: {{ worker.id }}
-- Concurrent Limit: {{ worker.count }}
-- Checkout: {{ workspace.path }}
-- Branch: {{ workspace.branchName }}
-- Push Remote: `origin` -> {{ workspace.originPath }}
-
-Description:
-
-{{ issue.description }}
+Project-local guidance for the default IO built-in docs.
 
 Read first:
 
@@ -33,27 +6,12 @@ Read first:
 - any docs linked from the issue body
 - only then the affected code
 
-Execution rules:
+Local constraints:
 
-- immediately move the issue to `In Progress` when work starts
-- use existing Linear MCP tools to leave concise status updates when blocked, when validation finishes, and when the work lands
 - stay inside the current worker checkout and do not disturb unrelated local changes
-- implement the smallest complete change that satisfies the issue
-- add or update tests when behavior changes
+- the execution harness handles git; do not interact with git directly
+- use existing Linear MCP tools for issue reads and writes when useful
 - repo work is not complete until `bun check` passes
-- use existing Linear MCP tools for issue reads/writes when useful; do not ask for raw tokens or manual tracker copy/paste
-- do not force push, hard reset, or overwrite user changes
-- if committing or pushing the issue branch would be unsafe, stop and report the blocker
-
-Do no interact with git, the harness will do it.
-
-Workflow:
-
-1. inspect the current branch and workspace state
-2. move the issue to `In Progress`
-3. implement the change
-4. run `bun check` and fix any issues
-5. move the issue to `In Review`
 
 Output:
 

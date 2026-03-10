@@ -3,8 +3,36 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
+import {
+  DEFAULT_BACKLOG_BUILTIN_DOC_IDS,
+  DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
+  resolveBuiltinDoc,
+} from "./builtins.js";
 import { AgentService, pickCandidateIssues } from "./service.js";
 import { normalizeLinearIssue } from "./tracker/linear.js";
+import type { PreparedWorkspace } from "./types.js";
+import { renderPrompt } from "./workflow.js";
+
+function buildExpectedPrompt(
+  builtinIds: readonly string[],
+  promptPath: string,
+  promptTemplate: string,
+  issue: Parameters<typeof renderPrompt>[1]["issue"],
+  workspace: PreparedWorkspace,
+) {
+  return renderPrompt(
+    [
+      ...builtinIds.map((id) => `<!-- ${id} -->\n${resolveBuiltinDoc(id)!.content.trim()}`),
+      `<!-- ${promptPath} -->\n${promptTemplate.trim()}`,
+    ].join("\n\n"),
+    {
+      attempt: 1,
+      issue,
+      worker: { count: 1, id: issue.identifier, index: 0 },
+      workspace,
+    },
+  );
+}
 
 test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   const issue = normalizeLinearIssue({
@@ -178,13 +206,13 @@ test("AgentService eagerly creates worker checkout on start", async () => {
   }
 });
 
-test("AgentService uses backlog prompt for io-labeled issues", async () => {
+test("AgentService composes execute built-ins with io.md", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
-  const backlogPromptPath = resolve(root, "llm", "agent", "backlog.md");
-  const workspacePath = resolve(root, "workspace", "workers", "OPE-55", "repo");
+  const ioPromptPath = resolve(root, "io.md");
+  const localPrompt = "LOCAL EXECUTE {{ issue.identifier }}\n";
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-54", "repo");
   let capturedPrompt = "";
 
-  await mkdir(resolve(root, "llm", "agent"), { recursive: true });
   await writeFile(
     resolve(root, "io.json"),
     JSON.stringify(
@@ -203,8 +231,155 @@ test("AgentService uses backlog prompt for io-labeled issues", async () => {
       2,
     ),
   );
-  await writeFile(resolve(root, "io.md"), "EXECUTE {{ issue.identifier }}\n");
-  await writeFile(backlogPromptPath, "BACKLOG {{ issue.identifier }} {{ issue.labels }}\n");
+  await writeFile(ioPromptPath, localPrompt);
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = mock(
+    async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            issues: {
+              nodes: [
+                {
+                  createdAt: "2024-01-01T00:00:00.000Z",
+                  description: "Implement execute flow",
+                  id: "1",
+                  identifier: "OPE-54",
+                  labels: { nodes: [] },
+                  priority: 0,
+                  state: { name: "Todo" },
+                  title: "Execute agent",
+                  updatedAt: "2024-01-01T00:00:00.000Z",
+                },
+              ],
+              pageInfo: {
+                endCursor: null,
+                hasNextPage: false,
+              },
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+  ) as unknown as typeof fetch;
+
+  try {
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => {
+          capturedPrompt = prompt;
+          return {
+            issue,
+            prompt,
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: workspacePath,
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          markBlocked: async () => undefined,
+          prepare: async () => ({
+            branchName: "ope-54",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: workspacePath,
+            sourceRepoPath: root,
+            workerId: "OPE-54",
+          }),
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(capturedPrompt).toBe(
+      buildExpectedPrompt(
+        DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
+        ioPromptPath,
+        localPrompt,
+        {
+          blockedBy: [],
+          createdAt: "2024-01-01T00:00:00.000Z",
+          description: "Implement execute flow",
+          id: "1",
+          identifier: "OPE-54",
+          labels: [],
+          priority: 0,
+          state: "Todo",
+          title: "Execute agent",
+          updatedAt: "2024-01-01T00:00:00.000Z",
+        },
+        {
+          branchName: "ope-54",
+          controlPath: root,
+          createdNow: true,
+          originPath: root,
+          path: workspacePath,
+          workerId: "OPE-54",
+        },
+      ),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("AgentService uses backlog built-ins for io-labeled issues", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const ioPromptPath = resolve(root, "io.md");
+  const localPrompt = "LOCAL BACKLOG {{ issue.identifier }}\n";
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-55", "repo");
+  let capturedPrompt = "";
+
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(ioPromptPath, localPrompt);
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "project-slug";
 
@@ -294,7 +469,166 @@ test("AgentService uses backlog prompt for io-labeled issues", async () => {
     });
 
     await service.start();
-    expect(capturedPrompt).toBe('BACKLOG OPE-55 ["io"]');
+    expect(capturedPrompt).toBe(
+      buildExpectedPrompt(
+        DEFAULT_BACKLOG_BUILTIN_DOC_IDS,
+        ioPromptPath,
+        localPrompt,
+        {
+          blockedBy: [],
+          createdAt: "2024-01-01T00:00:00.000Z",
+          description: "Refine backlog item",
+          id: "1",
+          identifier: "OPE-55",
+          labels: ["io"],
+          priority: 0,
+          state: "Todo",
+          title: "Backlog agent",
+          updatedAt: "2024-01-01T00:00:00.000Z",
+        },
+        {
+          branchName: "ope-55",
+          controlPath: root,
+          createdNow: true,
+          originPath: root,
+          path: workspacePath,
+          workerId: "OPE-55",
+        },
+      ),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("AgentService uses builtin override files from io.json", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const overridePath = resolve(root, "io", "context", "validation-override.md");
+  const ioPromptPath = resolve(root, "io.md");
+  const localPrompt = "LOCAL EXECUTE {{ issue.identifier }}\n";
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-56", "repo");
+  let capturedPrompt = "";
+
+  await mkdir(resolve(root, "io", "context"), { recursive: true });
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        context: {
+          overrides: {
+            "builtin:io.core.validation": "./io/context/validation-override.md",
+          },
+        },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(ioPromptPath, localPrompt);
+  await writeFile(overridePath, "VALIDATE WITH OVERRIDE {{ issue.identifier }}\n");
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = mock(
+    async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            issues: {
+              nodes: [
+                {
+                  createdAt: "2024-01-01T00:00:00.000Z",
+                  description: "Implement execute flow",
+                  id: "1",
+                  identifier: "OPE-56",
+                  labels: { nodes: [] },
+                  priority: 0,
+                  state: { name: "Todo" },
+                  title: "Execute agent override",
+                  updatedAt: "2024-01-01T00:00:00.000Z",
+                },
+              ],
+              pageInfo: {
+                endCursor: null,
+                hasNextPage: false,
+              },
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+  ) as unknown as typeof fetch;
+
+  try {
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => {
+          capturedPrompt = prompt;
+          return {
+            issue,
+            prompt,
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: workspacePath,
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          markBlocked: async () => undefined,
+          prepare: async () => ({
+            branchName: "ope-56",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: workspacePath,
+            sourceRepoPath: root,
+            workerId: "OPE-56",
+          }),
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(capturedPrompt).toContain("VALIDATE WITH OVERRIDE OPE-56");
+    expect(capturedPrompt).not.toContain(
+      "run the repo's required validation before declaring the work done",
+    );
   } finally {
     globalThis.fetch = originalFetch;
     await rm(root, { force: true, recursive: true });

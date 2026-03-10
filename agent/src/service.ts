@@ -1,16 +1,21 @@
 import { createLogger, type Logger } from "@io/lib";
 import { appendFile, readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 
 import type { AgentIssue, IssueRunResult, PreparedWorkspace, Workflow } from "./types.js";
 
+import {
+  DEFAULT_BACKLOG_BUILTIN_DOC_IDS,
+  DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
+  resolveBuiltinDoc,
+} from "./builtins.js";
 import { CodexAppServerRunner } from "./runner/codex.js";
 import { LinearTrackerAdapter } from "./tracker/linear.js";
 import { loadWorkflowFile, renderPrompt } from "./workflow.js";
 import { WorkspaceManager } from "./workspace.js";
 
 const BACKLOG_LABEL = "io";
-const BACKLOG_PROMPT_PATH = "llm/agent/backlog.md";
+const WORKFLOW_FILE = "WORKFLOW.md";
 
 type IssueRunner = {
   run: (options: {
@@ -142,7 +147,9 @@ export class AgentService {
       if (!waitForCompletion) {
         return [];
       }
-      return (await Promise.all(runs)).filter((result): result is IssueRunResult => Boolean(result));
+      return (await Promise.all(runs)).filter((result): result is IssueRunResult =>
+        Boolean(result),
+      );
     } finally {
       this.#ticking = false;
     }
@@ -208,20 +215,14 @@ export class AgentService {
         await workspaceManager.runAfterRunHook(workspace.path);
       }
       await workspaceManager.markBlocked(workspace, issue);
-      await this.#appendIssueOutput(
-        workspace.outputPath,
-        `${issue.identifier}: blocked\n`,
-      );
+      await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
       throw error;
     }
 
     await workspaceManager.runAfterRunHook(workspace.path);
     if (!result.success) {
       await workspaceManager.markBlocked(workspace, issue);
-      await this.#appendIssueOutput(
-        workspace.outputPath,
-        `${issue.identifier}: blocked\n`,
-      );
+      await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
       this.#log.info("issue.checkout.preserved", {
         branchName: workspace.branchName,
         issueIdentifier: issue.identifier,
@@ -251,10 +252,7 @@ export class AgentService {
       return result;
     } catch (error) {
       await workspaceManager.markBlocked(workspace, issue);
-      await this.#appendIssueOutput(
-        workspace.outputPath,
-        `${issue.identifier}: blocked\n`,
-      );
+      await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
       throw error;
     }
   }
@@ -293,14 +291,42 @@ export class AgentService {
   }
 
   async #loadPromptTemplate(workflow: Workflow, issue: AgentIssue) {
-    if (!issue.labels.includes(BACKLOG_LABEL)) {
+    if (
+      workflow.entrypoint.kind !== "io" ||
+      basename(workflow.entrypoint.promptPath) === WORKFLOW_FILE
+    ) {
       return workflow.promptTemplate;
     }
-    const promptPath = resolve(this.#repoRoot, BACKLOG_PROMPT_PATH);
-    const prompt = (await readFile(promptPath, "utf8")).trim();
-    if (!prompt) {
-      throw new Error(`workflow_prompt_empty:${promptPath}`);
+
+    const builtinIds = issue.labels.includes(BACKLOG_LABEL)
+      ? DEFAULT_BACKLOG_BUILTIN_DOC_IDS
+      : DEFAULT_EXECUTE_BUILTIN_DOC_IDS;
+    const sections = await Promise.all(
+      builtinIds.map(async (id) => {
+        const overridePath = workflow.context.overrides[id];
+        if (overridePath) {
+          const content = (await readFile(overridePath, "utf8")).trim();
+          if (!content) {
+            throw new Error(`workflow_doc_empty:${overridePath}`);
+          }
+          return { content, id };
+        }
+        const builtinDoc = resolveBuiltinDoc(id);
+        if (!builtinDoc) {
+          throw new Error(`workflow_doc_missing:${id}`);
+        }
+        return builtinDoc;
+      }),
+    );
+
+    const projectPrompt = workflow.promptTemplate.trim();
+    if (!projectPrompt) {
+      throw new Error(`workflow_prompt_empty:${workflow.entrypoint.promptPath}`);
     }
-    return prompt;
+
+    return [
+      ...sections.map((section) => `<!-- ${section.id} -->\n${section.content.trim()}`),
+      `<!-- ${workflow.entrypoint.promptPath} -->\n${projectPrompt}`,
+    ].join("\n\n");
   }
 }

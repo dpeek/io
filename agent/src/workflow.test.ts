@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
@@ -33,6 +33,7 @@ Issue {{ issue.identifier }}: {{ issue.title }}
   expect(result.value.tracker.projectSlug).toBe("project-slug");
   expect(result.value.workspace.root).toBe("/tmp/workspace");
   expect(result.value.workspace.origin).toBeUndefined();
+  expect(result.value.context.overrides).toEqual({});
   expect(result.value.agent.maxTurns).toBe(1);
 });
 
@@ -89,6 +90,49 @@ WORKFLOW {{ issue.identifier }}
     expect(result.value.tracker.apiKey).toBe("linear-token");
     expect(result.value.tracker.projectSlug).toBe("project-slug");
     expect(result.value.workspace.root).toBe(resolve(root, "workspace"));
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("loadWorkflowFile resolves builtin override paths from io.json", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "workflow-"));
+  process.env.LINEAR_API_KEY = "linear-token";
+
+  await mkdir(resolve(root, "io", "context"), { recursive: true });
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        context: {
+          overrides: {
+            "builtin:io.core.validation": "./io/context/validation.md",
+          },
+        },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+        },
+        workspace: {
+          root: "./workspace",
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(resolve(root, "io.md"), "IO {{ issue.identifier }}\n");
+
+  try {
+    const result = await loadWorkflowFile(undefined, root);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.value.context.overrides).toEqual({
+      "builtin:io.core.validation": resolve(root, "io", "context", "validation.md"),
+    });
   } finally {
     await rm(root, { force: true, recursive: true });
   }

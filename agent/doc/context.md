@@ -92,8 +92,8 @@ Examples:
 - `builtin:io.core.validation`
 - `builtin:io.agent.execute.default`
 - `builtin:io.agent.backlog.default`
-- `builtin:io.linear.issue-routing`
-- `builtin:io.context.resolution`
+- `builtin:io.linear.status-updates`
+- `builtin:io.context.discovery`
 
 ### Project docs
 
@@ -149,12 +149,19 @@ This keeps them near the repo root, avoids the current `llm/topic` naming ambigu
       "execute": {
         "include": [
           "builtin:io.agent.execute.default",
+          "builtin:io.context.discovery",
+          "builtin:io.linear.status-updates",
           "builtin:io.core.git-safety",
           "builtin:io.core.validation"
         ]
       },
       "backlog": {
-        "include": ["builtin:io.agent.backlog.default", "builtin:io.core.git-safety"]
+        "include": [
+          "builtin:io.agent.backlog.default",
+          "builtin:io.context.discovery",
+          "builtin:io.linear.status-updates",
+          "builtin:io.core.git-safety"
+        ]
       }
     }
   },

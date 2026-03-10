@@ -26,6 +26,9 @@ Always reference built-ins with the `builtin:` prefix:
 - `builtin:io.agent.execute.default`
 - `builtin:io.agent.backlog.default`
 - `builtin:io.core.git-safety`
+- `builtin:io.core.validation`
+- `builtin:io.linear.status-updates`
+- `builtin:io.context.discovery`
 
 Project doc ids remain unprefixed:
 

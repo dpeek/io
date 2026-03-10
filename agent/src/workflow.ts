@@ -6,12 +6,7 @@ import { parse as parseYaml } from "yaml";
 import z from "zod";
 
 import type { AskForApproval, SandboxMode, SandboxPolicy } from "./codex-schema.js";
-import type {
-  RenderContext,
-  ValidationResult,
-  Workflow,
-  WorkflowEntrypoint,
-} from "./types.js";
+import type { RenderContext, ValidationResult, Workflow, WorkflowEntrypoint } from "./types.js";
 
 import { toId } from "./util.js";
 
@@ -20,7 +15,15 @@ const log = createLogger({ pkg: "agent" });
 const IO_CONFIG_FILE = "io.json";
 const IO_PROMPT_FILE = "io.md";
 const WORKFLOW_FILE = "WORKFLOW.md";
-const IO_RUNTIME_KEYS = ["agent", "codex", "hooks", "polling", "tracker", "workspace"] as const;
+const IO_RUNTIME_KEYS = [
+  "agent",
+  "codex",
+  "context",
+  "hooks",
+  "polling",
+  "tracker",
+  "workspace",
+] as const;
 
 const approvalPolicySchema: z.ZodType<AskForApproval> = z.union([
   z.enum(["untrusted", "on-failure", "on-request", "never"]),
@@ -118,6 +121,11 @@ const ioConfigSchema = z
         threadSandbox: "workspace-write",
         turnTimeoutMs: 3_600_000,
       }),
+    context: z
+      .object({
+        overrides: z.record(z.string().min(1), z.string().min(1)).default({}),
+      })
+      .default({ overrides: {} }),
     hooks: z
       .object({
         afterCreate: z.string().min(1).optional(),
@@ -223,7 +231,7 @@ type IoConfig = z.infer<typeof ioConfigSchema>;
 type WorkflowFrontMatter = z.infer<typeof workflowFrontMatterSchema>;
 type WorkflowConfigFields = Pick<
   Workflow,
-  "agent" | "codex" | "hooks" | "polling" | "tracker" | "workspace"
+  "agent" | "codex" | "context" | "hooks" | "polling" | "tracker" | "workspace"
 >;
 
 function splitFrontMatter(document: string) {
@@ -300,6 +308,14 @@ function normalizeIoConfig(config: IoConfig, baseDir: string): WorkflowConfigFie
       turnSandboxPolicy: config.codex.turnSandboxPolicy,
       turnTimeoutMs: config.codex.turnTimeoutMs,
     },
+    context: {
+      overrides: Object.fromEntries(
+        Object.entries(config.context.overrides).map(([id, path]) => [
+          id,
+          expandPathValue(path, baseDir),
+        ]),
+      ),
+    },
     hooks: {
       afterCreate: config.hooks.afterCreate,
       afterRun: config.hooks.afterRun,
@@ -319,7 +335,9 @@ function normalizeIoConfig(config: IoConfig, baseDir: string): WorkflowConfigFie
       terminalStates: normalizeStates(config.tracker.terminalStates),
     },
     workspace: {
-      origin: config.workspace.origin ? expandPathValue(config.workspace.origin, baseDir) : undefined,
+      origin: config.workspace.origin
+        ? expandPathValue(config.workspace.origin, baseDir)
+        : undefined,
       root: expandPathValue(config.workspace.root, baseDir),
     },
   };
@@ -344,6 +362,9 @@ function normalizeWorkflowFrontMatter(
       turnSandboxPolicy: frontMatter.codex.turn_sandbox_policy,
       turnTimeoutMs: frontMatter.codex.turn_timeout_ms,
     },
+    context: {
+      overrides: {},
+    },
     hooks: {
       afterCreate: frontMatter.hooks.after_create,
       afterRun: frontMatter.hooks.after_run,
@@ -359,8 +380,7 @@ function normalizeWorkflowFrontMatter(
       apiKey: expandEnv(frontMatter.tracker.api_key) ?? expandEnv("$LINEAR_API_KEY"),
       endpoint: frontMatter.tracker.endpoint,
       kind: frontMatter.tracker.kind,
-      projectSlug:
-        expandEnv(frontMatter.tracker.project_slug) ?? expandEnv("$LINEAR_PROJECT_SLUG"),
+      projectSlug: expandEnv(frontMatter.tracker.project_slug) ?? expandEnv("$LINEAR_PROJECT_SLUG"),
       terminalStates: normalizeStates(frontMatter.tracker.terminal_states),
     },
     workspace: {
@@ -417,7 +437,10 @@ function parseWorkflowDocument(
   }
 }
 
-function resolveEntrypoint(path: string | undefined, baseDir: string): ValidationResult<WorkflowEntrypoint> {
+function resolveEntrypoint(
+  path: string | undefined,
+  baseDir: string,
+): ValidationResult<WorkflowEntrypoint> {
   if (path) {
     const absolutePath = isAbsolute(path) ? path : resolve(baseDir, path);
     const filename = basename(absolutePath);
@@ -509,7 +532,10 @@ async function loadPromptTemplate(path: string) {
 
 async function loadIoWorkflow(entrypoint: WorkflowEntrypoint): Promise<ValidationResult<Workflow>> {
   if (!existsSync(entrypoint.configPath)) {
-    return invalidResult(`Missing config entrypoint: ${entrypoint.configPath}`, entrypoint.configPath);
+    return invalidResult(
+      `Missing config entrypoint: ${entrypoint.configPath}`,
+      entrypoint.configPath,
+    );
   }
 
   try {
