@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
+import type { PredicateRef } from "../graph/client.js";
 import { isEnumType, type AnyTypeOutput, type EdgeOutput, type ResolvedAnyTypeOutput, typeId } from "../graph/schema.js";
 import type { TypeFilterOperator } from "../graph/type-module.js";
 import { genericWebFilterOperandEditorCapabilities } from "./generic-filter-editors.js";
@@ -49,6 +50,11 @@ export type WebFilterValueOf<
   T extends EdgeOutput,
   Key extends FieldFilterOperatorKey<T>,
 > = FieldFilterOperandShapeOf<T, Key> extends { kind: "enum" } ? string : AuthoredFieldFilterValueOf<T, Key>;
+
+type FilterablePredicateRef<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>> = Pick<
+  PredicateRef<T, Defs>,
+  "field" | "predicateId"
+>;
 
 export type WebFilterEnumOption = {
   value: string;
@@ -118,6 +124,33 @@ export type WebFilterOperatorResolution<
   test: (value: WebFilterValueOf<T, Key>, operand: WebFilterOperandOf<T, Key>) => boolean;
 };
 
+export type WebRuntimeFilterOperand<
+  T extends EdgeOutput,
+  Key extends FieldFilterOperatorKey<T>,
+> = FieldFilterOperandShapeOf<T, Key> extends { kind: "enum"; selection: infer Selection extends "one" | "many" }
+  ? {
+      kind: "enum";
+      selection: Selection;
+      value: string;
+    }
+  : {
+      kind: FieldFilterOperandShapeOf<T, Key>["kind"];
+      value: string;
+    };
+
+export type WebRuntimeFilterClause<
+  T extends EdgeOutput,
+  Key extends FieldFilterOperatorKey<T>,
+> = {
+  predicateId: string;
+  predicateKey: T["key"];
+  rangeKey: T["range"];
+  cardinality: T["cardinality"];
+  operatorKey: Key;
+  operatorLabel: string;
+  operand: WebRuntimeFilterOperand<T, Key>;
+};
+
 export type WebFieldFilterResolution<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
@@ -142,6 +175,28 @@ export type WebFilterResolver = {
     field: T,
     defs: Defs,
   ): WebFieldFilterResolution<T, Defs>;
+  resolvePredicate<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
+    predicate: PredicateRef<T, Defs>,
+  ): WebFieldFilterResolution<T, Defs>;
+};
+
+export type ActiveWebFilterClause<
+  T extends EdgeOutput,
+  Defs extends Record<string, AnyTypeOutput>,
+  Key extends FieldFilterOperatorKey<T>,
+> = {
+  operand: WebFilterOperandOf<T, Key>;
+  operator: WebFilterOperatorResolution<T, Defs, Key>;
+  predicate: FilterablePredicateRef<T, Defs>;
+};
+
+type AnyActiveWebFilterClause = ActiveWebFilterClause<any, any, any>;
+type AnyWebRuntimeFilterClause = WebRuntimeFilterClause<any, any>;
+
+export type WebRuntimeFilterQuery = {
+  clauses: readonly AnyWebRuntimeFilterClause[];
+  combinator: "and";
+  entityTypeKey: string;
 };
 
 export type UnsupportedFilterOperandFallbackProps = {
@@ -374,6 +429,41 @@ function resolveOperator<
   };
 }
 
+function resolveFilterField<
+  T extends EdgeOutput,
+  Defs extends Record<string, AnyTypeOutput>,
+>(
+  field: T,
+  rangeType: Defs[keyof Defs] | undefined,
+  operandEditorByKind: ReadonlyMap<string, AnyOperandEditorCapability>,
+): WebFieldFilterResolution<T, Defs> {
+  if (!hasFieldFilter(field)) return { status: "unsupported", reason: "missing-filter" };
+
+  const operators = Object.entries(field.filter.operators).map(([key, operator]) =>
+    resolveOperator(
+      field,
+      rangeType,
+      key as FieldFilterOperatorKey<T>,
+      operator as FieldFilterOperatorOf<T, FieldFilterOperatorKey<T>>,
+      operandEditorByKind,
+    ),
+  ) as readonly WebFilterOperatorResolution<T, Defs, FieldFilterOperatorKey<T>>[];
+  const operatorByKey = new Map(operators.map((operator) => [operator.key, operator]));
+
+  return {
+    status: "resolved",
+    field,
+    rangeType,
+    defaultOperator: field.filter.defaultOperator as FieldFilterOperatorKey<T>,
+    operators,
+    resolveOperator<Key extends FieldFilterOperatorKey<T>>(
+      key: Key,
+    ): WebFilterOperatorResolution<T, Defs, Key> | undefined {
+      return operatorByKey.get(key) as WebFilterOperatorResolution<T, Defs, Key> | undefined;
+    },
+  };
+}
+
 export function createWebFilterResolver(input?: {
   operandEditors?: readonly AnyOperandEditorCapability[];
 }): WebFilterResolver {
@@ -384,32 +474,17 @@ export function createWebFilterResolver(input?: {
       field: T,
       defs: Defs,
     ): WebFieldFilterResolution<T, Defs> {
-      if (!hasFieldFilter(field)) return { status: "unsupported", reason: "missing-filter" };
-
       const rangeType = resolveFieldRangeType(field, defs);
-      const operators = Object.entries(field.filter.operators).map(([key, operator]) =>
-        resolveOperator(
-          field,
-          rangeType,
-          key as FieldFilterOperatorKey<T>,
-          operator as FieldFilterOperatorOf<T, FieldFilterOperatorKey<T>>,
-          operandEditorByKind,
-        ),
-      ) as readonly WebFilterOperatorResolution<T, Defs, FieldFilterOperatorKey<T>>[];
-      const operatorByKey = new Map(operators.map((operator) => [operator.key, operator]));
-
-      return {
-        status: "resolved",
-        field,
-        rangeType,
-        defaultOperator: field.filter.defaultOperator as FieldFilterOperatorKey<T>,
-        operators,
-        resolveOperator<Key extends FieldFilterOperatorKey<T>>(
-          key: Key,
-        ): WebFilterOperatorResolution<T, Defs, Key> | undefined {
-          return operatorByKey.get(key) as WebFilterOperatorResolution<T, Defs, Key> | undefined;
-        },
-      };
+      return resolveFilterField(field, rangeType, operandEditorByKind);
+    },
+    resolvePredicate<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
+      predicate: PredicateRef<T, Defs>,
+    ): WebFieldFilterResolution<T, Defs> {
+      return resolveFilterField(
+        predicate.field,
+        predicate.rangeType as Defs[keyof Defs] | undefined,
+        operandEditorByKind,
+      );
     },
   };
 }
@@ -417,6 +492,85 @@ export function createWebFilterResolver(input?: {
 export const defaultWebFilterResolver = createWebFilterResolver({
   operandEditors: genericWebFilterOperandEditorCapabilities,
 });
+
+export function lowerWebFilterClause<
+  T extends EdgeOutput,
+  Defs extends Record<string, AnyTypeOutput>,
+  Key extends FieldFilterOperatorKey<T>,
+>(
+  predicate: FilterablePredicateRef<T, Defs>,
+  operator: WebFilterOperatorResolution<T, Defs, Key>,
+  operand: WebFilterOperandOf<T, Key>,
+): WebRuntimeFilterClause<T, Key> {
+  const base = {
+    predicateId: predicate.predicateId,
+    predicateKey: predicate.field.key,
+    rangeKey: predicate.field.range,
+    cardinality: predicate.field.cardinality,
+    operatorKey: operator.key,
+    operatorLabel: operator.label,
+  };
+  const formattedOperand = operator.format(operand);
+
+  if (operator.operand.kind === "enum") {
+    return {
+      ...base,
+      operand: {
+        kind: "enum",
+        selection: operator.operand.selection,
+        value: formattedOperand,
+      } as WebRuntimeFilterOperand<T, Key>,
+    };
+  }
+
+  return {
+    ...base,
+    operand: {
+      kind: operator.operand.kind,
+      value: formattedOperand,
+    } as WebRuntimeFilterOperand<T, Key>,
+  };
+}
+
+export function lowerWebFilterQuery(input: {
+  clauses: readonly AnyActiveWebFilterClause[];
+  entityTypeKey: string;
+}): WebRuntimeFilterQuery {
+  return {
+    entityTypeKey: input.entityTypeKey,
+    combinator: "and",
+    clauses: input.clauses.map((clause) =>
+      lowerWebFilterClause(clause.predicate, clause.operator, clause.operand),
+    ),
+  };
+}
+
+export function compileWebFilterQuery<Subject>(input: {
+  clauses: readonly AnyActiveWebFilterClause[];
+  entityTypeKey: string;
+  readValue: (subject: Subject, clause: AnyWebRuntimeFilterClause) => unknown;
+}): {
+  matches(subject: Subject): boolean;
+  query: WebRuntimeFilterQuery;
+} {
+  const query = lowerWebFilterQuery({
+    clauses: input.clauses,
+    entityTypeKey: input.entityTypeKey,
+  });
+
+  return {
+    query,
+    matches(subject) {
+      return query.clauses.every((clause, index) => {
+        const activeClause = input.clauses[index];
+        if (!activeClause) return false;
+        const value = input.readValue(subject, clause);
+        if (value === undefined) return false;
+        return activeClause.operator.test(value as never, activeClause.operand as never);
+      });
+    },
+  };
+}
 
 function UnsupportedFilterOperand({
   kind,

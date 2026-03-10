@@ -5,7 +5,7 @@ import { app } from "../graph/app.js";
 import { core } from "../graph/core.js";
 import { defineType } from "../graph/schema.js";
 import { statusTypeModule } from "../type/status.js";
-import { FilterOperandEditor, defaultWebFilterResolver } from "./bindings.js";
+import { FilterOperandEditor, defaultWebFilterResolver, lowerWebFilterClause } from "./bindings.js";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -212,6 +212,71 @@ describe("web filter resolver", () => {
 
     act(() => {
       renderer?.unmount();
+    });
+  });
+
+  it("lowers resolved operators into serializable runtime clauses", () => {
+    const urlResolution = defaultWebFilterResolver.resolveField(app.company.fields.website, defs);
+
+    expect(urlResolution.status).toBe("resolved");
+    if (urlResolution.status !== "resolved") return;
+
+    const equalsOperator = urlResolution.resolveOperator("equals");
+    expect(equalsOperator).toBeDefined();
+    if (!equalsOperator) return;
+
+    const urlClause = lowerWebFilterClause(
+      {
+        predicateId: "predicate:website",
+        field: app.company.fields.website,
+      },
+      equalsOperator,
+      new URL("https://acme.com"),
+    );
+
+    expect(urlClause).toEqual({
+      predicateId: "predicate:website",
+      predicateKey: app.company.fields.website.key,
+      rangeKey: app.company.fields.website.range,
+      cardinality: app.company.fields.website.cardinality,
+      operatorKey: "equals",
+      operatorLabel: "Equals",
+      operand: {
+        kind: "url",
+        value: "https://acme.com/",
+      },
+    });
+
+    const enumResolution = defaultWebFilterResolver.resolveField(app.company.fields.status, defs);
+
+    expect(enumResolution.status).toBe("resolved");
+    if (enumResolution.status !== "resolved") return;
+
+    const isOperator = enumResolution.resolveOperator("is");
+    expect(isOperator).toBeDefined();
+    if (!isOperator) return;
+
+    const statusClause = lowerWebFilterClause(
+      {
+        predicateId: "predicate:status",
+        field: app.company.fields.status,
+      },
+      isOperator,
+      app.status.values.active.id,
+    );
+
+    expect(statusClause).toEqual({
+      predicateId: "predicate:status",
+      predicateKey: app.company.fields.status.key,
+      rangeKey: app.company.fields.status.range,
+      cardinality: app.company.fields.status.cardinality,
+      operatorKey: "is",
+      operatorLabel: "Is",
+      operand: {
+        kind: "enum",
+        selection: "one",
+        value: app.status.values.active.id,
+      },
     });
   });
 
