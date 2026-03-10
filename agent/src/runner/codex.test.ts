@@ -3,34 +3,88 @@ import { expect, test } from "bun:test";
 import {
   buildAutomaticUserInputResponse,
   createDefaultTurnSandbox,
-  renderCodexSessionMessage,
-  type SessionDisplayState,
+  normalizeCodexSessionMessage,
 } from "./codex.js";
+import {
+  createAgentSessionDisplayState,
+  renderAgentStatusEvent,
+  type AgentSessionRef,
+} from "../session-events.js";
 
-function createState(): SessionDisplayState {
+function createSession(): AgentSessionRef {
   return {
-    headerPrinted: false,
-    lineOpen: false,
+    id: "worker:1",
+    issue: {
+      identifier: "OPE-41",
+      title: "Add predicate-slot subscriptions to graph runtime",
+    },
+    kind: "worker",
+    rootSessionId: "supervisor",
+    title: "Add predicate-slot subscriptions to graph runtime",
+    workerId: "worker-1",
   };
 }
 
 function renderMessages(messages: Array<Record<string, unknown>>) {
   const chunks: string[] = [];
-  const state = createState();
+  const session = createSession();
+  const state = createAgentSessionDisplayState();
+  let sequence = 0;
+
   for (const message of messages) {
-    renderCodexSessionMessage({
-      issueIdentifier: "OPE-41",
-      issueTitle: "Add predicate-slot subscriptions to graph runtime",
-      message,
-      state,
-      workerId: "worker-1",
-      writeDisplay: (text) => {
-        chunks.push(text);
-      },
-    });
-  }
+    for (const event of normalizeCodexSessionMessage(message)) {
+      renderAgentStatusEvent({
+        event: {
+          ...event,
+          sequence: ++sequence,
+          session,
+          timestamp: "2026-03-10T00:00:00.000Z",
+        },
+        state,
+        writeDisplay: (text) => {
+          chunks.push(text);
+        },
+      });
+    }
+  };
   return chunks.join("");
 }
+
+test("normalizes codex messages into typed status events", () => {
+  expect(
+    normalizeCodexSessionMessage({
+      method: "item/completed",
+      params: {
+        item: {
+          aggregatedOutput: "## main\n M agent/src/runner/codex.ts\n",
+          exitCode: 1,
+          id: "call-1",
+          status: "failed",
+          type: "commandExecution",
+        },
+      },
+    }),
+  ).toEqual([
+    {
+      code: "command-output",
+      format: "line",
+      text: "| ## main",
+      type: "status",
+    },
+    {
+      code: "command-output",
+      format: "line",
+      text: "|  M agent/src/runner/codex.ts",
+      type: "status",
+    },
+    {
+      code: "command-failed",
+      format: "line",
+      text: "Command failed (exit 1)",
+      type: "status",
+    },
+  ]);
+});
 
 test("renders agent message deltas as streamed session text", () => {
   const output = renderMessages([

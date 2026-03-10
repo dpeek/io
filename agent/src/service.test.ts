@@ -10,6 +10,7 @@ import {
 } from "./builtins.js";
 import { resolveIssueRouting } from "./issue-routing.js";
 import { AgentService, pickCandidateIssues } from "./service.js";
+import type { AgentSessionEvent } from "./session-events.js";
 import { LinearTrackerAdapter, normalizeLinearIssue } from "./tracker/linear.js";
 import type { AgentIssue, PreparedWorkspace } from "./types.js";
 import { renderPrompt } from "./workflow.js";
@@ -806,7 +807,178 @@ test("AgentService does not auto-run parent execute issues that already have chi
     await rm(root, { force: true, recursive: true });
   }
 });
+test("AgentService publishes supervisor and worker session events", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-events-"));
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-54", "repo");
+  const events: AgentSessionEvent[] = [];
 
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = mock(
+    async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            issues: {
+              nodes: [
+                {
+                  createdAt: "2024-01-01T00:00:00.000Z",
+                  description: "Implement execute flow",
+                  id: "1",
+                  identifier: "OPE-54",
+                  labels: { nodes: [] },
+                  priority: 0,
+                  state: { name: "Todo" },
+                  title: "Execute agent",
+                  updatedAt: "2024-01-01T00:00:00.000Z",
+                },
+              ],
+              pageInfo: {
+                endCursor: null,
+                hasNextPage: false,
+              },
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+  ) as unknown as typeof fetch;
+
+  try {
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => {
+          return {
+            issue,
+            prompt,
+            sessionId: "worker:OPE-54:1",
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => [
+          createIssue({
+            id: "1",
+            identifier: "OPE-54",
+            priority: 0,
+            title: "Execute agent",
+          }),
+        ],
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async () => undefined,
+      }),
+      stdoutEvents: false,
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: workspacePath,
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          markBlocked: async () => undefined,
+          markInterrupted: async () => undefined,
+          prepare: async () => ({
+            branchName: "ope-54",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: workspacePath,
+            sourceRepoPath: root,
+            workerId: "OPE-54",
+          }),
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+    service.observeSessionEvents((event) => {
+      events.push(event);
+    });
+
+    await service.start();
+
+    expect(
+      events.some(
+        (event) =>
+          event.type === "status" &&
+          event.code === "ready" &&
+          event.session.id === "supervisor",
+      ),
+    ).toBe(true);
+
+    const scheduledWorker = events.find(
+      (event) =>
+        event.type === "session" &&
+        event.phase === "scheduled" &&
+        event.session.issue?.identifier === "OPE-54",
+    );
+    expect(scheduledWorker).toBeDefined();
+    expect(scheduledWorker?.session.parentSessionId).toBe("supervisor");
+
+    expect(
+      events.some(
+        (event) =>
+          event.type === "status" &&
+          event.code === "issue-assigned" &&
+          event.session.id === "supervisor",
+      ),
+    ).toBe(true);
+
+    expect(
+      events.some(
+        (event) =>
+          event.type === "status" &&
+          event.code === "issue-committed" &&
+          event.session.issue?.identifier === "OPE-54",
+      ),
+    ).toBe(true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(root, { force: true, recursive: true });
+  }
+});
 test("AgentService composes execute built-ins with io.md", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
   const ioPromptPath = resolve(root, "io.md");

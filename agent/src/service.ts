@@ -15,6 +15,13 @@ import {
   DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
   resolveBuiltinDoc,
 } from "./builtins.js";
+import {
+  createAgentSessionEventBus,
+  createAgentSessionStdoutObserver,
+  type AgentSessionEventBus,
+  type AgentSessionEventObserver,
+  type AgentSessionRef,
+} from "./session-events.js";
 import { resolveIssueRouting } from "./issue-routing.js";
 import { CodexAppServerRunner } from "./runner/codex.js";
 import { LinearTrackerAdapter } from "./tracker/linear.js";
@@ -27,6 +34,7 @@ type IssueRunner = {
   run: (options: {
     issue: AgentIssue;
     prompt: string;
+    session?: AgentSessionRef;
     workspace: PreparedWorkspace;
   }) => Promise<IssueRunResult>;
 };
@@ -43,6 +51,8 @@ export interface AgentServiceOptions {
   repoRoot?: string;
   runnerFactory?: (workflow: Workflow) => IssueRunner;
   trackerFactory?: (workflow: Workflow) => IssueTracker;
+  sessionEvents?: AgentSessionEventBus;
+  stdoutEvents?: boolean;
   workspaceManagerFactory?: (workflow: Workflow, issueIdentifier?: string) => WorkspaceManager;
   workflowPath?: string;
 }
@@ -104,6 +114,8 @@ export class AgentService {
   readonly #repoRoot: string;
   readonly #runnerFactory?: (workflow: Workflow) => IssueRunner;
   readonly #trackerFactory?: (workflow: Workflow) => IssueTracker;
+  readonly #sessionEvents: AgentSessionEventBus;
+  readonly #supervisorSession: AgentSessionRef;
   readonly #workflowPath?: string;
   readonly #workspaceManagerFactory?: (
     workflow: Workflow,
@@ -114,6 +126,7 @@ export class AgentService {
   #ready = false;
   #ticking = false;
   #timer?: Timer;
+  #workerSessionCount = 0;
 
   constructor(options: AgentServiceOptions = {}) {
     this.#log = (options.log ?? createLogger({ level: "error", pkg: "agent" })).child({
@@ -127,9 +140,26 @@ export class AgentService {
       ? resolve(this.#repoRoot, options.workflowPath)
       : undefined;
     this.#workspaceManagerFactory = options.workspaceManagerFactory;
+    this.#sessionEvents = options.sessionEvents ?? createAgentSessionEventBus();
+    this.#supervisorSession = {
+      id: "supervisor",
+      kind: "supervisor",
+      rootSessionId: "supervisor",
+      title: "Supervisor",
+      workerId: "supervisor",
+      workspacePath: this.#repoRoot,
+    };
+    if (options.stdoutEvents ?? true) {
+      this.observeSessionEvents(createAgentSessionStdoutObserver());
+    }
   }
 
   async start() {
+    this.#sessionEvents.publish({
+      phase: "started",
+      session: this.#supervisorSession,
+      type: "session",
+    });
     const workflow = await this.#loadWorkflow();
     if (this.#once) {
       await this.runOnce(workflow, true);
@@ -150,6 +180,11 @@ export class AgentService {
       clearInterval(this.#timer);
     }
     await Promise.all(this.#activeRuns.values());
+    this.#sessionEvents.publish({
+      phase: "stopped",
+      session: this.#supervisorSession,
+      type: "session",
+    });
   }
 
   async runOnce(workflow?: Workflow, waitForCompletion = false) {
@@ -186,7 +221,13 @@ export class AgentService {
         .slice(0, availableSlots);
       if (!scheduledIssues.length) {
         this.#log.info("tick.idle");
-        process.stdout.write("No issues\n");
+        this.#sessionEvents.publish({
+          code: "idle",
+          format: "line",
+          session: this.#supervisorSession,
+          text: "No issues",
+          type: "status",
+        });
         return [];
       }
       const runs = scheduledIssues.map((issue, index) =>
@@ -253,7 +294,29 @@ export class AgentService {
     const workspaceManager = this.#createWorkspaceManager(workflow, issue.identifier);
     await workspaceManager.ensureSessionStartState();
     const workspace = await workspaceManager.prepare(issue);
+    const session = this.#createWorkerSession(issue, workspace);
     const assignmentLine = `${issue.identifier}: ${workspace.path} [${workspace.branchName}]\n`;
+    this.#sessionEvents.publish({
+      data: {
+        branchName: workspace.branchName,
+        workspacePath: workspace.path,
+      },
+      phase: "scheduled",
+      session,
+      type: "session",
+    });
+    this.#sessionEvents.publish({
+      code: "issue-assigned",
+      data: {
+        branchName: workspace.branchName,
+        childSessionId: session.id,
+        workspacePath: workspace.path,
+      },
+      format: "line",
+      session: this.#supervisorSession,
+      text: assignmentLine.trimEnd(),
+      type: "status",
+    });
     await this.#appendIssueOutput(workspace.outputPath, assignmentLine);
     let beforeRunCompleted = false;
     let result: IssueRunResult;
@@ -267,23 +330,39 @@ export class AgentService {
         workspace,
       });
       const runner =
-        this.#runnerFactory?.(workflow) ?? new CodexAppServerRunner(workflow.codex, this.#log);
+        this.#runnerFactory?.(workflow) ??
+        new CodexAppServerRunner(workflow.codex, this.#log, {
+          sessionEvents: this.#sessionEvents,
+        });
       await tracker.setIssueState(issue.id, "In Progress");
       await workspaceManager.runBeforeRunHook(workspace.path);
       beforeRunCompleted = true;
-      process.stdout.write(assignmentLine);
-      result = await runner.run({ issue, prompt, workspace });
+      result = await runner.run({ issue, prompt, session, workspace });
     } catch (error) {
       if (beforeRunCompleted) {
         await workspaceManager.runAfterRunHook(workspace.path);
       }
+      const reason = error instanceof Error ? error.message : String(error);
       if (isResumableRunError(error)) {
         await workspaceManager.markInterrupted(workspace, issue);
         await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: interrupted\n`);
       } else {
         await workspaceManager.markBlocked(workspace, issue);
         await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
+        this.#sessionEvents.publish({
+          code: "issue-blocked",
+          format: "line",
+          session,
+          text: `${issue.identifier}: blocked`,
+          type: "status",
+        });
       }
+      this.#sessionEvents.publish({
+        data: { reason },
+        phase: "failed",
+        session,
+        type: "session",
+      });
       throw error;
     }
 
@@ -291,6 +370,18 @@ export class AgentService {
     if (!result.success) {
       await workspaceManager.markBlocked(workspace, issue);
       await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
+      this.#sessionEvents.publish({
+        code: "issue-blocked",
+        format: "line",
+        session,
+        text: `${issue.identifier}: blocked`,
+        type: "status",
+      });
+      this.#sessionEvents.publish({
+        phase: "failed",
+        session,
+        type: "session",
+      });
       this.#log.info("issue.checkout.preserved", {
         branchName: workspace.branchName,
         issueIdentifier: issue.identifier,
@@ -305,12 +396,46 @@ export class AgentService {
     } catch (error) {
       await workspaceManager.markBlocked(workspace, issue);
       await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
+      this.#sessionEvents.publish({
+        code: "issue-blocked",
+        format: "line",
+        session,
+        text: `${issue.identifier}: blocked`,
+        type: "status",
+      });
+      this.#sessionEvents.publish({
+        data: {
+          reason: error instanceof Error ? error.message : String(error),
+        },
+        phase: "failed",
+        session,
+        type: "session",
+      });
       throw error;
     }
     await this.#appendIssueOutput(
       workspace.outputPath,
       `${issue.identifier}: committed ${completion.commitSha} on ${workspace.branchName}\n`,
     );
+    this.#sessionEvents.publish({
+      code: "issue-committed",
+      data: {
+        branchName: workspace.branchName,
+        commitSha: completion.commitSha,
+      },
+      format: "line",
+      session,
+      text: `${issue.identifier}: committed ${completion.commitSha} on ${workspace.branchName}`,
+      type: "status",
+    });
+    this.#sessionEvents.publish({
+      data: {
+        commitSha: completion.commitSha,
+      },
+      phase: "completed",
+      session,
+      type: "session",
+    });
     this.#log.info("issue.completed", {
       branchName: workspace.branchName,
       commitSha: completion.commitSha,
@@ -329,6 +454,10 @@ export class AgentService {
     }
     await tracker.setIssueState(issue.id, "In Review");
     return result;
+  }
+
+  observeSessionEvents(observer: AgentSessionEventObserver) {
+    return this.#sessionEvents.subscribe(observer);
   }
 
   #createWorkspaceManager(workflow: Workflow, issueIdentifier?: string) {
@@ -359,8 +488,33 @@ export class AgentService {
     const { path } = await workspaceManager.ensureSessionStartState();
     const workspace = workspaceManager.createIdleWorkspace();
     await workspaceManager.cleanup(workspace);
-    process.stdout.write(`ready at ${path}\n`);
+    this.#sessionEvents.publish({
+      code: "ready",
+      format: "line",
+      session: this.#supervisorSession,
+      text: `ready at ${path}`,
+      type: "status",
+    });
     this.#ready = true;
+  }
+
+  #createWorkerSession(issue: AgentIssue, workspace: PreparedWorkspace): AgentSessionRef {
+    this.#workerSessionCount += 1;
+    return {
+      branchName: workspace.branchName,
+      id: `worker:${workspace.workerId}:${this.#workerSessionCount}`,
+      issue: {
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+      },
+      kind: "worker",
+      parentSessionId: this.#supervisorSession.id,
+      rootSessionId: this.#supervisorSession.rootSessionId,
+      title: issue.title,
+      workerId: workspace.workerId,
+      workspacePath: workspace.path,
+    };
   }
 
   async #appendIssueOutput(path: string | undefined, text: string) {

@@ -13,6 +13,18 @@ import type {
   TurnStartParams,
   TurnStartResponse,
 } from "../codex-schema.js";
+import {
+  createAgentSessionDisplayState,
+  createAgentSessionEventBus,
+  renderAgentStatusEvent,
+  type AgentSessionEventBus,
+  type AgentSessionEventInit,
+  type AgentSessionLifecycleEventInit,
+  type AgentSessionEventObserver,
+  type AgentRawLineEventInit,
+  type AgentSessionRef,
+  type AgentStatusEventInit,
+} from "../session-events.js";
 import type { AgentIssue, CodexConfig, IssueRunResult, PreparedWorkspace } from "../types.js";
 
 type JsonRpcMessage = {
@@ -24,17 +36,10 @@ type JsonRpcMessage = {
 };
 
 type PendingTurnState = {
-  display: SessionDisplayState;
   inputRequired: boolean;
   lastEvent?: string;
   stderr: string[];
   stdout: string[];
-};
-
-export type SessionDisplayState = {
-  activeAgentMessageId?: string;
-  headerPrinted: boolean;
-  lineOpen: boolean;
 };
 
 class MessageQueue {
@@ -184,41 +189,6 @@ function summarizeParams(params: unknown) {
   };
 }
 
-function printDirectOutput(
-  issueIdentifier: string,
-  stream: "stderr" | "stdout",
-  line: string,
-  writeMain?: (text: string) => void,
-) {
-  const text = `[${issueIdentifier} ${stream}] ${line}\n`;
-  writeMain?.(text);
-  if (stream === "stderr") {
-    process.stderr.write(text);
-    return;
-  }
-  process.stdout.write(text);
-}
-
-type WorkspaceLogWriter = {
-  displayLogPath: string;
-  eventLogPath: string;
-  mainOutputPath: string;
-  writeDisplay: (text: string) => void;
-  writeMain: (text: string) => void;
-  stderrLogPath: string;
-  stdoutLogPath: string;
-  writeEvent: (event: string, data?: Record<string, unknown>) => void;
-  writeStderr: (line: string) => void;
-  writeStdout: (line: string) => void;
-};
-
-function createSessionDisplayState(): SessionDisplayState {
-  return {
-    headerPrinted: false,
-    lineOpen: false,
-  };
-}
-
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
@@ -294,189 +264,197 @@ export function buildAutomaticUserInputResponse(
   return { answers };
 }
 
-function renderSessionText(
-  text: string,
-  state: SessionDisplayState,
-  writeDisplay: (text: string) => void,
-) {
-  if (!text) {
-    return;
-  }
-  writeDisplay(text);
-  state.lineOpen = !text.endsWith("\n");
-}
+type CodexStatusEvent = Omit<AgentStatusEventInit, "session">;
+type RunnerSessionEvent =
+  | CodexStatusEvent
+  | Omit<AgentRawLineEventInit, "session">
+  | Omit<AgentSessionLifecycleEventInit, "session">;
 
-function renderSessionLine(
-  text: string,
-  state: SessionDisplayState,
-  writeDisplay: (text: string) => void,
-) {
-  if (state.lineOpen) {
-    writeDisplay("\n");
-  }
-  writeDisplay(`${text}\n`);
-  state.lineOpen = false;
-}
-
-function closeSessionLine(state: SessionDisplayState, writeDisplay: (text: string) => void) {
-  if (!state.lineOpen) {
-    return;
-  }
-  writeDisplay("\n");
-  state.lineOpen = false;
-}
-
-function renderCommandOutput(
-  output: string,
-  state: SessionDisplayState,
-  writeDisplay: (text: string) => void,
-) {
+function renderCommandOutput(output: string): CodexStatusEvent[] {
   const normalized = output.replace(/\r\n/g, "\n").replace(/\n$/, "");
   if (!normalized) {
-    return;
+    return [];
   }
-  closeSessionLine(state, writeDisplay);
-  for (const line of normalized.split("\n")) {
-    renderSessionLine(`| ${line}`, state, writeDisplay);
-  }
+  return normalized.split("\n").map((line) => ({
+    code: "command-output",
+    format: "line",
+    text: `| ${line}`,
+    type: "status",
+  }));
 }
 
-export function renderCodexSessionMessage(options: {
-  issueIdentifier: string;
-  issueTitle: string;
-  message: JsonRpcMessage;
-  state: SessionDisplayState;
-  workerId?: string;
-  writeDisplay: (text: string) => void;
-}) {
-  const { issueIdentifier, issueTitle, message, state, workerId, writeDisplay } = options;
-  if (!state.headerPrinted) {
-    const titlePrefix = workerId ? `${workerId} ` : "";
-    renderSessionLine(
-      `=== ${titlePrefix}${issueIdentifier} ${issueTitle} ===`,
-      state,
-      writeDisplay,
-    );
-    state.headerPrinted = true;
-  }
+export function normalizeCodexSessionMessage(message: JsonRpcMessage): CodexStatusEvent[] {
   switch (message.method) {
     case "thread/started":
-      renderSessionLine("Session started", state, writeDisplay);
-      return;
+      return [{ code: "thread-started", format: "line", text: "Session started", type: "status" }];
     case "turn/started":
-      renderSessionLine("Turn started", state, writeDisplay);
-      return;
+      return [{ code: "turn-started", format: "line", text: "Turn started", type: "status" }];
     case "turn/completed":
-      closeSessionLine(state, writeDisplay);
-      renderSessionLine("Turn completed", state, writeDisplay);
-      return;
+      return [{ code: "turn-completed", format: "line", text: "Turn completed", type: "status" }];
     case "turn/cancelled":
-      closeSessionLine(state, writeDisplay);
-      renderSessionLine("Turn cancelled", state, writeDisplay);
-      return;
+      return [{ code: "turn-cancelled", format: "line", text: "Turn cancelled", type: "status" }];
     case "turn/failed":
-      closeSessionLine(state, writeDisplay);
-      renderSessionLine("Turn failed", state, writeDisplay);
-      return;
+      return [{ code: "turn-failed", format: "line", text: "Turn failed", type: "status" }];
     case "thread/status/changed": {
       const params = asRecord(message.params);
       const status = asRecord(params?.status);
       const activeFlags = Array.isArray(status?.activeFlags) ? status.activeFlags : [];
-      if (activeFlags.includes("waitingOnUserInput")) {
-        renderSessionLine("Waiting for user input", state, writeDisplay);
+      if (!activeFlags.includes("waitingOnUserInput")) {
+        return [];
       }
-      return;
+      return [
+        {
+          code: "waiting-on-user-input",
+          format: "line",
+          text: "Waiting for user input",
+          type: "status",
+        },
+      ];
     }
     case "item/started": {
       const params = asRecord(message.params);
       const item = asRecord(params?.item);
       const itemType = asString(item?.type);
       if (!item || !itemType) {
-        return;
+        return [];
       }
-      if (itemType === "agentMessage") {
-        state.activeAgentMessageId = asString(item.id);
-        return;
-      }
-      closeSessionLine(state, writeDisplay);
       if (itemType === "commandExecution") {
-        renderSessionLine(`$ ${summarizeCommandExecution(item)}`, state, writeDisplay);
-        return;
+        return [
+          {
+            code: "command",
+            format: "line",
+            text: `$ ${summarizeCommandExecution(item)}`,
+            type: "status",
+          },
+        ];
       }
       if (itemType === "mcpToolCall") {
-        renderSessionLine(`Tool: ${summarizeToolCall(item)}`, state, writeDisplay);
+        return [
+          {
+            code: "tool",
+            format: "line",
+            text: `Tool: ${summarizeToolCall(item)}`,
+            type: "status",
+          },
+        ];
       }
-      return;
+      return [];
     }
     case "item/agentMessage/delta": {
       const params = asRecord(message.params);
-      const itemId = asString(params?.itemId);
       const delta = asString(params?.delta) ?? "";
       if (!delta) {
-        return;
+        return [];
       }
-      if (itemId && state.activeAgentMessageId && itemId !== state.activeAgentMessageId) {
-        closeSessionLine(state, writeDisplay);
-        state.activeAgentMessageId = itemId;
-      }
-      renderSessionText(delta, state, writeDisplay);
-      return;
+      return [
+        {
+          code: "agent-message-delta",
+          format: "chunk",
+          itemId: asString(params?.itemId),
+          text: delta,
+          type: "status",
+        },
+      ];
     }
     case "item/tool/requestUserInput": {
       const params = asRecord(message.params);
       const questions = Array.isArray(params?.questions) ? params.questions : [];
-      closeSessionLine(state, writeDisplay);
       const summary = questions.map(formatQuestionSummary).filter(Boolean).join(" | ");
-      renderSessionLine(
-        summary ? `Approval required: ${summary}` : "Approval required",
-        state,
-        writeDisplay,
-      );
-      return;
+      return [
+        {
+          code: "approval-required",
+          format: "line",
+          text: summary ? `Approval required: ${summary}` : "Approval required",
+          type: "status",
+        },
+      ];
     }
     case "item/completed": {
       const params = asRecord(message.params);
       const item = asRecord(params?.item);
       const itemType = asString(item?.type);
       if (!item || !itemType) {
-        return;
+        return [];
       }
       if (itemType === "agentMessage") {
-        if (asString(item.id) === state.activeAgentMessageId) {
-          closeSessionLine(state, writeDisplay);
-          state.activeAgentMessageId = undefined;
-        }
-        return;
+        return [
+          {
+            code: "agent-message-completed",
+            format: "close",
+            itemId: asString(item.id),
+            type: "status",
+          },
+        ];
       }
       if (itemType === "commandExecution") {
-        renderCommandOutput(asString(item.aggregatedOutput) ?? "", state, writeDisplay);
+        const events = renderCommandOutput(asString(item.aggregatedOutput) ?? "");
         const status = asString(item.status);
         const exitCode = item.exitCode;
         if (status === "failed") {
           const suffix = typeof exitCode === "number" ? ` (exit ${exitCode})` : "";
-          renderSessionLine(`Command failed${suffix}`, state, writeDisplay);
+          events.push({
+            code: "command-failed",
+            format: "line",
+            text: `Command failed${suffix}`,
+            type: "status",
+          });
         }
-        return;
+        return events;
       }
       if (itemType === "mcpToolCall") {
         const error = asRecord(item.error);
         const errorMessage = asString(error?.message);
-        if (errorMessage) {
-          renderSessionLine(`Tool failed: ${errorMessage}`, state, writeDisplay);
+        if (!errorMessage) {
+          return [];
         }
+        return [
+          {
+            code: "tool-failed",
+            format: "line",
+            text: `Tool failed: ${errorMessage}`,
+            type: "status",
+          },
+        ];
       }
-      return;
+      return [];
     }
     case "error":
-      closeSessionLine(state, writeDisplay);
-      renderSessionLine(`Error: ${JSON.stringify(message.params)}`, state, writeDisplay);
-      return;
+      return [
+        {
+          code: "error",
+          format: "line",
+          text: `Error: ${JSON.stringify(message.params)}`,
+          type: "status",
+        },
+      ];
     default:
-      return;
+      return [];
   }
 }
 
-async function createWorkspaceLogWriter(workspace: PreparedWorkspace): Promise<WorkspaceLogWriter> {
+function formatRawLineOutput(
+  session: AgentSessionRef,
+  stream: "stdout" | "stderr",
+  line: string,
+) {
+  const issueIdentifier = session.issue?.identifier ?? session.workerId;
+  return `[${issueIdentifier} ${stream}] ${line}\n`;
+}
+
+type WorkspaceLogObserver = {
+  displayLogPath: string;
+  eventLogPath: string;
+  flush: () => Promise<void>;
+  mainOutputPath: string;
+  observe: AgentSessionEventObserver;
+  stderrLogPath: string;
+  stdoutLogPath: string;
+};
+
+async function createWorkspaceLogObserver(
+  workspace: PreparedWorkspace,
+  sessionId: string,
+): Promise<WorkspaceLogObserver> {
   if (!workspace.runtimePath) {
     throw new Error("workspace_runtime_path_missing");
   }
@@ -487,59 +465,110 @@ async function createWorkspaceLogWriter(workspace: PreparedWorkspace): Promise<W
   const mainOutputPath = workspace.outputPath ?? join(logDir, "output.log");
   const stderrLogPath = join(logDir, "codex.stderr.log");
   const stdoutLogPath = join(logDir, "codex.stdout.jsonl");
+  const displayState = createAgentSessionDisplayState();
 
+  let pending = Promise.resolve();
+  const enqueueAppend = (path: string, text: string) => {
+    pending = pending.then(() => appendFile(path, text));
+  };
   const appendLine = (path: string, line: string) => {
-    void appendFile(path, `${line}\n`);
+    enqueueAppend(path, `${line}\n`);
   };
 
   return {
     displayLogPath,
     eventLogPath,
+    flush() {
+      return pending;
+    },
     mainOutputPath,
+    observe(event) {
+      if (event.session.id !== sessionId) {
+        return;
+      }
+
+      appendLine(eventLogPath, JSON.stringify(event));
+
+      if (event.type === "status") {
+        renderAgentStatusEvent({
+          event,
+          state: displayState,
+          writeDisplay: (text) => {
+            enqueueAppend(displayLogPath, text);
+            enqueueAppend(mainOutputPath, text);
+          },
+        });
+        return;
+      }
+
+      if (event.type !== "raw-line") {
+        return;
+      }
+
+      if (event.stream === "stdout") {
+        appendLine(stdoutLogPath, event.line);
+        if (event.encoding === "text") {
+          enqueueAppend(mainOutputPath, formatRawLineOutput(event.session, event.stream, event.line));
+        }
+        return;
+      }
+
+      appendLine(stderrLogPath, event.line);
+      enqueueAppend(mainOutputPath, formatRawLineOutput(event.session, event.stream, event.line));
+    },
     stderrLogPath,
     stdoutLogPath,
-    writeDisplay(text) {
-      void appendFile(displayLogPath, text);
-      void appendFile(mainOutputPath, text);
-    },
-    writeMain(text) {
-      void appendFile(mainOutputPath, text);
-    },
-    writeEvent(event, data) {
-      appendLine(
-        eventLogPath,
-        JSON.stringify({
-          data,
-          event,
-          ts: new Date().toISOString(),
-        }),
-      );
-    },
-    writeStderr(line) {
-      appendLine(stderrLogPath, line);
-    },
-    writeStdout(line) {
-      appendLine(stdoutLogPath, line);
-    },
   };
+}
+
+export interface CodexAppServerRunnerOptions {
+  sessionEvents?: AgentSessionEventBus;
 }
 
 export class CodexAppServerRunner {
   readonly #config: CodexConfig;
   readonly #log: Logger;
+  readonly #sessionEvents: AgentSessionEventBus;
 
-  constructor(config: CodexConfig, log: Logger = createLogger({ pkg: "agent" })) {
+  constructor(
+    config: CodexConfig,
+    log: Logger = createLogger({ pkg: "agent" }),
+    options: CodexAppServerRunnerOptions = {},
+  ) {
     this.#config = config;
     this.#log = log.child({ event_prefix: "codex" });
+    this.#sessionEvents = options.sessionEvents ?? createAgentSessionEventBus();
   }
 
   async run(options: {
     issue: AgentIssue;
     prompt: string;
+    session?: AgentSessionRef;
     workspace: PreparedWorkspace;
   }): Promise<IssueRunResult> {
-    const logs = await createWorkspaceLogWriter(options.workspace);
-    const displayState = createSessionDisplayState();
+    let session = options.session ?? {
+      branchName: options.workspace.branchName,
+      id: `worker:${options.workspace.workerId}`,
+      issue: {
+        id: options.issue.id,
+        identifier: options.issue.identifier,
+        title: options.issue.title,
+      },
+      kind: "worker" as const,
+      rootSessionId: `worker:${options.workspace.workerId}`,
+      title: options.issue.title,
+      workerId: options.workspace.workerId,
+      workspacePath: options.workspace.path,
+    };
+    const logs = await createWorkspaceLogObserver(options.workspace, session.id);
+    const publish = (event: RunnerSessionEvent) => {
+      const stampedEvent = this.#sessionEvents.publish({
+        ...event,
+        session,
+      } as AgentSessionEventInit);
+      logs.observe(stampedEvent);
+      return stampedEvent;
+    };
     const proc = Bun.spawn({
       cmd: ["bash", "-lc", this.#config.command],
       cwd: options.workspace.path,
@@ -549,7 +578,6 @@ export class CodexAppServerRunner {
     });
     const queue = new MessageQueue();
     const state: PendingTurnState = {
-      display: displayState,
       inputRequired: false,
       stderr: [],
       stdout: [],
@@ -558,43 +586,39 @@ export class CodexAppServerRunner {
       issueIdentifier: options.issue.identifier,
       workspace: options.workspace.path,
     });
-    logs.writeEvent("session.starting", {
-      issueIdentifier: options.issue.identifier,
-      workspace: options.workspace.path,
-    });
 
     void readJsonLines(
       proc.stdout,
       (line) => {
         state.stdout.push(line);
-        logs.writeStdout(line);
         try {
           const message = JSON.parse(line) as JsonRpcMessage;
-          renderCodexSessionMessage({
-            issueIdentifier: options.issue.identifier,
-            issueTitle: options.issue.title,
-            message,
-            state: state.display,
-            workerId: options.workspace.workerId,
-            writeDisplay: (text) => {
-              logs.writeDisplay(text);
-              process.stdout.write(text);
-            },
+          publish({
+            encoding: "jsonl",
+            line,
+            stream: "stdout",
+            type: "raw-line",
           });
+          for (const event of normalizeCodexSessionMessage(message)) {
+            publish(event);
+          }
           state.lastEvent = summarizeMessage(message);
           if (message.method && message.method !== "item/agentMessage/delta") {
-            const data = {
+            this.#log.info("session.event", {
               event: message.method,
               issueIdentifier: options.issue.identifier,
               ...summarizeParams(message.params),
               workspace: options.workspace.path,
-            };
-            this.#log.info("session.event", data);
-            logs.writeEvent("session.event", data);
+            });
           }
           queue.push(message);
         } catch (error) {
-          printDirectOutput(options.issue.identifier, "stdout", line, logs.writeMain);
+          publish({
+            encoding: "text",
+            line,
+            stream: "stdout",
+            type: "raw-line",
+          });
           queue.push({
             error: { message: `malformed:${(error as Error).message}` },
             method: "malformed",
@@ -610,14 +634,12 @@ export class CodexAppServerRunner {
       proc.stderr,
       (line) => {
         state.stderr.push(line);
-        printDirectOutput(options.issue.identifier, "stderr", line, logs.writeMain);
-        const data = {
-          issueIdentifier: options.issue.identifier,
+        publish({
+          encoding: "text",
           line,
-          workspace: options.workspace.path,
-        };
-        logs.writeStderr(line);
-        logs.writeEvent("session.stderr", data);
+          stream: "stderr",
+          type: "raw-line",
+        });
       },
       () => undefined,
     );
@@ -628,14 +650,12 @@ export class CodexAppServerRunner {
     };
     const sendRequest = async <T>(method: string, params: unknown) => {
       const id = nextId++;
-      const data = {
+      this.#log.info("session.request", {
         id,
         issueIdentifier: options.issue.identifier,
         method,
         workspace: options.workspace.path,
-      };
-      this.#log.info("session.request", data);
-      logs.writeEvent("session.request", data);
+      });
       sendLine(toRequest(id, method, params));
       return await this.#waitForResponse<T>(id, queue, state, options.workspace.path, sendLine);
     };
@@ -651,7 +671,6 @@ export class CodexAppServerRunner {
         workspace: options.workspace.path,
       };
       this.#log.info("session.heartbeat", data);
-      logs.writeEvent("session.heartbeat", data);
     }, 15_000);
 
     const initializeId = nextId++;
@@ -662,7 +681,6 @@ export class CodexAppServerRunner {
       workspace: options.workspace.path,
     };
     this.#log.info("session.request", initializeData);
-    logs.writeEvent("session.request", initializeData);
     sendLine(
       toRequest<InitializeParams>(initializeId, "initialize", {
         capabilities: null,
@@ -686,7 +704,6 @@ export class CodexAppServerRunner {
       workspace: options.workspace.path,
     };
     this.#log.info("session.started", sessionStartedData);
-    logs.writeEvent("session.started", sessionStartedData);
     const turn = await sendRequest<TurnStartResponse>("turn/start", {
       approvalPolicy: this.#config.approvalPolicy,
       cwd: options.workspace.path,
@@ -703,19 +720,22 @@ export class CodexAppServerRunner {
       workspace: options.workspace.path,
     };
     this.#log.info("turn.started", turnStartedData);
-    logs.writeEvent("turn.started", turnStartedData);
+    session = {
+      ...session,
+      threadId,
+      turnId,
+    };
+    publish({
+      data: {
+        workspacePath: options.workspace.path,
+      },
+      phase: "started",
+      type: "session",
+    });
 
     try {
       await this.#waitForTurnCompletion(queue, state, options.workspace.path, sendLine);
-      const turnCompletedData = {
-        issueIdentifier: options.issue.identifier,
-        threadId,
-        turnId,
-        workspace: options.workspace.path,
-      };
-      this.#log.info("turn.completed", turnCompletedData);
-      logs.writeEvent("turn.completed", turnCompletedData);
-      return {
+      const result = {
         issue: options.issue,
         logPaths: {
           eventLog: logs.eventLogPath,
@@ -724,7 +744,7 @@ export class CodexAppServerRunner {
           stdoutLog: logs.stdoutLogPath,
         },
         prompt: options.prompt,
-        sessionId: `${threadId}-${turnId}`,
+        sessionId: session.id,
         stderr: state.stderr,
         stdout: state.stdout,
         success: !state.inputRequired,
@@ -732,23 +752,34 @@ export class CodexAppServerRunner {
         turnId,
         workspace: options.workspace,
       };
+      await logs.flush();
+      return result;
+    } catch (error) {
+      publish({
+        data: {
+          reason: error instanceof Error ? error.message : String(error),
+        },
+        phase: "failed",
+        type: "session",
+      });
+      throw error;
     } finally {
       clearInterval(heartbeat);
-      closeSessionLine(state.display, (text) => {
-        logs.writeDisplay(text);
-        process.stdout.write(text);
-      });
-      logs.writeEvent("session.stopping", {
-        issueIdentifier: options.issue.identifier,
-        threadId: heartbeatThreadId,
-        turnId: heartbeatTurnId,
-        workspace: options.workspace.path,
+      publish({
+        data: {
+          threadId: heartbeatThreadId,
+          turnId: heartbeatTurnId,
+          workspacePath: options.workspace.path,
+        },
+        phase: "stopped",
+        type: "session",
       });
       try {
         proc.kill();
       } catch {
         // ignore
       }
+      await logs.flush();
     }
   }
 
