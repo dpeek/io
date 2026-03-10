@@ -18,7 +18,7 @@ import {
 import { resolveIssueRouting } from "./issue-routing.js";
 import { CodexAppServerRunner } from "./runner/codex.js";
 import { LinearTrackerAdapter } from "./tracker/linear.js";
-import { loadWorkflowFile, renderPrompt } from "./workflow.js";
+import { loadWorkflowFile, renderPrompt, toWorkspaceKey } from "./workflow.js";
 import { WorkspaceManager } from "./workspace.js";
 
 const WORKFLOW_FILE = "WORKFLOW.md";
@@ -31,17 +31,26 @@ type IssueRunner = {
   }) => Promise<IssueRunResult>;
 };
 
+type IssueTracker = {
+  fetchCandidateIssues: () => Promise<AgentIssue[]>;
+  fetchIssueStatesByIds: (issueIds: string[]) => Promise<Map<string, string>>;
+  setIssueState: (issueId: string, stateName: string) => Promise<void>;
+};
+
 export interface AgentServiceOptions {
   log?: Logger;
   once?: boolean;
   repoRoot?: string;
   runnerFactory?: (workflow: Workflow) => IssueRunner;
+  trackerFactory?: (workflow: Workflow) => IssueTracker;
   workspaceManagerFactory?: (workflow: Workflow, issueIdentifier?: string) => WorkspaceManager;
   workflowPath?: string;
 }
 
 export function pickCandidateIssues(issues: AgentIssue[], limit: number) {
-  return [...issues]
+  const selected: AgentIssue[] = [];
+  const reservedStreams = new Set<string>();
+  for (const issue of [...issues]
     .filter((issue) => issue.blockedBy.length === 0)
     .sort((left, right) => {
       const stateScore = scoreState(left.state) - scoreState(right.state);
@@ -53,8 +62,18 @@ export function pickCandidateIssues(issues: AgentIssue[], limit: number) {
         return priorityScore;
       }
       return left.updatedAt.localeCompare(right.updatedAt);
-    })
-    .slice(0, limit);
+    })) {
+    const streamKey = getStreamKey(issue);
+    if (reservedStreams.has(streamKey)) {
+      continue;
+    }
+    reservedStreams.add(streamKey);
+    selected.push(issue);
+    if (selected.length >= limit) {
+      break;
+    }
+  }
+  return selected;
 }
 
 function scoreState(state: string) {
@@ -68,17 +87,30 @@ function scoreState(state: string) {
   return 2;
 }
 
+function getStreamKey(issue: AgentIssue) {
+  return toWorkspaceKey(issue.parentIssueIdentifier ?? issue.identifier);
+}
+
+function isResumableRunError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return ["response_timeout", "stall_timeout", "turn_timeout"].includes(error.message);
+}
+
 export class AgentService {
   readonly #log: Logger;
   readonly #once: boolean;
   readonly #repoRoot: string;
   readonly #runnerFactory?: (workflow: Workflow) => IssueRunner;
+  readonly #trackerFactory?: (workflow: Workflow) => IssueTracker;
   readonly #workflowPath?: string;
   readonly #workspaceManagerFactory?: (
     workflow: Workflow,
     issueIdentifier?: string,
   ) => WorkspaceManager;
   #activeRuns = new Map<string, Promise<IssueRunResult | undefined>>();
+  #activeStreamKeys = new Set<string>();
   #ready = false;
   #ticking = false;
   #timer?: Timer;
@@ -90,6 +122,7 @@ export class AgentService {
     this.#once = options.once ?? false;
     this.#repoRoot = options.repoRoot ?? process.cwd();
     this.#runnerFactory = options.runnerFactory;
+    this.#trackerFactory = options.trackerFactory;
     this.#workflowPath = options.workflowPath
       ? resolve(this.#repoRoot, options.workflowPath)
       : undefined;
@@ -128,19 +161,28 @@ export class AgentService {
       const activeWorkflow = workflow ?? (await this.#loadWorkflow());
       await this.#ensureWorkerReady(activeWorkflow);
       const workspaceManager = this.#createWorkspaceManager(activeWorkflow);
-      const tracker = new LinearTrackerAdapter(activeWorkflow.tracker, this.#log);
+      const tracker = this.#createTracker(activeWorkflow);
       await workspaceManager.reconcileTerminalIssues(
         tracker,
         activeWorkflow.tracker.terminalStates,
       );
+      const occupiedStreams = await workspaceManager.listOccupiedStreams();
       const issues = await tracker.fetchCandidateIssues();
       const maxConcurrentAgents = Math.max(1, activeWorkflow.agent.maxConcurrentAgents);
       const availableSlots = Math.max(0, maxConcurrentAgents - this.#activeRuns.size);
       if (availableSlots === 0) {
         return [];
       }
-      const scheduledIssues = pickCandidateIssues(issues, issues.length)
+      const scheduledIssues = pickCandidateIssues(
+        issues.filter((issue) => this.#shouldAutoScheduleIssue(activeWorkflow, issue)),
+        issues.length,
+      )
         .filter((issue) => !this.#activeRuns.has(issue.identifier))
+        .filter((issue) => !this.#activeStreamKeys.has(getStreamKey(issue)))
+        .filter((issue) => {
+          const activeIssueIdentifier = occupiedStreams.get(getStreamKey(issue));
+          return !activeIssueIdentifier || activeIssueIdentifier === issue.identifier;
+        })
         .slice(0, availableSlots);
       if (!scheduledIssues.length) {
         this.#log.info("tick.idle");
@@ -148,7 +190,7 @@ export class AgentService {
         return [];
       }
       const runs = scheduledIssues.map((issue, index) =>
-        this.#startIssueRun(activeWorkflow, issue, maxConcurrentAgents, index),
+        this.#startIssueRun(activeWorkflow, tracker, issue, maxConcurrentAgents, index),
       );
       if (!waitForCompletion) {
         return [];
@@ -171,11 +213,14 @@ export class AgentService {
 
   #startIssueRun(
     workflow: Workflow,
+    tracker: IssueTracker,
     issue: AgentIssue,
     maxConcurrentAgents: number,
     runIndex: number,
   ) {
-    const run = this.#runIssue(workflow, issue, maxConcurrentAgents, runIndex)
+    const streamKey = getStreamKey(issue);
+    this.#activeStreamKeys.add(streamKey);
+    const run = this.#runIssue(workflow, tracker, issue, maxConcurrentAgents, runIndex)
       .catch((error) => {
         this.#log.error("issue.failed", {
           error: error instanceof Error ? error : new Error(String(error)),
@@ -185,13 +230,22 @@ export class AgentService {
       })
       .finally(() => {
         this.#activeRuns.delete(issue.identifier);
+        this.#activeStreamKeys.delete(streamKey);
       });
     this.#activeRuns.set(issue.identifier, run);
     return run;
   }
 
+  #shouldAutoScheduleIssue(workflow: Workflow, issue: AgentIssue) {
+    if (!issue.hasChildren || issue.hasParent) {
+      return true;
+    }
+    return resolveIssueRouting(workflow.issues, issue).agent === "backlog";
+  }
+
   async #runIssue(
     workflow: Workflow,
+    tracker: IssueTracker,
     issue: AgentIssue,
     maxConcurrentAgents: number,
     runIndex: number,
@@ -214,6 +268,7 @@ export class AgentService {
       });
       const runner =
         this.#runnerFactory?.(workflow) ?? new CodexAppServerRunner(workflow.codex, this.#log);
+      await tracker.setIssueState(issue.id, "In Progress");
       await workspaceManager.runBeforeRunHook(workspace.path);
       beforeRunCompleted = true;
       process.stdout.write(assignmentLine);
@@ -222,8 +277,13 @@ export class AgentService {
       if (beforeRunCompleted) {
         await workspaceManager.runAfterRunHook(workspace.path);
       }
-      await workspaceManager.markBlocked(workspace, issue);
-      await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
+      if (isResumableRunError(error)) {
+        await workspaceManager.markInterrupted(workspace, issue);
+        await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: interrupted\n`);
+      } else {
+        await workspaceManager.markBlocked(workspace, issue);
+        await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
+      }
       throw error;
     }
 
@@ -239,30 +299,36 @@ export class AgentService {
       return result;
     }
 
+    let completion: { commitSha: string };
     try {
-      const completion = await workspaceManager.complete(workspace, issue);
-      await this.#appendIssueOutput(
-        workspace.outputPath,
-        `${issue.identifier}: committed ${completion.commitSha} on ${workspace.branchName}\n`,
-      );
-      this.#log.info("issue.completed", {
-        branchName: workspace.branchName,
-        commitSha: completion.commitSha,
-        issueIdentifier: issue.identifier,
-        success: result.success,
-        workspace: workspace.path,
-      });
-      this.#log.info("issue.worktree.retained", {
-        branchName: workspace.branchName,
-        issueIdentifier: issue.identifier,
-        workspace: workspace.path,
-      });
-      return result;
+      completion = await workspaceManager.complete(workspace, issue);
     } catch (error) {
       await workspaceManager.markBlocked(workspace, issue);
       await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
       throw error;
     }
+    await this.#appendIssueOutput(
+      workspace.outputPath,
+      `${issue.identifier}: committed ${completion.commitSha} on ${workspace.branchName}\n`,
+    );
+    this.#log.info("issue.completed", {
+      branchName: workspace.branchName,
+      commitSha: completion.commitSha,
+      issueIdentifier: issue.identifier,
+      success: result.success,
+      workspace: workspace.path,
+    });
+    this.#log.info("issue.worktree.retained", {
+      branchName: workspace.branchName,
+      issueIdentifier: issue.identifier,
+      workspace: workspace.path,
+    });
+    if (issue.hasParent) {
+      await tracker.setIssueState(issue.id, "Done");
+      return result;
+    }
+    await tracker.setIssueState(issue.id, "In Review");
+    return result;
   }
 
   #createWorkspaceManager(workflow: Workflow, issueIdentifier?: string) {
@@ -276,6 +342,12 @@ export class AgentService {
         rootDir: workflow.workspace.root,
         workerId: issueIdentifier ?? "supervisor",
       })
+    );
+  }
+
+  #createTracker(workflow: Workflow) {
+    return (
+      this.#trackerFactory?.(workflow) ?? new LinearTrackerAdapter(workflow.tracker, this.#log)
     );
   }
 

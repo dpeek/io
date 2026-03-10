@@ -84,10 +84,9 @@ Description:
     id: "builtin:io.linear.status-updates",
     content: `Tracker:
 
-- move the issue to \`In Progress\` when work starts
-- use the existing tracker MCP tools for issue reads and writes when they help
-- leave concise status updates when blocked, when validation finishes, and when the work lands
-- move the issue to \`In Review\` when the change is ready for review`,
+- the harness manages Linear issue state transitions
+- do not move the issue between Linear states yourself
+- if the work is blocked or validation reveals something important, say so clearly in your output`,
   },
   {
     id: "builtin:io.context.discovery",

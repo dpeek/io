@@ -12,6 +12,8 @@ export interface AgentIssue {
   id: string;
   identifier: string;
   labels: string[];
+  parentIssueId?: string;
+  parentIssueIdentifier?: string;
   priority: number | null;
   projectSlug?: string;
   state: string;
@@ -131,12 +133,29 @@ export interface PreparedWorkspace {
   branchName: string;
   controlPath: string;
   createdNow: boolean;
+  issueRuntimePath?: string;
   originPath: string;
   outputPath?: string;
   path: string;
   runtimePath?: string;
   sourceRepoPath?: string;
+  streamIssueId?: string;
+  streamIssueIdentifier?: string;
+  streamRuntimePath?: string;
   workerId: string;
+}
+
+export interface StreamRuntimeState {
+  activeIssueId?: string;
+  activeIssueIdentifier?: string;
+  branchName: string;
+  createdAt: string;
+  latestLandedCommitSha?: string;
+  parentIssueId: string;
+  parentIssueIdentifier: string;
+  status: "active" | "completed";
+  updatedAt: string;
+  worktreeRoot: string;
 }
 
 export interface IssueRunResult {

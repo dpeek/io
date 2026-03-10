@@ -46,11 +46,11 @@ export default defineIoConfig({
     ],
   },
   tracker: linearTracker({
-    activeStates: ["Todo"],
+    activeStates: ["Todo", "In Progress"],
     apiKey: env.secret("LINEAR_API_KEY"),
     projectSlug: env.string("LINEAR_PROJECT_SLUG"),
   }),
   workspace: {
-    root: "$AGENT_WORKSPACE_ROOT",
+    root: ".io",
   },
 });

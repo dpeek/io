@@ -190,13 +190,15 @@ export interface ConfigDescriptor<T extends Record<string, unknown> = Record<str
   title?: string;
 }
 
-export interface PluginDescriptor<T extends Record<string, unknown> = Record<string, unknown>>
-  extends ConfigDescriptor<T> {
+export interface PluginDescriptor<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> extends ConfigDescriptor<T> {
   scope: "plugin";
 }
 
-export interface ProviderDescriptor<T extends Record<string, unknown> = Record<string, unknown>>
-  extends ConfigDescriptor<T> {
+export interface ProviderDescriptor<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> extends ConfigDescriptor<T> {
   scope: "provider";
 }
 
@@ -441,7 +443,7 @@ function expandPathValue(value: string, baseDir: string) {
 function resolvePathInput(value: StringInput, baseDir: string) {
   const resolved =
     typeof value === "string"
-      ? expandLegacyEnv(value) ?? value
+      ? (expandLegacyEnv(value) ?? value)
       : process.env[value.$env]?.trim() || stringifyEnvReference(value);
   return expandPathValue(resolved, baseDir);
 }
@@ -452,12 +454,15 @@ function resolveGenericValue(value: unknown, baseDir: string): unknown {
   }
   if (isEnvReference(value)) {
     if (value.kind === "path") {
-      return expandPathValue(process.env[value.$env]?.trim() || stringifyEnvReference(value), baseDir);
+      return expandPathValue(
+        process.env[value.$env]?.trim() || stringifyEnvReference(value),
+        baseDir,
+      );
     }
     return process.env[value.$env]?.trim() || undefined;
   }
   if (typeof value === "string") {
-    return value.startsWith("$") ? expandLegacyEnv(value) ?? value : value;
+    return value.startsWith("$") ? (expandLegacyEnv(value) ?? value) : value;
   }
   if (!isRecord(value)) {
     return value;
@@ -633,7 +638,8 @@ export function normalizeIoConfig(
         apiKey: resolveStringInput(parsed.tracker.apiKey) ?? process.env.LINEAR_API_KEY?.trim(),
         endpoint: parsed.tracker.endpoint,
         kind: parsed.tracker.kind,
-        projectSlug: resolveStringInput(parsed.tracker.projectSlug) ?? process.env.LINEAR_PROJECT_SLUG?.trim(),
+        projectSlug:
+          resolveStringInput(parsed.tracker.projectSlug) ?? process.env.LINEAR_PROJECT_SLUG?.trim(),
         terminalStates: [...parsed.tracker.terminalStates],
       },
       workspace: {
@@ -654,7 +660,9 @@ export async function loadIoConfig({
   configPath?: string;
 } = {}): Promise<ConfigValidationResult<LoadedIoConfig>> {
   const absolutePath = configPath
-    ? (isAbsolute(configPath) ? configPath : resolve(baseDir, configPath))
+    ? isAbsolute(configPath)
+      ? configPath
+      : resolve(baseDir, configPath)
     : existsSync(resolve(baseDir, IO_TS_FILE))
       ? resolve(baseDir, IO_TS_FILE)
       : resolve(baseDir, IO_JSON_FILE);
@@ -689,7 +697,10 @@ export async function loadIoConfig({
 
     const value = await raw;
     if (!isRecord(value)) {
-      return invalidResult(`${sourceKind === "ts" ? IO_TS_FILE : IO_JSON_FILE} must decode to an object`, absolutePath);
+      return invalidResult(
+        `${sourceKind === "ts" ? IO_TS_FILE : IO_JSON_FILE} must decode to an object`,
+        absolutePath,
+      );
     }
     const normalized = normalizeIoConfig(value, dirname(absolutePath));
     if (!normalized.ok) {

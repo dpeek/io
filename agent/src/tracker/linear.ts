@@ -1,3 +1,4 @@
+import { LinearClient } from "@linear/sdk";
 import { createLogger, type Logger } from "@io/lib";
 
 import type { AgentIssue, TrackerConfig } from "../types.js";
@@ -27,7 +28,10 @@ query AgentCandidateIssues(
       updatedAt
       project { slugId }
       state { name }
-      parent { id }
+      parent {
+        id
+        identifier
+      }
       children(first: 1) {
         nodes {
           id
@@ -86,7 +90,7 @@ interface CandidateIssueNode {
     > | null;
   } | null;
   labels?: { nodes?: Array<{ name?: string | null } | null> | null } | null;
-  parent?: { id: string } | null;
+  parent?: { id: string; identifier?: string | null } | null;
   priority?: number | null;
   project?: { slugId?: string | null } | null;
   state?: { name?: string | null } | null;
@@ -102,6 +106,10 @@ interface CandidateIssuePage {
       hasNextPage?: boolean | null;
     } | null;
   } | null;
+}
+
+function normalizeStateName(state: string) {
+  return state.trim().toLowerCase();
 }
 
 export function normalizeLinearIssue(node: CandidateIssueNode): AgentIssue {
@@ -137,6 +145,8 @@ export function normalizeLinearIssue(node: CandidateIssueNode): AgentIssue {
     labels: (node.labels?.nodes ?? [])
       .map((label) => label?.name?.trim().toLowerCase())
       .filter((value): value is string => !!value),
+    parentIssueId: node.parent?.id ?? undefined,
+    parentIssueIdentifier: node.parent?.identifier?.trim() || undefined,
     priority: Number.isInteger(node.priority) ? node.priority! : null,
     projectSlug: node.project?.slugId?.trim() || undefined,
     state: node.state?.name?.trim() || "Unknown",
@@ -146,12 +156,19 @@ export function normalizeLinearIssue(node: CandidateIssueNode): AgentIssue {
 }
 
 export class LinearTrackerAdapter {
+  #client?: LinearClient;
   readonly #config: TrackerConfig;
   readonly #log: Logger;
+  readonly #stateIdByTeam = new Map<string, Map<string, string>>();
 
-  constructor(config: TrackerConfig, log: Logger = createLogger({ pkg: "agent" })) {
+  constructor(
+    config: TrackerConfig,
+    log: Logger = createLogger({ pkg: "agent" }),
+    client?: LinearClient,
+  ) {
     this.#config = config;
     this.#log = log.child({ event_prefix: "tracker.linear" });
+    this.#client = client;
   }
 
   async fetchCandidateIssues(): Promise<AgentIssue[]> {
@@ -196,6 +213,16 @@ export class LinearTrackerAdapter {
     );
   }
 
+  async setIssueState(issueId: string, stateName: string) {
+    const client = this.#getClient();
+    const issue = await client.issue(issueId);
+    const stateId = await this.#resolveStateId(issue, stateName);
+    const payload = await issue.update({ stateId });
+    if (!payload.success) {
+      throw new Error(`linear_issue_update_failed:${issueId}:${stateName}`);
+    }
+  }
+
   async #request<T>(query: string, variables: Record<string, unknown>): Promise<T> {
     const apiKey = this.#getApiKey();
     const response = await fetch(this.#config.endpoint, {
@@ -220,6 +247,46 @@ export class LinearTrackerAdapter {
       throw new Error("linear_unknown_payload");
     }
     return payload.data;
+  }
+
+  #getClient() {
+    this.#client ??= new LinearClient({
+      apiKey: this.#getApiKey(),
+      apiUrl: this.#config.endpoint,
+    });
+    return this.#client;
+  }
+
+  async #resolveStateId(issue: { id: string; teamId?: string | null }, stateName: string) {
+    const client = this.#getClient();
+    const issueId = issue.id;
+    const teamId = issue.teamId?.trim();
+    if (!teamId) {
+      throw new Error(`linear_issue_team_missing:${issueId}`);
+    }
+    let stateIds = this.#stateIdByTeam.get(teamId);
+    if (!stateIds) {
+      const team = await client.team(teamId);
+      const states = await team.states();
+      stateIds = new Map(
+        states.nodes
+          .map((state) => {
+            const name = state.name?.trim();
+            const id = state.id?.trim();
+            if (!name || !id) {
+              return undefined;
+            }
+            return [normalizeStateName(name), id] as const;
+          })
+          .filter((entry): entry is readonly [string, string] => Boolean(entry)),
+      );
+      this.#stateIdByTeam.set(teamId, stateIds);
+    }
+    const stateId = stateIds.get(normalizeStateName(stateName));
+    if (!stateId) {
+      throw new Error(`linear_state_not_found:${teamId}:${stateName}`);
+    }
+    return stateId;
   }
 
   #getApiKey() {

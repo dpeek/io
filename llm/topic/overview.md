@@ -13,7 +13,7 @@ It stores triples (`s`, `p`, `o`) in an append-only store, while schema authors 
 
 ## Store Model
 
-Source: `src/store.ts`
+Source: `graph/src/store.ts`
 
 - A triple is `{ s, p, o }` plus an edge id.
 - `assert(...)` appends; `retract(...)` marks edges retracted.
@@ -22,7 +22,7 @@ Source: `src/store.ts`
 
 ## Schema Authoring API
 
-Source: `src/schema.ts`
+Source: `graph/src/schema.ts`
 
 - `defineScalar(...)` defines scalar codecs.
 - `defineType(...)` defines entity types and field trees.
@@ -42,7 +42,7 @@ Source: `src/schema.ts`
 
 ## Core Schema
 
-Source: `src/schema/core.ts`
+Source: `graph/src/schema/core.ts`
 
 Core currently defines:
 
@@ -59,8 +59,8 @@ Notable semantics:
 
 Sources:
 
-- `src/schema/core.json`
-- `src/schema/app.json`
+- `graph/src/schema/core.json`
+- `graph/src/schema/app.json`
 - CLI: `src/ids-cli.ts`
 
 Each namespace keeps its own `key -> id` map next to the schema file.
@@ -106,7 +106,7 @@ Source: `./graph/src/client.ts`
 Sources:
 
 - `./graph/src/runtime.ts` example graph bootstrapping and sample data.
-- `./graphweb/server.ts` explorer API/UI for browsing schema + nodes.
+- `./graph/src/web/server.ts` explorer API/UI for browsing schema + nodes.
 
 Explorer intentionally surfaces human-readable keys where helpful (`key` when available, fallback to id), but all internal querying uses resolved IDs.
 
