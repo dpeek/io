@@ -1,15 +1,19 @@
 import type { AskForApproval, SandboxMode, SandboxPolicy } from "./codex-schema.js";
 
 export type TrackerKind = "linear";
+export type AgentRole = "backlog" | "execute";
 
 export interface AgentIssue {
   blockedBy: string[];
   createdAt: string;
   description: string;
+  hasChildren: boolean;
+  hasParent: boolean;
   id: string;
   identifier: string;
   labels: string[];
   priority: number | null;
+  projectSlug?: string;
   state: string;
   title: string;
   updatedAt: string;
@@ -58,6 +62,32 @@ export interface WorkflowEntrypoint {
   promptPath: string;
 }
 
+export interface IssueRoutingCondition {
+  hasChildren?: boolean;
+  hasParent?: boolean;
+  labelsAll?: string[];
+  labelsAny?: string[];
+  projectSlugIn?: string[];
+  stateIn?: string[];
+}
+
+export interface IssueRoutingRule {
+  agent: AgentRole;
+  if: IssueRoutingCondition;
+  profile: string;
+}
+
+export interface IssueRoutingConfig {
+  defaultAgent: AgentRole;
+  defaultProfile: string;
+  routing: IssueRoutingRule[];
+}
+
+export interface IssueRoutingSelection {
+  agent: AgentRole;
+  profile: string;
+}
+
 export interface Workflow {
   agent: AgentConfig;
   codex: CodexConfig;
@@ -66,6 +96,7 @@ export interface Workflow {
   };
   entrypoint: WorkflowEntrypoint;
   hooks: HookConfig;
+  issues: IssueRoutingConfig;
   polling: PollingConfig;
   promptTemplate: string;
   tracker: TrackerConfig;
@@ -84,6 +115,7 @@ export interface WorkerContext {
 export interface RenderContext {
   attempt?: number;
   issue: AgentIssue;
+  selection?: IssueRoutingSelection;
   worker?: WorkerContext;
   workspace?: PreparedWorkspace;
 }

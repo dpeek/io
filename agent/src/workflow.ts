@@ -6,7 +6,15 @@ import { parse as parseYaml } from "yaml";
 import z from "zod";
 
 import type { AskForApproval, SandboxMode, SandboxPolicy } from "./codex-schema.js";
-import type { RenderContext, ValidationResult, Workflow, WorkflowEntrypoint } from "./types.js";
+import type {
+  AgentRole,
+  IssueRoutingCondition,
+  IssueRoutingConfig,
+  RenderContext,
+  ValidationResult,
+  Workflow,
+  WorkflowEntrypoint,
+} from "./types.js";
 
 import { toId } from "./util.js";
 
@@ -20,10 +28,16 @@ const IO_RUNTIME_KEYS = [
   "codex",
   "context",
   "hooks",
+  "issues",
   "polling",
   "tracker",
   "workspace",
 ] as const;
+const DEFAULT_ISSUE_ROUTING: IssueRoutingConfig = {
+  defaultAgent: "execute",
+  defaultProfile: "execute",
+  routing: [],
+};
 
 const approvalPolicySchema: z.ZodType<AskForApproval> = z.union([
   z.enum(["untrusted", "on-failure", "on-request", "never"]),
@@ -90,6 +104,27 @@ const stateListSchema = z.union([
     ),
 ]);
 
+const agentRoleSchema: z.ZodType<AgentRole> = z.enum(["backlog", "execute"]);
+
+const issueRoutingConditionSchema = z
+  .object({
+    hasChildren: z.boolean().optional(),
+    hasParent: z.boolean().optional(),
+    labelsAll: stateListSchema.optional(),
+    labelsAny: stateListSchema.optional(),
+    projectSlugIn: stateListSchema.optional(),
+    stateIn: stateListSchema.optional(),
+  })
+  .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
+    message: "Routing rules must define at least one condition",
+  });
+
+const issueRoutingRuleSchema = z.object({
+  agent: agentRoleSchema,
+  if: issueRoutingConditionSchema,
+  profile: z.string().min(1),
+});
+
 const ioConfigSchema = z
   .object({
     agent: z
@@ -154,6 +189,16 @@ const ioConfigSchema = z
         "Done",
       ]),
     }),
+    issues: z
+      .object({
+        defaultAgent: agentRoleSchema.default("execute"),
+        defaultProfile: z.string().min(1).optional(),
+        routing: z.array(issueRoutingRuleSchema).default([]),
+      })
+      .default({
+        defaultAgent: "execute",
+        routing: [],
+      }),
     workspace: z.object({
       origin: z.string().optional(),
       root: z.string().default("$AGENT_WORKSPACE_ROOT"),
@@ -228,10 +273,11 @@ const workflowFrontMatterSchema = z
   .passthrough();
 
 type IoConfig = z.infer<typeof ioConfigSchema>;
+type IoIssueRoutingConfig = IoConfig["issues"];
 type WorkflowFrontMatter = z.infer<typeof workflowFrontMatterSchema>;
 type WorkflowConfigFields = Pick<
   Workflow,
-  "agent" | "codex" | "context" | "hooks" | "polling" | "tracker" | "workspace"
+  "agent" | "codex" | "context" | "hooks" | "issues" | "polling" | "tracker" | "workspace"
 >;
 
 function splitFrontMatter(document: string) {
@@ -292,6 +338,38 @@ function normalizeStates(value: string[] | string) {
   return list.map((entry) => entry.trim()).filter(Boolean);
 }
 
+function normalizeIssueRoutingValues(value?: string[] | string) {
+  if (value == null) {
+    return undefined;
+  }
+  return normalizeStates(value).map((entry) => entry.toLowerCase());
+}
+
+function normalizeIssueRoutingCondition(
+  condition: IoIssueRoutingConfig["routing"][number]["if"],
+): IssueRoutingCondition {
+  return {
+    hasChildren: condition.hasChildren,
+    hasParent: condition.hasParent,
+    labelsAll: normalizeIssueRoutingValues(condition.labelsAll),
+    labelsAny: normalizeIssueRoutingValues(condition.labelsAny),
+    projectSlugIn: normalizeIssueRoutingValues(condition.projectSlugIn),
+    stateIn: normalizeIssueRoutingValues(condition.stateIn),
+  };
+}
+
+function normalizeIssueRouting(config: IoIssueRoutingConfig): IssueRoutingConfig {
+  return {
+    defaultAgent: config.defaultAgent,
+    defaultProfile: config.defaultProfile?.trim() || config.defaultAgent,
+    routing: config.routing.map((rule) => ({
+      agent: rule.agent,
+      if: normalizeIssueRoutingCondition(rule.if),
+      profile: rule.profile.trim(),
+    })),
+  };
+}
+
 function normalizeIoConfig(config: IoConfig, baseDir: string): WorkflowConfigFields {
   return {
     agent: {
@@ -323,6 +401,7 @@ function normalizeIoConfig(config: IoConfig, baseDir: string): WorkflowConfigFie
       beforeRun: config.hooks.beforeRun,
       timeoutMs: config.hooks.timeoutMs,
     },
+    issues: normalizeIssueRouting(config.issues),
     polling: {
       intervalMs: config.polling.intervalMs,
     },
@@ -372,6 +451,7 @@ function normalizeWorkflowFrontMatter(
       beforeRun: frontMatter.hooks.before_run,
       timeoutMs: frontMatter.hooks.timeout_ms,
     },
+    issues: DEFAULT_ISSUE_ROUTING,
     polling: {
       intervalMs: frontMatter.polling.interval_ms,
     },

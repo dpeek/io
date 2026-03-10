@@ -2,19 +2,25 @@ import { createLogger, type Logger } from "@io/lib";
 import { appendFile, readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
-import type { AgentIssue, IssueRunResult, PreparedWorkspace, Workflow } from "./types.js";
+import type {
+  AgentIssue,
+  IssueRoutingSelection,
+  IssueRunResult,
+  PreparedWorkspace,
+  Workflow,
+} from "./types.js";
 
 import {
   DEFAULT_BACKLOG_BUILTIN_DOC_IDS,
   DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
   resolveBuiltinDoc,
 } from "./builtins.js";
+import { resolveIssueRouting } from "./issue-routing.js";
 import { CodexAppServerRunner } from "./runner/codex.js";
 import { LinearTrackerAdapter } from "./tracker/linear.js";
 import { loadWorkflowFile, renderPrompt } from "./workflow.js";
 import { WorkspaceManager } from "./workspace.js";
 
-const BACKLOG_LABEL = "io";
 const WORKFLOW_FILE = "WORKFLOW.md";
 
 type IssueRunner = {
@@ -198,9 +204,11 @@ export class AgentService {
     let beforeRunCompleted = false;
     let result: IssueRunResult;
     try {
-      const prompt = renderPrompt(await this.#loadPromptTemplate(workflow, issue), {
+      const selection = resolveIssueRouting(workflow.issues, issue);
+      const prompt = renderPrompt(await this.#loadPromptTemplate(workflow, selection), {
         attempt: 1,
         issue,
+        selection,
         worker: { count: maxConcurrentAgents, id: issue.identifier, index: runIndex },
         workspace,
       });
@@ -290,7 +298,7 @@ export class AgentService {
     await appendFile(path, text);
   }
 
-  async #loadPromptTemplate(workflow: Workflow, issue: AgentIssue) {
+  async #loadPromptTemplate(workflow: Workflow, selection: IssueRoutingSelection) {
     if (
       workflow.entrypoint.kind !== "io" ||
       basename(workflow.entrypoint.promptPath) === WORKFLOW_FILE
@@ -298,9 +306,10 @@ export class AgentService {
       return workflow.promptTemplate;
     }
 
-    const builtinIds = issue.labels.includes(BACKLOG_LABEL)
-      ? DEFAULT_BACKLOG_BUILTIN_DOC_IDS
-      : DEFAULT_EXECUTE_BUILTIN_DOC_IDS;
+    const builtinIds =
+      selection.agent === "backlog"
+        ? DEFAULT_BACKLOG_BUILTIN_DOC_IDS
+        : DEFAULT_EXECUTE_BUILTIN_DOC_IDS;
     const sections = await Promise.all(
       builtinIds.map(async (id) => {
         const overridePath = workflow.context.overrides[id];

@@ -41,6 +41,21 @@
   "hooks": {
     "afterCreate": "bun install"
   },
+  "issues": {
+    "defaultAgent": "execute",
+    "defaultProfile": "execute",
+    "routing": [
+      {
+        "if": {
+          "labelsAny": [
+            "io"
+          ]
+        },
+        "agent": "backlog",
+        "profile": "backlog"
+      }
+    ]
+  },
   "tracker": {
     "activeStates": [
       "Todo"

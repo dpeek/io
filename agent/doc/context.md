@@ -167,6 +167,7 @@ This keeps them near the repo root, avoids the current `llm/topic` naming ambigu
   },
   "issues": {
     "defaultAgent": "execute",
+    "defaultProfile": "execute",
     "routing": [
       {
         "if": { "labelsAny": ["backlog", "planning"] },
@@ -313,16 +314,24 @@ This handles the common case with no per-issue author effort.
 
 ### Automatic routing
 
-For the first implementation, routing should inspect labels only.
-
-That keeps the initial resolver small and matches the current hard-coded backlog split closely enough to migrate incrementally.
+For the first implementation, routing should use issue metadata that the Linear
+adapter can fetch directly:
 
 Suggested first-version rule types:
 
 - `labelsAny`
 - `labelsAll`
+- `stateIn`
+- `projectSlugIn`
+- `hasParent`
+- `hasChildren`
 
-State, project, and hierarchy-aware routing can be added later once there are concrete cases that justify the extra fetches and config surface.
+Routing should stay ordered and explicit:
+
+- start from `defaultAgent` and `defaultProfile`
+- evaluate `issues.routing` from top to bottom
+- treat all predicates inside a single `if` block as an AND
+- let the first matching rule win
 
 Example:
 
@@ -338,7 +347,12 @@ Example:
         "profile": "backlog"
       },
       {
-        "if": { "labelsAny": ["docs-only"] },
+        "if": {
+          "hasParent": true,
+          "labelsAll": ["docs-only", "planning"],
+          "projectSlugIn": ["docs"],
+          "stateIn": ["Todo", "In Progress"]
+        },
         "agent": "backlog",
         "profile": "backlog"
       }
@@ -475,7 +489,7 @@ The first implementation should treat these defaults as settled:
 - include `io.md` by default unless a profile explicitly disables it
 - use an HTML comment `<!-- io ... -->` block for issue-body hints
 - allow both registered doc ids and repo-relative paths, without requiring prior registration for paths
-- start routing with labels only
+- use ordered issue routing rules with `labelsAny`, `labelsAll`, `stateIn`, `projectSlugIn`, `hasParent`, and `hasChildren`
 
 This keeps the first version small while preserving a clear path to richer routing later.
 
@@ -493,11 +507,10 @@ The current code should evolve roughly as follows:
   - distinguish built-ins, registered doc ids, and repo-relative paths during resolution
 - `agent/src/service.ts`
   - replace hard-coded backlog prompt switching with agent/profile resolution
-  - start with label-based routing rules before adding richer metadata-driven routing
+  - apply ordered repo defaults and routing rules before prompt selection
   - resolve docs before prompt rendering
 - `agent/src/tracker/linear.ts`
-  - keep the first routing pass label-only
-  - grow issue fetches only when routing expands beyond labels
+  - fetch the labels, state, project slug, and parent/child metadata needed by routing
 
 The final prompt given to Codex should be rendered from:
 

@@ -89,10 +89,13 @@ function issue(identifier: string, title = "Example") {
     blockedBy: [],
     createdAt: "2024-01-01T00:00:00.000Z",
     description: "",
+    hasChildren: false,
+    hasParent: false,
     id: identifier,
     identifier,
     labels: [],
     priority: 1,
+    projectSlug: "io",
     state: "Todo",
     title,
     updatedAt: "2024-01-01T00:00:00.000Z",
@@ -573,4 +576,3 @@ test("WorkspaceManager reconciles stale running issues using durable issue recor
     await rm(root, { force: true, recursive: true });
   }
 });
-

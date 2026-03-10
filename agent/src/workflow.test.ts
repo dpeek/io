@@ -87,6 +87,11 @@ WORKFLOW {{ issue.identifier }}
     expect(result.value.entrypoint.promptPath).toBe(resolve(root, "io.md"));
     expect(result.value.promptTemplate).toBe("IO {{ issue.identifier }}");
     expect(result.value.agent.maxTurns).toBe(2);
+    expect(result.value.issues).toEqual({
+      defaultAgent: "execute",
+      defaultProfile: "execute",
+      routing: [],
+    });
     expect(result.value.tracker.apiKey).toBe("linear-token");
     expect(result.value.tracker.projectSlug).toBe("project-slug");
     expect(result.value.workspace.root).toBe(resolve(root, "workspace"));
@@ -278,6 +283,74 @@ WORKFLOW {{ issue.identifier }}
   }
 });
 
+test("loadWorkflowFile parses issue routing defaults and normalized rules from io.json", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "workflow-"));
+
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        issues: {
+          defaultAgent: "execute",
+          routing: [
+            {
+              agent: "backlog",
+              if: {
+                hasChildren: false,
+                hasParent: true,
+                labelsAll: ["Planning", "Docs"],
+                labelsAny: ["docs"],
+                projectSlugIn: ["IO"],
+                stateIn: ["Todo", "In Progress"],
+              },
+              profile: "backlog",
+            },
+          ],
+        },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+        },
+        workspace: {
+          root: "./workspace",
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(resolve(root, "io.md"), "IO {{ issue.identifier }}\n");
+
+  try {
+    const result = await loadWorkflowFile(undefined, root);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.value.issues).toEqual({
+      defaultAgent: "execute",
+      defaultProfile: "execute",
+      routing: [
+        {
+          agent: "backlog",
+          if: {
+            hasChildren: false,
+            hasParent: true,
+            labelsAll: ["planning", "docs"],
+            labelsAny: ["docs"],
+            projectSlugIn: ["io"],
+            stateIn: ["todo", "in progress"],
+          },
+          profile: "backlog",
+        },
+      ],
+    });
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("renderPrompt fails on unknown variables", () => {
   expect(() =>
     renderPrompt("Issue {{ issue.identifier }} {{ issue.missing }}", {
@@ -285,10 +358,13 @@ test("renderPrompt fails on unknown variables", () => {
         blockedBy: [],
         createdAt: "2024-01-01T00:00:00.000Z",
         description: "",
+        hasChildren: false,
+        hasParent: false,
         id: "1",
         identifier: "OS-1",
         labels: [],
         priority: 1,
+        projectSlug: "io",
         state: "Todo",
         title: "Example",
         updatedAt: "2024-01-01T00:00:00.000Z",

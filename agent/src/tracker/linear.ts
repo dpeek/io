@@ -25,7 +25,14 @@ query AgentCandidateIssues(
       priority
       createdAt
       updatedAt
+      project { slugId }
       state { name }
+      parent { id }
+      children(first: 1) {
+        nodes {
+          id
+        }
+      }
       labels { nodes { name } }
       inverseRelations(first: 50) {
         nodes {
@@ -62,6 +69,9 @@ interface LinearResponse<T> {
 }
 
 interface CandidateIssueNode {
+  children?: {
+    nodes?: Array<{ id: string } | null> | null;
+  } | null;
   createdAt: string;
   description?: string | null;
   id: string;
@@ -76,7 +86,9 @@ interface CandidateIssueNode {
     > | null;
   } | null;
   labels?: { nodes?: Array<{ name?: string | null } | null> | null } | null;
+  parent?: { id: string } | null;
   priority?: number | null;
+  project?: { slugId?: string | null } | null;
   state?: { name?: string | null } | null;
   title: string;
   updatedAt: string;
@@ -118,12 +130,15 @@ export function normalizeLinearIssue(node: CandidateIssueNode): AgentIssue {
       .map((relatedIssue) => relatedIssue.id),
     createdAt: node.createdAt,
     description: node.description ?? "",
+    hasChildren: (node.children?.nodes ?? []).some((child) => Boolean(child?.id)),
+    hasParent: Boolean(node.parent?.id),
     id: node.id,
     identifier: node.identifier,
     labels: (node.labels?.nodes ?? [])
       .map((label) => label?.name?.trim().toLowerCase())
       .filter((value): value is string => !!value),
     priority: Number.isInteger(node.priority) ? node.priority! : null,
+    projectSlug: node.project?.slugId?.trim() || undefined,
     state: node.state?.name?.trim() || "Unknown",
     title: node.title.trim(),
     updatedAt: node.updatedAt,

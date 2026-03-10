@@ -8,10 +8,30 @@ import {
   DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
   resolveBuiltinDoc,
 } from "./builtins.js";
+import { resolveIssueRouting } from "./issue-routing.js";
 import { AgentService, pickCandidateIssues } from "./service.js";
 import { normalizeLinearIssue } from "./tracker/linear.js";
-import type { PreparedWorkspace } from "./types.js";
+import type { AgentIssue, PreparedWorkspace } from "./types.js";
 import { renderPrompt } from "./workflow.js";
+
+function createIssue(overrides: Partial<AgentIssue> = {}): AgentIssue {
+  return {
+    blockedBy: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
+    description: "",
+    hasChildren: false,
+    hasParent: false,
+    id: "1",
+    identifier: "OS-1",
+    labels: [],
+    priority: 1,
+    projectSlug: "io",
+    state: "Todo",
+    title: "Example",
+    updatedAt: "2024-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 function buildExpectedPrompt(
   builtinIds: readonly string[],
@@ -19,6 +39,7 @@ function buildExpectedPrompt(
   promptTemplate: string,
   issue: Parameters<typeof renderPrompt>[1]["issue"],
   workspace: PreparedWorkspace,
+  selection?: Parameters<typeof renderPrompt>[1]["selection"],
 ) {
   return renderPrompt(
     [
@@ -28,6 +49,7 @@ function buildExpectedPrompt(
     {
       attempt: 1,
       issue,
+      selection,
       worker: { count: 1, id: issue.identifier, index: 0 },
       workspace,
     },
@@ -36,6 +58,9 @@ function buildExpectedPrompt(
 
 test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   const issue = normalizeLinearIssue({
+    children: {
+      nodes: [{ id: "child-1" }],
+    },
     createdAt: "2024-01-01T00:00:00.000Z",
     description: null,
     id: "1",
@@ -61,7 +86,9 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
       ],
     },
     labels: { nodes: [{ name: "Bug" }, { name: " P1 " }, null] },
+    parent: { id: "parent-1" },
     priority: 2,
+    project: { slugId: "OpenSurf" },
     state: { name: "Todo" },
     title: "Fix integration",
     updatedAt: "2024-01-01T00:00:00.000Z",
@@ -69,51 +96,75 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   expect(issue.labels).toEqual(["bug", "p1"]);
   expect(issue.description).toBe("");
   expect(issue.blockedBy).toEqual(["2"]);
+  expect(issue.projectSlug).toBe("OpenSurf");
+  expect(issue.hasParent).toBe(true);
+  expect(issue.hasChildren).toBe(true);
 });
 
 test("pickCandidateIssues prefers unblocked todo issues by priority", () => {
   const selected = pickCandidateIssues(
     [
-      {
+      createIssue({
         blockedBy: ["OS-1"],
-        createdAt: "2024-01-01T00:00:00.000Z",
-        description: "",
         id: "3",
         identifier: "OS-3",
-        labels: [],
         priority: 5,
         state: "Todo",
         title: "Blocked",
-        updatedAt: "2024-01-01T00:00:00.000Z",
-      },
-      {
-        blockedBy: [],
-        createdAt: "2024-01-01T00:00:00.000Z",
-        description: "",
+      }),
+      createIssue({
         id: "2",
         identifier: "OS-2",
-        labels: [],
         priority: 1,
         state: "In Progress",
         title: "Later",
         updatedAt: "2024-01-02T00:00:00.000Z",
-      },
-      {
-        blockedBy: [],
-        createdAt: "2024-01-01T00:00:00.000Z",
-        description: "",
+      }),
+      createIssue({
         id: "1",
         identifier: "OS-1",
-        labels: [],
         priority: 3,
         state: "Todo",
         title: "First",
         updatedAt: "2024-01-03T00:00:00.000Z",
-      },
+      }),
     ],
     2,
   );
   expect(selected.map((issue) => issue.identifier)).toEqual(["OS-1", "OS-2"]);
+});
+
+test("resolveIssueRouting uses repo defaults and first matching rule precedence", () => {
+  const issue = createIssue({
+    hasChildren: true,
+    labels: ["planning", "docs"],
+    state: "Todo",
+  });
+
+  expect(
+    resolveIssueRouting(
+      {
+        defaultAgent: "execute",
+        defaultProfile: "execute",
+        routing: [
+          {
+            agent: "backlog",
+            if: { stateIn: ["todo"] },
+            profile: "triage",
+          },
+          {
+            agent: "execute",
+            if: { hasChildren: true, labelsAny: ["planning"] },
+            profile: "docs",
+          },
+        ],
+      },
+      issue,
+    ),
+  ).toEqual({
+    agent: "backlog",
+    profile: "triage",
+  });
 });
 
 test("AgentService eagerly creates worker checkout on start", async () => {
@@ -330,6 +381,8 @@ test("AgentService composes execute built-ins with io.md", async () => {
           blockedBy: [],
           createdAt: "2024-01-01T00:00:00.000Z",
           description: "Implement execute flow",
+          hasChildren: false,
+          hasParent: false,
           id: "1",
           identifier: "OPE-54",
           labels: [],
@@ -346,6 +399,10 @@ test("AgentService composes execute built-ins with io.md", async () => {
           path: workspacePath,
           workerId: "OPE-54",
         },
+        {
+          agent: "execute",
+          profile: "execute",
+        },
       ),
     );
   } finally {
@@ -354,10 +411,11 @@ test("AgentService composes execute built-ins with io.md", async () => {
   }
 });
 
-test("AgentService uses backlog built-ins for io-labeled issues", async () => {
+test("AgentService uses backlog built-ins for routed issues", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
   const ioPromptPath = resolve(root, "io.md");
-  const localPrompt = "LOCAL BACKLOG {{ issue.identifier }}\n";
+  const localPrompt =
+    "LOCAL BACKLOG {{ issue.identifier }} {{ selection.agent }} {{ selection.profile }}\n";
   const workspacePath = resolve(root, "workspace", "workers", "OPE-55", "repo");
   let capturedPrompt = "";
 
@@ -366,6 +424,24 @@ test("AgentService uses backlog built-ins for io-labeled issues", async () => {
     JSON.stringify(
       {
         agent: { maxConcurrentAgents: 1 },
+        issues: {
+          defaultAgent: "execute",
+          defaultProfile: "execute",
+          routing: [
+            {
+              agent: "backlog",
+              if: {
+                hasChildren: false,
+                hasParent: true,
+                labelsAll: ["planning", "docs"],
+                labelsAny: ["planning"],
+                projectSlugIn: ["docs-project"],
+                stateIn: ["todo"],
+              },
+              profile: "backlog",
+            },
+          ],
+        },
         tracker: {
           apiKey: "$LINEAR_API_KEY",
           kind: "linear",
@@ -381,7 +457,7 @@ test("AgentService uses backlog built-ins for io-labeled issues", async () => {
   );
   await writeFile(ioPromptPath, localPrompt);
   process.env.LINEAR_API_KEY = "linear-token";
-  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+  process.env.LINEAR_PROJECT_SLUG = "docs-project";
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = mock(
@@ -392,12 +468,17 @@ test("AgentService uses backlog built-ins for io-labeled issues", async () => {
             issues: {
               nodes: [
                 {
+                  children: {
+                    nodes: [],
+                  },
                   createdAt: "2024-01-01T00:00:00.000Z",
                   description: "Refine backlog item",
                   id: "1",
                   identifier: "OPE-55",
-                  labels: { nodes: [{ name: " io " }] },
+                  labels: { nodes: [{ name: " planning " }, { name: "Docs" }] },
+                  parent: { id: "parent-1" },
                   priority: 0,
+                  project: { slugId: "docs-project" },
                   state: { name: "Todo" },
                   title: "Backlog agent",
                   updatedAt: "2024-01-01T00:00:00.000Z",
@@ -478,10 +559,13 @@ test("AgentService uses backlog built-ins for io-labeled issues", async () => {
           blockedBy: [],
           createdAt: "2024-01-01T00:00:00.000Z",
           description: "Refine backlog item",
+          hasChildren: false,
+          hasParent: true,
           id: "1",
           identifier: "OPE-55",
-          labels: ["io"],
+          labels: ["planning", "docs"],
           priority: 0,
+          projectSlug: "docs-project",
           state: "Todo",
           title: "Backlog agent",
           updatedAt: "2024-01-01T00:00:00.000Z",
@@ -494,6 +578,10 @@ test("AgentService uses backlog built-ins for io-labeled issues", async () => {
           path: workspacePath,
           workerId: "OPE-55",
         },
+        {
+          agent: "backlog",
+          profile: "backlog",
+        },
       ),
     );
   } finally {
@@ -501,7 +589,6 @@ test("AgentService uses backlog built-ins for io-labeled issues", async () => {
     await rm(root, { force: true, recursive: true });
   }
 });
-
 test("AgentService uses builtin override files from io.json", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
   const overridePath = resolve(root, "io", "context", "validation-override.md");

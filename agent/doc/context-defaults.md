@@ -15,7 +15,7 @@ replaces them.
 | `io.md` inclusion | Include `io.md` automatically in every resolved context bundle unless a profile explicitly opts out. | Projects should get one predictable local instruction layer without repeating `./io.md` in every profile. |
 | Issue-body hints | Parse a single HTML comment block with YAML-style fields. | The hints stay machine-readable without adding visible fenced blocks to issue descriptions in Linear. |
 | Project doc references | Allow repo-relative paths like `./io/context/architecture.md` without prior registration. | Registration is useful for stable shared ids, but requiring it for every one-off doc adds friction with little value. |
-| Initial issue routing | Start with label-based routing only. | Labels cover the immediate execution/backlog split and avoid forcing extra tracker queries before the model is proven. |
+| Initial issue routing | Use repo defaults plus ordered first-match rules across labels, state, project slug, and issue hierarchy. | It keeps agent/profile selection explicit in `io.json` while covering the metadata already needed for the first backlog-vs-execution routing pass. |
 
 ## Accepted Forms
 
@@ -81,9 +81,11 @@ The current runtime resolves repo entrypoints in this order:
   different reference classes during resolution.
 - Keep profile configuration declarative; profiles should not need to repeat
   `./io.md` just to preserve the default behavior.
-- Keep first-version routing inputs narrow. Labels are required; state,
-  hierarchy, and project-structure routing can be added later without changing
-  the default contract.
+- Apply repo defaults first, then evaluate `issues.routing` from top to bottom.
+  A rule matches only when every predicate it specifies matches the issue.
+- Keep first-version routing inputs narrow and explicit:
+  `labelsAny`, `labelsAll`, `stateIn`, `projectSlugIn`, `hasParent`, and
+  `hasChildren`.
 - Surface unresolved doc references as warnings rather than silently dropping
   them.
 
@@ -91,6 +93,5 @@ The current runtime resolves repo entrypoints in this order:
 
 These are intentionally not part of the first-version default set:
 
-- state- or hierarchy-aware routing predicates
 - additional issue-body formats such as fenced code blocks
 - forcing every repo-relative doc into the registry before it can be linked
