@@ -1,6 +1,7 @@
 import { createLogger, handleExit } from "@io/lib";
 
 import { AgentService } from "./service.js";
+import { AgentTuiRetainedReader } from "./tui-runtime.js";
 import { loadWorkflowFile } from "./workflow.js";
 import { readIssueRuntimeState } from "./workspace.js";
 import { createAgentTui } from "./tui.js";
@@ -9,6 +10,8 @@ function printHelp() {
   console.log(`Usage:
   io agent start [entrypointPath] [--once]
   io agent tui [entrypointPath] [--once]
+  io agent tui attach <issue> [entrypointPath]
+  io agent tui replay <issue> [entrypointPath] [--delay-ms <ms>]
   io agent tail <issue> [entrypointPath]
   io agent validate [entrypointPath]
 
@@ -21,6 +24,13 @@ Compatibility:
 
 type StartCommandOptions = {
   once: boolean;
+  workflowPath?: string;
+};
+
+type RetainedTuiCommandOptions = {
+  delayMs?: number;
+  issueIdentifier: string;
+  mode: "attach" | "replay";
   workflowPath?: string;
 };
 
@@ -38,6 +48,49 @@ function parseStartOptions(args: string[]): StartCommandOptions {
     if (!value.startsWith("--") && !options.workflowPath) {
       options.workflowPath = value;
     }
+  }
+  return options;
+}
+
+function parseRetainedTuiOptions(
+  args: string[],
+  mode: RetainedTuiCommandOptions["mode"],
+): RetainedTuiCommandOptions {
+  const options: RetainedTuiCommandOptions = {
+    delayMs: mode === "replay" ? 40 : undefined,
+    issueIdentifier: "",
+    mode,
+  };
+
+  for (let index = 0; index < args.length; index++) {
+    const value = args[index];
+    if (!value) {
+      continue;
+    }
+    if (value === "--delay-ms") {
+      const next = args[index + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error("Usage: io agent tui replay <issue> [entrypointPath] [--delay-ms <ms>]");
+      }
+      const parsed = Number.parseInt(next, 10);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        throw new Error(`Invalid replay delay: ${next}`);
+      }
+      options.delayMs = parsed;
+      index += 1;
+      continue;
+    }
+    if (!value.startsWith("--") && !options.issueIdentifier) {
+      options.issueIdentifier = value;
+      continue;
+    }
+    if (!value.startsWith("--") && !options.workflowPath) {
+      options.workflowPath = value;
+    }
+  }
+
+  if (!options.issueIdentifier) {
+    throw new Error(`Usage: io agent tui ${mode} <issue> [entrypointPath]${mode === "replay" ? " [--delay-ms <ms>]" : ""}`);
   }
   return options;
 }
@@ -72,6 +125,103 @@ async function runAgentService(options: StartCommandOptions, mode: "start" | "tu
   }
 }
 
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function runRetainedTui(options: RetainedTuiCommandOptions) {
+  const result = await loadWorkflowFile(options.workflowPath, process.cwd());
+  if (!result.ok) {
+    for (const error of result.errors) {
+      console.error(`${error.path}: ${error.message}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const issueState = await readIssueRuntimeState(result.value.workspace.root, options.issueIdentifier);
+  if (!issueState) {
+    console.error(`No retained issue output for ${options.issueIdentifier}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const tui = createAgentTui();
+  const reader = new AgentTuiRetainedReader({
+    issueState,
+    repoRoot: process.cwd(),
+  });
+
+  let active = true;
+  let interval: ReturnType<typeof setInterval> | undefined;
+  let reading = false;
+
+  const stop = async () => {
+    if (!active) {
+      return;
+    }
+    active = false;
+    if (interval) {
+      clearInterval(interval);
+      interval = undefined;
+    }
+    tui.stop();
+  };
+
+  handleExit(stop);
+  tui.start();
+
+  const initialEvents = await reader.readInitialEvents(options.mode);
+  if (options.mode === "replay") {
+    for (const event of initialEvents) {
+      if (!active) {
+        return;
+      }
+      tui.observe(event);
+      if ((options.delayMs ?? 0) > 0) {
+        await sleep(options.delayMs ?? 0);
+      }
+    }
+    tui.observe(reader.createReplayCompletedEvent());
+    interval = setInterval(() => undefined, 60_000);
+  } else {
+    for (const event of initialEvents) {
+      tui.observe(event);
+    }
+    interval = setInterval(() => {
+      if (!active || reading) {
+        return;
+      }
+      reading = true;
+      void reader
+        .readNextEvents()
+        .then((events) => {
+          for (const event of events) {
+            tui.observe(event);
+          }
+        })
+        .catch((error) => {
+          tui.observe({
+            code: "error",
+            format: "line",
+            sequence: Number.MAX_SAFE_INTEGER,
+            session: reader.supervisorSession,
+            text: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString(),
+            type: "status",
+          });
+        })
+        .finally(() => {
+          reading = false;
+        });
+    }, 250);
+  }
+
+  await new Promise<void>(() => undefined);
+}
+
 export async function runAgentCli(args: string[]) {
   const [command = "start", ...rest] = args;
   switch (command) {
@@ -81,6 +231,12 @@ export async function runAgentCli(args: string[]) {
       return;
     }
     case "tui": {
+      const [subcommand, ...subcommandArgs] = rest;
+      if (subcommand === "attach" || subcommand === "replay") {
+        const options = parseRetainedTuiOptions(subcommandArgs, subcommand);
+        await runRetainedTui(options);
+        return;
+      }
       const options = parseStartOptions(rest);
       await runAgentService(options, "tui");
       return;

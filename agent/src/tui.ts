@@ -76,8 +76,8 @@ function mergeSessionRef(current: AgentSessionRef, next: AgentSessionRef): Agent
   let issue: AgentSessionIssueRef | undefined;
   if (current.issue || next.issue) {
     issue = {
-      ...(current.issue ?? {}),
-      ...(next.issue ?? {}),
+      ...current.issue,
+      ...next.issue,
     } as AgentSessionIssueRef;
   }
   return {
