@@ -92,6 +92,28 @@ export interface IssueRoutingSelection {
 
 export interface WorkflowContextProfile {
   include: string[];
+  includeEntrypoint: boolean;
+}
+
+export type ResolvedContextDocSource =
+  | "builtin"
+  | "entrypoint"
+  | "registered"
+  | "repo-path"
+  | "synthesized";
+
+export interface ResolvedContextDoc {
+  content: string;
+  id: string;
+  label: string;
+  order: number;
+  overridden: boolean;
+  path?: string;
+  source: ResolvedContextDocSource;
+}
+
+export interface ResolvedContextBundle {
+  docs: ResolvedContextDoc[];
 }
 
 export interface Workflow {
@@ -106,7 +128,7 @@ export interface Workflow {
   hooks: HookConfig;
   issues: IssueRoutingConfig;
   polling: PollingConfig;
-  promptTemplate: string;
+  entrypointContent: string;
   tracker: TrackerConfig;
   workspace: {
     origin?: string;
@@ -179,6 +201,7 @@ export interface IssueRunResult {
   success: boolean;
   threadId?: string;
   turnId?: string;
+  resolvedContext?: ResolvedContextBundle;
   warnings?: string[];
   workspace: PreparedWorkspace;
 }

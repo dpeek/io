@@ -129,6 +129,7 @@ const issueRoutingRuleSchema = z.object({
 
 const contextProfileSchema = z.object({
   include: z.array(z.string().min(1)).default([]),
+  includeEntrypoint: z.boolean().default(true),
 });
 
 const ioExtensionsSchema = z
@@ -228,15 +229,15 @@ type WorkflowConfigFields = Pick<
 
 function splitFrontMatter(document: string) {
   if (!document.startsWith("---\n")) {
-    return { configText: "", promptTemplate: document.trim() };
+    return { configText: "", entrypointContent: document.trim() };
   }
   const end = document.indexOf("\n---", 4);
   if (end === -1) {
     throw new Error("Invalid workflow front matter: missing closing ---");
   }
   const configText = document.slice(4, end).trim();
-  const promptTemplate = document.slice(end + 4).trim();
-  return { configText, promptTemplate };
+  const entrypointContent = document.slice(end + 4).trim();
+  return { configText, entrypointContent };
 }
 
 function expandEnv(value?: string) {
@@ -261,13 +262,13 @@ function expandPathValue(value: string, baseDir: string) {
 
 function buildWorkflow(
   config: WorkflowConfigFields,
-  promptTemplate: string,
+  entrypointContent: string,
   entrypoint: WorkflowEntrypoint,
 ): Workflow {
   return {
     ...config,
     entrypoint,
-    promptTemplate,
+    entrypointContent,
   };
 }
 
@@ -312,9 +313,11 @@ function normalizeIoExtensions(config: IoExtensions, baseDir: string) {
   const defaultProfiles = {
     backlog: {
       include: [...DEFAULT_BACKLOG_BUILTIN_DOC_IDS],
+      includeEntrypoint: true,
     },
     execute: {
       include: [...DEFAULT_EXECUTE_BUILTIN_DOC_IDS],
+      includeEntrypoint: true,
     },
   };
   return {
@@ -338,6 +341,7 @@ function normalizeIoExtensions(config: IoExtensions, baseDir: string) {
             name.trim(),
             {
               include: profile.include.map((reference) => reference.trim()).filter(Boolean),
+              includeEntrypoint: profile.includeEntrypoint,
             },
           ]),
         ),
@@ -418,9 +422,11 @@ function normalizeWorkflowFrontMatter(
       profiles: {
         backlog: {
           include: [...DEFAULT_BACKLOG_BUILTIN_DOC_IDS],
+          includeEntrypoint: true,
         },
         execute: {
           include: [...DEFAULT_EXECUTE_BUILTIN_DOC_IDS],
+          includeEntrypoint: true,
         },
       },
     },
@@ -510,7 +516,7 @@ function parseWorkflowDocument(
   entrypoint: WorkflowEntrypoint,
 ): ValidationResult<Workflow> {
   try {
-    const { configText, promptTemplate } = splitFrontMatter(document);
+    const { configText, entrypointContent } = splitFrontMatter(document);
     const rawConfig = configText ? parseYaml(configText) : {};
     if (rawConfig != null && typeof rawConfig !== "object") {
       return invalidResult("Workflow front matter must decode to an object");
@@ -519,14 +525,14 @@ function parseWorkflowDocument(
     if (!result.success) {
       return { errors: mapIssues(result.error.issues), ok: false };
     }
-    if (!promptTemplate) {
-      return invalidResult("Workflow prompt body must not be empty", "promptTemplate");
+    if (!entrypointContent) {
+      return invalidResult("Workflow prompt body must not be empty", "entrypointContent");
     }
     return {
       ok: true,
       value: buildWorkflow(
         normalizeWorkflowFrontMatter(result.data, dirname(entrypoint.configPath)),
-        promptTemplate,
+        entrypointContent,
         entrypoint,
       ),
     };
@@ -623,17 +629,17 @@ function resolveEntrypoint(path: string | undefined, baseDir: string): Validatio
   );
 }
 
-async function loadPromptTemplate(path: string) {
+async function loadEntrypointContent(path: string) {
   if (!existsSync(path)) {
     return invalidResult(`Missing prompt entrypoint: ${path}`, path);
   }
   const document = await Bun.file(path).text();
-  const promptTemplate =
-    basename(path) === WORKFLOW_FILE ? splitFrontMatter(document).promptTemplate : document.trim();
-  if (!promptTemplate) {
+  const entrypointContent =
+    basename(path) === WORKFLOW_FILE ? splitFrontMatter(document).entrypointContent : document.trim();
+  if (!entrypointContent) {
     return invalidResult(`Prompt entrypoint must not be empty: ${path}`, path);
   }
-  return { ok: true, value: promptTemplate } satisfies ValidationResult<string>;
+  return { ok: true, value: entrypointContent } satisfies ValidationResult<string>;
 }
 
 async function loadIoWorkflow(entrypoint: WorkflowEntrypoint): Promise<ValidationResult<Workflow>> {
@@ -663,15 +669,15 @@ async function loadIoWorkflow(entrypoint: WorkflowEntrypoint): Promise<Validatio
       entrypoint.configPath,
     );
   }
-  const promptTemplate = await loadPromptTemplate(entrypoint.promptPath);
-  if (!promptTemplate.ok) {
-    return promptTemplate;
+  const entrypointContent = await loadEntrypointContent(entrypoint.promptPath);
+  if (!entrypointContent.ok) {
+    return entrypointContent;
   }
   return {
     ok: true,
     value: buildWorkflow(
       normalizeLoadedIoConfig(loaded.value.config, extensions.value),
-      promptTemplate.value,
+      entrypointContent.value,
       {
         ...entrypoint,
         configPath: loaded.value.sourcePath,

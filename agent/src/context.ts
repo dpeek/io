@@ -9,9 +9,18 @@ import {
   DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
   resolveBuiltinDoc,
 } from "./builtins.js";
-import type { AgentIssue, AgentRole, IssueRoutingSelection, Workflow } from "./types.js";
+import type {
+  AgentIssue,
+  AgentRole,
+  IssueRoutingSelection,
+  ResolvedContextBundle,
+  ResolvedContextDoc,
+  Workflow,
+} from "./types.js";
 
 const WORKFLOW_FILE = "WORKFLOW.md";
+const CONTEXT_ENTRYPOINT_DOC_ID = "context.entrypoint";
+const ISSUE_CONTEXT_DOC_ID = "issue.context";
 const ISSUE_HINT_BLOCK_PATTERN = /<!--\s*io\b([\s\S]*?)-->/gi;
 const BUILTIN_DOC_REF_PATTERN = /(?<![A-Za-z0-9._/-])(builtin:[A-Za-z0-9._-]+)\b/g;
 const REGISTERED_DOC_REF_PATTERN =
@@ -33,14 +42,11 @@ type IssueBodyHints = {
   profile?: string;
 };
 
-type ResolvedDocSection = {
-  content: string;
-  key: string;
-  label: string;
-};
+type PendingResolvedContextDoc = Omit<ResolvedContextDoc, "order">;
 
 export interface ResolvedIssueContext {
-  promptTemplate: string;
+  bundle: ResolvedContextBundle;
+  issue: AgentIssue;
   selection: IssueRoutingSelection;
   warnings: string[];
 }
@@ -59,10 +65,13 @@ function uniqueOrdered(values: string[]) {
   return unique;
 }
 
-function collectMatches(text: string, pattern: RegExp) {
+function collectIndexedMatches(text: string, pattern: RegExp) {
   return [...text.matchAll(pattern)]
-    .map((match) => match[1])
-    .filter((value): value is string => Boolean(value));
+    .map((match) => ({
+      index: match.index ?? -1,
+      value: match[1],
+    }))
+    .filter((match): match is { index: number; value: string } => Boolean(match.value));
 }
 
 function stripPathFragment(path: string) {
@@ -75,6 +84,10 @@ function isBuiltinDocReference(reference: string) {
 
 function isRepoPathDocReference(reference: string) {
   return reference.startsWith("./");
+}
+
+function usesLegacyWorkflowPrompt(workflow: Workflow) {
+  return workflow.entrypoint.promptPath.endsWith(WORKFLOW_FILE);
 }
 
 function getDefaultProfileInclude(agent: AgentRole) {
@@ -142,11 +155,15 @@ function parseIssueBodyHints(description: string) {
 }
 
 function extractLinkedDocReferences(description: string) {
-  return uniqueOrdered([
-    ...collectMatches(description, BUILTIN_DOC_REF_PATTERN),
-    ...collectMatches(description, REPO_PATH_DOC_REF_PATTERN),
-    ...collectMatches(description, REGISTERED_DOC_REF_PATTERN),
-  ]);
+  return uniqueOrdered(
+    [
+      ...collectIndexedMatches(description, BUILTIN_DOC_REF_PATTERN),
+      ...collectIndexedMatches(description, REPO_PATH_DOC_REF_PATTERN),
+      ...collectIndexedMatches(description, REGISTERED_DOC_REF_PATTERN),
+    ]
+      .sort((left, right) => left.index - right.index)
+      .map((match) => match.value),
+  );
 }
 
 async function readTrimmedFile(path: string) {
@@ -161,25 +178,30 @@ async function resolveDocReference(
   workflow: Workflow,
   repoRoot: string,
   reference: string,
-): Promise<ResolvedDocSection | undefined> {
-  if (isBuiltinDocReference(reference)) {
-    const overridePath = workflow.context.overrides[reference];
-    if (overridePath) {
-      return {
-        content: await readTrimmedFile(overridePath),
-        key: `path:${overridePath}`,
-        label: reference,
-      };
-    }
+): Promise<PendingResolvedContextDoc | undefined> {
+  const overridePath = isRepoPathDocReference(reference) ? undefined : workflow.context.overrides[reference];
+  if (overridePath) {
+    return {
+      content: await readTrimmedFile(overridePath),
+      id: reference,
+      label: reference,
+      overridden: true,
+      path: overridePath,
+      source: isBuiltinDocReference(reference) ? "builtin" : "registered",
+    };
+  }
 
+  if (isBuiltinDocReference(reference)) {
     const builtinDoc = resolveBuiltinDoc(reference);
     if (!builtinDoc) {
       return undefined;
     }
     return {
       content: builtinDoc.content.trim(),
-      key: `builtin:${reference}`,
+      id: reference,
       label: reference,
+      overridden: false,
+      source: "builtin",
     };
   }
 
@@ -187,8 +209,11 @@ async function resolveDocReference(
     const absolutePath = resolve(repoRoot, stripPathFragment(reference));
     return {
       content: await readTrimmedFile(absolutePath),
-      key: `path:${absolutePath}`,
+      id: reference,
       label: reference,
+      overridden: false,
+      path: absolutePath,
+      source: "repo-path",
     };
   }
 
@@ -198,21 +223,67 @@ async function resolveDocReference(
   }
   return {
     content: await readTrimmedFile(registeredPath),
-    key: `path:${registeredPath}`,
+    id: reference,
     label: reference,
+    overridden: false,
+    path: registeredPath,
+    source: "registered",
   };
 }
 
-function appendSection(
-  sections: string[],
-  seenKeys: Set<string>,
-  section: ResolvedDocSection | undefined,
+function appendDoc(
+  docs: PendingResolvedContextDoc[],
+  seenDocIds: Set<string>,
+  seenPaths: Set<string>,
+  doc: PendingResolvedContextDoc | undefined,
 ) {
-  if (!section || seenKeys.has(section.key)) {
+  if (!doc) {
     return;
   }
-  seenKeys.add(section.key);
-  sections.push(`<!-- ${section.label} -->\n${section.content}`);
+  if (seenDocIds.has(doc.id)) {
+    return;
+  }
+  if (doc.path && seenPaths.has(doc.path)) {
+    return;
+  }
+  seenDocIds.add(doc.id);
+  if (doc.path) {
+    seenPaths.add(doc.path);
+  }
+  docs.push(doc);
+}
+
+function finalizeBundle(docs: PendingResolvedContextDoc[]): ResolvedContextBundle {
+  return {
+    docs: docs.map((doc, index) => ({
+      ...doc,
+      order: index + 1,
+    })),
+  };
+}
+
+function createEntrypointDoc(workflow: Workflow): PendingResolvedContextDoc {
+  return {
+    content: workflow.entrypointContent.trim(),
+    id: CONTEXT_ENTRYPOINT_DOC_ID,
+    label: workflow.entrypoint.promptPath,
+    overridden: false,
+    path: workflow.entrypoint.promptPath,
+    source: "entrypoint",
+  };
+}
+
+function createIssueContextDoc(description: string): PendingResolvedContextDoc | undefined {
+  if (!description.trim()) {
+    return undefined;
+  }
+  return {
+    content: "Issue Description:\n\n{{ issue.description }}",
+    id: ISSUE_CONTEXT_DOC_ID,
+    label: ISSUE_CONTEXT_DOC_ID,
+    overridden: false,
+    source: "synthesized",
+  };
 }
 
 function resolveProfileInclude(workflow: Workflow, selection: IssueRoutingSelection) {
@@ -220,16 +291,32 @@ function resolveProfileInclude(workflow: Workflow, selection: IssueRoutingSelect
   if (profile) {
     return {
       include: [...profile.include],
+      includeEntrypoint: profile.includeEntrypoint,
       warnings: [],
     };
   }
   return {
     include: getDefaultProfileInclude(selection.agent),
+    includeEntrypoint: true,
     warnings:
       selection.profile === selection.agent
         ? []
         : [`Unknown context profile "${selection.profile}"; using "${selection.agent}" defaults.`],
   };
+}
+
+export function renderContextBundle(bundle: ResolvedContextBundle) {
+  return bundle.docs.map((doc) => `<!-- ${doc.label} -->\n${doc.content}`).join("\n\n");
+}
+
+export function summarizeContextBundle(bundle: ResolvedContextBundle) {
+  const lines = ["context bundle:"];
+  for (const doc of bundle.docs) {
+    const location = doc.path ? ` ${doc.path}` : "";
+    const override = doc.overridden ? " override" : "";
+    lines.push(`${doc.order}. ${doc.id} [${doc.source}${override}]${location}`);
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 export async function resolveIssueContext(options: {
@@ -243,60 +330,64 @@ export async function resolveIssueContext(options: {
   const selection = resolveIssueSelection(baseSelection, hints);
   const linkedDocReferences = extractLinkedDocReferences(descriptionWithoutHints);
   const issueDocReferences = uniqueOrdered([...hints.docs, ...linkedDocReferences]);
-  const sections: string[] = [];
-  const seenKeys = new Set<string>();
-  const prePromptSections: ResolvedDocSection[] = [];
-  const postPromptSections: ResolvedDocSection[] = [];
+  const docs: PendingResolvedContextDoc[] = [];
+  const seenDocIds = new Set<string>();
+  const seenPaths = new Set<string>();
+  const issueForPrompt = {
+    ...issue,
+    description: descriptionWithoutHints,
+  };
 
   if (workflow.entrypoint.kind === "io") {
     const profileResolution = resolveProfileInclude(workflow, selection);
     warnings.push(...profileResolution.warnings);
+    const postEntrypointDocs: PendingResolvedContextDoc[] = [];
 
     for (const reference of profileResolution.include) {
-      const section = await resolveDocReference(workflow, repoRoot, reference);
-      if (!section) {
+      const doc = await resolveDocReference(workflow, repoRoot, reference);
+      if (!doc) {
         throw new Error(`workflow_doc_missing:${reference}`);
       }
-      if (isBuiltinDocReference(reference)) {
-        if (workflow.entrypoint.promptPath.endsWith(WORKFLOW_FILE)) {
-          continue;
-        }
-        prePromptSections.push(section);
+      if (usesLegacyWorkflowPrompt(workflow) && doc.source === "builtin") {
         continue;
       }
-      postPromptSections.push(section);
+      if (doc.source === "builtin") {
+        appendDoc(docs, seenDocIds, seenPaths, doc);
+        continue;
+      }
+      postEntrypointDocs.push(doc);
     }
-  }
 
-  for (const section of prePromptSections) {
-    appendSection(sections, seenKeys, section);
-  }
-
-  appendSection(sections, seenKeys, {
-    content: workflow.promptTemplate.trim(),
-    key: `path:${workflow.entrypoint.promptPath}`,
-    label: workflow.entrypoint.promptPath,
-  });
-
-  for (const section of postPromptSections) {
-    appendSection(sections, seenKeys, section);
+    if (profileResolution.includeEntrypoint) {
+      appendDoc(docs, seenDocIds, seenPaths, createEntrypointDoc(workflow));
+    }
+    for (const doc of postEntrypointDocs) {
+      appendDoc(docs, seenDocIds, seenPaths, doc);
+    }
+  } else {
+    appendDoc(docs, seenDocIds, seenPaths, createEntrypointDoc(workflow));
   }
 
   for (const reference of issueDocReferences) {
     try {
-      const section = await resolveDocReference(workflow, repoRoot, reference);
-      if (!section) {
+      const doc = await resolveDocReference(workflow, repoRoot, reference);
+      if (!doc) {
         warnings.push(`Unresolved issue doc reference: ${reference}`);
         continue;
       }
-      appendSection(sections, seenKeys, section);
+      appendDoc(docs, seenDocIds, seenPaths, doc);
     } catch {
       warnings.push(`Unresolved issue doc reference: ${reference}`);
     }
   }
 
+  if (workflow.entrypoint.kind === "io" && !usesLegacyWorkflowPrompt(workflow)) {
+    appendDoc(docs, seenDocIds, seenPaths, createIssueContextDoc(descriptionWithoutHints));
+  }
+
   return {
-    promptTemplate: sections.join("\n\n"),
+    bundle: finalizeBundle(docs),
+    issue: issueForPrompt,
     selection,
     warnings,
   };

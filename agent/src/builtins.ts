@@ -28,11 +28,7 @@ Run:
 - Concurrent Limit: {{ worker.count }}
 - Checkout: {{ workspace.path }}
 - Branch: {{ workspace.branchName }}
-- Push Remote: \`origin\` -> {{ workspace.originPath }}
-
-Description:
-
-{{ issue.description }}`,
+- Push Remote: \`origin\` -> {{ workspace.originPath }}`,
   },
   {
     id: "builtin:io.agent.backlog.default",
@@ -58,11 +54,7 @@ Run:
 - Concurrent Limit: {{ worker.count }}
 - Checkout: {{ workspace.path }}
 - Branch: {{ workspace.branchName }}
-- Push Remote: \`origin\` -> {{ workspace.originPath }}
-
-Description:
-
-{{ issue.description }}`,
+- Push Remote: \`origin\` -> {{ workspace.originPath }}`,
   },
   {
     id: "builtin:io.core.git-safety",

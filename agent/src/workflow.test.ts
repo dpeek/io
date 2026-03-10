@@ -107,7 +107,7 @@ WORKFLOW {{ issue.identifier }}
     expect(result.value.entrypoint.kind).toBe("io");
     expect(result.value.entrypoint.configPath).toBe(resolve(root, "io.ts"));
     expect(result.value.entrypoint.promptPath).toBe(resolve(root, "io.md"));
-    expect(result.value.promptTemplate).toBe("IO {{ issue.identifier }}");
+    expect(result.value.entrypointContent).toBe("IO {{ issue.identifier }}");
     expect(result.value.agent.maxTurns).toBe(3);
     expect(result.value.issues).toEqual({
       defaultAgent: "execute",
@@ -211,9 +211,57 @@ test("loadWorkflowFile resolves registered docs and merges default context profi
     });
     expect(result.value.context.profiles.backlog).toEqual({
       include: ["builtin:io.agent.backlog.default", "project.architecture"],
+      includeEntrypoint: true,
     });
     expect(result.value.context.profiles.execute).toEqual({
       include: [...DEFAULT_EXECUTE_BUILTIN_DOC_IDS],
+      includeEntrypoint: true,
+    });
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("loadWorkflowFile preserves profile entrypoint opt-out", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "workflow-"));
+  process.env.LINEAR_API_KEY = "linear-token";
+
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        context: {
+          profiles: {
+            execute: {
+              include: ["builtin:io.agent.execute.default"],
+              includeEntrypoint: false,
+            },
+          },
+        },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+        },
+        workspace: {
+          root: "./workspace",
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(resolve(root, "io.md"), "IO {{ issue.identifier }}\n");
+
+  try {
+    const result = await loadWorkflowFile(undefined, root);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.value.context.profiles.execute).toEqual({
+      include: ["builtin:io.agent.execute.default"],
+      includeEntrypoint: false,
     });
   } finally {
     await rm(root, { force: true, recursive: true });
@@ -263,7 +311,7 @@ WORKFLOW {{ issue.identifier }}
     expect(result.value.entrypoint.kind).toBe("io");
     expect(result.value.entrypoint.configPath).toBe(resolve(root, "io.json"));
     expect(result.value.entrypoint.promptPath).toBe(resolve(root, "WORKFLOW.md"));
-    expect(result.value.promptTemplate).toBe("WORKFLOW {{ issue.identifier }}");
+    expect(result.value.entrypointContent).toBe("WORKFLOW {{ issue.identifier }}");
     expect(result.value.tracker.apiKey).toBe("linear-token");
     expect(result.value.workspace.root).toBe(resolve(root, "workspace"));
   } finally {
@@ -298,7 +346,7 @@ WORKFLOW {{ issue.identifier }}
 
     expect(result.value.entrypoint.kind).toBe("workflow");
     expect(result.value.entrypoint.configPath).toBe(resolve(root, "WORKFLOW.md"));
-    expect(result.value.promptTemplate).toBe("WORKFLOW {{ issue.identifier }}");
+    expect(result.value.entrypointContent).toBe("WORKFLOW {{ issue.identifier }}");
     expect(result.value.workspace.root).toBe(resolve(root, "workspace"));
   } finally {
     await rm(root, { force: true, recursive: true });
@@ -351,7 +399,7 @@ WORKFLOW {{ issue.identifier }}
     expect(result.value.entrypoint.kind).toBe("io");
     expect(result.value.entrypoint.configPath).toBe(resolve(root, "io.json"));
     expect(result.value.entrypoint.promptPath).toBe(resolve(root, "WORKFLOW.md"));
-    expect(result.value.promptTemplate).toBe("WORKFLOW {{ issue.identifier }}");
+    expect(result.value.entrypointContent).toBe("WORKFLOW {{ issue.identifier }}");
     expect(result.value.agent.maxTurns).toBe(2);
     expect(result.value.tracker.projectSlug).toBe("project-slug");
     expect(result.value.workspace.root).toBe(resolve(root, "workspace"));

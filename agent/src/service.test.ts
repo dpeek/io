@@ -46,6 +46,7 @@ function buildExpectedPrompt(
     [
       ...builtinIds.map((id) => `<!-- ${id} -->\n${resolveBuiltinDoc(id)!.content.trim()}`),
       `<!-- ${promptPath} -->\n${promptTemplate.trim()}`,
+      issue.description ? "<!-- issue.context -->\nIssue Description:\n\n{{ issue.description }}" : "",
     ].join("\n\n"),
     {
       attempt: 1,
@@ -1598,8 +1599,15 @@ docs:
     await service.start();
 
     expect(capturedPrompt).toContain("LINKED ISSUE DOC");
+    expect(capturedPrompt).toContain("Issue Description:");
+    expect(capturedPrompt).not.toContain("<!-- io");
 
     const output = await readFile(outputPath, "utf8");
+    expect(output).toContain("context bundle:");
+    expect(output).toContain("1. builtin:io.agent.execute.default [builtin]");
+    expect(output).toContain("6. context.entrypoint [entrypoint]");
+    expect(output).toContain("7. ./io/context/linked.md [repo-path]");
+    expect(output).toContain("8. issue.context [synthesized]");
     expect(output).toContain("warning: Unresolved issue doc reference: ./io/context/missing.md");
   } finally {
     globalThis.fetch = originalFetch;

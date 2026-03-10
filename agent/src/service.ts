@@ -9,7 +9,7 @@ import type {
   Workflow,
 } from "./types.js";
 
-import { resolveIssueContext } from "./context.js";
+import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
 import {
   createAgentSessionEventBus,
   createAgentSessionStdoutObserver,
@@ -320,15 +320,31 @@ export class AgentService {
         repoRoot: this.#repoRoot,
         workflow,
       });
+      this.#log.info("issue.context.resolved", {
+        docs: resolvedContext.bundle.docs.map((doc) => ({
+          id: doc.id,
+          label: doc.label,
+          order: doc.order,
+          overridden: doc.overridden,
+          path: doc.path,
+          source: doc.source,
+        })),
+        issueIdentifier: issue.identifier,
+        selection: resolvedContext.selection,
+      });
+      await this.#appendIssueOutput(
+        workspace.outputPath,
+        summarizeContextBundle(resolvedContext.bundle),
+      );
       if (resolvedContext.warnings.length) {
         await this.#appendIssueOutput(
           workspace.outputPath,
           resolvedContext.warnings.map((warning) => `warning: ${warning}\n`).join(""),
         );
       }
-      const prompt = renderPrompt(resolvedContext.promptTemplate, {
+      const prompt = renderPrompt(renderContextBundle(resolvedContext.bundle), {
         attempt: 1,
-        issue,
+        issue: resolvedContext.issue,
         selection: resolvedContext.selection,
         worker: { count: maxConcurrentAgents, id: issue.identifier, index: runIndex },
         workspace,
@@ -342,6 +358,7 @@ export class AgentService {
       await workspaceManager.runBeforeRunHook(workspace.path);
       beforeRunCompleted = true;
       result = await runner.run({ issue, prompt, session, workspace });
+      result.resolvedContext = resolvedContext.bundle;
       if (resolvedContext.warnings.length) {
         result.warnings = [...resolvedContext.warnings];
       }
