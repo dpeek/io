@@ -89,6 +89,9 @@ void defineScalarModule({
     operators: {
       equals: {
         label: "Equals",
+        operand: {
+          kind: "string",
+        },
         parse: (raw: string) => raw,
         format: (operand: string) => operand,
         test: (value: string, operand: string) => value === operand,

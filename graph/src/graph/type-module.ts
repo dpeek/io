@@ -82,8 +82,50 @@ export type TypeModuleMeta<
   };
 };
 
-export type TypeFilterOperator<Decoded, Operand> = {
+type TypeFilterEnumOperand<Operand> = unknown extends Operand
+  ? {
+      kind: "enum";
+      placeholder?: string;
+      selection: "one" | "many";
+    }
+  : Operand extends readonly unknown[]
+    ? {
+        kind: "enum";
+        placeholder?: string;
+        selection: "many";
+      }
+    : {
+        kind: "enum";
+        placeholder?: string;
+        selection: "one";
+      };
+
+export type TypeFilterOperand<Operand> =
+  | {
+      kind: "string";
+      placeholder?: string;
+    }
+  | {
+      kind: "number";
+      placeholder?: string;
+      inputMode?: "decimal" | "numeric";
+    }
+  | {
+      kind: "url";
+      placeholder?: string;
+    }
+  | {
+      kind: "boolean";
+    }
+  | TypeFilterEnumOperand<Operand>;
+
+export type TypeFilterOperator<
+  Decoded,
+  Operand,
+  OperandShape extends TypeFilterOperand<Operand> = TypeFilterOperand<Operand>,
+> = {
   label: string;
+  operand: OperandShape;
   parse: (raw: string) => Operand;
   format: (operand: Operand) => string;
   test: (value: Decoded, operand: Operand) => boolean;

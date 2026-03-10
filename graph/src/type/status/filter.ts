@@ -21,12 +21,20 @@ export const statusFilter = {
   operators: {
     is: {
       label: "Is",
+      operand: {
+        kind: "enum",
+        selection: "one",
+      },
       parse: parseStatusValue,
       format: (operand: StatusValue) => operand,
       test: (value: StatusValue, operand: StatusValue) => value === operand,
     },
     oneOf: {
       label: "Is one of",
+      operand: {
+        kind: "enum",
+        selection: "many",
+      },
       parse: (raw: string) => raw.split(",").map((value) => parseStatusValue(value.trim())),
       format: (operand: StatusValue[]) => operand.join(","),
       test: (value: StatusValue, operand: StatusValue[]) => operand.includes(value),

@@ -11,12 +11,18 @@ export const booleanFilter = {
   operators: {
     is: {
       label: "Is",
+      operand: {
+        kind: "boolean",
+      },
       parse: parseBoolean,
       format: (operand: boolean) => String(operand),
       test: (value: boolean, operand: boolean) => value === operand,
     },
     isNot: {
       label: "Is not",
+      operand: {
+        kind: "boolean",
+      },
       parse: parseBoolean,
       format: (operand: boolean) => String(operand),
       test: (value: boolean, operand: boolean) => value !== operand,
