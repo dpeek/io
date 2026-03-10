@@ -60,6 +60,25 @@ function normalizeUrlValue(value: unknown): string {
   return String(value);
 }
 
+function BooleanFieldView({ predicate }: AnyFieldProps) {
+  const { value } = usePredicateField(predicate);
+
+  if (Array.isArray(value)) {
+    return <span data-web-field-status="unsupported">unsupported-display-kind:boolean</span>;
+  }
+
+  return (
+    <input
+      aria-label={formatPredicateValue(predicate, value)}
+      checked={value === true}
+      data-web-field-kind="boolean"
+      disabled
+      readOnly
+      type="checkbox"
+    />
+  );
+}
+
 function TextFieldView({ predicate }: AnyFieldProps) {
   const { value } = usePredicateField(predicate);
   return <span data-web-field-kind="text">{formatPredicateValue(predicate, value)}</span>;
@@ -255,6 +274,23 @@ function UrlFieldEditor({ predicate }: AnyFieldProps) {
   );
 }
 
+function CheckboxFieldEditor({ predicate }: AnyFieldProps) {
+  const { value } = usePredicateField(predicate);
+
+  if (Array.isArray(value)) {
+    return <span data-web-field-status="unsupported">unsupported-editor-kind:checkbox</span>;
+  }
+
+  return (
+    <input
+      checked={value === true}
+      data-web-field-kind="checkbox"
+      onChange={(event) => setPredicateValue(predicate, event.target.checked)}
+      type="checkbox"
+    />
+  );
+}
+
 function SelectFieldEditor({ predicate }: AnyFieldProps) {
   const { value } = usePredicateField(predicate);
   const options = getPredicateEnumOptions(predicate);
@@ -411,6 +447,7 @@ function EntityReferenceChecklistEditor({ predicate }: AnyFieldProps) {
   );
 }
 export const genericWebFieldViewCapabilities = [
+  { kind: "boolean", Component: BooleanFieldView },
   { kind: "text", Component: TextFieldView },
   { kind: "number", Component: NumberFieldView },
   { kind: "link", Component: LinkFieldView },
@@ -420,6 +457,7 @@ export const genericWebFieldViewCapabilities = [
 ] satisfies readonly PredicateFieldViewCapability<any, any>[];
 
 export const genericWebFieldEditorCapabilities = [
+  { kind: "checkbox", Component: CheckboxFieldEditor },
   { kind: "text", Component: TextFieldEditor },
   { kind: "textarea", Component: TextFieldEditor },
   { kind: "number", Component: NumberFieldEditor },

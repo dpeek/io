@@ -42,6 +42,22 @@ function setupGraph() {
   return { graph, companyId };
 }
 
+function setupBlockGraph() {
+  const store = createStore();
+  bootstrap(store, core);
+  bootstrap(store, app);
+  const graph = createTypeClient(store, app);
+
+  const blockId = graph.block.create({
+    name: "Parent node",
+    text: "Parent node",
+    order: 0,
+    collapsed: true,
+  });
+
+  return { blockId, graph };
+}
+
 function formatValue(value: unknown): string {
   if (value instanceof URL) return value.toString();
   if (Array.isArray(value)) return value.join(", ");
@@ -368,6 +384,41 @@ describe("web predicate bindings", () => {
     });
   });
 
+  it("renders migrated boolean fields through the default generic resolver", () => {
+    const { blockId, graph } = setupBlockGraph();
+    const blockRef = graph.block.ref(blockId);
+
+    let renderer: ReturnType<typeof create> | undefined;
+    act(() => {
+      renderer = create(
+        <Fragment>
+          <PredicateFieldView predicate={blockRef.fields.collapsed} />
+          <PredicateFieldEditor predicate={blockRef.fields.collapsed} />
+        </Fragment>,
+      );
+    });
+
+    const booleanView = renderer?.root.findByProps({ "data-web-field-kind": "boolean" });
+    const checkbox = renderer?.root.findByProps({ "data-web-field-kind": "checkbox" });
+
+    expect(booleanView?.children).toEqual(["True"]);
+    expect(checkbox?.props.checked).toBe(true);
+
+    act(() => {
+      checkbox?.props.onChange({ target: { checked: false } });
+    });
+
+    expect(blockRef.fields.collapsed.get()).toBe(false);
+    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).children).toEqual([
+      "False",
+    ]);
+    expect(renderer?.root.findByProps({ "data-web-field-kind": "checkbox" }).props.checked).toBe(false);
+
+    act(() => {
+      renderer?.unmount();
+    });
+  });
+
   it("keeps token-list editor rerenders scoped to its predicate slot", () => {
     const { graph, companyId } = setupGraph();
     const companyRef = graph.company.ref(companyId);
@@ -423,6 +474,7 @@ describe("web predicate bindings", () => {
       renderer?.unmount();
     });
   });
+
   it("renders entity-reference fields through the explicit relationship policy", () => {
     const { graph, companyId } = setupGraph();
     const secondCompanyId = graph.company.create({
@@ -502,6 +554,62 @@ describe("web predicate bindings", () => {
       renderer?.unmount();
     });
   });
+
+  it("keeps migrated boolean rerenders scoped to boolean subscribers", () => {
+    const { blockId, graph } = setupBlockGraph();
+    const blockRef = graph.block.ref(blockId);
+    const renders = { collapsedEditor: 0, collapsedView: 0, container: 0, text: 0 };
+
+    function onRender(id: string) {
+      if (id === "text") renders.text += 1;
+      if (id === "collapsed-view") renders.collapsedView += 1;
+      if (id === "collapsed-editor") renders.collapsedEditor += 1;
+    }
+
+    function BlockFields() {
+      renders.container += 1;
+      return (
+        <Fragment>
+          <Profiler id="text" onRender={onRender}>
+            <PredicateFieldView predicate={blockRef.fields.text} />
+          </Profiler>
+          <Profiler id="collapsed-view" onRender={onRender}>
+            <PredicateFieldView predicate={blockRef.fields.collapsed} />
+          </Profiler>
+          <Profiler id="collapsed-editor" onRender={onRender}>
+            <PredicateFieldEditor predicate={blockRef.fields.collapsed} />
+          </Profiler>
+        </Fragment>
+      );
+    }
+
+    let renderer: ReturnType<typeof create> | undefined;
+    act(() => {
+      renderer = create(<BlockFields />);
+    });
+
+    expect(renders).toEqual({ collapsedEditor: 1, collapsedView: 1, container: 1, text: 1 });
+
+    const checkbox = renderer?.root.findByProps({ "data-web-field-kind": "checkbox" });
+
+    act(() => {
+      checkbox?.props.onChange({ target: { checked: false } });
+    });
+
+    expect(blockRef.fields.collapsed.get()).toBe(false);
+    expect(renders.container).toBe(1);
+    expect(renders.text).toBe(1);
+    expect(renders.collapsedView).toBeGreaterThan(1);
+    expect(renders.collapsedEditor).toBeGreaterThan(1);
+    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).children).toEqual([
+      "False",
+    ]);
+
+    act(() => {
+      renderer?.unmount();
+    });
+  });
+
   it("keeps generic field rerenders scoped to each predicate slot", () => {
     const { graph, companyId } = setupGraph();
     const companyRef = graph.company.ref(companyId);
