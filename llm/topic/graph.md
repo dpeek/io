@@ -93,6 +93,7 @@ Core graph runtime:
 - `graph/src/graph/schema.ts`
 - `graph/src/graph/client.ts`
 - `graph/src/graph/store.ts`
+- `graph/src/graph/sync.ts`
 - `graph/src/graph/bootstrap.ts`
 - `graph/src/graph/app.ts`
 - `graph/src/graph/core.ts`
@@ -113,6 +114,7 @@ Architecture and roadmap docs:
 
 - `graph/doc/big-picture.md`
 - `graph/doc/overview.md`
+- `graph/doc/sync.md`
 - `graph/doc/typed-refs.md`
 - `graph/doc/type-modules.md`
 - `graph/doc/web-bindings.md`

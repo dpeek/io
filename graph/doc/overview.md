@@ -107,11 +107,33 @@ Source: `src/client.ts`
     - `createdAt` sets to `now` on create only if not provided.
     - `updatedAt` sets to `now` on create and on updates that touch non-timestamp fields.
 
+## Sync
+
+Sources:
+
+- `src/sync.ts`
+- `src/store.ts`
+- `doc/sync.md`
+
+The first shipped sync contract is a total graph snapshot applied into the local
+store.
+
+- `createSyncedTypeClient(namespace, { pull })` exposes a typed client plus a
+  pre-bound `sync.sync()` entry point
+- `createTotalSyncSession(store)` remains the lower-level store integration
+  surface
+- sync payloads carry explicit `mode`, `scope`, `cursor`, `completeness`, and
+  `freshness` metadata
+- typed queries still read local store state; v1 completeness is tracked in sync
+  state because the synced scope is the whole graph
+- predicate-slot subscriptions survive total resync and only notify when the
+  logical slot value changes
+
 ## Runtime + Explorer
 
 Sources:
 
-- `src/runtime.ts` example graph bootstrapping and sample data.
+- `src/runtime.ts` example graph sync bootstrap and sample data.
 - `web/server.ts` explorer API/UI for browsing schema + nodes.
 
 Explorer intentionally surfaces human-readable keys where helpful (`key` when available, fallback to id), but all internal querying uses resolved IDs.

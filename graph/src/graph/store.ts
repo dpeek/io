@@ -13,6 +13,11 @@ export type Edge = {
   readonly o: Id // object: entity id or scalar payload
 }
 
+export type StoreSnapshot = {
+  readonly edges: readonly Edge[]
+  readonly retracted: readonly Id[]
+}
+
 export type PredicateSlotListener = () => void
 
 export interface Store {
@@ -35,6 +40,10 @@ export interface Store {
   batch<T>(fn: () => T): T
   /** Subscribe to one logical predicate slot keyed by `(subject id, predicate id)` */
   subscribePredicateSlot(s: Id, p: Id, listener: PredicateSlotListener): () => void
+  /** Serialize the full current store state for sync or snapshot transport */
+  snapshot(): StoreSnapshot
+  /** Replace the current store state with a synced snapshot */
+  replace(snapshot: StoreSnapshot): void
 }
 
 export function createStore(): Store {
@@ -150,6 +159,44 @@ export function createStore(): Store {
     }
   }
 
+  function snapshot(): StoreSnapshot {
+    return {
+      edges: [...edges.values()].map((edge) => ({ ...edge })),
+      retracted: [...retracted.values()],
+    }
+  }
+
+  function loadSnapshot(snapshot: StoreSnapshot): void {
+    edges.clear()
+    retracted.clear()
+    usedIds.clear()
+
+    for (const edge of snapshot.edges) {
+      const cloned = { ...edge }
+      edges.set(cloned.id, cloned)
+      usedIds.add(cloned.id)
+      usedIds.add(cloned.s)
+      usedIds.add(cloned.p)
+      usedIds.add(cloned.o)
+    }
+
+    for (const edgeId of snapshot.retracted) {
+      retracted.add(edgeId)
+      usedIds.add(edgeId)
+    }
+  }
+
+  function replace(snapshot: StoreSnapshot): void {
+    for (const [key, listeners] of predicateSlotListeners) {
+      if (listeners.size === 0 || pendingPredicateSlots.has(key)) continue
+      const [s, p] = key.split("\0") as [Id, Id]
+      pendingPredicateSlots.set(key, { s, p, before: snapshotPredicateSlot(s, p) })
+    }
+
+    loadSnapshot(snapshot)
+    flushPredicateSlotNotifications()
+  }
+
   return {
     newNode: () => nextId(),
     assert,
@@ -159,5 +206,7 @@ export function createStore(): Store {
     get,
     batch,
     subscribePredicateSlot,
+    snapshot,
+    replace,
   }
 }
