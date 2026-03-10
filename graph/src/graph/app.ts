@@ -5,7 +5,9 @@ import { defineReferenceField } from "./type-module.js";
 import { existingEntityReferenceField } from "./web-policy.js";
 import { addressFields } from "../type/address.js";
 import { booleanTypeModule } from "../type/boolean.js";
+import { emailTypeModule } from "../type/email.js";
 import { numberTypeModule } from "../type/number.js";
+import { slugTypeModule } from "../type/slug.js";
 import { statusTypeModule } from "../type/status.js";
 import { stringTypeModule } from "../type/string.js";
 import { urlTypeModule } from "../type/url.js";
@@ -65,6 +67,22 @@ export const company = defineType({
         display: {
           kind: "external-link",
         },
+      },
+    }),
+    contactEmail: emailTypeModule.field({
+      cardinality: "one?",
+      meta: {
+        label: "Contact email",
+      },
+      filter: {
+        operators: ["equals", "domain"] as const,
+        defaultOperator: "domain",
+      },
+    }),
+    slug: slugTypeModule.field({
+      cardinality: "one?",
+      meta: {
+        label: "Slug",
       },
     }),
   },

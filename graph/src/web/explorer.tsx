@@ -1438,3 +1438,5 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
     </main>
   );
 }
+
+export const ExplorerSurface = Explorer;

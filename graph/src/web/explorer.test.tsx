@@ -7,7 +7,7 @@ import { core } from "../graph/core.js";
 import { createExampleRuntime } from "../graph/runtime.js";
 import { edgeId, typeId } from "../graph/schema.js";
 
-import { ExplorerSurface } from "./explorer.js";
+import { Explorer } from "./explorer.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -33,45 +33,43 @@ describe("explorer surface", () => {
 
     let renderer: ReturnType<typeof create> | undefined;
     await act(async () => {
-      renderer = create(
-        <ExplorerSurface graph={graph} store={runtime.store} sync={runtime.sync} />,
-      );
+      renderer = create(<Explorer runtime={runtime} />);
     });
 
-    const companyNodeButton = findByProp(renderer!, "data-explorer-item-id", runtime.ids.acme);
+    const companyNodeButton = findByProp(renderer!, "data-explorer-item-entity", runtime.ids.acme);
     await act(async () => {
       companyNodeButton.props.onClick();
     });
 
-    const nameRow = findByProp(renderer!, "data-explorer-field", "name");
+    const nameRow = findByProp(renderer!, "data-explorer-field-path", "name");
     const nameInput = nameRow.find(
       (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
     );
 
-    expect(collectText(nameRow)).toContain("Valid");
-    expect(collectText(nameRow)).toContain("Required");
+    expect(collectText(nameRow)).toContain("set");
+    expect(collectText(nameRow)).toContain("required");
 
     await act(async () => {
       nameInput.props.onChange({ target: { value: "Acme Graph Labs" } });
     });
 
     expect(graph.company.ref(runtime.ids.acme).fields.name.get()).toBe("Acme Graph Labs");
-    expect(collectText(findByProp(renderer!, "data-explorer-item-id", runtime.ids.acme))).toContain(
+    expect(collectText(findByProp(renderer!, "data-explorer-item-entity", runtime.ids.acme))).toContain(
       "Acme Graph Labs",
     );
 
-    const typesButton = findByProp(renderer!, "data-explorer-schema-section", "types");
+    const typesButton = findByProp(renderer!, "data-explorer-nav", "types");
     await act(async () => {
       typesButton.props.onClick();
     });
 
     const companyTypeId = typeId(app.company);
-    const companyTypeButton = findByProp(renderer!, "data-explorer-item-id", companyTypeId);
+    const companyTypeButton = findByProp(renderer!, "data-explorer-item-type", companyTypeId);
     await act(async () => {
       companyTypeButton.props.onClick();
     });
 
-    const typeNameRow = findByProp(renderer!, "data-explorer-field", "name");
+    const typeNameRow = findByProp(renderer!, "data-explorer-field-path", "metadata.name");
     const typeNameInput = typeNameRow.find(
       (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
     );
@@ -81,29 +79,33 @@ describe("explorer surface", () => {
     });
 
     expect(graph.type.ref(companyTypeId).fields.name.get()).toBe("Company Model");
-    expect(collectText(findByProp(renderer!, "data-explorer-item-id", companyTypeId))).toContain(
+    expect(collectText(findByProp(renderer!, "data-explorer-item-type", companyTypeId))).toContain(
       "Company Model",
     );
 
-    const predicatesButton = findByProp(renderer!, "data-explorer-schema-section", "predicates");
+    const predicatesButton = findByProp(renderer!, "data-explorer-nav", "predicates");
     await act(async () => {
       predicatesButton.props.onClick();
     });
 
     const websitePredicateId = edgeId(app.company.fields.website);
-    const websitePredicateButton = findByProp(renderer!, "data-explorer-item-id", websitePredicateId);
+    const websitePredicateButton = findByProp(
+      renderer!,
+      "data-explorer-item-predicate",
+      websitePredicateId,
+    );
     await act(async () => {
       websitePredicateButton.props.onClick();
     });
 
-    const predicateNameRow = findByProp(renderer!, "data-explorer-field", "name");
+    const predicateNameRow = findByProp(renderer!, "data-explorer-field-path", "metadata.name");
     const predicateNameInput = predicateNameRow.find(
       (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
     );
 
-    expect(collectText(findByProp(renderer!, "data-explorer-predicate-owner", "website"))).toContain(
-      "Company",
-    );
+    expect(
+      collectText(findByProp(renderer!, "data-explorer-open-type", companyTypeId).parent!.parent!),
+    ).toContain("Company");
 
     await act(async () => {
       predicateNameInput.props.onChange({ target: { value: "Website predicate" } });
@@ -111,7 +113,7 @@ describe("explorer surface", () => {
 
     expect(graph.predicate.ref(websitePredicateId).fields.name.get()).toBe("Website predicate");
     expect(
-      collectText(findByProp(renderer!, "data-explorer-item-id", websitePredicateId)),
+      collectText(findByProp(renderer!, "data-explorer-item-predicate", websitePredicateId)),
     ).toContain("Website predicate");
 
     act(() => {

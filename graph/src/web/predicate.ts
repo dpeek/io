@@ -1,6 +1,7 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 
 import type { EntityRef, PredicateRangeTypeOf, PredicateRef, PredicateValueOf } from "../graph/client.js";
+import type { EditorInputMode } from "../graph/type-module.js";
 import {
   entityReferenceChecklistEditorKind,
   entityReferenceListDisplayKind,
@@ -97,6 +98,54 @@ export function getPredicateEditorKind<T extends EdgeOutput>(field: T): string |
 export function getPredicateEditorPlaceholder<T extends EdgeOutput>(field: T): string | undefined {
   const meta = getPredicateFieldMeta(field) as { editor?: { placeholder?: string } } | undefined;
   return meta?.editor?.placeholder;
+}
+
+export function getPredicateEditorInputType<T extends EdgeOutput>(field: T): string | undefined {
+  const meta = getPredicateFieldMeta(field) as { editor?: { inputType?: string } } | undefined;
+  return meta?.editor?.inputType;
+}
+
+export function getPredicateEditorInputMode<T extends EdgeOutput>(
+  field: T,
+): EditorInputMode | undefined {
+  const meta = getPredicateFieldMeta(field) as { editor?: { inputMode?: EditorInputMode } } | undefined;
+  return meta?.editor?.inputMode;
+}
+
+export function getPredicateEditorAutocomplete<T extends EdgeOutput>(
+  field: T,
+): string | undefined {
+  const meta = getPredicateFieldMeta(field) as { editor?: { autocomplete?: string } } | undefined;
+  return meta?.editor?.autocomplete;
+}
+
+export function getPredicateEditorParser<T extends EdgeOutput>(
+  field: T,
+): ((raw: string) => unknown) | undefined {
+  const meta = getPredicateFieldMeta(field) as {
+    editor?: {
+      parse?: (raw: string) => unknown;
+    };
+  } | undefined;
+  return meta?.editor?.parse;
+}
+
+function getPredicateEditorFormatter<T extends EdgeOutput>(
+  field: T,
+): ((value: unknown) => string) | undefined {
+  const meta = getPredicateFieldMeta(field) as {
+    editor?: {
+      format?: (value: unknown) => string;
+    };
+  } | undefined;
+  return meta?.editor?.format;
+}
+
+export function formatPredicateEditorValue<T extends EdgeOutput>(field: T, value: unknown): string {
+  if (value === undefined) return "";
+  const formatter = getPredicateEditorFormatter(field);
+  if (formatter) return formatter(value);
+  return stringifyPredicateValue(value);
 }
 
 export function getPredicateCollectionKind<T extends EdgeOutput>(

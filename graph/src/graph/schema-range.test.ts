@@ -22,8 +22,10 @@ describe("rangeOf typing and namespace resolution", () => {
 
   it("resolves app field ranges to stable ids", () => {
     expect(core.predicate.fields.cardinality.range as string).toBe(core.cardinality.values.id);
+    expect(app.company.fields.contactEmail.range as string).toBe(core.email.values.id);
     expect(app.company.fields.status.range as string).toBe(app.status.values.id);
     expect(app.company.fields.foundedYear.range as string).toBe(core.number.values.id);
+    expect(app.company.fields.slug.range as string).toBe(core.slug.values.id);
     expect(app.company.fields.tags.range as string).toBe(core.string.values.id);
     expect(app.company.fields.website.range as string).toBe(core.url.values.id);
     expect(app.person.fields.worksAt.range as string).toBe(app.company.values.id);

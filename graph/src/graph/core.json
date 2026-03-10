@@ -7,6 +7,7 @@
     "core:cardinality.one": "x3l8a3vvo6sp",
     "core:cardinality.oneOptional": "uvr6juk6rzl9",
     "core:date": "eqms7z3il7nl",
+    "core:email": "maolz6oeouy6",
     "core:enum": "a9v5f28hndt3",
     "core:enum:member": "bnka91oggshl",
     "core:node": "zrrwbowt36hh",
@@ -21,6 +22,7 @@
     "core:predicate:cardinality": "i97ldcbhzj5r",
     "core:predicate:key": "l4hfxtf8d3dr",
     "core:predicate:range": "p57dk74w75h1",
+    "core:slug": "dwkymoxccd7v",
     "core:string": "0g623czsll6y",
     "core:type": "n0j2x4p8q6vk",
     "core:url": "ur6f0cxstzro"

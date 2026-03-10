@@ -28,6 +28,25 @@ describe("type-module authoring contract", () => {
     expect(app.company.fields.tags.meta.editor.kind).toBe("token-list");
     expect(app.company.fields.tags.meta.editor.placeholder).toBe("Enter text");
     expect(app.company.fields.website.meta.display.kind).toBe("external-link");
+    expect(app.company.fields.contactEmail.range as string).toBe(core.email.values.id);
+    expect(app.company.fields.contactEmail.meta.editor.kind).toBe("text");
+    expect(app.company.fields.contactEmail.meta.editor.inputType).toBe("email");
+    expect(app.company.fields.contactEmail.meta.editor.parse?.("TEAM@ACME.COM")).toBe(
+      "team@acme.com",
+    );
+    expect(app.company.fields.contactEmail.filter.defaultOperator).toBe("domain");
+    expect(Object.keys(app.company.fields.contactEmail.filter.operators)).toEqual([
+      "equals",
+      "domain",
+    ]);
+    expect(app.company.fields.slug.range as string).toBe(core.slug.values.id);
+    expect(app.company.fields.slug.meta.editor.placeholder).toBe("company-slug");
+    expect(app.company.fields.slug.meta.editor.parse?.("Acme Labs")).toBe("acme-labs");
+    expect(app.company.fields.slug.filter.defaultOperator).toBe("prefix");
+    expect(Object.keys(app.company.fields.slug.filter.operators)).toEqual([
+      "equals",
+      "prefix",
+    ]);
   });
 
   it("attaches boolean defaults through the migrated scalar module", () => {

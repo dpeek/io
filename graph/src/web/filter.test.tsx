@@ -153,6 +153,35 @@ describe("web filter resolver", () => {
     });
   });
 
+  it("resolves built-in validated string helpers through field filter metadata", () => {
+    const emailResolution = defaultWebFilterResolver.resolveField(app.company.fields.contactEmail, defs);
+
+    expect(emailResolution.status).toBe("resolved");
+    if (emailResolution.status !== "resolved") return;
+
+    expect(emailResolution.defaultOperator).toBe("domain");
+    expect(emailResolution.operators.map((operator) => operator.key)).toEqual(["equals", "domain"]);
+
+    const domainOperator = emailResolution.resolveOperator("domain");
+    expect(domainOperator?.operand.kind).toBe("string");
+    expect(domainOperator?.operand.editor.status).toBe("resolved");
+    expect(domainOperator?.parse("ACME.COM")).toBe("acme.com");
+    expect(domainOperator?.test("team@acme.com", "acme.com")).toBe(true);
+
+    const slugResolution = defaultWebFilterResolver.resolveField(app.company.fields.slug, defs);
+
+    expect(slugResolution.status).toBe("resolved");
+    if (slugResolution.status !== "resolved") return;
+
+    expect(slugResolution.defaultOperator).toBe("prefix");
+    expect(slugResolution.operators.map((operator) => operator.key)).toEqual(["equals", "prefix"]);
+
+    const prefixOperator = slugResolution.resolveOperator("prefix");
+    expect(prefixOperator?.operand.kind).toBe("string");
+    expect(prefixOperator?.parse("Acme Labs")).toBe("acme-labs");
+    expect(prefixOperator?.test("acme-labs", "acme-labs")).toBe(true);
+  });
+
   it("adapts enum operators to resolved member identities", () => {
     const resolution = defaultWebFilterResolver.resolveField(app.company.fields.status, defs);
 

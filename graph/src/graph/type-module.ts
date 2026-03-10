@@ -13,6 +13,15 @@ type MetaDisplayKinds<Meta extends TypeModuleMeta<any, any, any>> =
   Meta extends TypeModuleMeta<any, infer DisplayKinds, any> ? DisplayKinds : readonly string[];
 type MetaEditorKinds<Meta extends TypeModuleMeta<any, any, any>> =
   Meta extends TypeModuleMeta<any, any, infer EditorKinds> ? EditorKinds : readonly string[];
+export type EditorInputMode =
+  | "decimal"
+  | "email"
+  | "none"
+  | "numeric"
+  | "search"
+  | "tel"
+  | "text"
+  | "url";
 type FilterKey<Filter extends { operators: Record<string, unknown> }> = Extract<
   keyof Filter["operators"],
   string
@@ -68,6 +77,11 @@ export type TypeModuleMeta<
     allowed: EditorKinds;
     placeholder?: string;
     multiline?: boolean;
+    inputType?: string;
+    inputMode?: EditorInputMode;
+    autocomplete?: string;
+    parse?: (raw: string) => Decoded;
+    format?: (value: Decoded) => string;
   };
 };
 

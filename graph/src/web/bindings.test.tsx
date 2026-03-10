@@ -384,6 +384,44 @@ describe("web predicate bindings", () => {
     });
   });
 
+  it("uses editor parse metadata for validated text scalars without bespoke components", () => {
+    const { graph, companyId } = setupGraph();
+    const companyRef = graph.company.ref(companyId);
+
+    let renderer: ReturnType<typeof create> | undefined;
+    act(() => {
+      renderer = create(<PredicateFieldEditor predicate={companyRef.fields.contactEmail} />);
+    });
+
+    const input = renderer?.root.findByType("input");
+    expect(input?.props.type).toBe("email");
+
+    act(() => {
+      input?.props.onChange({ target: { value: "not-an-email" } });
+    });
+
+    expect(renderer?.root.findByType("input").props["aria-invalid"]).toBe(true);
+    expect(companyRef.fields.contactEmail.get()).toBeUndefined();
+
+    act(() => {
+      renderer?.root.findByType("input").props.onChange({ target: { value: "Team@Acme.com" } });
+    });
+
+    expect(companyRef.fields.contactEmail.get()).toBe("team@acme.com");
+    expect(renderer?.root.findByType("input").props.value).toBe("team@acme.com");
+
+    act(() => {
+      renderer?.root.findByType("input").props.onChange({ target: { value: "" } });
+    });
+
+    expect(companyRef.fields.contactEmail.get()).toBeUndefined();
+    expect(renderer?.root.findByType("input").props["aria-invalid"]).toBeUndefined();
+
+    act(() => {
+      renderer?.unmount();
+    });
+  });
+
   it("renders migrated boolean fields through the default generic resolver", () => {
     const { blockId, graph } = setupBlockGraph();
     const blockRef = graph.block.ref(blockId);

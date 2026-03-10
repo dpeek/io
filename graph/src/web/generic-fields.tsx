@@ -3,8 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import type { PredicateRef } from "../graph/client.js";
 import { isEnumType } from "../graph/schema.js";
 import {
+  formatPredicateEditorValue,
   formatPredicateValue,
+  getPredicateEditorAutocomplete,
+  getPredicateEditorInputMode,
+  getPredicateEditorInputType,
   getPredicateEditorKind,
+  getPredicateEditorParser,
   getPredicateEditorPlaceholder,
   getPredicateEntityReferenceOptions,
   getPredicateEntityReferenceSelection,
@@ -185,26 +190,57 @@ function TextFieldEditor({ predicate }: AnyFieldProps) {
   const { value } = usePredicateField(predicate);
   const editorKind = getPredicateEditorKind(predicate.field);
   const placeholder = getPredicateEditorPlaceholder(predicate.field);
-  const inputValue = normalizeTextValue(value);
+  const parser = getPredicateEditorParser(predicate.field);
+  const inputType = getPredicateEditorInputType(predicate.field) ?? "text";
+  const inputMode = getPredicateEditorInputMode(predicate.field);
+  const autoComplete = getPredicateEditorAutocomplete(predicate.field);
+  const committedValue = formatPredicateEditorValue(predicate.field, value);
+  const [draft, setDraft] = useState(committedValue);
+  const [isInvalid, setIsInvalid] = useState(false);
+
+  useEffect(() => {
+    setDraft(committedValue);
+    setIsInvalid(false);
+  }, [committedValue]);
+
+  function applyDraft(nextValue: string): void {
+    setDraft(nextValue);
+
+    if (nextValue === "" && parser && clearPredicateValue(predicate)) {
+      setIsInvalid(false);
+      return;
+    }
+
+    try {
+      setPredicateValue(predicate, parser ? parser(nextValue) : nextValue);
+      setIsInvalid(false);
+    } catch {
+      setIsInvalid(true);
+    }
+  }
 
   if (editorKind === "textarea") {
     return (
       <textarea
+        aria-invalid={isInvalid || undefined}
         data-web-field-kind="textarea"
-        onChange={(event) => setPredicateValue(predicate, event.target.value)}
+        onChange={(event) => applyDraft(event.target.value)}
         placeholder={placeholder}
-        value={inputValue}
+        value={draft}
       />
     );
   }
 
   return (
     <input
+      aria-invalid={isInvalid || undefined}
+      autoComplete={autoComplete}
       data-web-field-kind="text"
-      onChange={(event) => setPredicateValue(predicate, event.target.value)}
+      inputMode={inputMode}
+      onChange={(event) => applyDraft(event.target.value)}
       placeholder={placeholder}
-      type="text"
-      value={inputValue}
+      type={inputType}
+      value={draft}
     />
   );
 }
