@@ -113,6 +113,7 @@ export function normalizeLinearIssue(node: CandidateIssueNode): AgentIssue {
           state?: { name?: string | null } | null;
         } => !!relatedIssue,
       )
+      .filter((relatedIssue) => relatedIssue.id !== node.id)
       .filter((relatedIssue) => relatedIssue.state?.name?.trim().toLowerCase() !== "done")
       .map((relatedIssue) => relatedIssue.id),
     createdAt: node.createdAt,

@@ -19,6 +19,10 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
           type: "blocks",
         },
         {
+          relatedIssue: { id: "1", state: { name: "Todo" } },
+          type: "blocks",
+        },
+        {
           relatedIssue: { id: "3", state: { name: "Done" } },
           type: "blocks",
         },
