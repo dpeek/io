@@ -128,6 +128,7 @@ export interface AgentTuiStore {
 export interface AgentTuiStoreOptions {
   maxEventHistory?: number;
   maxTranscriptChars?: number;
+  retainTerminalSessions?: boolean;
 }
 
 function mergeSessionRef(current: AgentSessionRef, next: AgentSessionRef): AgentSessionRef {
@@ -615,8 +616,19 @@ export function createAgentTuiStore(options: AgentTuiStoreOptions = {}): AgentTu
   const listeners = new Set<() => void>();
   const maxEventHistory = options.maxEventHistory ?? DEFAULT_MAX_EVENT_HISTORY;
   const maxTranscriptChars = options.maxTranscriptChars ?? DEFAULT_MAX_TRANSCRIPT_CHARS;
+  const retainTerminalSessions = options.retainTerminalSessions ?? true;
   const sessions = new Map<string, AgentTuiInternalColumnState>();
   let updatedAt: string | undefined;
+
+  const deleteSessionTree = (sessionId: string) => {
+    const childIds = Array.from(sessions.values())
+      .filter((candidate) => candidate.session.parentSessionId === sessionId)
+      .map((candidate) => candidate.session.id);
+    for (const childId of childIds) {
+      deleteSessionTree(childId);
+    }
+    sessions.delete(sessionId);
+  };
 
   const getSessionState = (event: AgentSessionEvent) => {
     const existing = sessions.get(event.session.id);
@@ -662,6 +674,13 @@ export function createAgentTuiStore(options: AgentTuiStoreOptions = {}): AgentTu
         pushEventHistory(state, event, maxEventHistory);
         if (supervisorState && shouldMirrorEventToSupervisor(event)) {
           appendSupervisorMirrorEntry(supervisorState, event, maxTranscriptChars);
+        }
+        if (
+          !retainTerminalSessions &&
+          event.session.kind !== "supervisor" &&
+          (event.phase === "completed" || event.phase === "failed" || event.phase === "stopped")
+        ) {
+          deleteSessionTree(event.session.id);
         }
         notify();
         return;

@@ -50,12 +50,23 @@ export interface AgentServiceOptions {
   workflowPath?: string;
 }
 
-export function pickCandidateIssues(issues: AgentIssue[], limit: number) {
+export function pickCandidateIssues(
+  issues: AgentIssue[],
+  limit: number,
+  preferredIssueIdentifierByStream = new Map<string, string>(),
+) {
   const selected: AgentIssue[] = [];
   const reservedStreams = new Set<string>();
   for (const issue of [...issues]
     .filter((issue) => issue.blockedBy.length === 0)
     .sort((left, right) => {
+      const leftPreferred =
+        preferredIssueIdentifierByStream.get(getStreamKey(left)) === left.identifier;
+      const rightPreferred =
+        preferredIssueIdentifierByStream.get(getStreamKey(right)) === right.identifier;
+      if (leftPreferred !== rightPreferred) {
+        return leftPreferred ? -1 : 1;
+      }
       const stateScore = scoreState(left.state) - scoreState(right.state);
       if (stateScore !== 0) {
         return stateScore;
@@ -204,6 +215,7 @@ export class AgentService {
       const scheduledIssues = pickCandidateIssues(
         issues.filter((issue) => this.#shouldAutoScheduleIssue(activeWorkflow, issue)),
         issues.length,
+        occupiedStreams,
       )
         .filter((issue) => !this.#activeRuns.has(issue.identifier))
         .filter((issue) => !this.#activeStreamKeys.has(getStreamKey(issue)))

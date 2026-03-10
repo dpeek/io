@@ -128,6 +128,64 @@ test("AgentTuiStore tracks column hierarchy, summaries, and event history", () =
   expect(supervisorTranscript).toContain('[OPE-68] Tool: helper.spawn {"mode":"plan"}');
 });
 
+test("AgentTuiStore prunes completed non-supervisor sessions when retention is disabled", () => {
+  const store = createAgentTuiStore({ retainTerminalSessions: false });
+  const supervisor = createSupervisorSession();
+  const worker = createWorkerSession();
+  const child = createChildSession();
+
+  store.observe({
+    phase: "started",
+    sequence: 1,
+    session: supervisor,
+    timestamp: "2026-03-10T02:03:00.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "started",
+    sequence: 2,
+    session: worker,
+    timestamp: "2026-03-10T02:03:01.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "started",
+    sequence: 3,
+    session: child,
+    timestamp: "2026-03-10T02:03:02.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "stopped",
+    sequence: 4,
+    session: child,
+    timestamp: "2026-03-10T02:03:03.000Z",
+    type: "session",
+  });
+
+  let snapshot = store.getSnapshot();
+  expect(snapshot.columns.map((column) => column.session.id)).toEqual([
+    "supervisor",
+    "worker:OPE-68:1",
+  ]);
+
+  store.observe({
+    phase: "completed",
+    sequence: 5,
+    session: worker,
+    timestamp: "2026-03-10T02:03:04.000Z",
+    type: "session",
+  });
+
+  snapshot = store.getSnapshot();
+  expect(snapshot.columns.map((column) => column.session.id)).toEqual(["supervisor"]);
+  const supervisorTranscript = buildAgentTuiRootComponentModel(snapshot, {
+    selectedColumnId: supervisor.id,
+    viewMode: "status",
+  }).columns[0]?.transcript;
+  expect(supervisorTranscript).toContain("[OPE-68] Session completed");
+});
+
 test("buildAgentTuiRootComponentModel supports status-focused and raw-heavy transcript views", () => {
   const store = createAgentTuiStore();
   const supervisor = createSupervisorSession();
@@ -224,12 +282,15 @@ test("buildAgentTuiRootComponentModel supports status-focused and raw-heavy tran
   });
   const statusTranscript = statusModel.columns.find((column) => column.id === worker.id)?.transcript ?? "";
   const rawTranscript = rawModel.columns.find((column) => column.id === worker.id)?.transcript ?? "";
+  const statusLatestEventLine =
+    statusModel.columns.find((column) => column.id === worker.id)?.latestEventLine ?? "";
 
   expect(statusTranscript).toContain("[COMMAND] $ git status --short --branch");
   expect(statusTranscript).toContain("[CMD OUT x2] M agent/src/runner/codex.ts");
   expect(statusTranscript).toContain("Inspecting");
   expect(statusTranscript).toContain("runtime state");
-  expect(statusTranscript).toContain("[RAW stdout/jsonl x2] turn/completed");
+  expect(statusTranscript).not.toContain("[RAW stdout/jsonl");
+  expect(statusLatestEventLine).not.toContain("stdout jsonl:");
   expect(rawTranscript).toContain("[CMD OUT x2]");
   expect(rawTranscript).toContain("Inspecting runtime state");
   expect(rawTranscript).toContain("| ## main");
@@ -341,6 +402,59 @@ test("createAgentTui supports keyboard column navigation, view toggles, and tran
     await mockInput.typeText("q");
     await Promise.resolve();
     expect(exitRequested).toBe(1);
+  } finally {
+    await tui.stop();
+    renderer.destroy();
+  }
+});
+
+test("createAgentTui drops completed worker columns in live mode", async () => {
+  const { renderOnce, renderer } = await createTestRenderer({
+    height: 14,
+    width: 96,
+  });
+  const tui = createAgentTui({
+    renderer,
+    requireTty: false,
+  });
+  const supervisor = createSupervisorSession();
+  const worker = createWorkerSession();
+
+  try {
+    await tui.start();
+    tui.observe({
+      phase: "started",
+      sequence: 1,
+      session: supervisor,
+      timestamp: "2026-03-10T02:12:00.000Z",
+      type: "session",
+    });
+    tui.observe({
+      phase: "started",
+      sequence: 2,
+      session: worker,
+      timestamp: "2026-03-10T02:12:01.000Z",
+      type: "session",
+    });
+
+    await Promise.resolve();
+    await renderOnce();
+    expect(tui.getSnapshot().columns.map((column) => column.session.id)).toEqual([
+      "supervisor",
+      "worker:OPE-68:1",
+    ]);
+
+    tui.observe({
+      phase: "completed",
+      sequence: 3,
+      session: worker,
+      timestamp: "2026-03-10T02:12:02.000Z",
+      type: "session",
+    });
+
+    await Promise.resolve();
+    await renderOnce();
+    expect(tui.getSnapshot().columns.map((column) => column.session.id)).toEqual(["supervisor"]);
   } finally {
     await tui.stop();
     renderer.destroy();

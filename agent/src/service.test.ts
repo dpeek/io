@@ -171,6 +171,40 @@ test("pickCandidateIssues keeps stream execution to one issue per parent", () =>
   expect(selected.map((issue) => issue.identifier)).toEqual(["OS-2", "OS-4"]);
 });
 
+test("pickCandidateIssues prefers the locally active issue within an occupied stream", () => {
+  const selected = pickCandidateIssues(
+    [
+      createIssue({
+        id: "2",
+        identifier: "OS-2",
+        parentIssueId: "1",
+        parentIssueIdentifier: "OS-1",
+        hasParent: true,
+        priority: 2,
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      }),
+      createIssue({
+        id: "3",
+        identifier: "OS-3",
+        parentIssueId: "1",
+        parentIssueIdentifier: "OS-1",
+        hasParent: true,
+        priority: 1,
+        updatedAt: "2024-01-02T00:00:00.000Z",
+      }),
+      createIssue({
+        id: "4",
+        identifier: "OS-4",
+        priority: 1,
+        updatedAt: "2024-01-03T00:00:00.000Z",
+      }),
+    ],
+    3,
+    new Map([["os-1", "OS-3"]]),
+  );
+  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-4"]);
+});
+
 test("AgentService resumes an in-progress issue in its own occupied stream", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
   let runnerCalls = 0;

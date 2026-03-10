@@ -371,14 +371,32 @@ export class CheckoutManager {
   }
 
   async listOccupiedStreams() {
-    return new Map(
-      (await this.#listStreamStates())
-        .filter((state) => Boolean(state.activeIssueIdentifier))
-        .map((state) => [
-          toWorkspaceKey(state.parentIssueIdentifier),
-          state.activeIssueIdentifier!,
-        ] as const),
+    const issueStateByIdentifier = new Map(
+      (await this.#listIssueStates()).map((issue) => [issue.issueIdentifier, issue] as const),
     );
+    const occupiedStreams = new Map<string, string>();
+    for (const state of await this.#listStreamStates()) {
+      if (!state.activeIssueIdentifier) {
+        continue;
+      }
+      const activeIssue = issueStateByIdentifier.get(state.activeIssueIdentifier);
+      if (!activeIssue || activeIssue.status === "finalized") {
+        await this.#upsertStreamState(
+          {
+            branchName: state.branchName,
+            parentIssueId: state.parentIssueId,
+            parentIssueIdentifier: state.parentIssueIdentifier,
+          },
+          {
+            activeIssue: null,
+            status: state.status,
+          },
+        );
+        continue;
+      }
+      occupiedStreams.set(toWorkspaceKey(state.parentIssueIdentifier), state.activeIssueIdentifier);
+    }
+    return occupiedStreams;
   }
 
   async reconcileTerminalIssues(tracker: IssueStateTracker, terminalStates: string[]) {

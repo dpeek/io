@@ -554,3 +554,25 @@ test("WorkspaceManager reconciles stale running issues using landed stream refs"
     await rm(root, { force: true, recursive: true });
   }
 });
+
+test("WorkspaceManager clears ghost occupied streams when the active issue runtime is gone", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
+  const runtimeRoot = resolve(root, "runtime");
+  try {
+    const { repoRoot } = await createSourceRepo(root);
+    const manager = new WorkspaceManager({
+      hooks,
+      repoRoot,
+      rootDir: runtimeRoot,
+      workerId: "worker-1",
+    });
+    const activeIssue = issue("OPE-43", "Add Worker Checkout");
+    const workspace = await manager.prepare(activeIssue);
+
+    await rm(workspace.runtimePath!, { force: true, recursive: true });
+
+    expect(Array.from(await manager.listOccupiedStreams())).toEqual([]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});

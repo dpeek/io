@@ -126,7 +126,12 @@ function formatChildrenLine(
 
 function formatLatestEventLine(column: AgentTuiColumnSnapshot) {
   const eventHistory = column.eventHistory ?? [];
-  const latest = eventHistory[eventHistory.length - 1];
+  const latest =
+    [...eventHistory]
+      .reverse()
+      .find(
+        (event) => event.type !== "raw-line" || !event.summary.startsWith("stdout jsonl:"),
+      ) ?? eventHistory[eventHistory.length - 1];
   if (!latest) {
     return "Latest: waiting for events";
   }
@@ -362,6 +367,9 @@ function formatRawEntry(
   entry: Extract<AgentTuiTranscriptEntry, { kind: "raw" }>,
   viewMode: AgentTuiViewMode,
 ) {
+  if (viewMode === "status" && entry.stream === "stdout" && entry.encoding === "jsonl") {
+    return [];
+  }
   const label = `RAW ${entry.stream}/${entry.encoding} x${entry.count}`;
   if (viewMode === "status") {
     const preview = entry.lines.at(-1) ?? entry.lines[0] ?? "";

@@ -394,6 +394,7 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
     createAgentTuiStore({
       maxEventHistory: options.maxEventHistory,
       maxTranscriptChars: options.maxTranscriptChars,
+      retainTerminalSessions: options.retainTerminalSessions ?? false,
     });
   let active = false;
   let renderScheduled = false;
