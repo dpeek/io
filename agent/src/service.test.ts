@@ -90,24 +90,27 @@ test("pickCandidateIssues prefers unblocked todo issues by priority", () => {
 
 test("AgentService eagerly creates worker checkout on start", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
-  const workflowPath = resolve(root, "WORKFLOW.md");
   const writes: string[] = [];
 
   await writeFile(
-    workflowPath,
-    `---
-tracker:
-  kind: linear
-  api_key: $LINEAR_API_KEY
-  project_slug: $LINEAR_PROJECT_SLUG
-workspace:
-  root: ${resolve(root, "workspace")}
-agent:
-  max_concurrent_agents: 1
----
-Issue {{ issue.identifier }}
-`,
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+      },
+      null,
+      2,
+    ),
   );
+  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "project-slug";
 
@@ -140,7 +143,6 @@ Issue {{ issue.identifier }}
     const service = new AgentService({
       once: true,
       repoRoot: root,
-      workflowPath,
       workspaceManagerFactory: (_workflow, issueIdentifier) =>
         ({
           cleanup: async () => undefined,
@@ -178,27 +180,30 @@ Issue {{ issue.identifier }}
 
 test("AgentService uses backlog prompt for io-labeled issues", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
-  const workflowPath = resolve(root, "WORKFLOW.md");
   const backlogPromptPath = resolve(root, "llm", "agent", "backlog.md");
   const workspacePath = resolve(root, "workspace", "workers", "OPE-55", "repo");
   let capturedPrompt = "";
 
   await mkdir(resolve(root, "llm", "agent"), { recursive: true });
   await writeFile(
-    workflowPath,
-    `---
-tracker:
-  kind: linear
-  api_key: $LINEAR_API_KEY
-  project_slug: $LINEAR_PROJECT_SLUG
-workspace:
-  root: ${resolve(root, "workspace")}
-agent:
-  max_concurrent_agents: 1
----
-EXECUTE {{ issue.identifier }}
-`,
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+      },
+      null,
+      2,
+    ),
   );
+  await writeFile(resolve(root, "io.md"), "EXECUTE {{ issue.identifier }}\n");
   await writeFile(backlogPromptPath, "BACKLOG {{ issue.identifier }} {{ issue.labels }}\n");
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "project-slug";
@@ -251,7 +256,6 @@ EXECUTE {{ issue.identifier }}
           };
         },
       }),
-      workflowPath,
       workspaceManagerFactory: (_workflow, issueIdentifier) =>
         ({
           cleanup: async () => undefined,

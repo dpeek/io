@@ -426,6 +426,16 @@ If a team needs more nuance, they should add project docs and routing rules rath
 - preserve the current install-oriented `io.json` keys and fold the new agent config into the same file
 - continue to accept `WORKFLOW.md` for compatibility during migration
 
+Phase 1 entrypoint resolution should be:
+
+1. load config from `io.json` when it contains runtime keys
+2. load prompt text from `io.md` when it exists
+3. otherwise reuse the prompt body from `WORKFLOW.md` when it exists
+4. if `io.json` only contains install-oriented keys, fall back to full `WORKFLOW.md` loading
+5. treat partial new entrypoints as invalid when no compatible `WORKFLOW.md` fallback exists
+
+An existing install-only `io.json` must not switch the runtime into the new mode by itself; runtime keys in `io.json` opt config into the new path, and `io.md` opts prompt text into the new path.
+
 ### Phase 2: Move generic workflow body into built-ins
 
 - convert current execution guidance into built-in `io.agent.execute.*` docs

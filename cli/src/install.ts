@@ -1,6 +1,6 @@
 import { $ } from "bun";
 
-type Config = {
+type Config = Record<string, unknown> & {
   brews: string[];
 };
 

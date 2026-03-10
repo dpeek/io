@@ -1,4 +1,8 @@
 {
+  "agent": {
+    "maxConcurrentAgents": 1,
+    "maxTurns": 1
+  },
   "brews": [
     "fzf",
     "ripgrep",
@@ -28,5 +32,24 @@
     "--cask linear-linear",
     "--cask claude",
     "--cask claude-code"
-  ]
+  ],
+  "codex": {
+    "approvalPolicy": "never",
+    "command": "codex app-server",
+    "threadSandbox": "workspace-write"
+  },
+  "hooks": {
+    "afterCreate": "bun install"
+  },
+  "tracker": {
+    "activeStates": [
+      "Todo"
+    ],
+    "apiKey": "$LINEAR_API_KEY",
+    "kind": "linear",
+    "projectSlug": "$LINEAR_PROJECT_SLUG"
+  },
+  "workspace": {
+    "root": "$AGENT_WORKSPACE_ROOT"
+  }
 }

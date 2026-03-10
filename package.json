@@ -11,7 +11,7 @@
   "type": "module",
   "scripts": {
     "check": "bun run --cwd graph check",
-    "agent": "io agent start WORKFLOW.md"
+    "agent": "io agent start"
   },
   "devDependencies": {
     "@io/cli": "workspace:"

@@ -52,9 +52,16 @@ export interface CodexConfig {
   turnTimeoutMs: number;
 }
 
+export interface WorkflowEntrypoint {
+  configPath: string;
+  kind: "io" | "workflow";
+  promptPath: string;
+}
+
 export interface Workflow {
   agent: AgentConfig;
   codex: CodexConfig;
+  entrypoint: WorkflowEntrypoint;
   hooks: HookConfig;
   polling: PollingConfig;
   promptTemplate: string;

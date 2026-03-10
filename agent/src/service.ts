@@ -62,7 +62,7 @@ export class AgentService {
   readonly #once: boolean;
   readonly #repoRoot: string;
   readonly #runnerFactory?: (workflow: Workflow) => IssueRunner;
-  readonly #workflowPath: string;
+  readonly #workflowPath?: string;
   readonly #workspaceManagerFactory?: (
     workflow: Workflow,
     issueIdentifier?: string,
@@ -79,7 +79,9 @@ export class AgentService {
     this.#once = options.once ?? false;
     this.#repoRoot = options.repoRoot ?? process.cwd();
     this.#runnerFactory = options.runnerFactory;
-    this.#workflowPath = resolve(this.#repoRoot, options.workflowPath ?? "WORKFLOW.md");
+    this.#workflowPath = options.workflowPath
+      ? resolve(this.#repoRoot, options.workflowPath)
+      : undefined;
     this.#workspaceManagerFactory = options.workspaceManagerFactory;
   }
 
@@ -147,7 +149,7 @@ export class AgentService {
   }
 
   async #loadWorkflow(): Promise<Workflow> {
-    const result = await loadWorkflowFile(this.#workflowPath);
+    const result = await loadWorkflowFile(this.#workflowPath, this.#repoRoot);
     if (!result.ok) {
       throw new Error(result.errors.map((error) => `${error.path}: ${error.message}`).join("\n"));
     }

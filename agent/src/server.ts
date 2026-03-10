@@ -1,5 +1,4 @@
 import { createLogger } from "@io/lib";
-import { resolve } from "node:path";
 
 import { AgentService } from "./service.js";
 import { loadWorkflowFile } from "./workflow.js";
@@ -7,9 +6,14 @@ import { readIssueRuntimeState } from "./workspace.js";
 
 function printHelp() {
   console.log(`Usage:
-  io agent start [workflowPath] [--once]
-  io agent tail <issue> [workflowPath]
-  io agent validate [workflowPath]
+  io agent start [entrypointPath] [--once]
+  io agent tail <issue> [entrypointPath]
+  io agent validate [entrypointPath]
+
+Defaults:
+  ./io.json + ./io.md
+Compatibility:
+  falls back to ./WORKFLOW.md when the repo is still on the legacy entrypoint
   `);
 }
 
@@ -46,8 +50,7 @@ export async function runAgentCli(args: string[]) {
       return;
     }
     case "validate": {
-      const workflowPath = resolve(process.cwd(), rest[0] ?? "WORKFLOW.md");
-      const result = await loadWorkflowFile(workflowPath);
+      const result = await loadWorkflowFile(rest[0], process.cwd());
       if (!result.ok) {
         for (const error of result.errors) {
           console.error(`${error.path}: ${error.message}`);
@@ -58,6 +61,9 @@ export async function runAgentCli(args: string[]) {
       const log = createLogger({ pkg: "agent" });
       log.info("workflow.valid", {
         activeStates: result.value.tracker.activeStates,
+        configPath: result.value.entrypoint.configPath,
+        entrypointKind: result.value.entrypoint.kind,
+        promptPath: result.value.entrypoint.promptPath,
         projectSlug: result.value.tracker.projectSlug,
         workspaceRoot: result.value.workspace.root,
       });
@@ -66,10 +72,9 @@ export async function runAgentCli(args: string[]) {
     case "tail": {
       const [issueIdentifier, workflowArg] = rest;
       if (!issueIdentifier || issueIdentifier.startsWith("--")) {
-        throw new Error("Usage: surf agent tail <issue> [workflowPath]");
+        throw new Error("Usage: io agent tail <issue> [entrypointPath]");
       }
-      const workflowPath = resolve(process.cwd(), workflowArg ?? "WORKFLOW.md");
-      const result = await loadWorkflowFile(workflowPath);
+      const result = await loadWorkflowFile(workflowArg, process.cwd());
       if (!result.ok) {
         for (const error of result.errors) {
           console.error(`${error.path}: ${error.message}`);
