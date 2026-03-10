@@ -25,6 +25,7 @@ export type AgentTuiTerminal = NodeJS.WriteStream;
 
 export interface AgentTuiOptions extends AgentTuiStoreOptions {
   input?: NodeJS.ReadStream;
+  onExitRequest?: () => void | Promise<void>;
   output?: AgentTuiTerminal;
   renderer?: CliRenderer;
   requireTty?: boolean;
@@ -70,6 +71,10 @@ function isTopKey(key: { name: string; shift: boolean }) {
 
 function isBottomKey(key: { name: string; shift: boolean }) {
   return key.name === "end" || key.name === "G" || (key.name === "g" && key.shift);
+}
+
+function isQuitKey(key: { ctrl?: boolean; name: string }) {
+  return (key.ctrl && key.name === "c") || key.name === "escape" || key.name === "q";
 }
 
 function createColumnRenderable(
@@ -147,7 +152,10 @@ function createColumnRenderable(
   };
 }
 
-function createAgentTuiRenderableView(renderer: CliRenderer): AgentTuiRenderableView {
+function createAgentTuiRenderableView(
+  renderer: CliRenderer,
+  requestExit: () => void | Promise<void>,
+): AgentTuiRenderableView {
   const columnRefs = new Map<string, AgentTuiColumnRenderRef>();
   const scrollStateByColumnId = new Map<string, AgentTuiColumnScrollState>();
   let latestSnapshot: AgentTuiSnapshot = { columns: [], sessions: [] };
@@ -222,7 +230,17 @@ function createAgentTuiRenderableView(renderer: CliRenderer): AgentTuiRenderable
     renderCurrentSnapshot();
   };
 
-  const handleKeyPress = (key: { name: string; shift: boolean; preventDefault: () => void }) => {
+  const handleKeyPress = (key: {
+    ctrl?: boolean;
+    name: string;
+    preventDefault: () => void;
+    shift: boolean;
+  }) => {
+    if (isQuitKey(key)) {
+      key.preventDefault();
+      void requestExit();
+      return;
+    }
     if (isNextColumnKey(key)) {
       key.preventDefault();
       moveColumnSelection(1);
@@ -286,7 +304,7 @@ function createAgentTuiRenderableView(renderer: CliRenderer): AgentTuiRenderable
     const selectedTitle = selectedColumn ? selectedColumn.session.title : "Agent Sessions";
     return [
       `View: ${viewMode.toUpperCase()} | Focus: ${selectedTitle}`,
-      "Keys: left/right or h/l move columns | up/down or j/k scroll | 1 status | 2 raw | v toggle",
+      "Keys: left/right or h/l move columns | up/down or j/k scroll | 1 status | 2 raw | v toggle | q/esc/Ctrl+C quit",
     ].join("\n");
   };
 
@@ -364,6 +382,11 @@ function createAgentTuiRenderableView(renderer: CliRenderer): AgentTuiRenderable
 
 export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
   const input = options.input ?? process.stdin;
+  const onExitRequest =
+    options.onExitRequest ??
+    (() => {
+      process.kill(process.pid, "SIGINT");
+    });
   const output = options.output ?? process.stdout;
   const requireTty = options.requireTty ?? true;
   const store =
@@ -419,7 +442,7 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
         });
       }
 
-      view = createAgentTuiRenderableView(renderer);
+      view = createAgentTuiRenderableView(renderer, onExitRequest);
       if (ownsRenderer) {
         renderer.start();
       }

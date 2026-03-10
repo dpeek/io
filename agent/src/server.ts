@@ -120,6 +120,9 @@ async function runAgentService(options: StartCommandOptions, mode: "start" | "tu
   try {
     await tui?.start();
     await service.start();
+    if (!options.once) {
+      await waitForever();
+    }
   } finally {
     await stop();
   }
@@ -129,6 +132,10 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function waitForever() {
+  return new Promise<void>(() => undefined);
 }
 
 async function runRetainedTui(options: RetainedTuiCommandOptions) {
@@ -219,7 +226,7 @@ async function runRetainedTui(options: RetainedTuiCommandOptions) {
     }, 250);
   }
 
-  await new Promise<void>(() => undefined);
+  await waitForever();
 }
 
 export async function runAgentCli(args: string[]) {

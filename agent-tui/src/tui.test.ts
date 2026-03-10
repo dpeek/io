@@ -203,8 +203,12 @@ test("createAgentTui supports keyboard column navigation, view toggles, and tran
     height: 18,
     width: 96,
   });
+  let exitRequested = 0;
 
   const tui = createAgentTui({
+    onExitRequest: () => {
+      exitRequested += 1;
+    },
     renderer,
     requireTty: false,
   });
@@ -294,6 +298,10 @@ test("createAgentTui supports keyboard column navigation, view toggles, and tran
     await renderOnce();
     frame = captureCharFrame();
     expect(frame).toContain("| output line 2");
+
+    await mockInput.typeText("q");
+    await Promise.resolve();
+    expect(exitRequested).toBe(1);
   } finally {
     await tui.stop();
     renderer.destroy();

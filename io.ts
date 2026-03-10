@@ -2,7 +2,7 @@ import { defineIoConfig, env, linearTracker } from "@io/lib/config";
 
 export default defineIoConfig({
   agent: {
-    maxConcurrentAgents: 1,
+    maxConcurrentAgents: 3,
     maxTurns: 1,
   },
   codex: {
