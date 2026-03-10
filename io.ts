@@ -13,6 +13,37 @@ export default defineIoConfig({
   hooks: {
     afterCreate: "bun install",
   },
+  context: {
+    docs: {
+      "project.architecture": "./io/context/architecture.md",
+      "project.overview": "./io/context/project-overview.md",
+      "project.workflow-migration": "./io/context/workflow-migration.md",
+    },
+    profiles: {
+      backlog: {
+        include: [
+          "builtin:io.agent.backlog.default",
+          "builtin:io.context.discovery",
+          "builtin:io.linear.status-updates",
+          "builtin:io.core.git-safety",
+          "project.overview",
+          "project.architecture",
+          "project.workflow-migration",
+        ],
+      },
+      execute: {
+        include: [
+          "builtin:io.agent.execute.default",
+          "builtin:io.context.discovery",
+          "builtin:io.linear.status-updates",
+          "builtin:io.core.validation",
+          "builtin:io.core.git-safety",
+          "project.overview",
+          "project.architecture",
+        ],
+      },
+    },
+  },
   install: {
     brews: [
       "fzf",
@@ -43,6 +74,19 @@ export default defineIoConfig({
       "--cask linear-linear",
       "--cask claude",
       "--cask claude-code",
+    ],
+  },
+  issues: {
+    defaultAgent: "execute",
+    defaultProfile: "execute",
+    routing: [
+      {
+        if: {
+          labelsAny: ["backlog", "planning"],
+        },
+        agent: "backlog",
+        profile: "backlog",
+      },
     ],
   },
   tracker: linearTracker({

@@ -1,8 +1,15 @@
 # IO Context And Linear Plan
 
+Status: Historical design record. The shipped runtime now defaults to
+`./io.ts` + `./io.md`, keeps `./io.json` as the compatibility config path, and
+keeps `./WORKFLOW.md` only as the legacy fallback. For the current contract,
+start with [`./context-defaults.md`](./context-defaults.md) plus the repo-root
+`io/context/*.md` docs.
+
 ## Purpose
 
-This document proposes how `io` should move from the current `WORKFLOW.md`-centric setup to a JSON config plus Markdown context model:
+This document captures the original proposal for moving from the current
+`WORKFLOW.md`-centric setup to a JSON config plus Markdown context model:
 
 - `io.json` becomes the machine-readable configuration entrypoint in the current working directory
 - `io.md` becomes the default project instruction entrypoint in the current working directory

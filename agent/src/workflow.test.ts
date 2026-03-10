@@ -47,13 +47,34 @@ test("loadWorkflowFile prefers io.ts over io.json when both are present", async 
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "project-slug";
 
+  await mkdir(resolve(root, "io", "context"), { recursive: true });
   await writeFile(
     resolve(root, "io.ts"),
     `import { defineIoConfig, env, linearTracker } from "@io/lib/config";
 
 export default defineIoConfig({
   agent: { maxTurns: 3 },
+  context: {
+    docs: {
+      "project.overview": "./io/context/project-overview.md",
+    },
+    profiles: {
+      execute: {
+        include: ["builtin:io.agent.execute.default", "project.overview"],
+      },
+    },
+  },
   install: { brews: ["bat"] },
+  issues: {
+    defaultAgent: "execute",
+    routing: [
+      {
+        agent: "backlog",
+        if: { labelsAny: ["planning"] },
+        profile: "backlog",
+      },
+    ],
+  },
   tracker: linearTracker({
     apiKey: env.secret("LINEAR_API_KEY"),
     projectSlug: env.string("LINEAR_PROJECT_SLUG"),
@@ -84,6 +105,7 @@ export default defineIoConfig({
     ),
   );
   await writeFile(resolve(root, "io.md"), "IO {{ issue.identifier }}\n");
+  await writeFile(resolve(root, "io", "context", "project-overview.md"), "PROJECT OVERVIEW\n");
   await writeFile(
     resolve(root, "WORKFLOW.md"),
     `---
@@ -112,7 +134,22 @@ WORKFLOW {{ issue.identifier }}
     expect(result.value.issues).toEqual({
       defaultAgent: "execute",
       defaultProfile: "execute",
-      routing: [],
+      routing: [
+        {
+          agent: "backlog",
+          if: {
+            labelsAny: ["planning"],
+          },
+          profile: "backlog",
+        },
+      ],
+    });
+    expect(result.value.context.docs).toEqual({
+      "project.overview": resolve(root, "io", "context", "project-overview.md"),
+    });
+    expect(result.value.context.profiles.execute).toEqual({
+      include: ["builtin:io.agent.execute.default", "project.overview"],
+      includeEntrypoint: true,
     });
     expect(result.value.tracker.apiKey).toBe("linear-token");
     expect(result.value.tracker.projectSlug).toBe("project-slug");
