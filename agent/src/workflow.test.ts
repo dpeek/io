@@ -5,6 +5,10 @@ import { resolve } from "node:path";
 
 import { loadWorkflowFile, parseWorkflow, renderPrompt } from "./workflow.js";
 
+async function mkdtempInRepo(prefix: string) {
+  return mkdtemp(resolve(process.cwd(), prefix));
+}
+
 test("parseWorkflow normalizes legacy WORKFLOW front matter and env-backed values", () => {
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "project-slug";
@@ -37,11 +41,28 @@ Issue {{ issue.identifier }}: {{ issue.title }}
   expect(result.value.agent.maxTurns).toBe(1);
 });
 
-test("loadWorkflowFile prefers io.json and io.md when both are present", async () => {
-  const root = await mkdtemp(resolve(tmpdir(), "workflow-"));
+test("loadWorkflowFile prefers io.ts over io.json when both are present", async () => {
+  const root = await mkdtempInRepo(".workflow-");
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "project-slug";
 
+  await writeFile(
+    resolve(root, "io.ts"),
+    `import { defineIoConfig, env, linearTracker } from "@io/lib/config";
+
+export default defineIoConfig({
+  agent: { maxTurns: 3 },
+  install: { brews: ["bat"] },
+  tracker: linearTracker({
+    apiKey: env.secret("LINEAR_API_KEY"),
+    projectSlug: env.string("LINEAR_PROJECT_SLUG"),
+  }),
+  workspace: {
+    root: "./workspace",
+  },
+});
+`,
+  );
   await writeFile(
     resolve(root, "io.json"),
     JSON.stringify(
@@ -83,10 +104,10 @@ WORKFLOW {{ issue.identifier }}
     }
 
     expect(result.value.entrypoint.kind).toBe("io");
-    expect(result.value.entrypoint.configPath).toBe(resolve(root, "io.json"));
+    expect(result.value.entrypoint.configPath).toBe(resolve(root, "io.ts"));
     expect(result.value.entrypoint.promptPath).toBe(resolve(root, "io.md"));
     expect(result.value.promptTemplate).toBe("IO {{ issue.identifier }}");
-    expect(result.value.agent.maxTurns).toBe(2);
+    expect(result.value.agent.maxTurns).toBe(3);
     expect(result.value.issues).toEqual({
       defaultAgent: "execute",
       defaultProfile: "execute",

@@ -1,11 +1,12 @@
+import { loadIoConfig } from "@io/lib/config";
 import { $ } from "bun";
 
-type Config = Record<string, unknown> & {
-  brews: string[];
-};
-
 async function getConfig() {
-  return (await Bun.file("io.json").json()) as Config;
+  const result = await loadIoConfig();
+  if (!result.ok) {
+    throw new Error(result.errors.map((error) => `${error.path}: ${error.message}`).join("\n"));
+  }
+  return result.value.config;
 }
 
 process.env.HOMEBREW_NO_AUTO_UPDATE = "1";
@@ -40,5 +41,5 @@ async function installBrews(brews: string[], dryRun = false) {
 
 export async function install(args: string[]) {
   const config = await getConfig();
-  await installBrews(config.brews, args.includes("--dry-run"));
+  await installBrews(config.install.brews, args.includes("--dry-run"));
 }

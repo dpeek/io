@@ -1,12 +1,10 @@
 {
-  "name": "@io/lib",
+  "name": "@io/config",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./config": "./src/config.ts",
-    "./tsconfig.base.json": "./tsconfig.base.json"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "clean": "rm -rf out",
@@ -17,7 +15,7 @@
     "dev": "tsgo --watch"
   },
   "dependencies": {
-    "zod": "^4.3.6"
+    "@io/lib": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.3.9",

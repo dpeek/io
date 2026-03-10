@@ -11,9 +11,9 @@ function printHelp() {
   io agent validate [entrypointPath]
 
 Defaults:
-  ./io.json + ./io.md
+  ./io.ts + ./io.md
 Compatibility:
-  falls back to ./WORKFLOW.md when the repo is still on the legacy entrypoint
+  falls back to ./io.json during migration, then ./WORKFLOW.md for the legacy entrypoint
   `);
 }
 

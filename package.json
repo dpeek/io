@@ -6,6 +6,7 @@
     "cli",
     "graph",
     "agent",
+    "config",
     "lib"
   ],
   "type": "module",
@@ -14,6 +15,7 @@
     "agent": "io agent start"
   },
   "devDependencies": {
-    "@io/cli": "workspace:"
+    "@io/cli": "workspace:",
+    "@io/lib": "workspace:*"
   }
 }

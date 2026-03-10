@@ -66,13 +66,15 @@ that profile explicitly disables the project entrypoint.
 
 The current runtime resolves repo entrypoints in this order:
 
-1. `io agent start` and `io agent validate` default to `./io.json`.
-2. If `./io.json` contains agent runtime config, validate it and load prompt text
-   from `./io.md`.
-3. If `./io.json` contains agent runtime config but `./io.md` is missing, reuse
-   the prompt body from `./WORKFLOW.md` as the migration fallback.
-4. If `./io.json` only contains install-oriented keys such as `brews`, ignore it
-   for agent startup and load `./WORKFLOW.md` as the legacy single-file entrypoint.
+1. `io agent start` and `io agent validate` default to `./io.ts`, with `./io.json`
+   kept as the compatibility fallback.
+2. If `./io.ts` or `./io.json` contains agent runtime config, validate it and
+   load prompt text from `./io.md`.
+3. If the active IO config contains agent runtime config but `./io.md` is
+   missing, reuse the prompt body from `./WORKFLOW.md` as the migration fallback.
+4. If `./io.ts` or `./io.json` only contains install-oriented keys such as
+   `brews`, ignore it for agent startup and load `./WORKFLOW.md` as the legacy
+   single-file entrypoint.
 5. Passing `./WORKFLOW.md` explicitly continues to force the legacy path.
 
 ## Consequences For Implementation

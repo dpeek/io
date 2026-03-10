@@ -1,11 +1,20 @@
 import { createLogger } from "@io/lib";
+import {
+  IO_JSON_FILE,
+  IO_TS_FILE,
+  loadIoConfig,
+  type AskForApproval,
+  type NormalizedIoConfig,
+  type SandboxMode,
+  type SandboxPolicy,
+} from "@io/lib/config";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 import z from "zod";
 
-import type { AskForApproval, SandboxMode, SandboxPolicy } from "./codex-schema.js";
 import type {
   AgentRole,
   IssueRoutingCondition,
@@ -20,19 +29,8 @@ import { toId } from "./util.js";
 
 const log = createLogger({ pkg: "agent" });
 
-const IO_CONFIG_FILE = "io.json";
 const IO_PROMPT_FILE = "io.md";
 const WORKFLOW_FILE = "WORKFLOW.md";
-const IO_RUNTIME_KEYS = [
-  "agent",
-  "codex",
-  "context",
-  "hooks",
-  "issues",
-  "polling",
-  "tracker",
-  "workspace",
-] as const;
 const DEFAULT_ISSUE_ROUTING: IssueRoutingConfig = {
   defaultAgent: "execute",
   defaultProfile: "execute",
@@ -125,70 +123,13 @@ const issueRoutingRuleSchema = z.object({
   profile: z.string().min(1),
 });
 
-const ioConfigSchema = z
+const ioExtensionsSchema = z
   .object({
-    agent: z
-      .object({
-        maxConcurrentAgents: z.coerce.number().int().positive().default(1),
-        maxRetryBackoffMs: z.coerce.number().int().positive().default(300_000),
-        maxTurns: z.coerce.number().int().positive().default(1),
-      })
-      .default({
-        maxConcurrentAgents: 1,
-        maxRetryBackoffMs: 300_000,
-        maxTurns: 1,
-      }),
-    codex: z
-      .object({
-        approvalPolicy: approvalPolicySchema.default("never"),
-        command: z.string().min(1).default("codex app-server"),
-        readTimeoutMs: z.coerce.number().int().positive().default(5_000),
-        stallTimeoutMs: z.coerce.number().int().default(300_000),
-        threadSandbox: sandboxModeSchema.default("workspace-write"),
-        turnSandboxPolicy: sandboxPolicySchema.optional(),
-        turnTimeoutMs: z.coerce.number().int().positive().default(3_600_000),
-      })
-      .default({
-        approvalPolicy: "never",
-        command: "codex app-server",
-        readTimeoutMs: 5_000,
-        stallTimeoutMs: 300_000,
-        threadSandbox: "workspace-write",
-        turnTimeoutMs: 3_600_000,
-      }),
     context: z
       .object({
         overrides: z.record(z.string().min(1), z.string().min(1)).default({}),
       })
       .default({ overrides: {} }),
-    hooks: z
-      .object({
-        afterCreate: z.string().min(1).optional(),
-        afterRun: z.string().min(1).optional(),
-        beforeRemove: z.string().min(1).optional(),
-        beforeRun: z.string().min(1).optional(),
-        timeoutMs: z.coerce.number().int().positive().default(60_000),
-      })
-      .default({ timeoutMs: 60_000 }),
-    polling: z
-      .object({
-        intervalMs: z.coerce.number().int().positive().default(30_000),
-      })
-      .default({ intervalMs: 30_000 }),
-    tracker: z.object({
-      activeStates: stateListSchema.default(["Todo"]),
-      apiKey: z.string().optional(),
-      endpoint: z.string().url().default("https://api.linear.app/graphql"),
-      kind: z.literal("linear").default("linear"),
-      projectSlug: z.string().optional(),
-      terminalStates: stateListSchema.default([
-        "Closed",
-        "Cancelled",
-        "Canceled",
-        "Duplicate",
-        "Done",
-      ]),
-    }),
     issues: z
       .object({
         defaultAgent: agentRoleSchema.default("execute"),
@@ -199,13 +140,8 @@ const ioConfigSchema = z
         defaultAgent: "execute",
         routing: [],
       }),
-    workspace: z.object({
-      origin: z.string().optional(),
-      root: z.string().default("$AGENT_WORKSPACE_ROOT"),
-    }),
   })
   .passthrough();
-
 const workflowFrontMatterSchema = z
   .object({
     agent: z
@@ -272,8 +208,8 @@ const workflowFrontMatterSchema = z
   })
   .passthrough();
 
-type IoConfig = z.infer<typeof ioConfigSchema>;
-type IoIssueRoutingConfig = IoConfig["issues"];
+type IoExtensions = z.infer<typeof ioExtensionsSchema>;
+type IoIssueRoutingConfig = IoExtensions["issues"];
 type WorkflowFrontMatter = z.infer<typeof workflowFrontMatterSchema>;
 type WorkflowConfigFields = Pick<
   Workflow,
@@ -291,14 +227,6 @@ function splitFrontMatter(document: string) {
   const configText = document.slice(4, end).trim();
   const promptTemplate = document.slice(end + 4).trim();
   return { configText, promptTemplate };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value != null && typeof value === "object" && !Array.isArray(value);
-}
-
-function hasIoRuntimeConfig(value: Record<string, unknown>) {
-  return IO_RUNTIME_KEYS.some((key) => key in value);
 }
 
 function expandEnv(value?: string) {
@@ -370,7 +298,24 @@ function normalizeIssueRouting(config: IoIssueRoutingConfig): IssueRoutingConfig
   };
 }
 
-function normalizeIoConfig(config: IoConfig, baseDir: string): WorkflowConfigFields {
+function normalizeIoExtensions(config: IoExtensions, baseDir: string) {
+  return {
+    context: {
+      overrides: Object.fromEntries(
+        Object.entries(config.context.overrides).map(([id, path]) => [
+          id,
+          expandPathValue(path, baseDir),
+        ]),
+      ),
+    },
+    issues: normalizeIssueRouting(config.issues),
+  } satisfies Pick<WorkflowConfigFields, "context" | "issues">;
+}
+
+function normalizeLoadedIoConfig(
+  config: NormalizedIoConfig,
+  extensions: Pick<WorkflowConfigFields, "context" | "issues">,
+): WorkflowConfigFields {
   return {
     agent: {
       maxConcurrentAgents: config.agent.maxConcurrentAgents,
@@ -386,14 +331,7 @@ function normalizeIoConfig(config: IoConfig, baseDir: string): WorkflowConfigFie
       turnSandboxPolicy: config.codex.turnSandboxPolicy,
       turnTimeoutMs: config.codex.turnTimeoutMs,
     },
-    context: {
-      overrides: Object.fromEntries(
-        Object.entries(config.context.overrides).map(([id, path]) => [
-          id,
-          expandPathValue(path, baseDir),
-        ]),
-      ),
-    },
+    context: extensions.context,
     hooks: {
       afterCreate: config.hooks.afterCreate,
       afterRun: config.hooks.afterRun,
@@ -401,23 +339,21 @@ function normalizeIoConfig(config: IoConfig, baseDir: string): WorkflowConfigFie
       beforeRun: config.hooks.beforeRun,
       timeoutMs: config.hooks.timeoutMs,
     },
-    issues: normalizeIssueRouting(config.issues),
+    issues: extensions.issues,
     polling: {
       intervalMs: config.polling.intervalMs,
     },
     tracker: {
-      activeStates: normalizeStates(config.tracker.activeStates),
-      apiKey: expandEnv(config.tracker.apiKey) ?? expandEnv("$LINEAR_API_KEY"),
+      activeStates: [...config.tracker.activeStates],
+      apiKey: config.tracker.apiKey,
       endpoint: config.tracker.endpoint,
       kind: config.tracker.kind,
-      projectSlug: expandEnv(config.tracker.projectSlug) ?? expandEnv("$LINEAR_PROJECT_SLUG"),
-      terminalStates: normalizeStates(config.tracker.terminalStates),
+      projectSlug: config.tracker.projectSlug,
+      terminalStates: [...config.tracker.terminalStates],
     },
     workspace: {
-      origin: config.workspace.origin
-        ? expandPathValue(config.workspace.origin, baseDir)
-        : undefined,
-      root: expandPathValue(config.workspace.root, baseDir),
+      origin: config.workspace.origin,
+      root: config.workspace.root,
     },
   };
 }
@@ -486,6 +422,45 @@ function invalidResult(message: string, path = "$"): ValidationResult<never> {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function loadRawIoConfig(path: string) {
+  if (basename(path) === IO_TS_FILE) {
+    const moduleUrl = new URL(pathToFileURL(path).href);
+    moduleUrl.searchParams.set("t", `${Date.now()}-${Math.random()}`);
+    const module = await import(moduleUrl.href);
+    if (!("default" in module)) {
+      throw new Error(`${IO_TS_FILE} must export a default config object`);
+    }
+    return module.default;
+  }
+  return Bun.file(path).json();
+}
+
+async function loadIoExtensions(
+  configPath: string,
+): Promise<ValidationResult<Pick<WorkflowConfigFields, "context" | "issues">>> {
+  try {
+    const rawConfig = await loadRawIoConfig(configPath);
+    if (!isRecord(rawConfig)) {
+      return invalidResult(`${basename(configPath)} must decode to an object`, configPath);
+    }
+    const result = ioExtensionsSchema.safeParse(rawConfig);
+    if (!result.success) {
+      return { errors: mapIssues(result.error.issues), ok: false };
+    }
+    return {
+      ok: true,
+      value: normalizeIoExtensions(result.data, dirname(configPath)),
+    };
+  } catch (error) {
+    log.error("workflow.parse_failed", error instanceof Error ? error : new Error(String(error)));
+    return invalidResult(error instanceof Error ? error.message : String(error), configPath);
+  }
+}
+
 function parseWorkflowDocument(
   document: string,
   entrypoint: WorkflowEntrypoint,
@@ -517,14 +492,19 @@ function parseWorkflowDocument(
   }
 }
 
-function resolveEntrypoint(
-  path: string | undefined,
-  baseDir: string,
-): ValidationResult<WorkflowEntrypoint> {
+function resolvePreferredIoConfigPath(baseDir: string) {
+  const ioTsPath = resolve(baseDir, IO_TS_FILE);
+  if (existsSync(ioTsPath)) {
+    return ioTsPath;
+  }
+  return resolve(baseDir, IO_JSON_FILE);
+}
+
+function resolveEntrypoint(path: string | undefined, baseDir: string): ValidationResult<WorkflowEntrypoint> {
   if (path) {
     const absolutePath = isAbsolute(path) ? path : resolve(baseDir, path);
     const filename = basename(absolutePath);
-    if (filename === IO_CONFIG_FILE) {
+    if (filename === IO_TS_FILE || filename === IO_JSON_FILE) {
       return {
         ok: true,
         value: {
@@ -540,7 +520,7 @@ function resolveEntrypoint(
       return {
         ok: true,
         value: {
-          configPath: resolve(dirname(absolutePath), IO_CONFIG_FILE),
+          configPath: resolvePreferredIoConfigPath(dirname(absolutePath)),
           kind: "io",
           promptPath: absolutePath,
         },
@@ -557,21 +537,23 @@ function resolveEntrypoint(
       };
     }
     return invalidResult(
-      `Unsupported entrypoint path: ${path}. Expected ${IO_CONFIG_FILE}, ${IO_PROMPT_FILE}, or ${WORKFLOW_FILE}`,
+      `Unsupported entrypoint path: ${path}. Expected ${IO_TS_FILE}, ${IO_JSON_FILE}, ${IO_PROMPT_FILE}, or ${WORKFLOW_FILE}`,
     );
   }
 
-  const ioConfigPath = resolve(baseDir, IO_CONFIG_FILE);
+  const ioTsPath = resolve(baseDir, IO_TS_FILE);
+  const ioJsonPath = resolve(baseDir, IO_JSON_FILE);
   const ioPromptPath = resolve(baseDir, IO_PROMPT_FILE);
   const workflowPath = resolve(baseDir, WORKFLOW_FILE);
-  const hasIoConfig = existsSync(ioConfigPath);
+  const hasIoTs = existsSync(ioTsPath);
+  const hasIoJson = existsSync(ioJsonPath);
   const hasIoPrompt = existsSync(ioPromptPath);
 
-  if (hasIoConfig) {
+  if (hasIoTs || hasIoJson) {
     return {
       ok: true,
       value: {
-        configPath: ioConfigPath,
+        configPath: hasIoTs ? ioTsPath : ioJsonPath,
         kind: "io",
         promptPath: hasIoPrompt ? ioPromptPath : workflowPath,
       },
@@ -589,11 +571,11 @@ function resolveEntrypoint(
   }
   if (hasIoPrompt) {
     return invalidResult(
-      `Incomplete IO entrypoints. Expected both ${IO_CONFIG_FILE} and ${IO_PROMPT_FILE}, or fall back to ${WORKFLOW_FILE} during migration.`,
+      `Incomplete IO entrypoints. Expected ${IO_TS_FILE} or ${IO_JSON_FILE} with ${IO_PROMPT_FILE}, or fall back to ${WORKFLOW_FILE} during migration.`,
     );
   }
   return invalidResult(
-    `No agent entrypoint found. Add ${IO_CONFIG_FILE} and ${IO_PROMPT_FILE}, or keep ${WORKFLOW_FILE} during migration.`,
+    `No agent entrypoint found. Add ${IO_TS_FILE} and ${IO_PROMPT_FILE}, use ${IO_JSON_FILE} as compatibility input, or keep ${WORKFLOW_FILE} during migration.`,
   );
 }
 
@@ -611,56 +593,47 @@ async function loadPromptTemplate(path: string) {
 }
 
 async function loadIoWorkflow(entrypoint: WorkflowEntrypoint): Promise<ValidationResult<Workflow>> {
-  if (!existsSync(entrypoint.configPath)) {
+  const loaded = await loadIoConfig({
+    baseDir: dirname(entrypoint.configPath),
+    configPath: entrypoint.configPath,
+  });
+  if (!loaded.ok) {
+    return loaded;
+  }
+  const extensions = await loadIoExtensions(loaded.value.sourcePath);
+  if (!extensions.ok) {
+    return extensions;
+  }
+  if (!loaded.value.hasRuntimeConfig) {
+    const workflowPath = resolve(dirname(entrypoint.configPath), WORKFLOW_FILE);
+    if (existsSync(workflowPath)) {
+      const document = await Bun.file(workflowPath).text();
+      return parseWorkflowDocument(document, {
+        configPath: workflowPath,
+        kind: "workflow",
+        promptPath: workflowPath,
+      });
+    }
     return invalidResult(
-      `Missing config entrypoint: ${entrypoint.configPath}`,
+      `${basename(entrypoint.configPath)} does not contain agent runtime config: ${entrypoint.configPath}`,
       entrypoint.configPath,
     );
   }
-
-  try {
-    const rawConfig = JSON.parse(await Bun.file(entrypoint.configPath).text()) as unknown;
-    if (!isRecord(rawConfig)) {
-      return invalidResult("io.json must decode to an object", entrypoint.configPath);
-    }
-    if (!hasIoRuntimeConfig(rawConfig)) {
-      const workflowPath = resolve(dirname(entrypoint.configPath), WORKFLOW_FILE);
-      if (existsSync(workflowPath)) {
-        const document = await Bun.file(workflowPath).text();
-        return parseWorkflowDocument(document, {
-          configPath: workflowPath,
-          kind: "workflow",
-          promptPath: workflowPath,
-        });
-      }
-      return invalidResult(
-        `io.json does not contain agent runtime config: ${entrypoint.configPath}`,
-        entrypoint.configPath,
-      );
-    }
-    const result = ioConfigSchema.safeParse(rawConfig);
-    if (!result.success) {
-      return { errors: mapIssues(result.error.issues), ok: false };
-    }
-    const promptTemplate = await loadPromptTemplate(entrypoint.promptPath);
-    if (!promptTemplate.ok) {
-      return promptTemplate;
-    }
-    return {
-      ok: true,
-      value: buildWorkflow(
-        normalizeIoConfig(result.data, dirname(entrypoint.configPath)),
-        promptTemplate.value,
-        entrypoint,
-      ),
-    };
-  } catch (error) {
-    log.error("workflow.parse_failed", error instanceof Error ? error : new Error(String(error)));
-    return invalidResult(
-      error instanceof Error ? error.message : String(error),
-      entrypoint.configPath,
-    );
+  const promptTemplate = await loadPromptTemplate(entrypoint.promptPath);
+  if (!promptTemplate.ok) {
+    return promptTemplate;
   }
+  return {
+    ok: true,
+    value: buildWorkflow(
+      normalizeLoadedIoConfig(loaded.value.config, extensions.value),
+      promptTemplate.value,
+      {
+        ...entrypoint,
+        configPath: loaded.value.sourcePath,
+      },
+    ),
+  };
 }
 
 export function parseWorkflow(document: string): ValidationResult<Workflow> {
