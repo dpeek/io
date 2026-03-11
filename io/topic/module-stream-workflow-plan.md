@@ -19,18 +19,39 @@ reopening the contract on each issue.
 - branch, worktree, and landing lifecycle:
   [`../../agent/doc/stream-workflow.md`](../../agent/doc/stream-workflow.md)
 
-## Implementation Order
+## Phase 1 Landed
 
-1. validate managed parent identity as `io` plus exactly one configured module
-   label, and surface ambiguity clearly
-2. persist and refresh the repo-wide focus doc using the accepted
-   `./llm/topic/goals.md` shape
-3. ingest `@io backlog`, `@io focus`, `@io status`, and `@io help` comments
-   through the tracker layer
-4. connect comment commands to the allowed write surfaces without rewriting
-   human-owned issue prose
-5. keep operator-visible summaries stable across issue body updates, child
-   backlog maintenance, and comment replies
+The first managed-stream slice is now in place for the `agent` module:
+
+1. managed parent identity comes from `io` plus exactly one configured module
+   label
+2. module docs and allowed shared paths come from `modules.<id>` in `io.ts`
+3. `@io` comments are parsed and tracked through the Linear adapter
+4. parent managed-brief writeback has a stable marker shape
+5. stream-aware scheduling and workspaces already serialize child execution per
+   parent stream
+
+## Next Expansion Priorities
+
+1. finish the remaining comment-owned write surfaces:
+   implement the repo-wide focus doc refresh, align the canonical focus-doc
+   path, and make `@io backlog` own child-backlog refresh as well as parent
+   brief writeback
+2. prove the contract on one non-`agent` module:
+   use `graph` as the first portability proof so module-local planning,
+   context, and backlog expansion stop depending on `agent`-specific
+   assumptions
+3. surface module-stream state for operators:
+   show module identity, stream occupancy, and scheduling/blocked reasons
+   clearly enough that multiple package streams can run in parallel without
+   hidden routing decisions
+
+## Execution Order
+
+1. close the write-surface gaps so the contract is complete on one module
+2. prove the same flow on `graph` and capture any module-portability fixes
+3. upgrade operator-visible state once multiple module streams can exist at the
+   same time
 
 ## Out Of Scope For This Slice
 
@@ -42,6 +63,6 @@ reopening the contract on each issue.
 ## Done Means
 
 The stream is coherent when routing, parent writeback, child backlog
-maintenance, focus-doc refresh, and comment-triggered updates all target the
-same label rules, marker ids, and ownership boundaries.
-
+maintenance, focus-doc refresh, comment-triggered updates, non-`agent`
+portability, and operator-visible stream state all target the same label
+rules, marker ids, and ownership boundaries.
