@@ -52,7 +52,7 @@ function createDataOnlyTotalSyncPayload(
 
   for (const edge of store.facts()) {
     if (!dataNodeIds.has(edge.s)) continue;
-    dataOnlyStore.assert(edge.s, edge.p, edge.o);
+    dataOnlyStore.assertEdge({ ...edge });
   }
 
   return createTotalSyncPayload(dataOnlyStore, options);
@@ -357,6 +357,119 @@ describe("total sync", () => {
     if (!validation.ok) throw new Error("Expected local validation to stay usable after sync.apply");
   });
 
+  it("applies authoritative write results incrementally while preserving sync state and schema baseline", async () => {
+    const server = createServerGraph();
+    const acmeId = server.graph.company.create({
+      name: "Acme Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://acme.com"),
+    });
+
+    const client = createSyncedTypeClient(app, {
+      pull: () =>
+        createDataOnlyTotalSyncPayload(server.store, {
+          cursor: "server:data-only:1",
+        }),
+    });
+
+    await client.sync.sync();
+
+    const acme = client.graph.company.ref(acmeId);
+    let nameNotifications = 0;
+    let websiteNotifications = 0;
+    const unsubscribeName = acme.fields.name.subscribe(() => {
+      nameNotifications += 1;
+    });
+    const unsubscribeWebsite = acme.fields.website.subscribe(() => {
+      websiteNotifications += 1;
+    });
+
+    const authority = createAuthoritativeGraphWriteSession(server.store, app, {
+      cursorPrefix: "server:",
+    });
+    const result = authority.apply(
+      createCompanyNameWriteTransaction(server.store, acmeId, "Acme Graph Labs", "tx:1"),
+    );
+
+    const applied = client.sync.applyWriteResult(result);
+
+    expect(applied).toMatchObject({
+      txId: "tx:1",
+      cursor: "server:1",
+      replayed: false,
+    });
+    expect(client.graph.company.get(acmeId)).toMatchObject({
+      id: acmeId,
+      name: "Acme Graph Labs",
+      status: app.status.values.active.id,
+    });
+    expect(client.graph.company.get(acmeId).website.toString()).toBe("https://acme.com/");
+    expect(client.sync.getState()).toMatchObject({
+      status: "ready",
+      completeness: "complete",
+      freshness: "current",
+      cursor: "server:1",
+    });
+    expect(nameNotifications).toBe(1);
+    expect(websiteNotifications).toBe(0);
+
+    const validation = client.graph.company.validateUpdate(acmeId, {
+      name: "Acme After Incremental",
+    });
+
+    expect(validation).toMatchObject({
+      ok: true,
+      phase: "local",
+      event: "update",
+    });
+    if (!validation.ok) throw new Error("Expected schema baseline to remain valid after write replay");
+
+    unsubscribeName();
+    unsubscribeWebsite();
+  });
+
+  it("keeps predicate-slot notifications precise when incremental reconciliation preserves the logical value", async () => {
+    const server = createServerGraph();
+    const acmeId = server.graph.company.create({
+      name: "Acme Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://acme.com"),
+    });
+
+    const client = createSyncedTypeClient(app, {
+      pull: () => createTotalSyncPayload(server.store, { cursor: "server:0" }),
+    });
+
+    await client.sync.sync();
+
+    const acme = client.graph.company.ref(acmeId);
+    let nameNotifications = 0;
+    const unsubscribeName = acme.fields.name.subscribe(() => {
+      nameNotifications += 1;
+    });
+
+    const authority = createAuthoritativeGraphWriteSession(server.store, app, {
+      cursorPrefix: "server:",
+      initialSequence: 0,
+    });
+    const result = authority.apply(
+      createCompanyNameWriteTransaction(server.store, acmeId, "Acme Corp", "tx:same-value"),
+    );
+
+    client.sync.applyWriteResult(result);
+
+    expect(nameNotifications).toBe(0);
+    expect(client.graph.company.get(acmeId).name).toBe("Acme Corp");
+    expect(client.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: "server:1",
+      completeness: "complete",
+      freshness: "current",
+    });
+
+    unsubscribeName();
+  });
+
   it("lets non-throwing authoritative validation reuse the preserved schema baseline", () => {
     const server = createServerGraph();
     server.graph.company.create({
@@ -658,6 +771,50 @@ describe("total sync", () => {
         }),
       ]),
     );
+  });
+
+  it("rejects invalid authoritative write results without mutating synced client state", async () => {
+    const server = createServerGraph();
+    const acmeId = server.graph.company.create({
+      name: "Acme Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://acme.com"),
+    });
+
+    const client = createSyncedTypeClient(app, {
+      pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
+    });
+
+    await client.sync.sync();
+
+    const invalidResult = {
+      txId: "tx:invalid",
+      cursor: "server:2",
+      replayed: false,
+      transaction: createCompanyNameWriteTransaction(server.store, acmeId, "   ", "tx:invalid"),
+    };
+
+    let error: unknown;
+    try {
+      client.sync.applyWriteResult(invalidResult);
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(GraphValidationError);
+    const validationError = error as GraphValidationError<typeof invalidResult>;
+    expect(validationError.result).toMatchObject({
+      ok: false,
+      phase: "authoritative",
+      event: "reconcile",
+    });
+    expect(client.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: "server:1",
+      freshness: "current",
+      completeness: "complete",
+    });
+    expect(client.graph.company.get(acmeId).name).toBe("Acme Corp");
   });
 
   it("returns caller-owned authoritative validation payload snapshots", () => {

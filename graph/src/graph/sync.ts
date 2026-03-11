@@ -55,6 +55,7 @@ export type AuthoritativeGraphWriteResult = {
 
 const totalSyncPayloadValidationKey = "$sync:payload"
 const graphWriteTransactionValidationKey = "$sync:tx"
+const graphWriteResultValidationKey = "$sync:txResult"
 
 function createPayloadValidationIssue(
   path: readonly string[],
@@ -110,6 +111,35 @@ function invalidTransactionResult(
     event: "reconcile",
     value: transaction,
     changedPredicateKeys: issues.length > 0 ? [graphWriteTransactionValidationKey] : [],
+    issues,
+  }
+}
+
+function createGraphWriteResultValidationIssue(
+  path: readonly string[],
+  code: string,
+  message: string,
+): GraphValidationIssue {
+  return {
+    source: "runtime",
+    code,
+    message,
+    path: Object.freeze([...path]),
+    predicateKey: graphWriteResultValidationKey,
+    nodeId: graphWriteResultValidationKey,
+  }
+}
+
+function invalidGraphWriteResult(
+  result: AuthoritativeGraphWriteResult,
+  issues: readonly GraphValidationIssue[],
+): Extract<GraphValidationResult<AuthoritativeGraphWriteResult>, { ok: false }> {
+  return {
+    ok: false,
+    phase: "authoritative",
+    event: "reconcile",
+    value: result,
+    changedPredicateKeys: issues.length > 0 ? [graphWriteResultValidationKey] : [],
     issues,
   }
 }
@@ -254,6 +284,33 @@ function exposeGraphWriteValidationResult(
     changedPredicateKeys: [...result.changedPredicateKeys],
     issues: result.issues.map((issue) => cloneValidationIssue(issue)),
   }
+}
+
+function exposeGraphWriteResultValidationResult(
+  result: GraphValidationResult<AuthoritativeGraphWriteResult>,
+): GraphValidationResult<AuthoritativeGraphWriteResult> {
+  if (result.ok) {
+    return {
+      ...result,
+      value: cloneAuthoritativeGraphWriteResult(result.value),
+      changedPredicateKeys: [...result.changedPredicateKeys],
+    }
+  }
+
+  return {
+    ...result,
+    value: cloneAuthoritativeGraphWriteResult(result.value),
+    changedPredicateKeys: [...result.changedPredicateKeys],
+    issues: result.issues.map((issue) => cloneValidationIssue(issue)),
+  }
+}
+
+function prefixGraphWriteResultIssues(
+  issues: readonly GraphValidationIssue[],
+): GraphValidationIssue[] {
+  return issues.map((issue) =>
+    createGraphWriteResultValidationIssue(["transaction", ...issue.path], issue.code, issue.message),
+  )
 }
 
 function compareGraphWriteOperations(left: GraphWriteOperation, right: GraphWriteOperation): number {
@@ -588,9 +645,96 @@ function prepareGraphWriteTransaction(
   }
 }
 
+function prepareAuthoritativeGraphWriteResult(
+  result: AuthoritativeGraphWriteResult,
+):
+  | {
+      ok: true
+      value: AuthoritativeGraphWriteResult
+    }
+  | {
+      ok: false
+      result: Extract<GraphValidationResult<AuthoritativeGraphWriteResult>, { ok: false }>
+    } {
+  const candidate = result as Partial<AuthoritativeGraphWriteResult> & Record<string, unknown>
+  const issues: GraphValidationIssue[] = []
+
+  if (typeof candidate.txId !== "string") {
+    issues.push(
+      createGraphWriteResultValidationIssue(
+        ["txId"],
+        "sync.txResult.txId",
+        'Field "txId" must be a string.',
+      ),
+    )
+  }
+
+  if (typeof candidate.cursor !== "string") {
+    issues.push(
+      createGraphWriteResultValidationIssue(
+        ["cursor"],
+        "sync.txResult.cursor",
+        'Field "cursor" must be a string.',
+      ),
+    )
+  }
+
+  if (typeof candidate.replayed !== "boolean") {
+    issues.push(
+      createGraphWriteResultValidationIssue(
+        ["replayed"],
+        "sync.txResult.replayed",
+        'Field "replayed" must be a boolean.',
+      ),
+    )
+  }
+
+  const transaction = cloneGraphWriteTransaction(
+    isObjectRecord(candidate.transaction)
+      ? (candidate.transaction as GraphWriteTransaction)
+      : ({ id: "", ops: [] } as GraphWriteTransaction),
+  )
+  issues.push(...prefixGraphWriteResultIssues(validateGraphWriteTransactionShape(transaction)))
+
+  if (typeof candidate.txId === "string" && candidate.txId !== transaction.id) {
+    issues.push(
+      createGraphWriteResultValidationIssue(
+        ["txId"],
+        "sync.txResult.txId.mismatch",
+        'Field "txId" must match "transaction.id".',
+      ),
+    )
+  }
+
+  const cloned = cloneAuthoritativeGraphWriteResult({
+    txId: typeof candidate.txId === "string" ? candidate.txId : "",
+    cursor: typeof candidate.cursor === "string" ? candidate.cursor : "",
+    replayed: typeof candidate.replayed === "boolean" ? candidate.replayed : false,
+    transaction,
+  })
+
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      result: invalidGraphWriteResult(cloned, issues),
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      ...cloned,
+      transaction: canonicalizeGraphWriteTransaction(transaction),
+    },
+  }
+}
+
 function materializeGraphWriteTransactionSnapshot(
   store: Store,
   transaction: GraphWriteTransaction,
+  options: {
+    allowExistingAssertEdgeIds?: boolean
+  } = {},
 ):
   | {
       ok: true
@@ -624,7 +768,16 @@ function materializeGraphWriteTransactionSnapshot(
       continue
     }
 
-    if (edgeById.has(operation.edge.id)) {
+    const existing = edgeById.get(operation.edge.id)
+    if (existing) {
+      if (
+        options.allowExistingAssertEdgeIds &&
+        existing.s === operation.edge.s &&
+        existing.p === operation.edge.p &&
+        existing.o === operation.edge.o
+      ) {
+        continue
+      }
       issues.push(
         createTransactionValidationIssue(
           [opPath, "edge", "id"],
@@ -654,6 +807,19 @@ function materializeGraphWriteTransactionSnapshot(
       retracted: [...retracted],
     },
   }
+}
+
+function applyGraphWriteTransaction(store: Store, transaction: GraphWriteTransaction): void {
+  store.batch(() => {
+    for (const operation of transaction.ops) {
+      if (operation.op === "retract") {
+        store.retract(operation.edgeId)
+        continue
+      }
+
+      store.assertEdge(operation.edge)
+    }
+  })
 }
 
 function validateStoreSnapshotShape(snapshot: unknown): readonly GraphValidationIssue[] {
@@ -830,9 +996,13 @@ export type SyncState = {
 export type SyncStateListener = (state: SyncState) => void
 export type TotalSyncSource = () => TotalSyncPayload | Promise<TotalSyncPayload>
 export type TotalSyncPayloadValidator = (payload: TotalSyncPayload) => void
+export type AuthoritativeGraphWriteResultValidator = (
+  result: AuthoritativeGraphWriteResult,
+) => void
 
 export interface TotalSyncController {
   apply(payload: TotalSyncPayload): TotalSyncPayload
+  applyWriteResult(result: AuthoritativeGraphWriteResult): AuthoritativeGraphWriteResult
   sync(): Promise<TotalSyncPayload>
   getState(): SyncState
   subscribe(listener: SyncStateListener): () => void
@@ -846,6 +1016,7 @@ export type SyncedTypeClient<T extends Record<string, AnyTypeOutput>> = {
 
 export interface TotalSyncSession {
   apply(payload: TotalSyncPayload): TotalSyncPayload
+  applyWriteResult(result: AuthoritativeGraphWriteResult): AuthoritativeGraphWriteResult
   pull(source: TotalSyncSource): Promise<TotalSyncPayload>
   getState(): SyncState
   subscribe(listener: SyncStateListener): () => void
@@ -896,6 +1067,32 @@ export function validateAuthoritativeGraphWriteTransaction<
   )
 }
 
+export function validateAuthoritativeGraphWriteResult<
+  const T extends Record<string, AnyTypeOutput>,
+>(
+  result: AuthoritativeGraphWriteResult,
+  store: Store,
+  namespace: T,
+): GraphValidationResult<AuthoritativeGraphWriteResult> {
+  const prepared = prepareAuthoritativeGraphWriteResult(result)
+  if (!prepared.ok) return prepared.result
+
+  const materialized = materializeGraphWriteTransactionSnapshot(store, prepared.value.transaction, {
+    allowExistingAssertEdgeIds: true,
+  })
+  if (!materialized.ok) {
+    return exposeGraphWriteResultValidationResult(
+      invalidGraphWriteResult(prepared.value, prefixGraphWriteResultIssues(materialized.result.issues)),
+    )
+  }
+
+  const validationStore = createStore()
+  validationStore.replace(materialized.value)
+  return exposeGraphWriteResultValidationResult(
+    withValidationValue(validateGraphStore(validationStore, namespace), prepared.value),
+  )
+}
+
 export function createAuthoritativeTotalSyncValidator<
   const T extends Record<string, AnyTypeOutput>,
 >(
@@ -907,6 +1104,18 @@ export function createAuthoritativeTotalSyncValidator<
   return (payload) => {
     const result = validateAuthoritativeTotalSyncPayload(payload, namespace, options)
     if (!result.ok) throw new GraphValidationError(result)
+  }
+}
+
+export function createAuthoritativeGraphWriteResultValidator<
+  const T extends Record<string, AnyTypeOutput>,
+>(
+  store: Store,
+  namespace: T,
+): AuthoritativeGraphWriteResultValidator {
+  return (result) => {
+    const validation = validateAuthoritativeGraphWriteResult(result, store, namespace)
+    if (!validation.ok) throw new GraphValidationError(validation)
   }
 }
 
@@ -1022,6 +1231,7 @@ export function createTotalSyncSession(
   store: Store,
   options: {
     validate?: TotalSyncPayloadValidator
+    validateWriteResult?: AuthoritativeGraphWriteResultValidator
     preserveSnapshot?: StoreSnapshot
   } = {},
 ): TotalSyncSession {
@@ -1059,6 +1269,32 @@ export function createTotalSyncSession(
     return materialized
   }
 
+  function applyWriteResult(result: AuthoritativeGraphWriteResult): AuthoritativeGraphWriteResult {
+    const prepared = prepareAuthoritativeGraphWriteResult(result)
+    if (!prepared.ok) throw new GraphValidationError(prepared.result)
+
+    const materialized = prepared.value
+    const candidateSnapshot = materializeGraphWriteTransactionSnapshot(store, materialized.transaction, {
+      allowExistingAssertEdgeIds: true,
+    })
+    if (!candidateSnapshot.ok) {
+      throw new GraphValidationError(
+        invalidGraphWriteResult(materialized, prefixGraphWriteResultIssues(candidateSnapshot.result.issues)),
+      )
+    }
+    options.validateWriteResult?.(materialized)
+    applyGraphWriteTransaction(store, materialized.transaction)
+    publish({
+      ...state,
+      status: "ready",
+      freshness: "current",
+      cursor: materialized.cursor,
+      lastSyncedAt: new Date(),
+      error: undefined,
+    })
+    return cloneAuthoritativeGraphWriteResult(materialized)
+  }
+
   async function pull(source: TotalSyncSource): Promise<TotalSyncPayload> {
     publish({
       ...state,
@@ -1093,6 +1329,7 @@ export function createTotalSyncSession(
 
   return {
     apply,
+    applyWriteResult,
     pull,
     getState,
     subscribe,
@@ -1121,16 +1358,19 @@ export function createTotalSyncController(
   options: {
     pull: TotalSyncSource
     validate?: TotalSyncPayloadValidator
+    validateWriteResult?: AuthoritativeGraphWriteResultValidator
     preserveSnapshot?: StoreSnapshot
   },
 ): TotalSyncController {
   const session = createTotalSyncSession(store, {
     preserveSnapshot: options.preserveSnapshot,
     validate: options.validate,
+    validateWriteResult: options.validateWriteResult,
   })
 
   return {
     apply: session.apply,
+    applyWriteResult: session.applyWriteResult,
     sync() {
       return session.pull(options.pull)
     },
@@ -1153,6 +1393,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
   const session = createTotalSyncSession(store, {
     preserveSnapshot,
     validate: createAuthoritativeTotalSyncValidator(namespace),
+    validateWriteResult: createAuthoritativeGraphWriteResultValidator(store, namespace),
   })
 
   return {
@@ -1160,6 +1401,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
     graph,
     sync: {
       apply: session.apply,
+      applyWriteResult: session.applyWriteResult,
       sync() {
         return session.pull(options.pull)
       },

@@ -108,6 +108,8 @@ path:
 For lower-level integration, `createTotalSyncSession(store)` still exposes:
 
 - `apply(payload)` to install a total snapshot into the local store
+- `applyWriteResult(result)` to reconcile an authoritative write result into the
+  existing local store without replacing the whole snapshot
 - `pull(source)` to fetch a payload and apply it with sync-state transitions
 - `getState()` to read current sync metadata
 - `subscribe(listener)` to observe sync-state changes
@@ -176,17 +178,25 @@ That slice should:
 
 ### 2. Incremental authoritative apply on synced clients
 
-Once the client can push transactions, it should stop needing a full-store
-replace just to observe accepted writes locally.
+The synced client can now accept an authoritative write result through
+`sync.applyWriteResult(result)` and reconcile only the affected facts into the
+local store.
 
-That slice should:
+That path:
 
-- apply authoritative write results or echoed txs incrementally into the local
-  synced store
-- preserve the existing schema baseline and sync metadata while only updating
-  affected facts
-- keep predicate-slot notification behavior aligned with current local store
-  semantics
+- preserves the existing schema baseline instead of rebuilding the whole local
+  snapshot
+- updates `cursor`, `freshness`, `lastSyncedAt`, and `status` through the same
+  sync-state object used by total sync
+- keeps predicate-slot notification behavior aligned with current local store
+  semantics by batching the exact retract/assert ops and only notifying changed
+  logical slot values
+
+Callers that need the same authoritative validation boundary before they apply a
+write result can use:
+
+- `validateAuthoritativeGraphWriteResult(result, store, namespace)`
+- `createAuthoritativeGraphWriteResultValidator(store, namespace)`
 
 ### 3. Incremental pull and live tx delivery
 

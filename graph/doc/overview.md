@@ -183,11 +183,18 @@ store.
   lower-level store integration surface; `createTotalSyncController(...)` and
   `createSyncedTypeClient(...)` both build on that same session-level apply
   boundary
+- synced clients and lower-level sessions can now reconcile authoritative write
+  results incrementally with `sync.applyWriteResult(...)` /
+  `session.applyWriteResult(...)`, preserving the current schema baseline and
+  sync metadata while only mutating the affected graph facts
 - lower-level total-sync integrations can reuse the same authoritative
   validation boundary with
   `createAuthoritativeTotalSyncValidator(namespace)` or inspect
   `validateAuthoritativeTotalSyncPayload(payload, namespace, { preserveSnapshot })`
   directly
+- authoritative write-result validation is available through
+  `validateAuthoritativeGraphWriteResult(result, store, namespace)` and
+  `createAuthoritativeGraphWriteResultValidator(store, namespace)`
 - incoming snapshots are validated before they replace local state
 - `sync.sync()`, `apply(...)`, and `pull(...)` return the materialized payload
   that actually passed validation and replaced local state

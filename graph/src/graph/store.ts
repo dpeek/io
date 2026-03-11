@@ -28,6 +28,8 @@ export interface Store {
    * Returns the edge, whose id can itself be used as a subject (reification).
    */
   assert(s: Id, p: Id, o: Scalar): Edge
+  /** Assert a pre-authored edge, preserving its id for sync/replay flows. */
+  assertEdge(edge: Edge): Edge
   /** Mark an edge as retracted (append-only: the record is kept, just excluded from facts) */
   retract(edgeId: Id): void
   /** All edges matching the pattern, including retracted */
@@ -101,16 +103,29 @@ export function createStore(): Store {
     }
   }
 
-  function assert(s: Id, p: Id, o: Scalar): Edge {
-    usedIds.add(s)
-    usedIds.add(p)
-    usedIds.add(o)
-    beginPredicateSlotMutation(s, p)
-    const edge: Edge = { id: nextId(), s, p, o }
-    edges.set(edge.id, edge)
+  function assertEdge(edge: Edge): Edge {
+    const existing = edges.get(edge.id)
+    if (existing) {
+      if (existing.s !== edge.s || existing.p !== edge.p || existing.o !== edge.o) {
+        throw new Error(`Edge id "${edge.id}" already exists with different contents.`)
+      }
+      return { ...existing }
+    }
+
+    usedIds.add(edge.id)
+    usedIds.add(edge.s)
+    usedIds.add(edge.p)
+    usedIds.add(edge.o)
+    beginPredicateSlotMutation(edge.s, edge.p)
+    const cloned = { ...edge }
+    edges.set(cloned.id, cloned)
     version += 1
     flushPredicateSlotNotifications()
-    return edge
+    return cloned
+  }
+
+  function assert(s: Id, p: Id, o: Scalar): Edge {
+    return assertEdge({ id: nextId(), s, p, o })
   }
 
   function retract(edgeId: Id): void {
@@ -211,6 +226,7 @@ export function createStore(): Store {
   return {
     newNode: () => nextId(),
     assert,
+    assertEdge,
     retract,
     find,
     facts,
