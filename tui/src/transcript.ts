@@ -968,21 +968,33 @@ function formatPlanEntry(entry: Extract<AgentTuiBlock, { kind: "plan" }>) {
   return [`Plan: ${entry.text.replace(/\r\n/g, "\n").replace(/\n+/g, " ").trim()}`];
 }
 
-function formatReasoningEntry(entry: Extract<AgentTuiBlock, { kind: "reasoning" }>) {
-  const rawLines = [...entry.summary, ...entry.content]
+function getReasoningSectionLines(parts: string[]) {
+  return parts
     .filter(Boolean)
     .flatMap((part) => normalizeBlockLines(part))
     .map((line) => line.trim())
     .filter(Boolean);
-  const previewLines = rawLines.slice(-4);
+}
+
+function formatReasoningEntry(entry: Extract<AgentTuiBlock, { kind: "reasoning" }>) {
   const header =
     entry.status === "streaming"
-      ? `Reasoning [${REASONING_SPINNER_FRAMES[0]}]`
-      : "Reasoning [done]";
-  if (!previewLines.length) {
-    return [header];
+      ? `Reasoning [running ${REASONING_SPINNER_FRAMES[0]}]`
+      : "Reasoning [completed]";
+  const summaryLines = getReasoningSectionLines(entry.summary);
+  const contentLines = getReasoningSectionLines(entry.content);
+  const lines = [header];
+
+  if (summaryLines.length) {
+    lines.push("summary:");
+    lines.push(...indentBlockLines(summaryLines));
   }
-  return [header, ...indentBlockLines(previewLines)];
+  if (contentLines.length) {
+    lines.push("content:");
+    lines.push(...indentBlockLines(contentLines));
+  }
+
+  return lines;
 }
 
 function formatToolEntry(entry: Extract<AgentTuiBlock, { kind: "tool" }>) {
@@ -1033,7 +1045,7 @@ export function formatBlocks(
             REASONING_SPINNER_FRAMES[
               Math.abs(options.animationFrame ?? 0) % REASONING_SPINNER_FRAMES.length
             ] ?? REASONING_SPINNER_FRAMES[0];
-          formatted[0] = `Reasoning [${frame}]`;
+          formatted[0] = `Reasoning [running ${frame}]`;
           return formatted;
         })();
       case "tool":

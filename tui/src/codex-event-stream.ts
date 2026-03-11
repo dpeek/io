@@ -29,6 +29,21 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
+function getReasoningItemText(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+  return asString(asRecord(value)?.text);
+}
+
+function getReasoningItemLines(
+  item: Record<string, unknown> | undefined,
+  field: "content" | "summary",
+) {
+  const values = Array.isArray(item?.[field]) ? item[field] : [];
+  return values.map((value) => getReasoningItemText(value) ?? "").filter(Boolean);
+}
+
 function formatQuestionSummary(question: unknown) {
   const record = asRecord(question);
   const header = asString(record?.header);
@@ -598,40 +613,39 @@ function appendCodexReasoningEntry(
   if (existing?.kind === "reasoning") {
     existing.count += 1;
     existing.sequenceEnd = event.sequence;
+    existing.status = event.method === "item/completed" ? "completed" : "streaming";
     existing.timestamp = event.timestamp;
     if (event.method === "item/reasoning/summaryTextDelta" && delta) {
       const index = asNumber(event.params.summaryIndex) ?? 0;
       existing.summary[index] = `${existing.summary[index] ?? ""}${delta}`;
+    } else if (event.method === "item/reasoning/summaryPartAdded") {
+      const index = asNumber(event.params.summaryIndex) ?? existing.summary.length;
+      existing.summary[index] = existing.summary[index] ?? "";
     } else if (event.method === "item/reasoning/textDelta" && delta) {
       const index = asNumber(event.params.contentIndex) ?? 0;
       existing.content[index] = `${existing.content[index] ?? ""}${delta}`;
     } else if (event.method === "item/completed") {
       const item = asRecord(event.params.item);
-      existing.summary = Array.isArray(item?.summary)
-        ? item.summary.map((value) => asString(value) ?? "").filter(Boolean)
-        : existing.summary;
-      existing.content = Array.isArray(item?.content)
-        ? item.content.map((value) => asString(value) ?? "").filter(Boolean)
-        : existing.content;
-      existing.status = "completed";
+      if (Array.isArray(item?.summary)) {
+        existing.summary = getReasoningItemLines(item, "summary");
+      }
+      if (Array.isArray(item?.content)) {
+        existing.content = getReasoningItemLines(item, "content");
+      }
     }
     return;
   }
 
   const item = asRecord(event.params.item);
   adapter.appendEntry({
-    content: Array.isArray(item?.content)
-      ? item.content.map((value) => asString(value) ?? "").filter(Boolean)
-      : [],
+    content: getReasoningItemLines(item, "content"),
     count: 1,
     itemId,
     kind: "reasoning",
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
     status: event.method === "item/completed" ? "completed" : "streaming",
-    summary: Array.isArray(item?.summary)
-      ? item.summary.map((value) => asString(value) ?? "").filter(Boolean)
-      : [],
+    summary: getReasoningItemLines(item, "summary"),
     timestamp: event.timestamp,
   });
 }
@@ -680,6 +694,7 @@ export function appendCodexNotificationToBlocks(
       appendCodexCommandOutputDeltaEntry(adapter, event);
       return;
     case "item/reasoning/summaryTextDelta":
+    case "item/reasoning/summaryPartAdded":
     case "item/reasoning/textDelta":
       appendCodexReasoningEntry(adapter, event);
       return;
@@ -814,6 +829,7 @@ export function formatCodexNotificationSummary(event: AgentCodexNotificationEven
     case "item/agentMessage/delta":
     case "item/commandExecution/outputDelta":
     case "item/reasoning/summaryTextDelta":
+    case "item/reasoning/summaryPartAdded":
     case "item/reasoning/textDelta":
       return undefined;
     case "error": {

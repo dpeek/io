@@ -469,15 +469,22 @@ test("buildAgentTuiRootComponentModel formats tool calls and reasoning as struct
       animationFrame: 1,
       selectedColumnId: worker.id,
     }).columns.find((column) => column.id === worker.id)?.content ?? "";
+  const selectedTitle =
+    buildAgentTuiRootComponentModel(snapshot, {
+      animationFrame: 0,
+      selectedColumnId: worker.id,
+    }).columns.find((column) => column.id === worker.id)?.title ?? "";
 
   expect(frameOne).toContain("Tool: linear.save_issue [running]");
   expect(frameOne).toContain("args:");
   expect(frameOne).toContain("  id: OPE-68");
   expect(frameOne).toContain("  state: In Progress");
   expect(frameOne).not.toContain('{"id":"OPE-68"');
-  expect(frameOne).toContain("Reasoning [|]");
-  expect(frameTwo).toContain("Reasoning [/]");
-  expect(frameOne).toContain("Checking transcript formatting");
+  expect(frameOne).toContain("Reasoning [running |]");
+  expect(frameTwo).toContain("Reasoning [running /]");
+  expect(frameOne).toContain("summary:");
+  expect(frameOne).toContain("  Checking transcript formatting");
+  expect(selectedTitle).toBe("OPE-68 [thinking]");
 });
 
 test("buildAgentTuiRootComponentModel highlights completed Linear writes", () => {
@@ -751,9 +758,11 @@ test("buildAgentTuiRootComponentModel keeps live transcript slices readable in r
   expect(liveContent).toContain("$ git diff --stat");
   expect(liveContent).toContain("output:");
   expect(liveContent).toContain("  agent/src/runner/codex.ts | 4 ++--");
-  expect(liveContent).toContain("Reasoning [/]");
-  expect(liveContent).toContain("Checking transcript seams");
-  expect(liveContent).toContain("Keeping replay readable");
+  expect(liveContent).toContain("Reasoning [running /]");
+  expect(liveContent).toContain("summary:");
+  expect(liveContent).toContain("  Checking transcript seams");
+  expect(liveContent).toContain("content:");
+  expect(liveContent).toContain("  Keeping replay readable");
   expect(liveContent).toContain("Tool: linear.save_issue [running]");
   expect(liveContent).toContain("Tool: spawned.run [running]");
 
@@ -854,6 +863,10 @@ test("buildAgentTuiRootComponentModel keeps live transcript slices readable in r
     buildAgentTuiRootComponentModel(replaySnapshot, {
       selectedColumnId: worker.id,
     }).columns.find((column) => column.id === worker.id)?.content ?? "";
+  const replayTitle =
+    buildAgentTuiRootComponentModel(replaySnapshot, {
+      selectedColumnId: worker.id,
+    }).columns.find((column) => column.id === worker.id)?.title ?? "";
 
   expect(snapshotColumn?.blocks.map((entry) => entry.kind)).toEqual([
     "lifecycle",
@@ -863,6 +876,13 @@ test("buildAgentTuiRootComponentModel keeps live transcript slices readable in r
     "tool",
     "raw",
   ]);
+  expect(
+    snapshotColumn?.blocks.find((entry) => entry.kind === "reasoning"),
+  ).toMatchObject({
+    content: ["Keeping replay readable", "Retaining fallback output"],
+    status: "completed",
+    summary: ["Checking transcript seams"],
+  });
   expect(replayContent).toContain("$ git diff --stat");
   expect(replayContent).toContain("Command failed (exit 1)");
   expect(replayContent).toContain("Linear issue updated: OPE-68");
@@ -870,8 +890,11 @@ test("buildAgentTuiRootComponentModel keeps live transcript slices readable in r
   expect(replayContent).toContain("  title: Run plan");
   expect(replayContent).toContain("  state: In Progress");
   expect(replayContent).toContain("  url: https://linear.app/io/issue/OPE-68");
-  expect(replayContent).toContain("Reasoning [done]");
-  expect(replayContent).toContain("Retaining fallback output");
+  expect(replayContent).toContain("Reasoning [completed]");
+  expect(replayContent).toContain("summary:");
+  expect(replayContent).toContain("  Checking transcript seams");
+  expect(replayContent).toContain("content:");
+  expect(replayContent).toContain("  Retaining fallback output");
   expect(replayContent).toContain("Tool: spawned.run [failed]");
   expect(replayContent).toContain("  mode: helper");
   expect(replayContent).toContain("  task: summarize");
@@ -879,6 +902,7 @@ test("buildAgentTuiRootComponentModel keeps live transcript slices readable in r
   expect(replayContent).toContain("  permission denied");
   expect(replayContent).toContain("stderr: retained stderr line");
   expect(replayContent).not.toContain("Tool: linear.save_issue");
+  expect(replayTitle).toBe("OPE-68");
 });
 
 test("createAgentTui supports keyboard column navigation and content scrolling", async () => {

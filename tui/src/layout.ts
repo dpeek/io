@@ -1,4 +1,4 @@
-import { formatBlocks } from "./transcript.js";
+import { formatBlocks, hasStreamingReasoningBlocks } from "./transcript.js";
 import type {
   AgentTuiColumnSnapshot,
   AgentTuiSnapshot,
@@ -68,11 +68,18 @@ function resolveIssueLabel(
 function formatPanelTitle(
   column: AgentTuiColumnSnapshot,
   columnsById: Map<string, AgentTuiColumnSnapshot>,
+  options: {
+    isSelected: boolean;
+  },
 ) {
-  if (column.session.kind === "supervisor") {
-    return column.session.workspacePath ?? "Supervisor";
+  const baseTitle =
+    column.session.kind === "supervisor"
+      ? column.session.workspacePath ?? "Supervisor"
+      : resolveIssueLabel(column, columnsById);
+  if (options.isSelected && hasStreamingReasoningBlocks(column.blocks ?? [])) {
+    return `${baseTitle} [thinking]`;
   }
-  return resolveIssueLabel(column, columnsById);
+  return baseTitle;
 }
 
 function formatContent(
@@ -119,7 +126,9 @@ export function buildAgentTuiRootComponentModel(
     columns: columns.map((column) => ({
       id: column.session.id,
       isSelected: column.session.id === selectedColumnId,
-      title: formatPanelTitle(column, columnsById),
+      title: formatPanelTitle(column, columnsById, {
+        isSelected: column.session.id === selectedColumnId,
+      }),
       content: formatContent(column, options),
     })),
     selectedColumnId,
