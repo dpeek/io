@@ -1,90 +1,146 @@
-# Repo-Wide Goals
+# Managed Module Stream Contract
+
+Status: Accepted target for the first managed-stream implementation pass.
 
 ## Purpose
 
-This document is the shared planning anchor for managed module streams in the
-IO monorepo.
+This document defines the first concrete contract for turning a repo module into
+an IO-managed stream. Follow-on implementation work should target these rules
+instead of inventing new label, comment, or issue-body shapes per feature.
 
-A backlog run for any `io`-managed parent issue should read this file before it
-proposes work, rewrites the parent issue, or tops up child issues.
+## Managed Parent Label Contract
 
-## Current Priorities
+A parent issue is managed only when all of the following are true:
 
-### 1. Make managed Linear streams practical
+- the issue has no parent
+- the issue has the `io` label
+- the issue has exactly one module label that matches a configured module id
+- the issue is intended to accumulate child issues on one stream branch
 
-The repo's highest planning priority is turning the current stream-aware agent
-runtime into something that works cleanly with:
+Rules:
 
-- `io`-labeled managed parent issues
-- package labels such as `agent`
-- `@io ...` comment commands
-- durable parent issue briefs
-- a small, high-quality queue of ready child issues
+- `io` means the parent opts into agent-managed sections and `@io` comment
+  triggers
+- `io` never identifies the module; the module label does
+- child issues do not need the `io` label; they inherit stream membership from
+  `parentId`
+- removing `io` disables managed-parent behavior without deleting the
+  human-authored brief
+- zero or multiple module labels are a blocking ambiguity that the human must
+  fix before managed automation continues
 
-Good work in this area improves:
+## Module Identity Contract
 
-- backlog quality
-- operator trust
-- human steering
-- issue-to-stream coherence
+Module identity comes from `io.ts` or `io.json` under `modules.<id>`.
 
-### 2. Preserve operator visibility
+Example:
 
-IO should not become "more autonomous" at the cost of legibility.
+- label: `agent`
+- module id: `agent`
+- primary path: `./agent`
 
-Changes are better when they make it easier to understand:
+Rules:
 
-- why the agent chose a direction
-- which docs and context were used
-- what changed in the parent issue
-- which child issues are ready next
-- whether a stream is blocked, stale, or drifting
+- the issue label must match the module id after lowercase normalization
+- `modules.<id>.path` is the canonical primary implementation root
+- `modules.<id>.docs` are the default context docs for that module
+- `modules.<id>.allowedSharedPaths` define the shared repo paths that are still
+  considered in-bounds for a module-local child
+- each child issue keeps one primary module label for routing, context
+  narrowing, and operator scanning
+- cross-module work requires an explicit exception in the child description;
+  touching shared code does not change primary module identity
 
-### 3. Keep execution slices rebase-friendly
+## Repo-Wide Focus Document Shape
 
-Long-lived stream branches are acceptable only if child work stays narrow.
+Managed streams may maintain one repo-wide focus doc at `./llm/topic/goals.md`.
+The doc should stay plain markdown with stable headings.
 
-Planning should bias toward:
+Required shape:
 
-- module-local changes
-- explicit cross-module exceptions
-- shared-interface work split into its own stream when needed
-- avoiding repo-wide cleanup inside module streams
+```md
+# <stream focus title>
 
-## What To Deprioritize
+## Objective
 
-For now, backlog runs should deprioritize:
+- one or two bullets defining the shipping outcome
 
-- broad autonomy features with weak operator visibility
-- large-scale repo cleanup that is not tied to a managed stream goal
-- speculative schema or UI work unrelated to the active stream direction
-- backlog churn that rewrites stable child issues without a clear reason
+## Current Focus
 
-## Shared Constraints
+- the next one to three concrete work areas
 
-All managed module streams should respect these constraints:
+## Constraints
 
-- the human can write freeform issue descriptions and comments
-- the agent owns only clearly managed sections
-- the parent issue is a durable stream brief, not disposable planning text
-- child issues should be execution-ready and ordered through `blockedBy`
-- the backlog should stay shallow and current; target about 5 ready tasks
+- repo or stream rules that can narrow the work
 
-## Current Monorepo Focus
+## Proof Surfaces
 
-The first stream to prove this model should be the `agent` package.
+- repo paths or docs that must stay aligned
 
-Reason:
+## Deferred
 
-- the `agent` package already owns issue routing, context assembly, tracker
-  interaction, stream scheduling, and operator output
-- the missing workflow pieces mostly belong there
-- proving the model in `agent` gives the repo a reusable pattern for later
-  streams such as `graph`, `app`, and `cli`
+- work that is intentionally outside the current slice
+```
 
-## Key References
+Rules:
 
-- `./io/topic/module-stream-workflow-plan.md`
-- `./io/topic/managed-stream-comments.md`
-- `./io/topic/agent.md`
-- `./agent/doc/stream-workflow.md`
+- the focus doc summarizes active stream intent; it does not replace the full
+  parent issue brief
+- bullets should stay short and concrete enough for backlog or comment refresh
+  passes to quote directly
+- humans may edit any section; agents should refresh the doc only when a
+  managed trigger explicitly asks for it
+- `Proof Surfaces` should use repo-relative paths
+
+## Parent Issue Managed-Section Model
+
+Managed parent issues separate human-owned prose from agent-owned sections.
+
+Marker format:
+
+```md
+<!-- io-managed:<section-id>:start -->
+
+...
+
+<!-- io-managed:<section-id>:end -->
+```
+
+Phase 1 required section id:
+
+- `backlog-proposal`
+
+Reserved section ids for later:
+
+- `focus`
+- `status`
+- `comment-log`
+
+Rules:
+
+- on first write, append the managed block after the existing human brief
+- on reruns, replace only the content between matching markers
+- preserve human-authored sections before, between, and after managed blocks
+- keep section ids, headings, and section order stable once published
+- agent-owned blocks are for derived state and proposals, not for human
+  approvals or decisions
+
+## Human And Agent Ownership In The Parent Issue
+
+Human-owned:
+
+- outcome, scope, priority, acceptance intent, constraints that require
+  judgment, decisions, approvals, and freeform notes outside managed markers
+
+Agent-owned:
+
+- content inside `io-managed:*` markers
+- derived backlog proposal text
+- later machine-maintained links or status summaries for child backlog state
+- reply comments generated from `@io` trigger execution
+
+Ownership rule:
+
+- humans can edit anything, but agents may only overwrite content inside managed
+  markers or inside their own reply comments
+- if a human edits inside a managed block, a later agent refresh may replace it

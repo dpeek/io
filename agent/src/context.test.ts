@@ -301,8 +301,12 @@ test("repo backlog context includes managed stream maintenance guidance", async 
     agent: "backlog",
     profile: "backlog",
   });
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-goals");
   expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-backlog");
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-comments");
+  expect(rendered).toContain("exactly one configured module label");
   expect(rendered).toContain("## Stable Child Payload");
+  expect(rendered).toContain("@io backlog");
   expect(rendered).toContain("top the stream back up to about five planned tasks");
   expect(rendered).toContain("Do not destructively rewrite children that are already active or completed.");
   expect(rendered).toContain("## Operator-Visible Output");

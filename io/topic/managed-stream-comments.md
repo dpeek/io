@@ -1,146 +1,126 @@
-# Managed Stream Comments
+# Managed Stream Comment Trigger Contract
+
+Status: Accepted target for implementation. Comment-triggered execution is not
+fully shipped yet.
 
 ## Purpose
 
-This document defines the preferred operator workflow for managed module
-streams in Linear.
+This document defines the stable parser and writeback contract for `@io ...`
+comments on managed parent issues.
 
-The model is:
+## Trigger Scope
 
-- labels identify what the issue is
-- comments tell the agent what to do next
+`@io` comments apply only to managed parent issues that satisfy the label and
+module rules in [`./goals.md`](./goals.md).
 
-## Managed Issue Identity
+Rules:
 
-A parent issue is managed when it has:
+- only top-level comments on managed parent issues can trigger managed actions
+- child issues ignore `@io` comments unless a later contract adds explicit
+  child-scope commands
+- one comment requests one command
+- the first non-empty line is the command line; later lines are optional
+  command arguments
+- if the parent is not managed, the runtime should reply with a blocked result
+  and make no writes
 
-- the label `io`
-- exactly one package label such as `agent`
+## Accepted Command Shape
 
-The package label resolves to the module path through a checked-in registry.
+The first version uses a narrow line-plus-YAML shape:
 
-Examples:
+```md
+@io <command>
+docs:
+  - ./llm/topic/goals.md
+dryRun: true
+note: Refresh after the latest scope review
+```
 
-- `agent` -> `./agent`
-- `graph` -> `./graph`
-- `app` -> `./app`
+Rules:
 
-## User Workflow
+- the first non-empty line must start with `@io `
+- `<command>` is a single lowercase token
+- the remaining body, when present, must parse as one YAML mapping
+- unknown commands or unknown top-level keys are rejected with a reply comment
+- commands never rely on free-form natural-language parsing outside the
+  accepted keys
 
-The intended operator flow is:
+## Initial Command Set
 
-1. create a parent issue in Linear
-2. add the labels `io` and the package label
-3. write whatever freeform description is useful
-4. comment `@io ...` with the request
-5. let the agent reorganize managed sections and child backlog state
+### `@io backlog`
 
-Examples:
+Refresh the parent `backlog-proposal` managed block and the speculative child
+backlog.
 
-- `@io backlog`
-- `@io review this stream and clean up the parent brief`
-- `@io expand the runtime/context direction into subtasks`
-- `@io top this stream back up to 5 ready tasks`
+Write surface:
 
-## Description Ownership
+- parent issue `<!-- io-managed:backlog-proposal:* -->`
+- child issues under the parent
 
-The issue description should have two conceptual layers:
+### `@io focus`
 
-- human-authored notes, constraints, references, and intent
-- agent-owned managed sections
+Refresh `./llm/topic/goals.md` using the repo-wide focus doc shape.
 
-The agent should rewrite only the managed sections.
+Write surface:
 
-Recommended managed sections:
+- `./llm/topic/goals.md`
 
-- current summary
-- current focus
-- proposal options
-- selected direction
-- child backlog state
-- latest action summary
+### `@io status`
 
-## Comment Semantics
+Report the current managed-stream state without rewriting the issue body.
 
-Any comment containing `@io` is a request to the agent.
+Write surface:
 
-Interpretation rules:
+- reply comment only
 
-- `@io` is the trigger
-- the rest of the comment is freeform intent
-- the agent should interpret the request in the context of the parent issue,
-  labels, child issues, and repo docs
+### `@io help`
 
-This should stay natural-language oriented.
+Return the accepted commands and key validation rules.
 
-Do not require a strict slash-command grammar for the first version.
+Write surface:
 
-## Event Handling
+- reply comment only
 
-The clean implementation path is:
+## Execution Model
 
-- subscribe to Linear comment events
-- detect comments containing `@io`
-- fetch the full issue plus children and relations
-- perform the requested planning action
-- reply in the thread with a short action summary
+For each accepted trigger:
 
-The first version should probably process:
+1. resolve the parent issue, child issues, module identity, and referenced docs
+2. validate that the parent still satisfies the managed-parent contract
+3. execute only the write surfaces allowed for that command
+4. post one reply comment that reports `updated`, `noop`, or `blocked`
+5. leave the original trigger comment untouched
 
-- comment creation events only
+If multiple unhandled trigger comments exist on one parent, process them in
+comment order so the command stream stays deterministic.
 
-Later versions can optionally process:
+## Reply Comment Shape
 
-- edited comments when the body changes and still contains `@io`
+Every handled trigger should produce one concise reply with a stable shape:
 
-## Tracking Seen Comments
+```md
+<!-- io-managed:comment-result -->
+Command: backlog
+Result: updated
+Target: OPE-122 / agent
 
-The runtime needs durable state for handled comments.
+- Updated the parent managed brief
+- Left existing in-progress child issues untouched
+- Warning: skipped focus doc refresh because this command does not own it
+```
 
-Track at least:
+Rules:
 
-- `commentId`
-- `issueId`
-- `bodyHash`
-- `createdAt`
-- `updatedAt`
-- `handledAt`
-- `result`
+- keep the result summary operator-readable first
+- mention each written surface or explicit no-op
+- surface blocking conditions or validation warnings directly in the reply
 
-Why:
+## Safety Rules
 
-- webhook retries must not cause duplicate work
-- comment edits need a deliberate policy
-- operators need a replay/debug trail when the backlog changes
+- never rewrite human-authored prose outside managed markers
+- never infer module identity from `io`; require the module label match
+- reject ambiguous module labels instead of choosing one silently
+- allow `dryRun: true` to compute and report the intended changes without
+  writing them
+- treat repeated equivalent commands as valid no-ops, not as errors
 
-Prefer tracking by comment ID rather than only by timestamp.
-
-## Agent Behavior
-
-When handling `@io ...` on a managed parent issue, the agent should:
-
-- resolve the module path from the package label
-- read `./io/topic/goals.md`
-- read the module-specific docs and relevant code
-- inspect the current parent issue and child backlog state
-- interpret the user request
-- update the managed sections of the parent issue
-- create, update, or reorder child issues if needed
-- post a reply comment summarizing what changed
-
-## Guardrails
-
-Keep the workflow tight:
-
-- only `io`-labeled issues are managed this way
-- only one package label should define the module identity
-- active child issues should not be rewritten except for clarifications
-- child issues should stay module-local unless explicitly marked
-- the backlog target should stay around 5 ready tasks
-
-## Key References
-
-- `./io/topic/goals.md`
-- `./io/topic/module-stream-workflow-plan.md`
-- `./io/topic/agent.md`
-- `./agent/doc/stream-workflow.md`
