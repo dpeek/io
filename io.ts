@@ -15,9 +15,9 @@ export default defineIoConfig({
   },
   context: {
     docs: {
-      "project.architecture": "./io/context/architecture.md",
-      "project.overview": "./io/context/project-overview.md",
-      "project.workflow-migration": "./io/context/workflow-migration.md",
+      "project.architecture": "./io/topic/architecture.md",
+      "project.overview": "./io/topic/project-overview.md",
+      "project.workflow-migration": "./io/topic/workflow-migration.md",
     },
     profiles: {
       backlog: {
