@@ -7,6 +7,7 @@ import {
   formatValidationPath,
 } from "./client";
 import { core } from "./core";
+import { createExampleRuntime } from "./runtime";
 import { edgeId, typeId } from "./schema";
 import { createStore } from "./store";
 import {
@@ -426,6 +427,43 @@ describe("total sync", () => {
 
     unsubscribeName();
     unsubscribeWebsite();
+  });
+
+  it("proves authority-backed local writes become visible to synced peers without per-write total sync", () => {
+    const runtime = createExampleRuntime();
+    const peer = runtime.createPeer();
+    const syncPayloadCount = runtime.authority.getSyncPayloadCount();
+
+    expect(runtime.graph.company.get(runtime.ids.acme).name).toBe("Acme Corp");
+    expect(peer.graph.company.get(runtime.ids.acme).name).toBe("Acme Corp");
+
+    const result = runtime.commitLocalMutation(runtime, "tx:runtime:1", (graph) => {
+      graph.company.update(runtime.ids.acme, {
+        name: "Acme Runtime Labs",
+      });
+    });
+
+    expect(result).toMatchObject({
+      txId: "tx:runtime:1",
+      cursor: "example:1",
+      replayed: false,
+    });
+    expect(runtime.authority.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs");
+    expect(runtime.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs");
+    expect(peer.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs");
+    expect(runtime.authority.getSyncPayloadCount()).toBe(syncPayloadCount);
+    expect(runtime.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: "example:1",
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(peer.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: "example:1",
+      completeness: "complete",
+      freshness: "current",
+    });
   });
 
   it("keeps predicate-slot notifications precise when incremental reconciliation preserves the logical value", async () => {
