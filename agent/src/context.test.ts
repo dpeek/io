@@ -301,15 +301,60 @@ test("repo backlog context includes managed stream maintenance guidance", async 
     agent: "backlog",
     profile: "backlog",
   });
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.focus");
   expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-goals");
   expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-backlog");
   expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-comments");
-  expect(rendered).toContain("exactly one configured module label");
+  expect(rendered).toContain("exactly one module label that matches a configured module id");
   expect(rendered).toContain("## Stable Child Payload");
   expect(rendered).toContain("@io backlog");
   expect(rendered).toContain("top the stream back up to about five planned tasks");
   expect(rendered).toContain("Do not destructively rewrite children that are already active or completed.");
   expect(rendered).toContain("## Operator-Visible Output");
+});
+
+test("repo config allows the canonical managed focus doc as an in-bounds module doc", async () => {
+  const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "io";
+
+  const workflowResult = await loadWorkflowFile(undefined, repoRoot);
+  expect(workflowResult.ok).toBe(true);
+  if (!workflowResult.ok) {
+    return;
+  }
+
+  const issue: AgentIssue = {
+    blockedBy: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
+    description: "Refresh the stream focus doc at `./io/topic/focus.md`.",
+    hasChildren: true,
+    hasParent: false,
+    id: "1",
+    identifier: "OPE-134",
+    labels: ["io", "agent"],
+    priority: 3,
+    projectSlug: "io",
+    state: "Todo",
+    title: "Managed focus doc refresh",
+    updatedAt: "2024-01-01T00:00:00.000Z",
+  };
+
+  const resolved = await resolveIssueContext({
+    baseSelection: resolveIssueRouting(
+      workflowResult.value.issues,
+      issue,
+      workflowResult.value.modules,
+    ),
+    issue,
+    repoRoot,
+    workflow: workflowResult.value,
+  });
+
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.focus");
+  expect(resolved.warnings).not.toContain(
+    "Issue doc reference is outside module scope: ./io/topic/focus.md",
+  );
 });
 
 test("resolveIssueContext adds module docs and limits repo-path refs to module scope", async () => {

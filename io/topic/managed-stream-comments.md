@@ -59,11 +59,11 @@ Write surface:
 
 ### `@io focus`
 
-Refresh `./llm/topic/goals.md` using the repo-wide focus doc shape.
+Refresh `./io/topic/focus.md` using the repo-wide focus doc shape.
 
 Write surface:
 
-- `./llm/topic/goals.md`
+- `./io/topic/focus.md`
 
 ### `@io status`
 
@@ -123,4 +123,3 @@ Rules:
 - allow `dryRun: true` to compute and report the intended changes without
   writing them
 - treat repeated equivalent commands as valid no-ops, not as errors
-

@@ -197,6 +197,7 @@ test("LinearTrackerAdapter applies managed comment mutations and posts a reply",
     createComment: [] as Array<{ body: string; issueId: string; parentId: string }>,
     createIssue: [] as Array<Record<string, unknown>>,
     createIssueRelation: [] as Array<Record<string, unknown>>,
+    deleteIssueRelation: [] as string[],
     issueAddLabel: [] as Array<{ issueId: string; labelId: string }>,
     update: [] as Array<Record<string, unknown>>,
   };
@@ -222,9 +223,26 @@ test("LinearTrackerAdapter applies managed comment mutations and posts a reply",
       calls.createIssueRelation.push(input);
       return { success: true };
     },
+    deleteIssueRelation: async (id: string) => {
+      calls.deleteIssueRelation.push(id);
+      return { success: true };
+    },
     issue: async () => ({
       children: async () => ({
-        nodes: [{ id: "existing-child", identifier: "OPE-125" }],
+        nodes: [
+          {
+            attachments: async () => ({ nodes: [] }),
+            description: "Existing child",
+            id: "existing-child",
+            identifier: "OPE-125",
+            inverseRelations: async () => ({ nodes: [] }),
+            labels: async () => ({ nodes: [{ id: "label-agent", name: "agent" }] }),
+            priority: 2,
+            state: Promise.resolve({ name: "In Progress" }),
+            title: "Existing child",
+            update: async () => ({ success: true }),
+          },
+        ],
       }),
       teamId: "team-1",
       update: async (input: Record<string, unknown>) => {
@@ -264,9 +282,10 @@ test("LinearTrackerAdapter applies managed comment mutations and posts a reply",
       {
         blockedBy: ["OPE-125"],
         description: "Child description",
-        docs: ["./llm/topic/goals.md"],
+        docs: ["./io/topic/goals.md"],
         labels: ["agent"],
         priority: 2,
+        reference: "managed-child-1",
         state: "Todo",
         title: "Create child issue",
       },
@@ -293,12 +312,12 @@ test("LinearTrackerAdapter applies managed comment mutations and posts a reply",
       updatedAt: "2024-01-02T00:00:00.000Z",
     },
     parentDescription: "Updated parent description",
-    replyBody: `<!-- io-managed:comment-result -->
-Command: backlog
-Result: updated
-Target: OPE-126
-
-- Updated the parent managed brief.`,
+    reply: {
+      command: "backlog",
+      issueIdentifier: "OPE-126 / agent",
+      lines: [],
+      result: "noop",
+    },
   });
 
   expect(result).toEqual({
@@ -306,6 +325,7 @@ Target: OPE-126
     dependencyCount: 1,
     replyCommentId: "reply-1",
     result: "updated",
+    updatedChildIssueIdentifiers: [],
     updatedParentDescription: true,
     warnings: [],
   });
@@ -321,8 +341,8 @@ Target: OPE-126
   expect(calls.attachmentLinkURL).toEqual([
     {
       issueId: "child-1",
-      title: "./llm/topic/goals.md",
-      url: "./llm/topic/goals.md",
+      title: "./io/topic/goals.md",
+      url: "./io/topic/goals.md",
     },
   ]);
   expect(calls.createIssueRelation).toEqual([
@@ -333,6 +353,186 @@ Target: OPE-126
     },
   ]);
   expect(calls.createComment[0]?.parentId).toBe("comment-1");
+});
+
+test("LinearTrackerAdapter reuses todo children and relinks dependencies without rerun churn", async () => {
+  const calls = {
+    attachmentLinkURL: [] as Array<{ issueId: string; title?: string; url: string }>,
+    createComment: [] as Array<{ body: string; issueId: string; parentId: string }>,
+    deleteIssueRelation: [] as string[],
+    update: [] as Array<Record<string, unknown>>,
+  };
+  const childState = {
+    attachments: new Set<string>(),
+    blockers: new Map([["old-blocker", "relation-1"]]),
+    description: "Old child description",
+    priority: 2,
+    state: "Todo",
+    title: "Old child title",
+  };
+  const child = {
+    attachments: async () => ({
+      nodes: [...childState.attachments].map((url) => ({ title: url, url })),
+    }),
+    get description() {
+      return childState.description;
+    },
+    id: "child-1",
+    identifier: "OPE-127",
+    inverseRelations: async () => ({
+      nodes: [...childState.blockers.entries()].map(([relatedIssueId, id]) => ({
+        id,
+        relatedIssueId,
+        type: "blocks",
+      })),
+    }),
+    labels: async () => ({
+      nodes: [{ id: "label-agent", name: "agent" }],
+    }),
+    get priority() {
+      return childState.priority;
+    },
+    get state() {
+      return Promise.resolve({ name: childState.state });
+    },
+    get title() {
+      return childState.title;
+    },
+    update: async (input: Record<string, unknown>) => {
+      calls.update.push(input);
+      if (typeof input.description === "string") {
+        childState.description = input.description;
+      }
+      if (typeof input.title === "string") {
+        childState.title = input.title;
+      }
+      if (typeof input.priority === "number") {
+        childState.priority = input.priority;
+      }
+      return { success: true };
+    },
+  };
+
+  const tracker = new LinearTrackerAdapter(
+    {
+      activeStates: ["Todo"],
+      apiKey: "token",
+      endpoint: "https://linear.invalid/graphql",
+      kind: "linear",
+      projectSlug: "io",
+      terminalStates: ["Done"],
+    },
+    undefined,
+    {
+      attachmentLinkURL: async (issueId: string, url: string, options?: { title?: string }) => {
+        calls.attachmentLinkURL.push({ issueId, title: options?.title, url });
+        childState.attachments.add(url);
+        return { success: true };
+      },
+      createComment: async (input: { body: string; issueId: string; parentId: string }) => {
+        calls.createComment.push(input);
+        return { commentId: `reply-${calls.createComment.length}`, success: true };
+      },
+      deleteIssueRelation: async (id: string) => {
+        calls.deleteIssueRelation.push(id);
+        for (const [relatedIssueId, relationId] of childState.blockers.entries()) {
+          if (relationId === id) {
+            childState.blockers.delete(relatedIssueId);
+          }
+        }
+        return { success: true };
+      },
+      issue: async () => ({
+        children: async () => ({ nodes: [child] }),
+        teamId: "team-1",
+        update: async () => ({ success: true }),
+      }),
+      team: async () => ({
+        labels: async () => ({ nodes: [{ id: "label-agent", name: "agent" }] }),
+        states: async () => ({ nodes: [{ id: "state-todo", name: "Todo" }] }),
+      }),
+    } as never,
+  );
+
+  const mutation = {
+    children: [
+      {
+        blockedBy: [],
+        description: "New child description",
+        docs: ["./io/topic/goals.md"],
+        labels: ["agent"],
+        priority: 2,
+        reference: "managed-child-1",
+        state: "Todo",
+        title: "New child title",
+      },
+    ],
+    comment: {
+      body: "@io backlog",
+      bodyHash: "hash",
+      command: "backlog" as const,
+      commentId: "comment-1",
+      createdAt: "2024-01-02T00:00:00.000Z",
+      issue: createIssue({
+        description: "Parent description",
+        id: "issue-1",
+        identifier: "OPE-126",
+        labels: ["io", "agent"],
+        priority: 2,
+        teamId: "team-1",
+        title: "Managed parent",
+      }),
+      payload: {
+        docs: [],
+        dryRun: false,
+      },
+      updatedAt: "2024-01-02T00:00:00.000Z",
+    },
+    parentDescription: "Parent description",
+    reply: {
+      command: "backlog",
+      issueIdentifier: "OPE-126 / agent",
+      lines: [],
+      result: "noop",
+    },
+  } satisfies Parameters<NonNullable<LinearTrackerAdapter["applyManagedCommentMutation"]>>[0];
+
+  const firstResult = await tracker.applyManagedCommentMutation?.(mutation);
+  const secondResult = await tracker.applyManagedCommentMutation?.({
+    ...mutation,
+    comment: {
+      ...mutation.comment,
+      commentId: "comment-2",
+    },
+  });
+
+  expect(firstResult).toEqual({
+    createdChildIssueIdentifiers: [],
+    dependencyCount: 1,
+    replyCommentId: "reply-1",
+    result: "updated",
+    updatedChildIssueIdentifiers: ["OPE-127"],
+    updatedParentDescription: false,
+    warnings: [],
+  });
+  expect(secondResult).toEqual({
+    createdChildIssueIdentifiers: [],
+    dependencyCount: 0,
+    replyCommentId: "reply-2",
+    result: "noop",
+    updatedChildIssueIdentifiers: [],
+    updatedParentDescription: false,
+    warnings: [],
+  });
+  expect(calls.attachmentLinkURL).toEqual([
+    {
+      issueId: "child-1",
+      title: "./io/topic/goals.md",
+      url: "./io/topic/goals.md",
+    },
+  ]);
+  expect(calls.update).toEqual([{ description: "New child description", title: "New child title" }]);
+  expect(calls.deleteIssueRelation).toEqual(["relation-1"]);
 });
 
 test("pickCandidateIssues prefers unblocked todo issues by priority", () => {
@@ -501,6 +701,7 @@ test("AgentService records handled managed comments and skips them on the next p
             dependencyCount: 0,
             replyCommentId: "reply-1",
             result: "noop",
+            updatedChildIssueIdentifiers: [],
             updatedParentDescription: false,
             warnings: [],
           };
@@ -544,6 +745,155 @@ test("AgentService records handled managed comments and skips them on the next p
         commentId: "comment-1",
         handledAt: expect.any(String),
       },
+    ]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("AgentService writes the canonical focus doc and treats equivalent focus refreshes as no-ops", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-focus-"));
+  const replies: string[] = [];
+  let triggerFetches = 0;
+
+  await mkdir(resolve(root, "agent"), { recursive: true });
+  await mkdir(resolve(root, "llm", "topic"), { recursive: true });
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        modules: {
+          agent: {
+            allowedSharedPaths: ["./llm/topic"],
+            docs: ["./llm/topic/agent.md"],
+            path: "./agent",
+          },
+        },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(resolve(root, "io.md"), "LOCAL {{ issue.identifier }}\n");
+  await writeFile(
+    resolve(root, "llm", "topic", "agent.md"),
+    `# Agent Stream
+
+## Current Focus
+
+- refresh managed write surfaces
+- keep reruns deterministic
+`,
+  );
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "io";
+
+  const baseTrigger = {
+    body: "@io focus",
+    bodyHash: "hash-focus",
+    command: "focus" as const,
+    createdAt: "2024-01-02T00:00:00.000Z",
+    issue: createIssue({
+      description: `## Outcome
+
+- Implement repo-wide focus refresh.
+- Keep managed write surfaces aligned.
+
+## Scope
+
+- Update the canonical focus doc path.
+- Keep backlog and focus refreshes deterministic.
+
+## Out Of Scope
+
+- Non-agent module rollout.
+`,
+      hasChildren: true,
+      id: "issue-1",
+      identifier: "OPE-134",
+      labels: ["io", "agent"],
+      priority: 3,
+      teamId: "team-1",
+      title: "Implement repo-wide focus refresh",
+    }),
+    payload: {
+      docs: [],
+      dryRun: false,
+    },
+    updatedAt: "2024-01-02T00:00:00.000Z",
+  };
+
+  try {
+    const service = new AgentService({
+      repoRoot: root,
+      trackerFactory: () => ({
+        applyManagedCommentMutation: async (mutation) => {
+          replies.push(mutation.reply.lines.join("\n"));
+          return {
+            createdChildIssueIdentifiers: [],
+            dependencyCount: 0,
+            replyCommentId: `reply-${replies.length}`,
+            result: "noop",
+            updatedChildIssueIdentifiers: [],
+            updatedParentDescription: false,
+            warnings: [],
+          };
+        },
+        fetchCandidateIssues: async () => [],
+        fetchIssueStatesByIds: async () => new Map(),
+        fetchManagedCommentTriggers: async () => {
+          triggerFetches += 1;
+          return [
+            {
+              ...baseTrigger,
+              commentId: `comment-${triggerFetches}`,
+            },
+          ];
+        },
+        setIssueState: async () => undefined,
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          reconcileTerminalIssues: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.runOnce();
+    await service.runOnce();
+
+    const focusDoc = await readFile(resolve(root, "llm", "topic", "goals.md"), "utf8");
+    expect(focusDoc).toContain("# OPE-134: Implement repo-wide focus refresh");
+    expect(focusDoc).toContain("## Objective");
+    expect(focusDoc).toContain("## Current Focus");
+    expect(focusDoc).toContain("## Proof Surfaces");
+    expect(focusDoc).toContain("./agent");
+    expect(replies).toEqual([
+      expect.stringContaining("Updated ./llm/topic/goals.md."),
+      expect.stringContaining("./llm/topic/goals.md was already up to date."),
     ]);
   } finally {
     await rm(root, { force: true, recursive: true });

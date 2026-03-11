@@ -17,6 +17,7 @@ export default defineIoConfig({
     entrypoint: "./io.md",
     docs: {
       "project.architecture": "./io/topic/architecture.md",
+      "project.focus": "./io/topic/focus.md",
       "project.managed-stream-comments": "./io/topic/managed-stream-comments.md",
       "project.managed-stream-backlog": "./io/topic/managed-stream-backlog.md",
       "project.managed-stream-goals": "./io/topic/goals.md",
@@ -33,6 +34,7 @@ export default defineIoConfig({
           "builtin:io.core.git-safety",
           "project.overview",
           "project.architecture",
+          "project.focus",
           "project.managed-stream-goals",
           "project.managed-stream-backlog",
           "project.managed-stream-comments",
@@ -54,37 +56,37 @@ export default defineIoConfig({
   },
   modules: {
     agent: {
-      allowedSharedPaths: ["./io/topic"],
+      allowedSharedPaths: ["./io/topic", "./llm/topic"],
       docs: ["./io/topic/agent.md", "./agent/doc/stream-workflow.md"],
       path: "./agent",
     },
     app: {
-      allowedSharedPaths: ["./graph/doc", "./io/topic"],
+      allowedSharedPaths: ["./graph/doc", "./io/topic", "./llm/topic"],
       docs: ["./io/topic/graph.md"],
       path: "./app",
     },
     cli: {
-      allowedSharedPaths: ["./io/topic"],
+      allowedSharedPaths: ["./io/topic", "./llm/topic"],
       docs: ["./io/topic/io-ts-config.md"],
       path: "./cli",
     },
     config: {
-      allowedSharedPaths: ["./io/topic"],
+      allowedSharedPaths: ["./io/topic", "./llm/topic"],
       docs: ["./io/topic/io-ts-config.md"],
       path: "./config",
     },
     graph: {
-      allowedSharedPaths: ["./io/topic"],
+      allowedSharedPaths: ["./io/topic", "./llm/topic"],
       docs: ["./io/topic/graph.md", "./graph/doc/overview.md"],
       path: "./graph",
     },
     lib: {
-      allowedSharedPaths: ["./io/topic"],
+      allowedSharedPaths: ["./io/topic", "./llm/topic"],
       docs: ["./io/topic/io-ts-config.md"],
       path: "./lib",
     },
     tui: {
-      allowedSharedPaths: ["./agent/doc", "./io/topic"],
+      allowedSharedPaths: ["./agent/doc", "./io/topic", "./llm/topic"],
       docs: ["./io/topic/agent-opentui.md"],
       path: "./tui",
     },

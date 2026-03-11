@@ -1,34 +1,32 @@
-# TUI Transcript Rendering
+# Managed Stream Write Surfaces
 
 ## Objective
 
-- make agent transcripts easier to scan in the OpenTUI view without losing the underlying session-event model
-- ship readable command, tool, and reasoning blocks that stay aligned between live, replayed, and retained sessions
+- Ship the managed-stream comment write surfaces without hand-editing parent issues or the focus doc.
+- Keep focus refresh, parent brief writeback, and child backlog maintenance aligned.
 
 ## Current Focus
 
-- render command and tool output as structured blocks instead of pipe-prefixed transcript noise
-- surface Linear MCP writes and other high-signal tool results while filtering or demoting low-signal output
-- show in-flight reasoning as a first-class transcript block with visible running vs completed state
+- Refresh `@io focus` against the stable repo-wide focus-doc shape.
+- Let `@io backlog` reuse and relink speculative Todo children deterministically.
+- Keep docs, config, and tests aligned on `./llm/topic/goals.md`.
 
 ## Constraints
 
-- keep the primary implementation in `./tui`; only touch `./agent` when session-event mapping must stay in sync
-- preserve the normalized session-event contract so `io agent tui`, attach, replay, and `io agent tail` continue to agree
-- prove behavior with focused transcript, store, and TUI tests before widening formatting or filtering rules
+- Preserve human-authored content outside managed issue sections and agent reply comments.
+- Treat equivalent reruns as no-ops across issue-body, child-issue, and focus-doc writes.
+- Keep the implementation narrow to the `agent` module for this slice.
 
 ## Proof Surfaces
 
-- `./tui/src/transcript.ts`
-- `./tui/src/codex-event-stream.ts`
-- `./tui/src/store.ts`
-- `./tui/src/tui.tsx`
-- `./tui/src/tui.test.ts`
-- `./agent/src/runner/codex.test.ts`
-- `./io/topic/agent-opentui.md`
+- ./agent/src/service.ts
+- ./agent/src/tracker/linear.ts
+- ./agent/src/context.ts
+- ./io/topic/goals.md
+- ./io/topic/managed-stream-backlog.md
+- ./io/topic/managed-stream-comments.md
 
 ## Deferred
 
-- broad visual redesign outside transcript readability
-- per-tool rich renderers beyond the first Linear-focused formatting pass
-- collapsing or hiding raw session data that operators may still need for debugging
+- Proving the managed stream flow on a non-`agent` module.
+- Operator UI changes beyond the reporting needed for the new write surfaces.

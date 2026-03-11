@@ -1,12 +1,10 @@
-import { appendFile } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, relative, resolve } from "node:path";
 
 import { createLogger, type Logger } from "@io/lib";
 
 import {
   buildManagedParentProposal,
-  MANAGED_BACKLOG_PROPOSAL_END,
-  MANAGED_BACKLOG_PROPOSAL_START,
 } from "./backlog-proposal.js";
 import {
   hasHandledManagedComment,
@@ -15,7 +13,12 @@ import {
 } from "./comment-state.js";
 import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
 import { resolveIssueModule, resolveIssueRouting } from "./issue-routing.js";
-import { isManagedCommentCommand, renderManagedCommentReply } from "./managed-comments.js";
+import {
+  buildManagedBacklogChildren,
+  MANAGED_STREAM_FOCUS_DOC_PATH,
+  renderManagedFocusDoc,
+} from "./managed-stream.js";
+import { isManagedCommentCommand } from "./managed-comments.js";
 import { CodexAppServerRunner } from "./runner/codex.js";
 import {
   createAgentSessionEventBus,
@@ -120,12 +123,6 @@ function isResumableRunError(error: unknown) {
   return ["response_timeout", "stall_timeout", "turn_timeout"].includes(error.message);
 }
 
-type ManagedBacklogOption = {
-  alignment: string;
-  focus: string;
-  title: string;
-};
-
 function uniqueOrdered(values: string[]) {
   const seen = new Set<string>();
   const unique: string[] = [];
@@ -138,70 +135,6 @@ function uniqueOrdered(values: string[]) {
     unique.push(normalized);
   }
   return unique;
-}
-
-function parseManagedBacklogOptions(description: string): ManagedBacklogOption[] {
-  const start = description.indexOf(MANAGED_BACKLOG_PROPOSAL_START);
-  const end = description.indexOf(MANAGED_BACKLOG_PROPOSAL_END);
-  if (start === -1 || end === -1 || end <= start) {
-    return [];
-  }
-
-  const blockLines = description
-    .slice(start + MANAGED_BACKLOG_PROPOSAL_START.length, end)
-    .split(/\r?\n/);
-  const options: ManagedBacklogOption[] = [];
-
-  for (let index = 0; index < blockLines.length; index++) {
-    const title = blockLines[index]?.match(/^\d+\.\s+\*\*(.+?)\*\*$/)?.[1]?.trim();
-    const focus = blockLines[index + 1]?.match(/^\s*Focus:\s*(.+)$/)?.[1]?.trim();
-    const alignment = blockLines[index + 2]?.match(/^\s*Alignment:\s*(.+)$/)?.[1]?.trim();
-    if (!title || !focus || !alignment) {
-      continue;
-    }
-    options.push({ alignment, focus, title });
-  }
-
-  return options;
-}
-
-function renderManagedBacklogChildDescription(options: {
-  docs: string[];
-  issue: AgentIssue;
-  note?: string;
-  option: ManagedBacklogOption;
-  primaryModuleId: string;
-}) {
-  const docLines = options.docs.length
-    ? options.docs.map((doc) => `- ${doc}`)
-    : ["- Reuse the parent issue brief and module defaults."];
-  const noteLines = options.note?.trim() ? [`- Operator note: ${options.note.trim()}`] : [];
-
-  return [
-    "## Outcome",
-    `- ${options.option.focus}`,
-    `- Land the next ${options.primaryModuleId} stream slice for ${options.issue.identifier}.`,
-    "",
-    "## Scope",
-    `- ${options.option.alignment}`,
-    `- Keep the work centered on the ${options.primaryModuleId} module surface.`,
-    "",
-    "## Acceptance Criteria",
-    `- ${options.option.focus}`,
-    `- ${options.option.alignment}`,
-    "- Keep the parent managed brief and child backlog aligned.",
-    "",
-    "## Module Scope",
-    `- Primary module: ${options.primaryModuleId}`,
-    "",
-    "## Dependencies And Docs",
-    `- Parent issue: ${options.issue.identifier}`,
-    ...docLines,
-    ...noteLines,
-    "",
-    "## Out Of Scope",
-    "- Unrelated module work or repo-wide refactors beyond this slice.",
-  ].join("\n");
 }
 
 export class AgentService {
@@ -365,57 +298,107 @@ export class AgentService {
         continue;
       }
 
-      let replyBody = "";
+      let reply: ManagedCommentMutation["reply"] = {
+        command: "invalid",
+        issueIdentifier: trigger.issue.identifier,
+        lines: [] as string[],
+        result: "blocked",
+      };
       let parentDescription: string | undefined;
+      let children: ManagedCommentMutation["children"] = [];
 
       if (!isManagedCommentCommand(trigger)) {
-        replyBody = renderManagedCommentReply({
+        reply = {
           command: "invalid",
           issueIdentifier: trigger.issue.identifier,
           lines: [trigger.error],
           result: "blocked",
-        });
+        };
       } else {
         const module = resolveIssueModule(workflow.modules, trigger.issue);
         const isManagedParent =
           !trigger.issue.hasParent && trigger.issue.labels.includes("io") && Boolean(module);
+        const issueIdentifier = module
+          ? `${trigger.issue.identifier} / ${module.id}`
+          : trigger.issue.identifier;
 
         if (!isManagedParent) {
-          replyBody = renderManagedCommentReply({
+          reply = {
             command: trigger.command,
-            issueIdentifier: trigger.issue.identifier,
+            issueIdentifier,
             lines: ["The parent is not currently eligible for managed `@io` commands."],
             result: "blocked",
-          });
+          };
         } else if (trigger.command === "help") {
-          replyBody = renderManagedCommentReply({
+          reply = {
             command: trigger.command,
-            issueIdentifier: trigger.issue.identifier,
+            issueIdentifier,
             lines: [
               "Accepted commands: backlog, focus, status, help.",
               "Accepted keys: docs, dryRun, note.",
               "Only top-level comments on managed parent issues are processed.",
             ],
             result: "noop",
-          });
+          };
         } else if (trigger.command === "status") {
-          replyBody = renderManagedCommentReply({
+          reply = {
             command: trigger.command,
-            issueIdentifier: trigger.issue.identifier,
+            issueIdentifier,
             lines: [
               `Module: ${module!.id}`,
               `Managed block present: ${trigger.issue.description.includes("<!-- io-managed:backlog-proposal:start -->") ? "yes" : "no"}`,
               `Requested docs: ${trigger.payload.docs.length ? trigger.payload.docs.join(", ") : "none"}`,
             ],
             result: "noop",
-          });
+          };
         } else if (trigger.command === "focus") {
-          replyBody = renderManagedCommentReply({
-            command: trigger.command,
-            issueIdentifier: trigger.issue.identifier,
-            lines: ["Focus-doc refresh is not implemented in this slice."],
-            result: "blocked",
+          const focusDocPathRef = MANAGED_STREAM_FOCUS_DOC_PATH;
+          const resolvedContext = await resolveIssueContext({
+            baseSelection: resolveIssueRouting(workflow.issues, trigger.issue, workflow.modules),
+            issue: trigger.issue,
+            repoRoot: this.#repoRoot,
+            workflow,
           });
+          const proposal = buildManagedParentProposal({
+            issue: trigger.issue,
+            module: module!,
+            repoRoot: this.#repoRoot,
+            resolvedContext: resolvedContext.bundle,
+          });
+          const focusDoc = `${renderManagedFocusDoc({
+            docs: uniqueOrdered([focusDocPathRef, ...trigger.payload.docs]),
+            issue: trigger.issue,
+            module: module!,
+            parentDescription: proposal.description,
+            repoRoot: this.#repoRoot,
+            resolvedContext: resolvedContext.bundle,
+          })}\n`;
+          const focusDocPath = resolve(
+            this.#repoRoot,
+            focusDocPathRef.replace(/^\.\//, ""),
+          );
+          const existingFocusDoc = await this.#readOptionalFile(focusDocPath);
+          const changed = existingFocusDoc !== focusDoc;
+          if (changed && !trigger.payload.dryRun) {
+            await mkdir(dirname(focusDocPath), { recursive: true });
+            await writeFile(focusDocPath, focusDoc, "utf8");
+          }
+          reply = {
+            command: trigger.command,
+            issueIdentifier,
+            lines: trigger.payload.dryRun
+              ? [
+                  changed
+                    ? `Dry run: would update ${focusDocPathRef}.`
+                    : `Dry run: ${focusDocPathRef} is already up to date.`,
+                ]
+              : [
+                  changed
+                    ? `Updated ${focusDocPathRef}.`
+                    : `${focusDocPathRef} was already up to date.`,
+                ],
+            result: trigger.payload.dryRun ? "noop" : changed ? "updated" : "noop",
+          };
         } else {
           const resolvedContext = await resolveIssueContext({
             baseSelection: resolveIssueRouting(workflow.issues, trigger.issue, workflow.modules),
@@ -430,31 +413,27 @@ export class AgentService {
             resolvedContext: resolvedContext.bundle,
           });
           parentDescription = proposal.description;
-          const result = trigger.payload.dryRun ? "noop" : proposal.changed ? "updated" : "noop";
-          replyBody = renderManagedCommentReply({
-            command: trigger.command,
-            issueIdentifier: trigger.issue.identifier,
-            lines: trigger.payload.dryRun
-              ? [
-                  proposal.changed
-                    ? "Dry run: would update the parent managed brief."
-                    : "Dry run: the parent managed brief is already up to date.",
-                ]
-              : [
-                  proposal.changed
-                    ? "Updated the parent managed brief."
-                    : "The parent managed brief was already up to date.",
-                ],
-            result,
+          children = buildManagedBacklogChildren({
+            docs: uniqueOrdered(trigger.payload.docs.length ? trigger.payload.docs : module!.docs),
+            issue: trigger.issue,
+            note: trigger.payload.note,
+            parentDescription: proposal.description,
+            primaryModuleId: module!.id,
           });
+          reply = {
+            command: trigger.command,
+            issueIdentifier,
+            lines: [],
+            result: "noop",
+          };
         }
       }
 
       const result = await tracker.applyManagedCommentMutation({
-        children: [],
+        children,
         comment: trigger,
         parentDescription,
-        replyBody,
+        reply,
       });
       if (result.warnings.length) {
         this.#log.warn("managed_comment.warning", {
@@ -813,6 +792,22 @@ export class AgentService {
       workerId: workspace.workerId,
       workspacePath: workspace.path,
     };
+  }
+
+  async #readOptionalFile(path: string) {
+    try {
+      return await readFile(path, "utf8");
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "ENOENT"
+      ) {
+        return "";
+      }
+      throw error;
+    }
   }
 
   async #appendIssueOutput(path: string | undefined, text: string) {

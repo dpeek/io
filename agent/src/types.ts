@@ -60,15 +60,23 @@ export interface ManagedCommentChildMutation {
   docs: string[];
   labels: string[];
   priority: number | null;
+  reference: string;
   state?: string;
   title: string;
+}
+
+export interface ManagedCommentReply {
+  command: string;
+  issueIdentifier: string;
+  lines: string[];
+  result: ManagedCommentResult;
 }
 
 export interface ManagedCommentMutation {
   comment: ManagedCommentTrigger;
   children: ManagedCommentChildMutation[];
   parentDescription?: string;
-  replyBody: string;
+  reply: ManagedCommentReply;
 }
 
 export interface ManagedCommentMutationResult {
@@ -76,6 +84,7 @@ export interface ManagedCommentMutationResult {
   dependencyCount: number;
   replyCommentId?: string;
   result: ManagedCommentResult;
+  updatedChildIssueIdentifiers: string[];
   updatedParentDescription: boolean;
   warnings: string[];
 }
