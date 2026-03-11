@@ -4,7 +4,7 @@ import { act, create } from "react-test-renderer";
 import { app } from "../graph/app.js";
 import { core } from "../graph/core.js";
 import { defineType } from "../graph/schema.js";
-import { statusTypeModule } from "../type/status.js";
+import { statusTypeModule } from "../type/status/index.js";
 import { FilterOperandEditor, defaultWebFilterResolver, lowerWebFilterClause } from "./bindings.js";
 
 (
@@ -154,7 +154,10 @@ describe("web filter resolver", () => {
   });
 
   it("resolves built-in validated string helpers through field filter metadata", () => {
-    const emailResolution = defaultWebFilterResolver.resolveField(app.company.fields.contactEmail, defs);
+    const emailResolution = defaultWebFilterResolver.resolveField(
+      app.company.fields.contactEmail,
+      defs,
+    );
 
     expect(emailResolution.status).toBe("resolved");
     if (emailResolution.status !== "resolved") return;
@@ -331,10 +334,9 @@ describe("web filter resolver", () => {
     expect(oneOfOperator.operand.kind).toBe("enum");
     expect(oneOfOperator.operand.selection).toBe("many");
     expect(oneOfOperator.operand.editor.status).toBe("resolved");
-    expect(oneOfOperator.parse(`${app.status.values.active.id},${app.status.values.paused.id}`)).toEqual([
-      app.status.values.active.id,
-      app.status.values.paused.id,
-    ]);
+    expect(
+      oneOfOperator.parse(`${app.status.values.active.id},${app.status.values.paused.id}`),
+    ).toEqual([app.status.values.active.id, app.status.values.paused.id]);
 
     let nextOperand: string[] | undefined;
     let renderer: ReturnType<typeof create> | undefined;

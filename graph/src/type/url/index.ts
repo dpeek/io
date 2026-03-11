@@ -1,7 +1,7 @@
 import { defineScalarModule } from "../../graph/type-module.js";
-import { urlFilter } from "./filter.js";
-import { urlMeta } from "./meta.js";
-import { urlType } from "./type.js";
+import { urlFilter } from "../url/filter.js";
+import { urlMeta } from "../url/meta.js";
+import { urlType } from "../url/type.js";
 
 export const urlTypeModule = defineScalarModule({
   type: urlType,

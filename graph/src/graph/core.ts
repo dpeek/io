@@ -1,14 +1,14 @@
+import { booleanTypeModule } from "../type/boolean/index.js";
+import { dateTypeModule } from "../type/date/index.js";
+import { emailTypeModule } from "../type/email/index.js";
+import { defineDefaultEnumTypeModule } from "../type/enum-module.js";
+import { numberTypeModule } from "../type/number/index.js";
+import { slugTypeModule } from "../type/slug.js";
+import { stringTypeModule } from "../type/string/index.js";
+import { urlTypeModule } from "../type/url/index.js";
 import coreIdMap from "./core.json";
 import { defineEnum, defineNamespace, defineType } from "./schema.js";
 import { defineReferenceField } from "./type-module.js";
-import { booleanTypeModule } from "../type/boolean.js";
-import { dateTypeModule } from "../type/date.js";
-import { emailTypeModule } from "../type/email.js";
-import { defineDefaultEnumTypeModule } from "../type/enum-module.js";
-import { numberTypeModule } from "../type/number.js";
-import { slugTypeModule } from "../type/slug.js";
-import { stringTypeModule } from "../type/string.js";
-import { urlTypeModule } from "../type/url.js";
 
 const string = stringTypeModule.type;
 

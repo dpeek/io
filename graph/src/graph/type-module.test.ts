@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
+import { address } from "../type/address/index.js";
+import { booleanTypeModule } from "../type/boolean/index.js";
+import { stringTypeModule } from "../type/string/index.js";
 import { app } from "./app";
 import { core } from "./core";
-import { address } from "../type/address.js";
-import { booleanTypeModule } from "../type/boolean.js";
-import { stringTypeModule } from "../type/string.js";
 
 describe("type-module authoring contract", () => {
   it("composes scalar defaults with field-level overrides", () => {
@@ -43,10 +43,7 @@ describe("type-module authoring contract", () => {
     expect(app.company.fields.slug.meta.editor.placeholder).toBe("company-slug");
     expect(app.company.fields.slug.meta.editor.parse?.("Acme Labs")).toBe("acme-labs");
     expect(app.company.fields.slug.filter.defaultOperator).toBe("prefix");
-    expect(Object.keys(app.company.fields.slug.filter.operators)).toEqual([
-      "equals",
-      "prefix",
-    ]);
+    expect(Object.keys(app.company.fields.slug.filter.operators)).toEqual(["equals", "prefix"]);
   });
 
   it("attaches boolean defaults through the migrated scalar module", () => {

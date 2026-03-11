@@ -1,5 +1,5 @@
-import type { TypeModuleFilter } from "../graph/type-module.js";
-import { defineValidatedStringTypeModule } from "./validated-string.js";
+import type { TypeModuleFilter } from "../../graph/type-module.js";
+import { defineValidatedStringTypeModule } from "../validated-string.js";
 
 const emailLocalPattern = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i;
 const emailDomainLabel = "example.com";

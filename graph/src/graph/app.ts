@@ -1,16 +1,16 @@
+import { addressFields } from "../type/address/index.js";
+import { booleanTypeModule } from "../type/boolean/index.js";
+import { emailTypeModule } from "../type/email/index.js";
+import { numberTypeModule } from "../type/number/index.js";
+import { slugTypeModule } from "../type/slug.js";
+import { statusTypeModule } from "../type/status/index.js";
+import { stringTypeModule } from "../type/string/index.js";
+import { urlTypeModule } from "../type/url/index.js";
 import ids from "./app.json";
 import { core } from "./core";
 import { defineNamespace, defineType } from "./schema.js";
 import { defineReferenceField } from "./type-module.js";
 import { existingEntityReferenceField } from "./web-policy.js";
-import { addressFields } from "../type/address.js";
-import { booleanTypeModule } from "../type/boolean.js";
-import { emailTypeModule } from "../type/email.js";
-import { numberTypeModule } from "../type/number.js";
-import { slugTypeModule } from "../type/slug.js";
-import { statusTypeModule } from "../type/status.js";
-import { stringTypeModule } from "../type/string.js";
-import { urlTypeModule } from "../type/url.js";
 
 export const status = statusTypeModule.type;
 

@@ -1,12 +1,15 @@
 import { app } from "../graph/app.js";
 import { core } from "../graph/core.js";
 import { defineType } from "../graph/schema.js";
-import { statusTypeModule } from "../type/status.js";
+import { statusTypeModule } from "../type/status/index.js";
 import { defaultWebFilterResolver, type FilterOperandEditorProps } from "./bindings.js";
 
 const defs = { ...core, ...app };
 
-const foundedYearResolution = defaultWebFilterResolver.resolveField(app.company.fields.foundedYear, defs);
+const foundedYearResolution = defaultWebFilterResolver.resolveField(
+  app.company.fields.foundedYear,
+  defs,
+);
 
 if (foundedYearResolution.status === "resolved") {
   const greaterThan = foundedYearResolution.resolveOperator("gt");
@@ -27,7 +30,11 @@ if (foundedYearResolution.status === "resolved") {
 
     void acceptsNumber;
 
-    const rejectsString: FilterOperandEditorProps<typeof app.company.fields.foundedYear, typeof defs, "gt"> = {
+    const rejectsString: FilterOperandEditorProps<
+      typeof app.company.fields.foundedYear,
+      typeof defs,
+      "gt"
+    > = {
       operator: greaterThan,
       // @ts-expect-error number operators do not accept string operands
       value: "1999",
@@ -59,13 +66,20 @@ const broadStatusProbe = defineType({
     }),
   },
 });
-const broadStatusResolution = defaultWebFilterResolver.resolveField(broadStatusProbe.fields.status, defs);
+const broadStatusResolution = defaultWebFilterResolver.resolveField(
+  broadStatusProbe.fields.status,
+  defs,
+);
 
 if (broadStatusResolution.status === "resolved") {
   const oneOf = broadStatusResolution.resolveOperator("oneOf");
 
   if (oneOf) {
-    const acceptsIds: FilterOperandEditorProps<typeof broadStatusProbe.fields.status, typeof defs, "oneOf"> = {
+    const acceptsIds: FilterOperandEditorProps<
+      typeof broadStatusProbe.fields.status,
+      typeof defs,
+      "oneOf"
+    > = {
       operator: oneOf,
       value: [app.status.values.active.id],
       onChange(value) {
@@ -76,7 +90,11 @@ if (broadStatusResolution.status === "resolved") {
 
     void acceptsIds;
 
-    const rejectsSingleId: FilterOperandEditorProps<typeof broadStatusProbe.fields.status, typeof defs, "oneOf"> = {
+    const rejectsSingleId: FilterOperandEditorProps<
+      typeof broadStatusProbe.fields.status,
+      typeof defs,
+      "oneOf"
+    > = {
       operator: oneOf,
       // @ts-expect-error enum multi-select operators require string arrays
       value: app.status.values.active.id,

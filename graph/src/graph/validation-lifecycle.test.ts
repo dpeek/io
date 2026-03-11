@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
+import { stringTypeModule } from "../type/string/index.js";
 import { app } from "./app";
 import { bootstrap } from "./bootstrap";
 import { GraphValidationError, createTypeClient } from "./client";
 import { core } from "./core";
-import { edgeId, defineNamespace, defineScalar, defineType } from "./schema";
+import { defineNamespace, defineScalar, defineType, edgeId } from "./schema";
 import { createStore } from "./store";
 import { createSyncedTypeClient, createTotalSyncPayload } from "./sync";
-import { stringTypeModule } from "../type/string.js";
 
 type ValidatorCall = {
   changedPredicateKeys: readonly string[];
@@ -26,15 +26,7 @@ function createValidationLifecycleFixture() {
     values: { key: "test:score", name: "Score" },
     encode: (value: number) => String(value),
     decode: (raw) => Number(raw),
-    validate: ({
-      changedPredicateKeys,
-      event,
-      nodeId,
-      path,
-      phase,
-      predicateKey,
-      value,
-    }) => {
+    validate: ({ changedPredicateKeys, event, nodeId, path, phase, predicateKey, value }) => {
       scalarCalls.push({
         changedPredicateKeys: [...changedPredicateKeys],
         event,
@@ -58,15 +50,7 @@ function createValidationLifecycleFixture() {
       ...core.node.fields,
       title: stringTypeModule.field({
         cardinality: "one",
-        validate: ({
-          changedPredicateKeys,
-          event,
-          nodeId,
-          path,
-          phase,
-          predicateKey,
-          value,
-        }) => {
+        validate: ({ changedPredicateKeys, event, nodeId, path, phase, predicateKey, value }) => {
           fieldCalls.push({
             changedPredicateKeys: [...changedPredicateKeys],
             event,
@@ -140,14 +124,7 @@ function createDeleteValidationLifecycleFixture() {
       worksAt: {
         range: company,
         cardinality: "many",
-        validate: ({
-          changedPredicateKeys,
-          event,
-          nodeId,
-          path,
-          phase,
-          predicateKey,
-        }) => {
+        validate: ({ changedPredicateKeys, event, nodeId, path, phase, predicateKey }) => {
           relationshipCalls.push({
             changedPredicateKeys: [...changedPredicateKeys],
             event,
@@ -338,12 +315,18 @@ describe("validation lifecycle contract", () => {
     fixture.fieldCalls.length = 0;
     fixture.scalarCalls.length = 0;
 
-    for (const edge of server.store.facts(serverId, edgeId(fixture.namespace.reviewItem.fields.title))) {
+    for (const edge of server.store.facts(
+      serverId,
+      edgeId(fixture.namespace.reviewItem.fields.title),
+    )) {
       server.store.retract(edge.id);
     }
     server.store.assert(serverId, edgeId(fixture.namespace.reviewItem.fields.title), "   ");
 
-    for (const edge of server.store.facts(serverId, edgeId(fixture.namespace.reviewItem.fields.score))) {
+    for (const edge of server.store.facts(
+      serverId,
+      edgeId(fixture.namespace.reviewItem.fields.score),
+    )) {
       server.store.retract(edge.id);
     }
     server.store.assert(serverId, edgeId(fixture.namespace.reviewItem.fields.score), "Infinity");

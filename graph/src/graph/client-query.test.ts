@@ -186,11 +186,7 @@ describe("typed query client", () => {
     const { store, graph } = setupGraph();
     const brokenCompanyId = store.newNode();
 
-    store.assert(
-      brokenCompanyId,
-      edgeId(core.node.fields.type as EdgeOutput),
-      typeId(app.company),
-    );
+    store.assert(brokenCompanyId, edgeId(core.node.fields.type as EdgeOutput), typeId(app.company));
     store.assert(brokenCompanyId, edgeId(app.company.fields.name), "Broken Co");
 
     await expect(
@@ -205,12 +201,12 @@ describe("typed query client", () => {
   });
 
   it("rejects nested entity selections when a referenced entity is missing", async () => {
-    const { graph } = setupGraph();
+    const { store, graph } = setupGraph();
     const missingCompanyId = "missing-company";
-    const danglingPersonId = graph.person.create({
-      name: "Dangling",
-      worksAt: [missingCompanyId],
-    });
+    const danglingPersonId = store.newNode();
+    store.assert(danglingPersonId, edgeId(core.node.fields.type as EdgeOutput), typeId(app.person));
+    store.assert(danglingPersonId, edgeId(app.person.fields.name), "Dangling");
+    store.assert(danglingPersonId, edgeId(app.person.fields.worksAt as EdgeOutput), missingCompanyId);
 
     await expect(
       graph.person.query({

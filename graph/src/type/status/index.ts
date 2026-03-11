@@ -1,7 +1,7 @@
 import { defineEnumModule } from "../../graph/type-module.js";
-import { statusFilter } from "./filter.js";
-import { statusMeta } from "./meta.js";
-import { statusType } from "./type.js";
+import { statusFilter } from "../status/filter.js";
+import { statusMeta } from "../status/meta.js";
+import { statusType } from "../status/type.js";
 
 export const statusTypeModule = defineEnumModule({
   type: statusType,

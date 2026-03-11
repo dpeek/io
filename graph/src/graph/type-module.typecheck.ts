@@ -1,6 +1,6 @@
-import { booleanTypeModule } from "../type/boolean.js";
-import { statusTypeModule } from "../type/status.js";
-import { stringTypeModule } from "../type/string.js";
+import { booleanTypeModule } from "../type/boolean/index.js";
+import { statusTypeModule } from "../type/status/index.js";
+import { stringTypeModule } from "../type/string/index.js";
 import { defineScalar, defineType } from "./schema.js";
 import { defineReferenceField, defineScalarModule } from "./type-module.js";
 import { existingEntityReferenceField } from "./web-policy.js";

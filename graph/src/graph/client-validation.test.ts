@@ -1,16 +1,12 @@
 import { describe, expect, it } from "bun:test";
+import { stringTypeModule } from "../type/string/index.js";
 import { app } from "./app";
-import {
-  GraphValidationError,
-  createTypeClient,
-  formatValidationPath,
-} from "./client";
 import { bootstrap } from "./bootstrap";
+import { GraphValidationError, createTypeClient, formatValidationPath } from "./client";
 import { core } from "./core";
 import { defineNamespace, defineType, edgeId } from "./schema";
 import { createStore } from "./store";
 import { defineReferenceField } from "./type-module.js";
-import { stringTypeModule } from "../type/string.js";
 
 function createGraph() {
   const store = createStore();
@@ -103,12 +99,8 @@ describe("graph validation", () => {
     const id = graph.company.create(input);
     const company = graph.company.get(id);
 
-    expect(company.createdAt?.toISOString()).toBe(
-      (first.value["createdAt"] as Date).toISOString(),
-    );
-    expect(company.updatedAt?.toISOString()).toBe(
-      (first.value["updatedAt"] as Date).toISOString(),
-    );
+    expect(company.createdAt?.toISOString()).toBe((first.value["createdAt"] as Date).toISOString());
+    expect(company.updatedAt?.toISOString()).toBe((first.value["updatedAt"] as Date).toISOString());
   });
 
   it("keeps local create preflight and commit aligned when post-create graph validation fails", () => {

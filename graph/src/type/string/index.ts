@@ -1,7 +1,7 @@
 import { defineScalarModule } from "../../graph/type-module.js";
-import { stringFilter } from "./filter.js";
-import { stringMeta } from "./meta.js";
-import { stringType } from "./type.js";
+import { stringFilter } from "../string/filter.js";
+import { stringMeta } from "../string/meta.js";
+import { stringType } from "../string/type.js";
 
 export const stringTypeModule = defineScalarModule({
   type: stringType,

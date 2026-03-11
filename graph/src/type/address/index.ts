@@ -1,6 +1,6 @@
-import { defineType } from "../graph/schema.js";
-import { countryTypeModule } from "./country";
-import { stringTypeModule } from "./string";
+import { defineType } from "../../graph/schema.js";
+import { countryTypeModule } from "../country";
+import { stringTypeModule } from "../string";
 
 export const addressFields = {
   recipient: stringTypeModule.field({
