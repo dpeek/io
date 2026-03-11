@@ -279,7 +279,8 @@ test("AgentTuiRetainedReader reconstructs events.log into supervisor and worker 
     ]);
     expect(snapshot.sessions[0]?.body).toContain("Attach OPE-67 from events.log\n");
     expect(snapshot.sessions[1]?.body).toContain("Session scheduled | ope-67");
-  expect(snapshot.sessions[1]?.body).toContain('Tool: spawned.run {"mode":"helper"}');
+    expect(snapshot.sessions[1]?.body).toContain("Tool: spawned.run [running]");
+    expect(snapshot.sessions[1]?.body).toContain("args:\n  mode: helper");
   } finally {
     await rm(root, { force: true, recursive: true });
   }

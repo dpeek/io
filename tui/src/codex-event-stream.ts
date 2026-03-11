@@ -442,6 +442,7 @@ function appendCodexToolEntry(
   const existing = adapter.findEntryByItemId(itemId);
 
   if (existing?.kind === "tool") {
+    existing.argumentsData = item?.arguments ?? existing.argumentsData;
     existing.count += 1;
     existing.sequenceEnd = event.sequence;
     existing.timestamp = event.timestamp;
@@ -449,6 +450,7 @@ function appendCodexToolEntry(
   }
 
   adapter.appendEntry({
+    argumentsData: item?.arguments,
     argumentsText:
       item?.arguments && typeof item.arguments === "object" ? JSON.stringify(item.arguments) : undefined,
     count: 1,
@@ -478,6 +480,7 @@ function appendCodexToolCompletionEntry(
   const resultText = asString(resultContent.length ? asRecord(resultContent[0])?.text : undefined);
 
   if (existing?.kind === "tool") {
+    existing.argumentsData = item?.arguments ?? existing.argumentsData;
     existing.count += 1;
     existing.errorText = errorText ?? existing.errorText;
     existing.resultText = resultText ?? existing.resultText;
@@ -488,6 +491,7 @@ function appendCodexToolCompletionEntry(
   }
 
   adapter.appendEntry({
+    argumentsData: item?.arguments,
     argumentsText:
       item?.arguments && typeof item.arguments === "object" ? JSON.stringify(item.arguments) : undefined,
     count: 1,

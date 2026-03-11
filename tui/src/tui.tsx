@@ -4,6 +4,7 @@ import { useMemo } from "react";
 
 import { buildAgentTuiRenderedPanels, getAgentTuiSelectedContentMetrics } from "./layout.js";
 import type { AgentSessionEventObserver } from "./session-events.js";
+import { hasStreamingReasoningBlocks } from "./transcript.js";
 import {
   createAgentTuiStore,
   type AgentTuiSnapshot,
@@ -12,6 +13,7 @@ import {
 } from "./store.js";
 
 const APP_ROOT_ID = "tui-root";
+const REASONING_SPINNER_INTERVAL_MS = 120;
 
 export type AgentTuiTerminal = NodeJS.WriteStream;
 
@@ -37,6 +39,7 @@ type AgentTuiColumnScrollState = {
 };
 
 type AgentTuiAppProps = {
+  animationFrame?: number;
   onExitRequest: () => void | Promise<void>;
   selectedColumnId?: string;
   selectedScrollY?: number;
@@ -59,7 +62,12 @@ function isQuitKey(key: { ctrl?: boolean; name: string }) {
   return (key.ctrl && key.name === "c") || key.name === "escape" || key.name === "q";
 }
 
-function AgentTuiApp({ selectedColumnId, selectedScrollY = 0, snapshot }: AgentTuiAppProps) {
+function AgentTuiApp({
+  animationFrame = 0,
+  selectedColumnId,
+  selectedScrollY = 0,
+  snapshot,
+}: AgentTuiAppProps) {
   const { height, width } = useTerminalDimensions();
   const snapshotColumns = snapshot.columns ?? snapshot.sessions ?? [];
   const resolvedSelectedColumnId = snapshotColumns.find(
@@ -81,10 +89,11 @@ function AgentTuiApp({ selectedColumnId, selectedScrollY = 0, snapshot }: AgentT
   const panels = useMemo(
     () =>
       buildAgentTuiRenderedPanels(snapshot, frameSize, {
+        animationFrame,
         selectedColumnId: resolvedSelectedColumnId,
         selectedScrollY,
       }),
-    [frameSize, resolvedSelectedColumnId, selectedScrollY, snapshot],
+    [animationFrame, frameSize, resolvedSelectedColumnId, selectedScrollY, snapshot],
   );
 
   return (
@@ -134,6 +143,7 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
   let renderScheduled = false;
   let renderer = options.renderer;
   let root: Root | undefined;
+  let reasoningSpinnerInterval: ReturnType<typeof setInterval> | undefined;
   let selectedColumnId: string | undefined;
   let startPromise: Promise<void> | undefined;
   let unsubscribe: (() => void) | undefined;
@@ -230,6 +240,29 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
     }
   };
 
+  const clearReasoningSpinnerInterval = () => {
+    if (reasoningSpinnerInterval) {
+      clearInterval(reasoningSpinnerInterval);
+      reasoningSpinnerInterval = undefined;
+    }
+  };
+
+  const syncReasoningSpinnerInterval = (snapshot: AgentTuiSnapshot) => {
+    const columns = snapshot.columns ?? snapshot.sessions ?? [];
+    const hasStreamingReasoning = columns.some((column) =>
+      hasStreamingReasoningBlocks(column.blocks ?? []),
+    );
+    if (!active || !hasStreamingReasoning) {
+      clearReasoningSpinnerInterval();
+      return;
+    }
+    if (!reasoningSpinnerInterval) {
+      reasoningSpinnerInterval = setInterval(() => {
+        scheduleRender();
+      }, REASONING_SPINNER_INTERVAL_MS);
+    }
+  };
+
   const render = () => {
     renderScheduled = false;
     if (!active || !root || !renderer) {
@@ -256,6 +289,7 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
     flushSync(() => {
       currentRoot.render(
         <AgentTuiApp
+          animationFrame={Math.floor(Date.now() / REASONING_SPINNER_INTERVAL_MS)}
           onExitRequest={onExitRequest}
           selectedColumnId={selectedColumnId}
           selectedScrollY={selectedScrollY}
@@ -263,6 +297,7 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
         />,
       );
     });
+    syncReasoningSpinnerInterval(snapshot);
     renderer.requestRender();
   };
 
@@ -354,6 +389,7 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
       root = undefined;
       startPromise = undefined;
       renderer?.keyInput.off("keypress", handleKeyPress);
+      clearReasoningSpinnerInterval();
 
       if (renderer && ownsRenderer) {
         renderer.destroy();

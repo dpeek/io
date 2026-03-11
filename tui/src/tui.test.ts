@@ -267,8 +267,9 @@ test("buildAgentTuiRootComponentModel renders a single human-readable block stre
   const content = model.columns.find((column) => column.id === worker.id)?.content ?? "";
 
   expect(content).toContain("$ git status --short --branch");
-  expect(content).toContain("| ## main");
-  expect(content).toContain("|  M agent/src/runner/codex.ts");
+  expect(content).toContain("output:");
+  expect(content).toContain("  ## main");
+  expect(content).toContain("   M agent/src/runner/codex.ts");
   expect(content).toContain("Inspecting runtime state");
   expect(content).not.toContain('jsonl: {"method":"thread/started"}');
 });
@@ -388,13 +389,95 @@ test("store renders codex v2 notifications as item blocks", () => {
   const snapshot = store.getSnapshot();
   const content =
     buildAgentTuiRootComponentModel(snapshot, {
+      animationFrame: 0,
       selectedColumnId: worker.id,
     }).columns.find((column) => column.id === worker.id)?.content ?? "";
 
   expect(content).toContain("$ git status --short --branch");
-  expect(content).toContain("| ## main");
-  expect(content).toContain("|  M tui/src/store.ts");
+  expect(content).toContain("output:");
+  expect(content).toContain("  ## main");
+  expect(content).toContain("   M tui/src/store.ts");
   expect(content).toContain("Inspecting runtime state");
+});
+
+test("buildAgentTuiRootComponentModel formats tool calls and reasoning as structured blocks", () => {
+  const store = createAgentTuiStore();
+  const worker = createWorkerSession();
+
+  store.observe({
+    phase: "started",
+    sequence: 1,
+    session: worker,
+    timestamp: "2026-03-10T02:08:00.000Z",
+    type: "session",
+  });
+  store.observe({
+    method: "item/started",
+    params: {
+      item: {
+        arguments: {
+          id: "OPE-68",
+          priority: 2,
+          state: "In Progress",
+          title: "Run plan",
+        },
+        id: "tool-1",
+        server: "linear",
+        tool: "save_issue",
+        type: "mcpToolCall",
+      },
+    },
+    sequence: 2,
+    session: worker,
+    timestamp: "2026-03-10T02:08:01.000Z",
+    type: "codex-notification",
+  });
+  store.observe({
+    method: "item/started",
+    params: {
+      item: {
+        id: "reason-1",
+        type: "reasoning",
+      },
+    },
+    sequence: 3,
+    session: worker,
+    timestamp: "2026-03-10T02:08:02.000Z",
+    type: "codex-notification",
+  });
+  store.observe({
+    method: "item/reasoning/summaryTextDelta",
+    params: {
+      delta: "Checking transcript formatting",
+      itemId: "reason-1",
+      summaryIndex: 0,
+    },
+    sequence: 4,
+    session: worker,
+    timestamp: "2026-03-10T02:08:03.000Z",
+    type: "codex-notification",
+  });
+
+  const snapshot = store.getSnapshot();
+  const frameOne =
+    buildAgentTuiRootComponentModel(snapshot, {
+      animationFrame: 0,
+      selectedColumnId: worker.id,
+    }).columns.find((column) => column.id === worker.id)?.content ?? "";
+  const frameTwo =
+    buildAgentTuiRootComponentModel(snapshot, {
+      animationFrame: 1,
+      selectedColumnId: worker.id,
+    }).columns.find((column) => column.id === worker.id)?.content ?? "";
+
+  expect(frameOne).toContain("Tool: linear.save_issue [running]");
+  expect(frameOne).toContain("args:");
+  expect(frameOne).toContain("  id: OPE-68");
+  expect(frameOne).toContain("  state: In Progress");
+  expect(frameOne).not.toContain('{"id":"OPE-68"');
+  expect(frameOne).toContain("Reasoning [|]");
+  expect(frameTwo).toContain("Reasoning [/]");
+  expect(frameOne).toContain("Checking transcript formatting");
 });
 
 test("createAgentTui supports keyboard column navigation and content scrolling", async () => {
@@ -478,17 +561,17 @@ test("createAgentTui supports keyboard column navigation and content scrolling",
     await renderOnce();
     frame = captureCharFrame();
     expect(frame).toContain("OPE-68");
-    expect(frame).toContain("| output line 11");
+    expect(frame).toContain("output line 11");
 
     mockInput.pressArrow("up");
     await renderOnce();
     frame = captureCharFrame();
-    expect(frame).toContain("| output line 10");
+    expect(frame).toContain("output line 10");
 
     mockInput.pressArrow("up");
     await renderOnce();
     frame = captureCharFrame();
-    expect(frame).toContain("| output line 9");
+    expect(frame).toContain("output line 9");
 
     await mockInput.typeText("q");
     await Promise.resolve();

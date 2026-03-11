@@ -13,6 +13,7 @@ export interface AgentTuiFrameSize {
 }
 
 export interface AgentTuiLayoutOptions {
+  animationFrame?: number;
   selectedColumnId?: string;
   selectedScrollY?: number;
 }
@@ -76,6 +77,7 @@ function formatPanelTitle(
 
 function formatContent(
   column: AgentTuiColumnSnapshot,
+  options: AgentTuiLayoutOptions = {},
 ) {
   if (!(column.blocks ?? []).length) {
     const body = column.body.trimEnd();
@@ -83,7 +85,9 @@ function formatContent(
       return body;
     }
   }
-  return formatBlocks(column.blocks ?? []);
+  return formatBlocks(column.blocks ?? [], {
+    animationFrame: options.animationFrame,
+  });
 }
 
 export function buildAgentTuiRootComponentModel(
@@ -116,7 +120,7 @@ export function buildAgentTuiRootComponentModel(
       id: column.session.id,
       isSelected: column.session.id === selectedColumnId,
       title: formatPanelTitle(column, columnsById),
-      content: formatContent(column),
+      content: formatContent(column, options),
     })),
     selectedColumnId,
   };

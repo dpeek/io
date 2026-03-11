@@ -18,6 +18,7 @@ import {
 export { createStatusSummaryFromCodexNotification } from "./codex-event-stream.js";
 
 const DEFAULT_TRANSCRIPT_WAITING_MESSAGE = "Waiting for session transcript...";
+const REASONING_SPINNER_FRAMES = ["|", "/", "-", "\\"];
 
 type BlockTarget = {
   blocks: AgentTuiBlock[];
@@ -77,6 +78,7 @@ export interface AgentTuiCommandEntry extends AgentTuiBlockBase {
 }
 
 export interface AgentTuiToolEntry extends AgentTuiBlockBase {
+  argumentsData?: unknown;
   argumentsText?: string;
   errorText?: string;
   itemId?: string;
@@ -249,7 +251,10 @@ function formatErrorText(data: Record<string, unknown> | undefined) {
 
 function getCommandOutputLines(event: AgentStatusEvent) {
   const lines = Array.isArray(event.data?.lines)
-    ? event.data.lines.map((line) => asString(line)).filter((line): line is string => Boolean(line))
+    ? event.data.lines
+        .map((line) => asString(line))
+        .filter((line): line is string => Boolean(line))
+        .map((line) => line.replace(/^\|\s?/, ""))
     : [];
   if (lines.length) {
     return lines;
@@ -682,7 +687,218 @@ function formatLifecycleEntry(entry: Extract<AgentTuiBlock, { kind: "lifecycle" 
   return [entry.text];
 }
 
+function normalizeBlockLines(text: string) {
+  return text.replace(/\r\n/g, "\n").split("\n").map((line) => line.trimEnd());
+}
+
+function indentBlockLines(lines: string[], prefix = "  ") {
+  return lines.map((line) => (line ? `${prefix}${line}` : prefix.trimEnd()));
+}
+
+function truncateInlineText(text: string, maxLength = 160) {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function formatInlineValue(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return truncateInlineText(value.replace(/\s+/g, " ").trim());
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    const inlineItems = value
+      .map((item) => formatInlineValue(item))
+      .filter((item): item is string => Boolean(item));
+    if (!inlineItems.length) {
+      return "[]";
+    }
+    return truncateInlineText(inlineItems.join(", "));
+  }
+  if (value && typeof value === "object") {
+    return "{...}";
+  }
+  return undefined;
+}
+
+function formatJsonBlock(value: unknown, maxLines = 10) {
+  const pretty = JSON.stringify(value, null, 2);
+  if (!pretty) {
+    return [];
+  }
+  const lines = pretty.split("\n");
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+  return [...lines.slice(0, maxLines - 1), "..."];
+}
+
+function formatRecordSummaryLines(
+  record: Record<string, unknown>,
+  preferredKeys: readonly string[] = [],
+  maxLines = 8,
+) {
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  const keys = [...preferredKeys, ...Object.keys(record).sort()];
+
+  for (const key of keys) {
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    const value = record[key];
+    if (value === undefined || value === null || value === "") {
+      continue;
+    }
+    const inlineValue = formatInlineValue(value);
+    if (!inlineValue) {
+      continue;
+    }
+    lines.push(`${key}: ${inlineValue}`);
+    if (lines.length >= maxLines) {
+      break;
+    }
+  }
+
+  if (lines.length < Object.keys(record).length) {
+    lines.push("...");
+  }
+
+  return lines;
+}
+
+function formatLinearToolArgumentLines(tool: string, record: Record<string, unknown>) {
+  const preferredKeysByTool: Record<string, string[]> = {
+    create_attachment: ["issue", "filename", "title", "subtitle"],
+    create_document: ["issue", "project", "title", "icon"],
+    save_comment: ["issueId", "id", "parentId", "body"],
+    save_issue: [
+      "id",
+      "title",
+      "state",
+      "priority",
+      "project",
+      "assignee",
+      "labels",
+      "dueDate",
+      "parentId",
+      "description",
+    ],
+    update_document: ["id", "project", "title", "icon", "content"],
+  };
+
+  return formatRecordSummaryLines(record, preferredKeysByTool[tool] ?? []);
+}
+
+function getToolArgumentLines(
+  server: string | undefined,
+  tool: string | undefined,
+  argumentsData: unknown,
+  argumentsText: string | undefined,
+) {
+  const parsedArguments =
+    argumentsData ??
+    (() => {
+      if (!argumentsText) {
+        return undefined;
+      }
+      try {
+        return JSON.parse(argumentsText);
+      } catch {
+        return undefined;
+      }
+    })();
+
+  if (!parsedArguments) {
+    return [];
+  }
+  if (server === "linear") {
+    const record = asRecord(parsedArguments);
+    if (record) {
+      return formatLinearToolArgumentLines(tool ?? "", record);
+    }
+  }
+
+  const record = asRecord(parsedArguments);
+  if (record) {
+    return formatRecordSummaryLines(record);
+  }
+
+  if (typeof parsedArguments === "string") {
+    return normalizeBlockLines(parsedArguments);
+  }
+
+  return formatJsonBlock(parsedArguments);
+}
+
+function parseToolText(text: string | undefined) {
+  if (!text) {
+    return undefined;
+  }
+  const match = text.match(/^Tool:\s+([^. ]+)\.([^ ]+)(?:\s+(.+))?$/);
+  if (!match) {
+    return undefined;
+  }
+  const [, server, tool, argumentsText] = match;
+  return {
+    argumentsText,
+    server,
+    tool,
+  };
+}
+
+function formatToolBlock(options: {
+  argumentsData?: unknown;
+  argumentsText?: string;
+  errorText?: string;
+  server?: string;
+  status?: "completed" | "failed" | "running";
+  tool?: string;
+}) {
+  const server = options.server;
+  const tool = options.tool;
+  if (!server || !tool) {
+    return options.errorText ? [`Tool failed: ${options.errorText}`] : [];
+  }
+
+  const statusSuffix =
+    options.status === "running" ? " [running]" : options.status === "failed" ? " [failed]" : "";
+  const lines = [`Tool: ${server}.${tool}${statusSuffix}`];
+  const argumentLines = getToolArgumentLines(
+    server,
+    tool,
+    options.argumentsData,
+    options.argumentsText,
+  );
+  if (argumentLines.length) {
+    lines.push("args:");
+    lines.push(...indentBlockLines(argumentLines));
+  }
+  if (options.errorText) {
+    lines.push("error:");
+    lines.push(...indentBlockLines(normalizeBlockLines(options.errorText)));
+  }
+  return lines;
+}
+
 function formatStatusEntry(entry: Extract<AgentTuiBlock, { kind: "status" }>) {
+  if (entry.code === "tool") {
+    const parsedToolText = parseToolText(entry.text);
+    const toolLines = formatToolBlock({
+      argumentsData: entry.data?.arguments,
+      argumentsText: parsedToolText?.argumentsText,
+      server: asString(entry.data?.server) ?? parsedToolText?.server,
+      status: "running",
+      tool: asString(entry.data?.tool) ?? parsedToolText?.tool,
+    });
+    if (toolLines.length) {
+      return toolLines;
+    }
+  }
   return [entry.text];
 }
 
@@ -702,13 +918,14 @@ function formatAgentMessageEntry(entry: Extract<AgentTuiBlock, { kind: "agent-me
 function formatCommandEntry(entry: Extract<AgentTuiBlock, { kind: "command" }>) {
   const header = `$ ${entry.command}`;
   const lines = [header];
+  if (entry.outputLines.length) {
+    lines.push("output:");
+    lines.push(...indentBlockLines(entry.outputLines));
+  }
   if (entry.status === "failed") {
     lines.push(
       `Command failed${typeof entry.exitCode === "number" ? ` (exit ${entry.exitCode})` : ""}`,
     );
-  }
-  if (entry.outputLines.length) {
-    lines.push(...entry.outputLines.map((line) => `| ${line}`));
   }
   return lines;
 }
@@ -717,7 +934,7 @@ function formatCommandOutputEntry(entry: Extract<AgentTuiBlock, { kind: "command
   if (!entry.lines.length) {
     return [];
   }
-  return entry.lines.map((line) => `| ${line}`);
+  return ["output:", ...indentBlockLines(entry.lines)];
 }
 
 function formatRawEntry(entry: Extract<AgentTuiBlock, { kind: "raw" }>) {
@@ -740,25 +957,36 @@ function formatPlanEntry(entry: Extract<AgentTuiBlock, { kind: "plan" }>) {
 }
 
 function formatReasoningEntry(entry: Extract<AgentTuiBlock, { kind: "reasoning" }>) {
-  const combined = [...entry.summary, ...entry.content].filter(Boolean);
-  if (!combined.length) {
-    return [];
+  const rawLines = [...entry.summary, ...entry.content]
+    .filter(Boolean)
+    .flatMap((part) => normalizeBlockLines(part))
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const previewLines = rawLines.slice(-4);
+  const header =
+    entry.status === "streaming"
+      ? `Reasoning [${REASONING_SPINNER_FRAMES[0]}]`
+      : "Reasoning [done]";
+  if (!previewLines.length) {
+    return [header];
   }
-  return [
-    `Reasoning: ${(combined.at(-1) ?? combined[0] ?? "").replace(/\r\n/g, "\n").replace(/\n+/g, " ").trim()}`,
-  ];
+  return [header, ...indentBlockLines(previewLines)];
 }
 
 function formatToolEntry(entry: Extract<AgentTuiBlock, { kind: "tool" }>) {
-  const header = `Tool: ${entry.server}.${entry.tool}${entry.argumentsText ? ` ${entry.argumentsText}` : ""}`;
-  const lines = [header];
-  if (entry.errorText) {
-    lines.push(`Tool failed: ${entry.errorText}`);
-  }
-  return lines;
+  return formatToolBlock(entry);
 }
 
-export function formatBlocks(blocks: AgentTuiBlock[]) {
+export function hasStreamingReasoningBlocks(blocks: AgentTuiBlock[]) {
+  return blocks.some((entry) => entry.kind === "reasoning" && entry.status === "streaming");
+}
+
+export function formatBlocks(
+  blocks: AgentTuiBlock[],
+  options: {
+    animationFrame?: number;
+  } = {},
+) {
   if (!blocks.length) {
     return DEFAULT_TRANSCRIPT_WAITING_MESSAGE;
   }
@@ -784,7 +1012,18 @@ export function formatBlocks(blocks: AgentTuiBlock[]) {
       case "raw":
         return formatRawEntry(entry);
       case "reasoning":
-        return formatReasoningEntry(entry);
+        return (() => {
+          const formatted = formatReasoningEntry(entry);
+          if (entry.status !== "streaming" || !formatted.length) {
+            return formatted;
+          }
+          const frame =
+            REASONING_SPINNER_FRAMES[
+              Math.abs(options.animationFrame ?? 0) % REASONING_SPINNER_FRAMES.length
+            ] ?? REASONING_SPINNER_FRAMES[0];
+          formatted[0] = `Reasoning [${frame}]`;
+          return formatted;
+        })();
       case "tool":
         return formatToolEntry(entry);
     }
