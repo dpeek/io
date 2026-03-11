@@ -1,11 +1,11 @@
 import { createLogger, handleExit } from "@io/lib";
 
-import type { AgentSessionEvent, AgentSessionPhase } from "./session-events.js";
 import { AgentService } from "./service.js";
+import type { AgentSessionEvent, AgentSessionPhase } from "./session-events.js";
 import { AgentTuiRetainedReader } from "./tui-runtime.js";
+import { createAgentTui } from "./tui.js";
 import { loadWorkflowFile } from "./workflow.js";
 import { readIssueRuntimeState } from "./workspace.js";
-import { createAgentTui } from "./tui.js";
 
 function printHelp() {
   console.log(`Usage:
@@ -105,7 +105,9 @@ function parseRetainedTuiOptions(
   }
 
   if (!options.issueIdentifier) {
-    throw new Error(`Usage: io agent tui ${mode} <issue> [entrypointPath]${mode === "replay" ? " [--delay-ms <ms>]" : ""}`);
+    throw new Error(
+      `Usage: io agent tui ${mode} <issue> [entrypointPath]${mode === "replay" ? " [--delay-ms <ms>]" : ""}`,
+    );
   }
   return options;
 }
@@ -163,7 +165,10 @@ async function runRetainedTui(options: RetainedTuiCommandOptions) {
     return;
   }
 
-  const issueState = await readIssueRuntimeState(result.value.workspace.root, options.issueIdentifier);
+  const issueState = await readIssueRuntimeState(
+    result.value.workspace.root,
+    options.issueIdentifier,
+  );
   if (!issueState) {
     console.error(`No retained issue output for ${options.issueIdentifier}`);
     process.exitCode = 1;
@@ -199,7 +204,10 @@ async function runRetainedTui(options: RetainedTuiCommandOptions) {
 
   const observe = (event: AgentSessionEvent) => {
     tui.observe(event);
-    if (options.mode === "attach" && isCompletedRetainedSessionEvent(event, reader.workerSession.id)) {
+    if (
+      options.mode === "attach" &&
+      isCompletedRetainedSessionEvent(event, reader.workerSession.id)
+    ) {
       void stop();
     }
   };

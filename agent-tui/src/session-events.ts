@@ -1,3 +1,10 @@
+export {
+  closeAgentSessionDisplayLine,
+  createAgentSessionDisplayState,
+  createAgentSessionStdoutObserver,
+  renderAgentStatusEvent,
+} from "./transcript.js";
+
 export type AgentSessionKind = "supervisor" | "worker" | "child";
 
 export interface AgentSessionIssueRef {
@@ -127,143 +134,5 @@ export function createAgentSessionEventBus(): AgentSessionEventBus {
         observers.delete(observer);
       };
     },
-  };
-}
-
-export function createAgentSessionDisplayState(): AgentSessionDisplayState {
-  return {
-    headerPrinted: false,
-    lineOpen: false,
-  };
-}
-
-function formatWorkerHeader(session: AgentSessionRef) {
-  const issueIdentifier = session.issue?.identifier ?? session.workerId;
-  const issueTitle = session.issue?.title ?? session.title;
-  const workerPrefix = session.workerId ? `${session.workerId} ` : "";
-  return `=== ${workerPrefix}${issueIdentifier} ${issueTitle} ===`;
-}
-
-function renderSessionText(
-  text: string,
-  state: AgentSessionDisplayState,
-  writeDisplay: (text: string) => void,
-) {
-  if (!text) {
-    return;
-  }
-  writeDisplay(text);
-  state.lineOpen = !text.endsWith("\n");
-}
-
-function renderSessionLine(
-  text: string,
-  state: AgentSessionDisplayState,
-  writeDisplay: (text: string) => void,
-) {
-  if (state.lineOpen) {
-    writeDisplay("\n");
-  }
-  writeDisplay(`${text}\n`);
-  state.lineOpen = false;
-}
-
-function closeSessionLine(
-  state: AgentSessionDisplayState,
-  writeDisplay: (text: string) => void,
-) {
-  if (!state.lineOpen) {
-    return;
-  }
-  writeDisplay("\n");
-  state.lineOpen = false;
-}
-
-export function closeAgentSessionDisplayLine(options: {
-  state: AgentSessionDisplayState;
-  writeDisplay: (text: string) => void;
-}) {
-  closeSessionLine(options.state, options.writeDisplay);
-}
-
-export function renderAgentStatusEvent(options: {
-  event: AgentStatusEvent;
-  state: AgentSessionDisplayState;
-  writeDisplay: (text: string) => void;
-}) {
-  const { event, state, writeDisplay } = options;
-  if (event.session.kind === "worker" && !state.headerPrinted) {
-    renderSessionLine(formatWorkerHeader(event.session), state, writeDisplay);
-    state.headerPrinted = true;
-  }
-
-  switch (event.format) {
-    case "chunk": {
-      if (event.itemId && state.activeAgentMessageId && event.itemId !== state.activeAgentMessageId) {
-        closeSessionLine(state, writeDisplay);
-      }
-      if (event.itemId) {
-        state.activeAgentMessageId = event.itemId;
-      }
-      renderSessionText(event.text ?? "", state, writeDisplay);
-      return;
-    }
-    case "close":
-      closeSessionLine(state, writeDisplay);
-      if (!event.itemId || event.itemId === state.activeAgentMessageId) {
-        state.activeAgentMessageId = undefined;
-      }
-      return;
-    case "line":
-      renderSessionLine(event.text ?? "", state, writeDisplay);
-      return;
-  }
-}
-
-export function createAgentSessionStdoutObserver(): AgentSessionEventObserver {
-  const displayStates = new Map<string, AgentSessionDisplayState>();
-
-  return (event) => {
-    if (event.type === "session") {
-      return;
-    }
-
-    const displayState =
-      displayStates.get(event.session.id) ??
-      (() => {
-        const state = createAgentSessionDisplayState();
-        displayStates.set(event.session.id, state);
-        return state;
-      })();
-
-    if (event.type === "status") {
-      renderAgentStatusEvent({
-        event,
-        state: displayState,
-        writeDisplay: (text) => {
-          process.stdout.write(text);
-        },
-      });
-      return;
-    }
-
-    if (event.stream === "stdout" && event.encoding !== "text") {
-      return;
-    }
-
-    closeAgentSessionDisplayLine({
-      state: displayState,
-      writeDisplay: (text) => {
-        process.stdout.write(text);
-      },
-    });
-
-    const issueIdentifier = event.session.issue?.identifier ?? event.session.workerId;
-    const text = `[${issueIdentifier} ${event.stream}] ${event.line}\n`;
-    if (event.stream === "stderr") {
-      process.stderr.write(text);
-      return;
-    }
-    process.stdout.write(text);
   };
 }

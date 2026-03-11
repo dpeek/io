@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import type { AgentIssue, HookConfig } from "./types.js";
-
 import { readIssueRuntimeState, WorkspaceManager } from "./workspace.js";
 
 const hooks: HookConfig = { timeoutMs: 5_000 };
@@ -72,11 +71,7 @@ async function commitAll(cwd: string, message: string) {
   return await run(["git", "rev-parse", "HEAD"], cwd);
 }
 
-async function writeWorkerState(
-  rootDir: string,
-  workerId: string,
-  state: Record<string, unknown>,
-) {
+async function writeWorkerState(rootDir: string, workerId: string, state: Record<string, unknown>) {
   await mkdir(resolve(rootDir, "workers", workerId), { recursive: true });
   await writeFile(
     resolve(rootDir, "workers", workerId, "worker-state.json"),

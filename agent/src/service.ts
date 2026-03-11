@@ -1,15 +1,11 @@
-import { createLogger, type Logger } from "@io/lib";
 import { appendFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import type {
-  AgentIssue,
-  IssueRunResult,
-  PreparedWorkspace,
-  Workflow,
-} from "./types.js";
+import { createLogger, type Logger } from "@io/lib";
 
 import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
+import { resolveIssueRouting } from "./issue-routing.js";
+import { CodexAppServerRunner } from "./runner/codex.js";
 import {
   createAgentSessionEventBus,
   createAgentSessionStdoutObserver,
@@ -17,9 +13,8 @@ import {
   type AgentSessionEventObserver,
   type AgentSessionRef,
 } from "./session-events.js";
-import { resolveIssueRouting } from "./issue-routing.js";
-import { CodexAppServerRunner } from "./runner/codex.js";
 import { LinearTrackerAdapter } from "./tracker/linear.js";
+import type { AgentIssue, IssueRunResult, PreparedWorkspace, Workflow } from "./types.js";
 import { loadWorkflowFile, renderPrompt, toWorkspaceKey } from "./workflow.js";
 import { WorkspaceManager } from "./workspace.js";
 

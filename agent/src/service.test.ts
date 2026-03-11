@@ -46,7 +46,9 @@ function buildExpectedPrompt(
     [
       ...builtinIds.map((id) => `<!-- ${id} -->\n${resolveBuiltinDoc(id)!.content.trim()}`),
       `<!-- ${promptPath} -->\n${promptTemplate.trim()}`,
-      issue.description ? "<!-- issue.context -->\nIssue Description:\n\n{{ issue.description }}" : "",
+      issue.description
+        ? "<!-- issue.context -->\nIssue Description:\n\n{{ issue.description }}"
+        : "",
     ].join("\n\n"),
     {
       attempt: 1,
@@ -977,9 +979,7 @@ test("AgentService publishes supervisor and worker session events", async () => 
     expect(
       events.some(
         (event) =>
-          event.type === "status" &&
-          event.code === "ready" &&
-          event.session.id === "supervisor",
+          event.type === "status" && event.code === "ready" && event.session.id === "supervisor",
       ),
     ).toBe(true);
 

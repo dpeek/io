@@ -1,16 +1,18 @@
 import { expect, test } from "bun:test";
 
 import {
-  buildAutomaticUserInputResponse,
-  createDefaultTurnSandbox,
-  normalizeCodexSessionMessage,
-} from "./codex.js";
-import {
   closeAgentSessionDisplayLine,
   createAgentSessionDisplayState,
   renderAgentStatusEvent,
   type AgentSessionRef,
 } from "../session-events.js";
+import {
+  buildAutomaticUserInputResponse,
+  createDefaultTurnSandbox,
+  normalizeCodexSessionMessage,
+} from "./codex.js";
+
+type CodexSessionMessage = Parameters<typeof normalizeCodexSessionMessage>[0];
 
 function createSession(): AgentSessionRef {
   return {
@@ -33,7 +35,7 @@ function renderMessages(messages: Array<Record<string, unknown>>) {
   let sequence = 0;
 
   for (const message of messages) {
-    for (const event of normalizeCodexSessionMessage(message)) {
+    for (const event of normalizeCodexSessionMessage(message as CodexSessionMessage)) {
       renderAgentStatusEvent({
         event: {
           ...event,
@@ -47,7 +49,7 @@ function renderMessages(messages: Array<Record<string, unknown>>) {
         },
       });
     }
-  };
+  }
   return chunks.join("");
 }
 
@@ -64,24 +66,22 @@ test("normalizes codex messages into typed status events", () => {
           type: "commandExecution",
         },
       },
-    }),
+    } as CodexSessionMessage),
   ).toEqual([
     {
       code: "command-output",
+      data: {
+        lines: ["## main", " M agent/src/runner/codex.ts"],
+      },
       format: "line",
-      text: "| ## main",
-      type: "status",
-    },
-    {
-      code: "command-output",
-      format: "line",
-      text: "|  M agent/src/runner/codex.ts",
       type: "status",
     },
     {
       code: "command-failed",
+      data: {
+        exitCode: 1,
+      },
       format: "line",
-      text: "Command failed (exit 1)",
       type: "status",
     },
   ]);
@@ -238,11 +238,15 @@ test("auto-approves requestUserInput prompts for the session", () => {
     questions: [
       {
         id: "approval-1",
+        header: "Approve app tool call?",
+        isOther: false,
+        isSecret: false,
         options: [
           { description: "Run once", label: "Approve Once" },
           { description: "Remember choice", label: "Approve this Session" },
           { description: "Decline", label: "Deny" },
         ],
+        question: "Allow this action?",
       },
     ],
   });

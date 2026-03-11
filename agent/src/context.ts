@@ -31,7 +31,15 @@ const REPO_PATH_DOC_REF_PATTERN =
 const issueBodyHintsSchema = z
   .object({
     agent: z.enum(["backlog", "execute"]).optional(),
-    docs: z.union([z.array(z.string().min(1)), z.string().min(1).transform((value) => [value])]).default([]),
+    docs: z
+      .union([
+        z.array(z.string().min(1)),
+        z
+          .string()
+          .min(1)
+          .transform((value) => [value]),
+      ])
+      .default([]),
     profile: z.string().min(1).optional(),
   })
   .strict();
@@ -103,7 +111,8 @@ function resolveIssueSelection(
   const agent = hints.agent ?? baseSelection.agent;
   return {
     agent,
-    profile: hints.profile?.trim() || (hints.agent && !hints.profile ? agent : baseSelection.profile),
+    profile:
+      hints.profile?.trim() || (hints.agent && !hints.profile ? agent : baseSelection.profile),
   };
 }
 
@@ -111,7 +120,7 @@ function parseIssueBodyHints(description: string) {
   const warnings: string[] = [];
   const matches = [...description.matchAll(ISSUE_HINT_BLOCK_PATTERN)];
   if (matches.length > 1) {
-    warnings.push('Multiple `<!-- io ... -->` blocks found; using the first block.');
+    warnings.push("Multiple `<!-- io ... -->` blocks found; using the first block.");
   }
 
   const descriptionWithoutHints = description.replaceAll(ISSUE_HINT_BLOCK_PATTERN, "").trim();
@@ -179,7 +188,9 @@ async function resolveDocReference(
   repoRoot: string,
   reference: string,
 ): Promise<PendingResolvedContextDoc | undefined> {
-  const overridePath = isRepoPathDocReference(reference) ? undefined : workflow.context.overrides[reference];
+  const overridePath = isRepoPathDocReference(reference)
+    ? undefined
+    : workflow.context.overrides[reference];
   if (overridePath) {
     return {
       content: await readTrimmedFile(overridePath),

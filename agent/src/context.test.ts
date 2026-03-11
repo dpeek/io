@@ -216,12 +216,14 @@ test("resolveIssueContext supports doc-id overrides and profile entrypoint opt-o
       workflow,
     });
 
-    expect(resolved.bundle.docs.map((doc) => ({
-      id: doc.id,
-      overridden: doc.overridden,
-      path: doc.path,
-      source: doc.source,
-    }))).toEqual([
+    expect(
+      resolved.bundle.docs.map((doc) => ({
+        id: doc.id,
+        overridden: doc.overridden,
+        path: doc.path,
+        source: doc.source,
+      })),
+    ).toEqual([
       {
         id: "project.architecture",
         overridden: true,

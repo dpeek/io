@@ -1,5 +1,5 @@
-import { LinearClient } from "@linear/sdk";
 import { createLogger, type Logger } from "@io/lib";
+import { LinearClient } from "@linear/sdk";
 
 import type { AgentIssue, TrackerConfig } from "../types.js";
 
@@ -81,13 +81,10 @@ interface CandidateIssueNode {
   id: string;
   identifier: string;
   inverseRelations?: {
-    nodes?: Array<
-      | {
-          relatedIssue?: { id: string; state?: { name?: string | null } | null } | null;
-          type?: string | null;
-        }
-      | null
-    > | null;
+    nodes?: Array<{
+      relatedIssue?: { id: string; state?: { name?: string | null } | null } | null;
+      type?: string | null;
+    } | null> | null;
   } | null;
   labels?: { nodes?: Array<{ name?: string | null } | null> | null } | null;
   parent?: { id: string; identifier?: string | null } | null;

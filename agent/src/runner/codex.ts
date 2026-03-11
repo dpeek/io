@@ -1,18 +1,37 @@
-import { createLogger, type Logger } from "@io/lib";
 import { appendFile, mkdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 
+import { createLogger, type Logger } from "@io/lib";
+
+import type {
+  ApplyPatchApprovalResponse,
+  ExecCommandApprovalResponse,
+  InitializeParams,
+  InitializeResponse,
+  ServerRequest,
+} from "../plugin/codex/server/api/index.js";
 import type {
   CommandExecutionRequestApprovalResponse,
   DynamicToolCallResponse,
   FileChangeRequestApprovalResponse,
-  InitializeParams,
   ThreadStartParams,
   ThreadStartResponse,
+  ToolRequestUserInputParams,
+  ToolRequestUserInputQuestion,
   ToolRequestUserInputResponse,
   TurnStartParams,
   TurnStartResponse,
-} from "../codex-schema.js";
+} from "../plugin/codex/server/api/v2/index.js";
+import {
+  isJsonRpcErrorResponse,
+  isJsonRpcSuccessResponse,
+  isServerNotificationMessage,
+  isServerRequestMessage,
+  normalizeCodexSessionMessage,
+  summarizeCodexMessage,
+  summarizeCodexParams,
+  type CodexSessionMessage,
+} from "./codex-events.js";
 import {
   closeAgentSessionDisplayLine,
   createAgentSessionDisplayState,
@@ -28,13 +47,10 @@ import {
 } from "../session-events.js";
 import type { AgentIssue, CodexConfig, IssueRunResult, PreparedWorkspace } from "../types.js";
 
-type JsonRpcMessage = {
-  error?: { message?: string };
-  id?: number | string;
-  method?: string;
-  params?: unknown;
-  result?: unknown;
-};
+export {
+  normalizeCodexSessionMessage,
+  type CodexSessionMessage,
+} from "./codex-events.js";
 
 type PendingTurnState = {
   inputRequired: boolean;
@@ -46,8 +62,8 @@ type PendingTurnState = {
 class MessageQueue {
   #closed = false;
   #error?: Error;
-  #messages: JsonRpcMessage[] = [];
-  #resolvers: Array<(message: JsonRpcMessage) => void> = [];
+  #messages: CodexSessionMessage[] = [];
+  #resolvers: Array<(message: CodexSessionMessage) => void> = [];
 
   close(error?: Error) {
     this.#closed = true;
@@ -58,7 +74,7 @@ class MessageQueue {
     }
   }
 
-  push(message: JsonRpcMessage) {
+  push(message: CodexSessionMessage) {
     const resolve = this.#resolvers.shift();
     if (resolve) {
       resolve(message);
@@ -67,19 +83,19 @@ class MessageQueue {
     this.#messages.push(message);
   }
 
-  async take(timeoutMs: number): Promise<JsonRpcMessage> {
+  async take(timeoutMs: number): Promise<CodexSessionMessage> {
     if (this.#messages.length) {
       return this.#messages.shift()!;
     }
     if (this.#closed) {
       throw this.#error ?? new Error("codex_app_server_closed");
     }
-    return await new Promise<JsonRpcMessage>((resolve, reject) => {
+    return await new Promise<CodexSessionMessage>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#resolvers = this.#resolvers.filter((entry) => entry !== onResolve);
         reject(new Error("response_timeout"));
       }, timeoutMs);
-      const onResolve = (message: JsonRpcMessage) => {
+      const onResolve = (message: CodexSessionMessage) => {
         clearTimeout(timer);
         resolve(message);
       };
@@ -165,76 +181,26 @@ export function createDefaultTurnSandbox(workspace: PreparedWorkspace) {
   };
 }
 
-function summarizeMessage(message: JsonRpcMessage) {
-  if (message.method) {
-    return message.method;
-  }
-  if (message.id !== undefined && message.error) {
-    return `response:error:${message.id}`;
-  }
-  if (message.id !== undefined && "result" in message) {
-    return `response:ok:${message.id}`;
-  }
-  return "message:unknown";
-}
-
-function summarizeParams(params: unknown) {
-  if (!params || typeof params !== "object") {
+function toWireSandboxPolicy(
+  policy: CodexConfig["turnSandboxPolicy"] | ReturnType<typeof createDefaultTurnSandbox> | undefined,
+): TurnStartParams["sandboxPolicy"] {
+  if (!policy) {
     return undefined;
   }
-  const record = params as Record<string, unknown>;
-  return {
-    itemId: typeof record.itemId === "string" ? record.itemId : undefined,
-    threadId: typeof record.threadId === "string" ? record.threadId : undefined,
-    turnId: typeof record.turnId === "string" ? record.turnId : undefined,
-  };
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object") {
-    return undefined;
+  if (policy.type === "externalSandbox") {
+    if (policy.networkAccess === "disabled") {
+      throw new Error('Codex v2 does not support `externalSandbox.networkAccess: "disabled"`.');
+    }
+    return {
+      networkAccess: policy.networkAccess,
+      type: "externalSandbox",
+    };
   }
-  return value as Record<string, unknown>;
+  return policy;
 }
 
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-function summarizeCommandAction(action: unknown) {
-  const record = asRecord(action);
-  return asString(record?.command) ?? asString(record?.cmd);
-}
-
-function summarizeCommandExecution(item: Record<string, unknown>) {
-  const actions = Array.isArray(item.commandActions) ? item.commandActions : [];
-  const actionCommand = actions.map(summarizeCommandAction).find(Boolean);
-  return actionCommand ?? asString(item.command) ?? "command";
-}
-
-function summarizeToolCall(item: Record<string, unknown>) {
-  const server = asString(item.server) ?? "tool";
-  const tool = asString(item.tool) ?? "call";
-  const argumentsText =
-    item.arguments && typeof item.arguments === "object"
-      ? ` ${JSON.stringify(item.arguments)}`
-      : "";
-  return `${server}.${tool}${argumentsText}`;
-}
-
-function formatQuestionSummary(question: unknown) {
-  const record = asRecord(question);
-  const header = asString(record?.header);
-  const prompt = asString(record?.question);
-  return [header, prompt].filter(Boolean).join(": ");
-}
-
-function chooseApprovalOptionLabel(question: unknown) {
-  const record = asRecord(question);
-  const options = Array.isArray(record?.options) ? record.options : [];
-  const labels = options
-    .map((option) => asString(asRecord(option)?.label))
-    .filter((label): label is string => Boolean(label));
+function chooseApprovalOptionLabel(question: ToolRequestUserInputQuestion) {
+  const labels = (question.options ?? []).map((option) => option.label).filter(Boolean);
   return (
     labels.find((label) => /^approve this session$/i.test(label)) ??
     labels.find((label) => /^approve once$/i.test(label)) ??
@@ -244,200 +210,30 @@ function chooseApprovalOptionLabel(question: unknown) {
 }
 
 export function buildAutomaticUserInputResponse(
-  params: unknown,
+  params: Pick<ToolRequestUserInputParams, "questions">,
 ): ToolRequestUserInputResponse | undefined {
-  const record = asRecord(params);
-  const questions = Array.isArray(record?.questions) ? record.questions : [];
+  const { questions } = params;
   if (!questions.length) {
     return undefined;
   }
 
   const answers: ToolRequestUserInputResponse["answers"] = {};
   for (const question of questions) {
-    const questionRecord = asRecord(question);
-    const questionId = asString(questionRecord?.id);
     const label = chooseApprovalOptionLabel(question);
-    if (!questionId || !label) {
+    if (!question.id || !label) {
       return undefined;
     }
-    answers[questionId] = { answers: [label] };
+    answers[question.id] = { answers: [label] };
   }
   return { answers };
 }
 
-type CodexStatusEvent = Omit<AgentStatusEventInit, "session">;
 type RunnerSessionEvent =
-  | CodexStatusEvent
+  | Omit<AgentStatusEventInit, "session">
   | Omit<AgentRawLineEventInit, "session">
   | Omit<AgentSessionLifecycleEventInit, "session">;
 
-function renderCommandOutput(output: string): CodexStatusEvent[] {
-  const normalized = output.replace(/\r\n/g, "\n").replace(/\n$/, "");
-  if (!normalized) {
-    return [];
-  }
-  return normalized.split("\n").map((line) => ({
-    code: "command-output",
-    format: "line",
-    text: `| ${line}`,
-    type: "status",
-  }));
-}
-
-export function normalizeCodexSessionMessage(message: JsonRpcMessage): CodexStatusEvent[] {
-  switch (message.method) {
-    case "thread/started":
-      return [{ code: "thread-started", format: "line", text: "Session started", type: "status" }];
-    case "turn/started":
-      return [{ code: "turn-started", format: "line", text: "Turn started", type: "status" }];
-    case "turn/completed":
-      return [{ code: "turn-completed", format: "line", text: "Turn completed", type: "status" }];
-    case "turn/cancelled":
-      return [{ code: "turn-cancelled", format: "line", text: "Turn cancelled", type: "status" }];
-    case "turn/failed":
-      return [{ code: "turn-failed", format: "line", text: "Turn failed", type: "status" }];
-    case "thread/status/changed": {
-      const params = asRecord(message.params);
-      const status = asRecord(params?.status);
-      const activeFlags = Array.isArray(status?.activeFlags) ? status.activeFlags : [];
-      if (!activeFlags.includes("waitingOnUserInput")) {
-        return [];
-      }
-      return [
-        {
-          code: "waiting-on-user-input",
-          format: "line",
-          text: "Waiting for user input",
-          type: "status",
-        },
-      ];
-    }
-    case "item/started": {
-      const params = asRecord(message.params);
-      const item = asRecord(params?.item);
-      const itemType = asString(item?.type);
-      if (!item || !itemType) {
-        return [];
-      }
-      if (itemType === "commandExecution") {
-        return [
-          {
-            code: "command",
-            format: "line",
-            text: `$ ${summarizeCommandExecution(item)}`,
-            type: "status",
-          },
-        ];
-      }
-      if (itemType === "mcpToolCall") {
-        return [
-          {
-            code: "tool",
-            format: "line",
-            text: `Tool: ${summarizeToolCall(item)}`,
-            type: "status",
-          },
-        ];
-      }
-      return [];
-    }
-    case "item/agentMessage/delta": {
-      const params = asRecord(message.params);
-      const delta = asString(params?.delta) ?? "";
-      if (!delta) {
-        return [];
-      }
-      return [
-        {
-          code: "agent-message-delta",
-          format: "chunk",
-          itemId: asString(params?.itemId),
-          text: delta,
-          type: "status",
-        },
-      ];
-    }
-    case "item/tool/requestUserInput": {
-      const params = asRecord(message.params);
-      const questions = Array.isArray(params?.questions) ? params.questions : [];
-      const summary = questions.map(formatQuestionSummary).filter(Boolean).join(" | ");
-      return [
-        {
-          code: "approval-required",
-          format: "line",
-          text: summary ? `Approval required: ${summary}` : "Approval required",
-          type: "status",
-        },
-      ];
-    }
-    case "item/completed": {
-      const params = asRecord(message.params);
-      const item = asRecord(params?.item);
-      const itemType = asString(item?.type);
-      if (!item || !itemType) {
-        return [];
-      }
-      if (itemType === "agentMessage") {
-        return [
-          {
-            code: "agent-message-completed",
-            format: "close",
-            itemId: asString(item.id),
-            type: "status",
-          },
-        ];
-      }
-      if (itemType === "commandExecution") {
-        const events = renderCommandOutput(asString(item.aggregatedOutput) ?? "");
-        const status = asString(item.status);
-        const exitCode = item.exitCode;
-        if (status === "failed") {
-          const suffix = typeof exitCode === "number" ? ` (exit ${exitCode})` : "";
-          events.push({
-            code: "command-failed",
-            format: "line",
-            text: `Command failed${suffix}`,
-            type: "status",
-          });
-        }
-        return events;
-      }
-      if (itemType === "mcpToolCall") {
-        const error = asRecord(item.error);
-        const errorMessage = asString(error?.message);
-        if (!errorMessage) {
-          return [];
-        }
-        return [
-          {
-            code: "tool-failed",
-            format: "line",
-            text: `Tool failed: ${errorMessage}`,
-            type: "status",
-          },
-        ];
-      }
-      return [];
-    }
-    case "error":
-      return [
-        {
-          code: "error",
-          format: "line",
-          text: `Error: ${JSON.stringify(message.params)}`,
-          type: "status",
-        },
-      ];
-    default:
-      return [];
-  }
-}
-
-function formatRawLineOutput(
-  session: AgentSessionRef,
-  stream: "stdout" | "stderr",
-  line: string,
-) {
+function formatRawLineOutput(session: AgentSessionRef, stream: "stdout" | "stderr", line: string) {
   const issueIdentifier = session.issue?.identifier ?? session.workerId;
   return `[${issueIdentifier} ${stream}] ${line}\n`;
 }
@@ -517,7 +313,10 @@ async function createWorkspaceLogObserver(
       if (event.stream === "stdout") {
         appendLine(stdoutLogPath, event.line);
         if (event.encoding === "text") {
-          enqueueAppend(mainOutputPath, formatRawLineOutput(event.session, event.stream, event.line));
+          enqueueAppend(
+            mainOutputPath,
+            formatRawLineOutput(event.session, event.stream, event.line),
+          );
         }
         return;
       }
@@ -601,7 +400,7 @@ export class CodexAppServerRunner {
       (line) => {
         state.stdout.push(line);
         try {
-          const message = JSON.parse(line) as JsonRpcMessage;
+          const message = JSON.parse(line) as CodexSessionMessage;
           publish({
             encoding: "jsonl",
             line,
@@ -611,12 +410,15 @@ export class CodexAppServerRunner {
           for (const event of normalizeCodexSessionMessage(message)) {
             publish(event);
           }
-          state.lastEvent = summarizeMessage(message);
-          if (message.method && message.method !== "item/agentMessage/delta") {
+          state.lastEvent = summarizeCodexMessage(message);
+          if (
+            (isServerNotificationMessage(message) || isServerRequestMessage(message)) &&
+            message.method !== "item/agentMessage/delta"
+          ) {
             this.#log.info("session.event", {
               event: message.method,
               issueIdentifier: options.issue.identifier,
-              ...summarizeParams(message.params),
+              ...summarizeCodexParams(message.params),
               workspace: options.workspace.path,
             });
           }
@@ -696,7 +498,13 @@ export class CodexAppServerRunner {
         clientInfo: { name: "opensurf-agent", title: "OpenSurf Agent", version: "0.0.0" },
       }),
     );
-    await this.#waitForResponse(initializeId, queue, state, options.workspace.path, sendLine);
+    await this.#waitForResponse<InitializeResponse>(
+      initializeId,
+      queue,
+      state,
+      options.workspace.path,
+      sendLine,
+    );
     sendLine(toNotification("initialized"));
     const thread = await sendRequest<ThreadStartResponse>("thread/start", {
       approvalPolicy: this.#config.approvalPolicy,
@@ -717,7 +525,9 @@ export class CodexAppServerRunner {
       approvalPolicy: this.#config.approvalPolicy,
       cwd: options.workspace.path,
       input: [{ text: options.prompt, text_elements: [], type: "text" }],
-      sandboxPolicy: this.#config.turnSandboxPolicy ?? createDefaultTurnSandbox(options.workspace),
+      sandboxPolicy: toWireSandboxPolicy(
+        this.#config.turnSandboxPolicy ?? createDefaultTurnSandbox(options.workspace),
+      ),
       threadId,
     } satisfies TurnStartParams);
     const turnId = turn.turn.id;
@@ -793,23 +603,26 @@ export class CodexAppServerRunner {
   }
 
   async #handleServerRequest(
-    message: JsonRpcMessage,
+    message: ServerRequest,
     workspacePath: string,
     state: PendingTurnState,
   ) {
     const requestId = message.id;
-    if (requestId === undefined) {
-      return;
-    }
     switch (message.method) {
-      case "item/commandExecution/requestApproval":
-      case "execCommandApproval": {
+      case "item/commandExecution/requestApproval": {
         const response: CommandExecutionRequestApprovalResponse = { decision: "acceptForSession" };
         return JSON.stringify({ id: requestId, result: response });
       }
-      case "item/fileChange/requestApproval":
-      case "applyPatchApproval": {
+      case "execCommandApproval": {
+        const response: ExecCommandApprovalResponse = { decision: "approved_for_session" };
+        return JSON.stringify({ id: requestId, result: response });
+      }
+      case "item/fileChange/requestApproval": {
         const response: FileChangeRequestApprovalResponse = { decision: "acceptForSession" };
+        return JSON.stringify({ id: requestId, result: response });
+      }
+      case "applyPatchApproval": {
+        const response: ApplyPatchApprovalResponse = { decision: "approved_for_session" };
         return JSON.stringify({ id: requestId, result: response });
       }
       case "item/tool/call": {
@@ -851,21 +664,21 @@ export class CodexAppServerRunner {
   ): Promise<T> {
     for (;;) {
       const message = await queue.take(this.#config.readTimeoutMs);
-      if (message.id === id && "result" in message) {
+      if (isJsonRpcSuccessResponse(message) && message.id === id) {
         return message.result as T;
       }
-      if (message.id === id && message.error) {
+      if (isJsonRpcErrorResponse(message) && message.id === id) {
         throw new Error(message.error.message ?? "response_error");
       }
-      if (message.method && message.id !== undefined) {
+      if (isServerRequestMessage(message)) {
         const response = await this.#handleServerRequest(message, workspacePath, state);
         if (response) {
           sendLine(response);
         }
         continue;
       }
-      if (message.method === "malformed") {
-        throw new Error(message.error?.message ?? "malformed");
+      if ("method" in message && message.method === "malformed") {
+        throw new Error(message.error.message);
       }
     }
   }
@@ -887,30 +700,30 @@ export class CodexAppServerRunner {
       const timeoutMs = Math.min(timeUntilTurnTimeout, timeUntilStallTimeout);
       const message = await queue.take(timeoutMs);
       lastActivity = Date.now();
-      if (message.method && message.id !== undefined) {
+      if (isServerRequestMessage(message)) {
         const response = await this.#handleServerRequest(message, workspacePath, state);
         if (response) {
           sendLine(response);
         }
         continue;
       }
-      if (message.method === "turn/completed") {
+      if (isServerNotificationMessage(message) && message.method === "turn/completed") {
         if (state.inputRequired) {
           throw new Error("turn_input_required");
         }
+        if (message.params.turn.status === "failed") {
+          throw new Error(message.params.turn.error?.message ?? "turn_failed");
+        }
+        if (message.params.turn.status === "interrupted") {
+          throw new Error("turn_interrupted");
+        }
         return;
       }
-      if (message.method === "turn/cancelled") {
-        throw new Error("turn_cancelled");
+      if (isServerNotificationMessage(message) && message.method === "error") {
+        throw new Error(message.params.error.message);
       }
-      if (message.method === "turn/failed") {
-        throw new Error("turn_failed");
-      }
-      if (message.method === "error") {
-        throw new Error(JSON.stringify(message.params));
-      }
-      if (message.method === "malformed") {
-        throw new Error(message.error?.message ?? "malformed");
+      if ("method" in message && message.method === "malformed") {
+        throw new Error(message.error.message);
       }
       if (Date.now() >= turnDeadline) {
         throw new Error("turn_timeout");

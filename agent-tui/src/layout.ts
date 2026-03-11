@@ -1,10 +1,10 @@
 import { basename } from "node:path";
 
 import type { AgentSessionRef, AgentStatusCode } from "./session-events.js";
+import { formatTranscriptEntries } from "./transcript.js";
 import type {
   AgentTuiColumnSnapshot,
   AgentTuiSnapshot,
-  AgentTuiTranscriptEntry,
 } from "./store.js";
 
 const DEFAULT_FRAME_COLUMNS = 120;
@@ -241,179 +241,17 @@ function formatColumnTitle(
   return `${prefix} ${activity.marker} ${formatTitle(column.session)}`;
 }
 
-function formatLifecycleEntry(entry: Extract<AgentTuiTranscriptEntry, { kind: "lifecycle" }>) {
-  return [`[SESSION ${entry.phase.toUpperCase()}] ${entry.text}`];
-}
-
-function formatStatusEntry(entry: Extract<AgentTuiTranscriptEntry, { kind: "status" }>) {
-  let label = "STATUS";
-  switch (entry.code) {
-    case "approval-required":
-      label = "APPROVAL";
-      break;
-    case "command":
-      label = "COMMAND";
-      break;
-    case "command-failed":
-      label = "COMMAND FAIL";
-      break;
-    case "error":
-      label = "ERROR";
-      break;
-    case "tool":
-      label = "TOOL";
-      break;
-    case "tool-failed":
-      label = "TOOL FAIL";
-      break;
-    case "waiting-on-user-input":
-      label = "WAIT";
-      break;
-    case "thread-started":
-    case "turn-started":
-    case "turn-completed":
-    case "turn-cancelled":
-    case "turn-failed":
-      label = "TURN";
-      break;
-  }
-  return [`[${label}] ${entry.text}`];
-}
-
-function formatAgentMessageEntry(
-  entry: Extract<AgentTuiTranscriptEntry, { kind: "agent-message" }>,
-  viewMode: AgentTuiViewMode,
-) {
-  if (viewMode === "raw") {
-    return entry.text.trimEnd().split("\n");
-  }
-  return entry.segments
-    .flatMap((segment) => segment.trimEnd().split("\n"))
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-}
-
-function truncateSummary(text: string, maxChars = 120) {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length <= maxChars) {
-    return compact;
-  }
-  return `${compact.slice(0, Math.max(0, maxChars - 3))}...`;
-}
-
-function summarizeJsonLine(line: string) {
-  try {
-    const parsed = JSON.parse(line) as {
-      method?: unknown;
-      params?: unknown;
-    };
-    if (!parsed || typeof parsed !== "object") {
-      return undefined;
-    }
-    if (typeof parsed.method !== "string") {
-      return undefined;
-    }
-    if (parsed.method === "item/started") {
-      const params =
-        parsed.params && typeof parsed.params === "object"
-          ? (parsed.params as { item?: { type?: unknown } })
-          : undefined;
-      const itemType = params?.item?.type;
-      return typeof itemType === "string" ? `${parsed.method} ${itemType}` : parsed.method;
-    }
-    if (parsed.method === "item/completed") {
-      const params =
-        parsed.params && typeof parsed.params === "object"
-          ? (parsed.params as {
-              item?: { exitCode?: unknown; status?: unknown; type?: unknown };
-            })
-          : undefined;
-      const itemType = params?.item?.type;
-      const status = params?.item?.status;
-      const exitCode = params?.item?.exitCode;
-      const parts = [parsed.method];
-      if (typeof itemType === "string") {
-        parts.push(itemType);
-      }
-      if (typeof status === "string") {
-        parts.push(status);
-      }
-      if (typeof exitCode === "number") {
-        parts.push(`exit=${exitCode}`);
-      }
-      return parts.join(" ");
-    }
-    return parsed.method;
-  } catch {
-    return undefined;
-  }
-}
-
-function formatCommandOutputEntry(
-  entry: Extract<AgentTuiTranscriptEntry, { kind: "command-output" }>,
-  viewMode: AgentTuiViewMode,
-) {
-  if (!entry.lines.length) {
-    return [];
-  }
-  if (viewMode === "status") {
-    const preview = entry.lines.at(-1) ?? entry.lines[0] ?? "";
-    return [`[CMD OUT x${entry.count}] ${truncateSummary(preview)}`];
-  }
-  return [`[CMD OUT x${entry.count}]`, ...entry.lines.map((line) => `| ${line}`)];
-}
-
-function formatRawEntry(
-  entry: Extract<AgentTuiTranscriptEntry, { kind: "raw" }>,
-  viewMode: AgentTuiViewMode,
-) {
-  if (viewMode === "status" && entry.stream === "stdout" && entry.encoding === "jsonl") {
-    return [];
-  }
-  const label = `RAW ${entry.stream}/${entry.encoding} x${entry.count}`;
-  if (viewMode === "status") {
-    const preview = entry.lines.at(-1) ?? entry.lines[0] ?? "";
-    const summarized =
-      entry.encoding === "jsonl" ? summarizeJsonLine(preview) ?? truncateSummary(preview) : truncateSummary(preview);
-    return summarized ? [`[${label}] ${summarized}`] : [`[${label}]`];
-  }
-  const prefix = entry.encoding === "jsonl" ? "jsonl" : entry.stream;
-  return [`[${label}]`, ...entry.lines.map((line) => `${prefix}: ${line}`)];
-}
-
-function formatMirrorEntry(entry: Extract<AgentTuiTranscriptEntry, { kind: "mirror" }>) {
-  return [entry.text];
-}
-
 function formatTranscript(
   column: AgentTuiColumnSnapshot,
   viewMode: AgentTuiViewMode,
 ) {
-  const transcriptEntries = column.transcriptEntries ?? [];
-  if (!transcriptEntries.length) {
+  if (!(column.transcriptEntries ?? []).length) {
     const body = column.body.trimEnd();
-    return body.length ? body : "Waiting for session transcript...";
-  }
-
-  const lines = transcriptEntries.flatMap((entry) => {
-    switch (entry.kind) {
-      case "lifecycle":
-        return formatLifecycleEntry(entry);
-      case "status":
-        return formatStatusEntry(entry);
-      case "agent-message":
-        return formatAgentMessageEntry(entry, viewMode);
-      case "command-output":
-        return formatCommandOutputEntry(entry, viewMode);
-      case "mirror":
-        return formatMirrorEntry(entry);
-      case "raw":
-        return formatRawEntry(entry, viewMode);
+    if (body) {
+      return body;
     }
-  });
-
-  const filteredLines = lines.map((line) => line.trimEnd()).filter((line) => line.length > 0);
-  return filteredLines.join("\n") || "Waiting for session transcript...";
+  }
+  return formatTranscriptEntries(column.transcriptEntries ?? [], viewMode);
 }
 
 export function buildAgentTuiRootComponentModel(

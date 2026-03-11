@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { normalizeCodexSessionMessage } from "./runner/codex.js";
+import { normalizeCodexSessionMessage } from "./runner/codex-events.js";
 import type {
   AgentRawLineEvent,
   AgentSessionEvent,
@@ -150,7 +150,9 @@ export class AgentTuiRetainedReader {
     this.issueState = options.issueState;
     this.supervisorSession = createSupervisorSession(options.repoRoot);
     this.#workerSession = createFallbackWorkerSession(options.issueState);
-    this.#eventLogReader = new AppendOnlyLineReader(resolve(options.issueState.runtimePath, "events.log"));
+    this.#eventLogReader = new AppendOnlyLineReader(
+      resolve(options.issueState.runtimePath, "events.log"),
+    );
     this.#stdoutLogReader = new AppendOnlyLineReader(
       resolve(options.issueState.runtimePath, "codex.stdout.jsonl"),
     );
@@ -207,7 +209,9 @@ export class AgentTuiRetainedReader {
 
   #buildPrelude(mode: AgentTuiRetainedMode): AgentSessionEvent[] {
     const issue = this.issueState;
-    const summary = [issue.status, issue.branchName, issue.worktreePath].filter(Boolean).join(" | ");
+    const summary = [issue.status, issue.branchName, issue.worktreePath]
+      .filter(Boolean)
+      .join(" | ");
     return [
       this.#buildLifecycleEvent(this.supervisorSession, "started", {
         workspacePath: this.supervisorSession.workspacePath,
@@ -218,11 +222,7 @@ export class AgentTuiRetainedReader {
         `${capitalizeMode(mode)} ${issue.issueIdentifier} from ${describeSource(this.#source)}`,
       ),
       this.#buildStatusEvent(this.supervisorSession, "ready", summary),
-      this.#buildStatusEvent(
-        this.supervisorSession,
-        "ready",
-        `runtime: ${issue.runtimePath}`,
-      ),
+      this.#buildStatusEvent(this.supervisorSession, "ready", `runtime: ${issue.runtimePath}`),
     ];
   }
 
@@ -343,7 +343,13 @@ export class AgentTuiRetainedReader {
       try {
         const message = JSON.parse(line) as Parameters<typeof normalizeCodexSessionMessage>[0];
         const stamped = normalizeCodexSessionMessage(message).map((event) =>
-          this.#buildStatusFromNormalizedEvent(event.code, event.format, event.text, event.itemId),
+          this.#buildStatusFromNormalizedEvent(
+            event.code,
+            event.format,
+            event.data,
+            event.text,
+            event.itemId,
+          ),
         );
         events.push(...stamped);
       } catch {
@@ -369,12 +375,14 @@ export class AgentTuiRetainedReader {
   #buildStatusFromNormalizedEvent(
     code: AgentStatusCode,
     format: AgentStatusEvent["format"],
+    data?: Record<string, unknown>,
     text?: string,
     itemId?: string,
   ): AgentStatusEvent {
     const sequence = this.#nextSyntheticSequence();
     return {
       code,
+      data,
       format,
       itemId,
       sequence,

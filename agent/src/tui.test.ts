@@ -37,7 +37,10 @@ function createWorkerSession(): AgentSessionRef {
   };
 }
 
-function createIssueState(runtimePath: string, overrides: Partial<IssueRuntimeState> = {}): IssueRuntimeState {
+function createIssueState(
+  runtimePath: string,
+  overrides: Partial<IssueRuntimeState> = {},
+): IssueRuntimeState {
   return {
     branchName: "ope-67",
     controlPath: "/Users/dpeek/code/io/.io/control",
@@ -59,7 +62,9 @@ function createIssueState(runtimePath: string, overrides: Partial<IssueRuntimeSt
 }
 
 function createSnapshotColumn(
-  overrides: Partial<ReturnType<ReturnType<typeof createAgentTuiStore>["getSnapshot"]>["sessions"][number]>,
+  overrides: Partial<
+    ReturnType<ReturnType<typeof createAgentTuiStore>["getSnapshot"]>["sessions"][number]
+  >,
 ) {
   return {
     body: "",

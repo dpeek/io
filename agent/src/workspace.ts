@@ -1,15 +1,10 @@
-import { createLogger, type Logger } from "@io/lib";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import type {
-  AgentIssue,
-  HookConfig,
-  PreparedWorkspace,
-  StreamRuntimeState,
-} from "./types.js";
+import { createLogger, type Logger } from "@io/lib";
 
+import type { AgentIssue, HookConfig, PreparedWorkspace, StreamRuntimeState } from "./types.js";
 import { toWorkspaceKey } from "./workflow.js";
 
 type CommandResult = {
@@ -118,7 +113,9 @@ function normalizeStateName(state: string) {
   return state.trim().toLowerCase();
 }
 
-function resolveStreamIssue(issue: Pick<AgentIssue, "id" | "identifier" | "parentIssueId" | "parentIssueIdentifier">) {
+function resolveStreamIssue(
+  issue: Pick<AgentIssue, "id" | "identifier" | "parentIssueId" | "parentIssueIdentifier">,
+) {
   return {
     id: issue.parentIssueId ?? issue.id,
     identifier: issue.parentIssueIdentifier ?? issue.identifier,
@@ -650,7 +647,8 @@ export class CheckoutManager {
       },
       {
         activeIssue:
-          issue.issueId === (await this.#readStreamState(issue.streamIssueIdentifier))?.activeIssueId
+          issue.issueId ===
+          (await this.#readStreamState(issue.streamIssueIdentifier))?.activeIssueId
             ? null
             : undefined,
         status: "active",
@@ -664,10 +662,7 @@ export class CheckoutManager {
       await this.#mergeStreamBranch(issue);
     }
     if (!(await this.#hasStreamLandedOnMain(issue))) {
-      this.#reportIssueProgress(
-        issue,
-        `preserving ${issue.branchName}; stream not yet on main`,
-      );
+      this.#reportIssueProgress(issue, `preserving ${issue.branchName}; stream not yet on main`);
       return;
     }
     await this.#removeIssueWorktree(issue);
@@ -803,7 +798,8 @@ export class CheckoutManager {
   }
 
   async #hasIssueCommitLandedOnStream(issue: IssueRuntimeState) {
-    const commitSha = issue.landedCommitSha ?? issue.commitSha ?? (await this.#ensureIssueCommitSha(issue));
+    const commitSha =
+      issue.landedCommitSha ?? issue.commitSha ?? (await this.#ensureIssueCommitSha(issue));
     if (!commitSha) {
       return false;
     }
@@ -1136,7 +1132,10 @@ export class CheckoutManager {
     options: { commitSha?: string; landedAt?: string; landedCommitSha?: string } = {},
   ) {
     const streamIssue = resolveStreamIssue(issue);
-    const runtimePath = workspace.issueRuntimePath ?? workspace.runtimePath ?? this.getIssueRuntimePath(issue.identifier);
+    const runtimePath =
+      workspace.issueRuntimePath ??
+      workspace.runtimePath ??
+      this.getIssueRuntimePath(issue.identifier);
     const state: IssueRuntimeState = {
       branchName: workspace.branchName,
       commitSha: options.commitSha,
@@ -1209,17 +1208,14 @@ export class CheckoutManager {
     const current = await this.#readStreamState(stream.parentIssueIdentifier);
     const state: StreamRuntimeState = {
       activeIssueId:
-        updates.activeIssue === undefined
-          ? current?.activeIssueId
-          : updates.activeIssue?.id,
+        updates.activeIssue === undefined ? current?.activeIssueId : updates.activeIssue?.id,
       activeIssueIdentifier:
         updates.activeIssue === undefined
           ? current?.activeIssueIdentifier
           : updates.activeIssue?.identifier,
       branchName: stream.branchName,
       createdAt: current?.createdAt ?? new Date().toISOString(),
-      latestLandedCommitSha:
-        updates.latestLandedCommitSha ?? current?.latestLandedCommitSha,
+      latestLandedCommitSha: updates.latestLandedCommitSha ?? current?.latestLandedCommitSha,
       parentIssueId: stream.parentIssueId,
       parentIssueIdentifier: stream.parentIssueIdentifier,
       status: updates.status ?? current?.status ?? "active",

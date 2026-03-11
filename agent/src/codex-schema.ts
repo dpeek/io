@@ -1,30 +1,30 @@
 export type AskForApproval =
-  | 'untrusted'
-  | 'on-failure'
-  | 'on-request'
-  | 'never'
+  | "untrusted"
+  | "on-failure"
+  | "on-request"
+  | "never"
   | { reject: { mcp_elicitations: boolean; rules: boolean; sandbox_approval: boolean } };
 
-export type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
+export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
 
 export type SandboxPolicy =
-  | { type: 'dangerFullAccess' }
+  | { type: "dangerFullAccess" }
   | {
       access:
-        | { type: 'fullAccess' }
-        | { includePlatformDefaults: boolean; readableRoots: string[]; type: 'restricted' };
+        | { type: "fullAccess" }
+        | { includePlatformDefaults: boolean; readableRoots: string[]; type: "restricted" };
       networkAccess: boolean;
-      type: 'readOnly';
+      type: "readOnly";
     }
-  | { networkAccess: 'restricted' | 'enabled' | 'disabled'; type: 'externalSandbox' }
+  | { networkAccess: "restricted" | "enabled" | "disabled"; type: "externalSandbox" }
   | {
       excludeSlashTmp: boolean;
       excludeTmpdirEnvVar: boolean;
       networkAccess: boolean;
       readOnlyAccess:
-        | { type: 'fullAccess' }
-        | { includePlatformDefaults: boolean; readableRoots: string[]; type: 'restricted' };
-      type: 'workspaceWrite';
+        | { type: "fullAccess" }
+        | { includePlatformDefaults: boolean; readableRoots: string[]; type: "restricted" };
+      type: "workspaceWrite";
       writableRoots: string[];
     };
 
@@ -49,7 +49,7 @@ export interface TurnStartParams {
   approvalPolicy?: AskForApproval | null;
   collaborationMode?: null;
   cwd?: string | null;
-  input: Array<{ text: string; text_elements: []; type: 'text' }>;
+  input: Array<{ text: string; text_elements: []; type: "text" }>;
   sandboxPolicy?: SandboxPolicy | null;
   threadId: string;
 }
@@ -67,15 +67,15 @@ export interface TurnStartResponse {
 }
 
 export interface CommandExecutionRequestApprovalResponse {
-  decision: 'accept' | 'acceptForSession' | 'decline' | 'cancel';
+  decision: "accept" | "acceptForSession" | "decline" | "cancel";
 }
 
 export interface FileChangeRequestApprovalResponse {
-  decision: 'accept' | 'acceptForSession' | 'decline' | 'cancel';
+  decision: "accept" | "acceptForSession" | "decline" | "cancel";
 }
 
 export interface DynamicToolCallResponse {
-  contentItems: Array<{ text: string; type: 'inputText' }>;
+  contentItems: Array<{ text: string; type: "inputText" }>;
   success: boolean;
 }
 

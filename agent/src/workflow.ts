@@ -1,3 +1,8 @@
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
 import { createLogger } from "@io/lib";
 import {
   IO_JSON_FILE,
@@ -8,13 +13,10 @@ import {
   type SandboxMode,
   type SandboxPolicy,
 } from "@io/lib/config";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 import z from "zod";
 
+import { DEFAULT_BACKLOG_BUILTIN_DOC_IDS, DEFAULT_EXECUTE_BUILTIN_DOC_IDS } from "./builtins.js";
 import type {
   AgentRole,
   IssueRoutingCondition,
@@ -24,11 +26,6 @@ import type {
   Workflow,
   WorkflowEntrypoint,
 } from "./types.js";
-
-import {
-  DEFAULT_BACKLOG_BUILTIN_DOC_IDS,
-  DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
-} from "./builtins.js";
 import { toId } from "./util.js";
 
 const log = createLogger({ pkg: "agent" });
@@ -550,7 +547,10 @@ function resolvePreferredIoConfigPath(baseDir: string) {
   return resolve(baseDir, IO_JSON_FILE);
 }
 
-function resolveEntrypoint(path: string | undefined, baseDir: string): ValidationResult<WorkflowEntrypoint> {
+function resolveEntrypoint(
+  path: string | undefined,
+  baseDir: string,
+): ValidationResult<WorkflowEntrypoint> {
   if (path) {
     const absolutePath = isAbsolute(path) ? path : resolve(baseDir, path);
     const filename = basename(absolutePath);
@@ -635,7 +635,9 @@ async function loadEntrypointContent(path: string) {
   }
   const document = await Bun.file(path).text();
   const entrypointContent =
-    basename(path) === WORKFLOW_FILE ? splitFrontMatter(document).entrypointContent : document.trim();
+    basename(path) === WORKFLOW_FILE
+      ? splitFrontMatter(document).entrypointContent
+      : document.trim();
   if (!entrypointContent) {
     return invalidResult(`Prompt entrypoint must not be empty: ${path}`, path);
   }
