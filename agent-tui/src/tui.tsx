@@ -1,4 +1,11 @@
-import { TextRenderable, createCliRenderer, type CliRenderer } from "@opentui/core";
+import { createCliRenderer, type CliRenderer } from "@opentui/core";
+import {
+  createRoot,
+  flushSync,
+  useTerminalDimensions,
+  type Root,
+} from "@opentui/react";
+import { useMemo } from "react";
 
 import {
   getAgentTuiSelectedTranscriptMetrics,
@@ -37,9 +44,12 @@ type AgentTuiColumnScrollState = {
   scrollY: number;
 };
 
-type AgentTuiRenderableView = {
-  destroy: () => void;
-  render: (snapshot: AgentTuiSnapshot) => void;
+type AgentTuiAppProps = {
+  onExitRequest: () => void | Promise<void>;
+  selectedColumnId?: string;
+  selectedTranscriptScrollY?: number;
+  snapshot: AgentTuiSnapshot;
+  viewMode: AgentTuiViewMode;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -66,25 +76,91 @@ function isQuitKey(key: { ctrl?: boolean; name: string }) {
   return (key.ctrl && key.name === "c") || key.name === "escape" || key.name === "q";
 }
 
-function createAgentTuiRenderableView(
-  renderer: CliRenderer,
-  requestExit: () => void | Promise<void>,
-): AgentTuiRenderableView {
-  const scrollStateByColumnId = new Map<string, AgentTuiColumnScrollState>();
-  let latestSnapshot: AgentTuiSnapshot = { columns: [], sessions: [] };
-  let selectedColumnId: string | undefined;
-  let viewMode: AgentTuiViewMode = "status";
+function buildHeaderText(
+  snapshot: AgentTuiSnapshot,
+  selectedColumnId: string | undefined,
+  viewMode: AgentTuiViewMode,
+) {
+  const columns = snapshot.columns ?? snapshot.sessions ?? [];
+  const selectedColumn =
+    columns.find((column) => column.session.id === selectedColumnId) ?? columns[0];
+  const selectedTitle = selectedColumn ? selectedColumn.session.title : "Agent Sessions";
+  return [
+    `View: ${viewMode.toUpperCase()} | Focus: ${selectedTitle}`,
+    "Keys: left/right or h/l move columns | up/down or j/k scroll | 1 status | 2 raw | v toggle | q/esc/Ctrl+C quit",
+  ].join("\n");
+}
 
-  const removeRoot = () => {
-    if (!renderer.root.findDescendantById(APP_ROOT_ID)) {
-      return;
-    }
-    renderer.root.remove(APP_ROOT_ID);
-  };
+function AgentTuiApp({
+  selectedColumnId,
+  selectedTranscriptScrollY = 0,
+  snapshot,
+  viewMode,
+}: AgentTuiAppProps) {
+  const { height, width } = useTerminalDimensions();
+  const columns = snapshot.columns ?? snapshot.sessions ?? [];
+  const resolvedSelectedColumnId = columns.find((column) => column.session.id === selectedColumnId)
+    ? selectedColumnId
+    : columns[0]?.session.id;
+  const frameSize = useMemo(
+    () => ({
+      columns: Math.max(1, width),
+      rows: Math.max(1, height - 3),
+    }),
+    [height, width],
+  );
+
+  const frame = useMemo(
+    () =>
+      renderAgentTuiFrame(snapshot, frameSize, {
+        selectedColumnId: resolvedSelectedColumnId,
+        selectedTranscriptScrollY: selectedTranscriptScrollY,
+        viewMode,
+      }),
+    [frameSize, resolvedSelectedColumnId, selectedTranscriptScrollY, snapshot, viewMode],
+  );
+
+  return (
+    <box height="100%" id={APP_ROOT_ID} width="100%">
+      <text
+        content={`${buildHeaderText(snapshot, resolvedSelectedColumnId, viewMode)}\n\n${frame}`}
+        wrapMode="none"
+      />
+    </box>
+  );
+}
+
+export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
+  const input = options.input ?? process.stdin;
+  const onExitRequest =
+    options.onExitRequest ??
+    (() => {
+      process.kill(process.pid, "SIGINT");
+    });
+  const output = options.output ?? process.stdout;
+  const requireTty = options.requireTty ?? true;
+  const store =
+    options.store ??
+    createAgentTuiStore({
+      maxEventHistory: options.maxEventHistory,
+      maxTranscriptChars: options.maxTranscriptChars,
+      retainTerminalSessions: options.retainTerminalSessions ?? false,
+    });
+  let active = false;
+  let renderScheduled = false;
+  let renderer = options.renderer;
+  let root: Root | undefined;
+  let selectedColumnId: string | undefined;
+  let startPromise: Promise<void> | undefined;
+  let viewMode: AgentTuiViewMode = "status";
+  let unsubscribe: (() => void) | undefined;
+  const scrollStateByColumnId = new Map<string, AgentTuiColumnScrollState>();
+
+  const ownsRenderer = !options.renderer;
 
   const getFrameSize = () => ({
-    columns: Math.max(1, renderer.width),
-    rows: Math.max(1, renderer.height - 3),
+    columns: Math.max(1, renderer?.width ?? 1),
+    rows: Math.max(1, (renderer?.height ?? 4) - 3),
   });
 
   const selectColumn = (nextColumnId: string | undefined) => {
@@ -92,11 +168,11 @@ function createAgentTuiRenderableView(
       return;
     }
     selectedColumnId = nextColumnId;
-    renderCurrentSnapshot();
+    scheduleRender();
   };
 
   const moveColumnSelection = (delta: number) => {
-    const columns = latestSnapshot.columns ?? latestSnapshot.sessions ?? [];
+    const columns = store.getSnapshot().columns ?? store.getSnapshot().sessions ?? [];
     if (!columns.length) {
       return;
     }
@@ -114,7 +190,7 @@ function createAgentTuiRenderableView(
     if (!selectedColumnId) {
       return;
     }
-    const metrics = getAgentTuiSelectedTranscriptMetrics(latestSnapshot, getFrameSize(), {
+    const metrics = getAgentTuiSelectedTranscriptMetrics(store.getSnapshot(), getFrameSize(), {
       selectedColumnId,
       viewMode,
     });
@@ -122,21 +198,21 @@ function createAgentTuiRenderableView(
     scrollStateByColumnId.set(selectedColumnId, {
       scrollY: clamp(current + delta, 0, metrics.maxScrollY),
     });
-    renderCurrentSnapshot();
+    scheduleRender();
   };
 
   const jumpSelectedTranscript = (position: "top" | "bottom") => {
     if (!selectedColumnId) {
       return;
     }
-    const metrics = getAgentTuiSelectedTranscriptMetrics(latestSnapshot, getFrameSize(), {
+    const metrics = getAgentTuiSelectedTranscriptMetrics(store.getSnapshot(), getFrameSize(), {
       selectedColumnId,
       viewMode,
     });
     scrollStateByColumnId.set(selectedColumnId, {
       scrollY: position === "top" ? 0 : metrics.maxScrollY,
     });
-    renderCurrentSnapshot();
+    scheduleRender();
   };
 
   const toggleViewMode = (nextViewMode?: AgentTuiViewMode) => {
@@ -146,7 +222,7 @@ function createAgentTuiRenderableView(
       return;
     }
     viewMode = resolvedViewMode;
-    renderCurrentSnapshot();
+    scheduleRender();
   };
 
   const handleKeyPress = (key: {
@@ -157,7 +233,7 @@ function createAgentTuiRenderableView(
   }) => {
     if (isQuitKey(key)) {
       key.preventDefault();
-      void requestExit();
+      void onExitRequest();
       return;
     }
     if (isNextColumnKey(key)) {
@@ -216,90 +292,32 @@ function createAgentTuiRenderableView(
     }
   };
 
-  const buildHeaderText = () => {
-    const columns = latestSnapshot.columns ?? latestSnapshot.sessions ?? [];
-    const selectedColumn =
-      columns.find((column) => column.session.id === selectedColumnId) ?? columns[0];
-    const selectedTitle = selectedColumn ? selectedColumn.session.title : "Agent Sessions";
-    return [
-      `View: ${viewMode.toUpperCase()} | Focus: ${selectedTitle}`,
-      "Keys: left/right or h/l move columns | up/down or j/k scroll | 1 status | 2 raw | v toggle | q/esc/Ctrl+C quit",
-    ].join("\n");
-  };
-
-  const renderCurrentSnapshot = () => {
-    removeRoot();
-    const columns = latestSnapshot.columns ?? latestSnapshot.sessions ?? [];
+  const render = () => {
+    renderScheduled = false;
+    if (!active || !root || !renderer) {
+      return;
+    }
+    const currentRoot = root;
+    const snapshot = store.getSnapshot();
+    const columns = snapshot.columns ?? snapshot.sessions ?? [];
     if (!columns.find((column) => column.session.id === selectedColumnId)) {
       selectedColumnId = columns[0]?.session.id;
     }
-    const frame = renderAgentTuiFrame(latestSnapshot, getFrameSize(), {
-      selectedColumnId,
-      selectedTranscriptScrollY: selectedColumnId
-        ? (scrollStateByColumnId.get(selectedColumnId)?.scrollY ?? 0)
-        : 0,
-      viewMode,
+    const selectedTranscriptScrollY = selectedColumnId
+      ? (scrollStateByColumnId.get(selectedColumnId)?.scrollY ?? 0)
+      : 0;
+    flushSync(() => {
+      currentRoot.render(
+        <AgentTuiApp
+          onExitRequest={onExitRequest}
+          selectedColumnId={selectedColumnId}
+          selectedTranscriptScrollY={selectedTranscriptScrollY}
+          snapshot={snapshot}
+          viewMode={viewMode}
+        />,
+      );
     });
-    renderer.root.add(
-      new TextRenderable(renderer, {
-        content: `${buildHeaderText()}\n\n${frame}`,
-        id: APP_ROOT_ID,
-        wrapMode: "none",
-      }),
-    );
     renderer.requestRender();
-  };
-
-  renderer.keyInput.on("keypress", handleKeyPress);
-
-  return {
-    destroy() {
-      renderer.keyInput.off("keypress", handleKeyPress);
-      removeRoot();
-      renderer.requestRender();
-    },
-    render(snapshot) {
-      latestSnapshot = snapshot;
-      const columns = snapshot.columns ?? snapshot.sessions ?? [];
-      if (!columns.find((column) => column.session.id === selectedColumnId)) {
-        selectedColumnId = columns[0]?.session.id;
-      }
-      renderCurrentSnapshot();
-    },
-  };
-}
-
-export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
-  const input = options.input ?? process.stdin;
-  const onExitRequest =
-    options.onExitRequest ??
-    (() => {
-      process.kill(process.pid, "SIGINT");
-    });
-  const output = options.output ?? process.stdout;
-  const requireTty = options.requireTty ?? true;
-  const store =
-    options.store ??
-    createAgentTuiStore({
-      maxEventHistory: options.maxEventHistory,
-      maxTranscriptChars: options.maxTranscriptChars,
-      retainTerminalSessions: options.retainTerminalSessions ?? false,
-    });
-  let active = false;
-  let renderScheduled = false;
-  let renderer = options.renderer;
-  let startPromise: Promise<void> | undefined;
-  let unsubscribe: (() => void) | undefined;
-  let view: AgentTuiRenderableView | undefined;
-
-  const ownsRenderer = !options.renderer;
-
-  const render = () => {
-    renderScheduled = false;
-    if (!active || !view) {
-      return;
-    }
-    view.render(store.getSnapshot());
   };
 
   const scheduleRender = () => {
@@ -332,11 +350,12 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
         });
       }
 
-      view = createAgentTuiRenderableView(renderer, onExitRequest);
+      root = createRoot(renderer);
+      renderer.keyInput.on("keypress", handleKeyPress);
       if (ownsRenderer) {
         renderer.start();
       }
-      view.render(store.getSnapshot());
+      render();
     })();
 
     try {
@@ -385,9 +404,10 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
         // Ignore startup failures while tearing down the wrapper.
       }
 
-      view?.destroy();
-      view = undefined;
+      root?.unmount();
+      root = undefined;
       startPromise = undefined;
+      renderer?.keyInput.off("keypress", handleKeyPress);
 
       if (renderer && ownsRenderer) {
         renderer.destroy();
