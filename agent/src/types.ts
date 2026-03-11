@@ -17,8 +17,77 @@ export interface AgentIssue {
   priority: number | null;
   projectSlug?: string;
   state: string;
+  teamId?: string;
   title: string;
   updatedAt: string;
+}
+
+export type ManagedCommentCommandName = "backlog" | "focus" | "help" | "status";
+export type ManagedCommentResult = "blocked" | "noop" | "partial" | "updated";
+
+export interface ManagedCommentPayload {
+  docs: string[];
+  dryRun: boolean;
+  note?: string;
+}
+
+export interface ManagedCommentCommand {
+  body: string;
+  bodyHash: string;
+  commentId: string;
+  command: ManagedCommentCommandName;
+  createdAt: string;
+  issue: AgentIssue;
+  payload: ManagedCommentPayload;
+  updatedAt: string;
+}
+
+export interface ManagedCommentParseError {
+  body: string;
+  bodyHash: string;
+  commentId: string;
+  createdAt: string;
+  error: string;
+  issue: AgentIssue;
+  updatedAt: string;
+}
+
+export type ManagedCommentTrigger = ManagedCommentCommand | ManagedCommentParseError;
+
+export interface ManagedCommentChildMutation {
+  blockedBy: string[];
+  description: string;
+  docs: string[];
+  labels: string[];
+  priority: number | null;
+  state?: string;
+  title: string;
+}
+
+export interface ManagedCommentMutation {
+  comment: ManagedCommentTrigger;
+  children: ManagedCommentChildMutation[];
+  parentDescription?: string;
+  replyBody: string;
+}
+
+export interface ManagedCommentMutationResult {
+  createdChildIssueIdentifiers: string[];
+  dependencyCount: number;
+  replyCommentId?: string;
+  result: ManagedCommentResult;
+  updatedParentDescription: boolean;
+  warnings: string[];
+}
+
+export interface HandledManagedComment {
+  bodyHash: string;
+  commentId: string;
+  handledAt: string;
+}
+
+export interface ManagedCommentState {
+  comments: HandledManagedComment[];
 }
 
 export interface TrackerConfig {
@@ -218,5 +287,9 @@ export interface IssueTracker {
   fetchCandidateIssues: () => Promise<AgentIssue[]>;
   fetchIssueStatesByIds: (issueIds: string[]) => Promise<Map<string, string>>;
   setIssueState: (issueId: string, stateName: string) => Promise<void>;
+  fetchManagedCommentTriggers?: () => Promise<ManagedCommentTrigger[]>;
+  applyManagedCommentMutation?: (
+    mutation: ManagedCommentMutation,
+  ) => Promise<ManagedCommentMutationResult>;
   updateIssueDescription?: (issueId: string, description: string) => Promise<void>;
 }

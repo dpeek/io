@@ -3,9 +3,19 @@ import { relative, resolve } from "node:path";
 
 import { createLogger, type Logger } from "@io/lib";
 
-import { buildManagedParentProposal } from "./backlog-proposal.js";
+import {
+  buildManagedParentProposal,
+  MANAGED_BACKLOG_PROPOSAL_END,
+  MANAGED_BACKLOG_PROPOSAL_START,
+} from "./backlog-proposal.js";
+import {
+  hasHandledManagedComment,
+  readManagedCommentState,
+  recordHandledManagedComment,
+} from "./comment-state.js";
 import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
 import { resolveIssueModule, resolveIssueRouting } from "./issue-routing.js";
+import { isManagedCommentCommand, renderManagedCommentReply } from "./managed-comments.js";
 import { CodexAppServerRunner } from "./runner/codex.js";
 import {
   createAgentSessionEventBus,
@@ -19,6 +29,8 @@ import type {
   AgentIssue,
   IssueRunResult,
   IssueTracker,
+  ManagedCommentMutation,
+  ManagedCommentTrigger,
   PreparedWorkspace,
   Workflow,
 } from "./types.js";
@@ -106,6 +118,90 @@ function isResumableRunError(error: unknown) {
     return false;
   }
   return ["response_timeout", "stall_timeout", "turn_timeout"].includes(error.message);
+}
+
+type ManagedBacklogOption = {
+  alignment: string;
+  focus: string;
+  title: string;
+};
+
+function uniqueOrdered(values: string[]) {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    const normalized = value.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    unique.push(normalized);
+  }
+  return unique;
+}
+
+function parseManagedBacklogOptions(description: string): ManagedBacklogOption[] {
+  const start = description.indexOf(MANAGED_BACKLOG_PROPOSAL_START);
+  const end = description.indexOf(MANAGED_BACKLOG_PROPOSAL_END);
+  if (start === -1 || end === -1 || end <= start) {
+    return [];
+  }
+
+  const blockLines = description
+    .slice(start + MANAGED_BACKLOG_PROPOSAL_START.length, end)
+    .split(/\r?\n/);
+  const options: ManagedBacklogOption[] = [];
+
+  for (let index = 0; index < blockLines.length; index++) {
+    const title = blockLines[index]?.match(/^\d+\.\s+\*\*(.+?)\*\*$/)?.[1]?.trim();
+    const focus = blockLines[index + 1]?.match(/^\s*Focus:\s*(.+)$/)?.[1]?.trim();
+    const alignment = blockLines[index + 2]?.match(/^\s*Alignment:\s*(.+)$/)?.[1]?.trim();
+    if (!title || !focus || !alignment) {
+      continue;
+    }
+    options.push({ alignment, focus, title });
+  }
+
+  return options;
+}
+
+function renderManagedBacklogChildDescription(options: {
+  docs: string[];
+  issue: AgentIssue;
+  note?: string;
+  option: ManagedBacklogOption;
+  primaryModuleId: string;
+}) {
+  const docLines = options.docs.length
+    ? options.docs.map((doc) => `- ${doc}`)
+    : ["- Reuse the parent issue brief and module defaults."];
+  const noteLines = options.note?.trim() ? [`- Operator note: ${options.note.trim()}`] : [];
+
+  return [
+    "## Outcome",
+    `- ${options.option.focus}`,
+    `- Land the next ${options.primaryModuleId} stream slice for ${options.issue.identifier}.`,
+    "",
+    "## Scope",
+    `- ${options.option.alignment}`,
+    `- Keep the work centered on the ${options.primaryModuleId} module surface.`,
+    "",
+    "## Acceptance Criteria",
+    `- ${options.option.focus}`,
+    `- ${options.option.alignment}`,
+    "- Keep the parent managed brief and child backlog aligned.",
+    "",
+    "## Module Scope",
+    `- Primary module: ${options.primaryModuleId}`,
+    "",
+    "## Dependencies And Docs",
+    `- Parent issue: ${options.issue.identifier}`,
+    ...docLines,
+    ...noteLines,
+    "",
+    "## Out Of Scope",
+    "- Unrelated module work or repo-wide refactors beyond this slice.",
+  ].join("\n");
 }
 
 export class AgentService {
@@ -197,6 +293,7 @@ export class AgentService {
       await this.#ensureWorkerReady(activeWorkflow);
       const workspaceManager = this.#createWorkspaceManager(activeWorkflow);
       const tracker = this.#createTracker(activeWorkflow);
+      await this.#processManagedCommentTriggers(activeWorkflow, tracker);
       await workspaceManager.reconcileTerminalIssues(
         tracker,
         activeWorkflow.tracker.terminalStates,
@@ -251,6 +348,123 @@ export class AgentService {
       throw new Error(result.errors.map((error) => `${error.path}: ${error.message}`).join("\n"));
     }
     return result.value;
+  }
+
+  async #processManagedCommentTriggers(workflow: Workflow, tracker: IssueTracker) {
+    if (!tracker.fetchManagedCommentTriggers || !tracker.applyManagedCommentMutation) {
+      return;
+    }
+
+    const triggers = await tracker.fetchManagedCommentTriggers();
+    for (const trigger of triggers) {
+      const state = await readManagedCommentState(
+        workflow.workspace.root,
+        trigger.issue.identifier,
+      );
+      if (hasHandledManagedComment(state, trigger)) {
+        continue;
+      }
+
+      let replyBody = "";
+      let parentDescription: string | undefined;
+
+      if (!isManagedCommentCommand(trigger)) {
+        replyBody = renderManagedCommentReply({
+          command: "invalid",
+          issueIdentifier: trigger.issue.identifier,
+          lines: [trigger.error],
+          result: "blocked",
+        });
+      } else {
+        const module = resolveIssueModule(workflow.modules, trigger.issue);
+        const isManagedParent =
+          !trigger.issue.hasParent && trigger.issue.labels.includes("io") && Boolean(module);
+
+        if (!isManagedParent) {
+          replyBody = renderManagedCommentReply({
+            command: trigger.command,
+            issueIdentifier: trigger.issue.identifier,
+            lines: ["The parent is not currently eligible for managed `@io` commands."],
+            result: "blocked",
+          });
+        } else if (trigger.command === "help") {
+          replyBody = renderManagedCommentReply({
+            command: trigger.command,
+            issueIdentifier: trigger.issue.identifier,
+            lines: [
+              "Accepted commands: backlog, focus, status, help.",
+              "Accepted keys: docs, dryRun, note.",
+              "Only top-level comments on managed parent issues are processed.",
+            ],
+            result: "noop",
+          });
+        } else if (trigger.command === "status") {
+          replyBody = renderManagedCommentReply({
+            command: trigger.command,
+            issueIdentifier: trigger.issue.identifier,
+            lines: [
+              `Module: ${module!.id}`,
+              `Managed block present: ${trigger.issue.description.includes("<!-- io-managed:backlog-proposal:start -->") ? "yes" : "no"}`,
+              `Requested docs: ${trigger.payload.docs.length ? trigger.payload.docs.join(", ") : "none"}`,
+            ],
+            result: "noop",
+          });
+        } else if (trigger.command === "focus") {
+          replyBody = renderManagedCommentReply({
+            command: trigger.command,
+            issueIdentifier: trigger.issue.identifier,
+            lines: ["Focus-doc refresh is not implemented in this slice."],
+            result: "blocked",
+          });
+        } else {
+          const resolvedContext = await resolveIssueContext({
+            baseSelection: resolveIssueRouting(workflow.issues, trigger.issue, workflow.modules),
+            issue: trigger.issue,
+            repoRoot: this.#repoRoot,
+            workflow,
+          });
+          const proposal = buildManagedParentProposal({
+            issue: trigger.issue,
+            module: module!,
+            repoRoot: this.#repoRoot,
+            resolvedContext: resolvedContext.bundle,
+          });
+          parentDescription = proposal.description;
+          const result = trigger.payload.dryRun ? "noop" : proposal.changed ? "updated" : "noop";
+          replyBody = renderManagedCommentReply({
+            command: trigger.command,
+            issueIdentifier: trigger.issue.identifier,
+            lines: trigger.payload.dryRun
+              ? [
+                  proposal.changed
+                    ? "Dry run: would update the parent managed brief."
+                    : "Dry run: the parent managed brief is already up to date.",
+                ]
+              : [
+                  proposal.changed
+                    ? "Updated the parent managed brief."
+                    : "The parent managed brief was already up to date.",
+                ],
+            result,
+          });
+        }
+      }
+
+      const result = await tracker.applyManagedCommentMutation({
+        children: [],
+        comment: trigger,
+        parentDescription,
+        replyBody,
+      });
+      if (result.warnings.length) {
+        this.#log.warn("managed_comment.warning", {
+          commentId: trigger.commentId,
+          issueIdentifier: trigger.issue.identifier,
+          warnings: result.warnings,
+        });
+      }
+      await recordHandledManagedComment(workflow.workspace.root, trigger.issue.identifier, trigger);
+    }
   }
 
   #startIssueRun(

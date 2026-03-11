@@ -105,6 +105,234 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   expect(issue.hasChildren).toBe(true);
   expect(issue.parentIssueId).toBe("parent-1");
   expect(issue.parentIssueIdentifier).toBe("OS-1");
+  expect(issue.teamId).toBeUndefined();
+});
+
+test("LinearTrackerAdapter fetches top-level managed comment triggers on managed parents", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = mock(
+    async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            issues: {
+              nodes: [
+                {
+                  children: { nodes: [] },
+                  comments: {
+                    nodes: [
+                      {
+                        body: "@io backlog\ndryRun: true",
+                        createdAt: "2024-01-02T00:00:00.000Z",
+                        id: "comment-1",
+                        parent: null,
+                        updatedAt: "2024-01-02T00:00:00.000Z",
+                      },
+                      {
+                        body: "@io backlog",
+                        createdAt: "2024-01-03T00:00:00.000Z",
+                        id: "comment-2",
+                        parent: { id: "comment-1" },
+                        updatedAt: "2024-01-03T00:00:00.000Z",
+                      },
+                    ],
+                  },
+                  createdAt: "2024-01-01T00:00:00.000Z",
+                  description: "Managed parent",
+                  id: "issue-1",
+                  identifier: "OPE-126",
+                  inverseRelations: { nodes: [] },
+                  labels: { nodes: [{ name: "io" }, { name: "agent" }] },
+                  priority: 2,
+                  project: { slugId: "io" },
+                  state: { name: "Todo" },
+                  team: { id: "team-1" },
+                  title: "Managed stream",
+                  updatedAt: "2024-01-01T00:00:00.000Z",
+                },
+              ],
+              pageInfo: {
+                endCursor: null,
+                hasNextPage: false,
+              },
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+  ) as unknown as typeof fetch;
+
+  try {
+    const tracker = new LinearTrackerAdapter({
+      activeStates: ["Todo"],
+      apiKey: "token",
+      endpoint: "https://linear.invalid/graphql",
+      kind: "linear",
+      projectSlug: "io",
+      terminalStates: ["Done"],
+    });
+
+    const comments = await tracker.fetchManagedCommentTriggers?.();
+    expect(comments).toHaveLength(1);
+    expect(comments?.[0]).toMatchObject({
+      command: "backlog",
+      commentId: "comment-1",
+      issue: {
+        identifier: "OPE-126",
+        teamId: "team-1",
+      },
+      payload: {
+        docs: [],
+        dryRun: true,
+      },
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("LinearTrackerAdapter applies managed comment mutations and posts a reply", async () => {
+  const calls = {
+    attachmentLinkURL: [] as Array<{ issueId: string; title?: string; url: string }>,
+    createComment: [] as Array<{ body: string; issueId: string; parentId: string }>,
+    createIssue: [] as Array<Record<string, unknown>>,
+    createIssueRelation: [] as Array<Record<string, unknown>>,
+    issueAddLabel: [] as Array<{ issueId: string; labelId: string }>,
+    update: [] as Array<Record<string, unknown>>,
+  };
+
+  const client = {
+    attachmentLinkURL: async (issueId: string, url: string, options?: { title?: string }) => {
+      calls.attachmentLinkURL.push({ issueId, title: options?.title, url });
+      return { success: true };
+    },
+    createComment: async (input: { body: string; issueId: string; parentId: string }) => {
+      calls.createComment.push(input);
+      return { commentId: "reply-1", success: true };
+    },
+    createIssue: async (input: Record<string, unknown>) => {
+      calls.createIssue.push(input);
+      return {
+        issue: Promise.resolve({ identifier: "OPE-127" }),
+        issueId: "child-1",
+        success: true,
+      };
+    },
+    createIssueRelation: async (input: Record<string, unknown>) => {
+      calls.createIssueRelation.push(input);
+      return { success: true };
+    },
+    issue: async () => ({
+      children: async () => ({
+        nodes: [{ id: "existing-child", identifier: "OPE-125" }],
+      }),
+      teamId: "team-1",
+      update: async (input: Record<string, unknown>) => {
+        calls.update.push(input);
+        return { success: true };
+      },
+    }),
+    issueAddLabel: async (issueId: string, labelId: string) => {
+      calls.issueAddLabel.push({ issueId, labelId });
+      return { success: true };
+    },
+    team: async () => ({
+      labels: async () => ({
+        nodes: [{ id: "label-agent", name: "agent" }],
+      }),
+      states: async () => ({
+        nodes: [{ id: "state-todo", name: "Todo" }],
+      }),
+    }),
+  };
+
+  const tracker = new LinearTrackerAdapter(
+    {
+      activeStates: ["Todo"],
+      apiKey: "token",
+      endpoint: "https://linear.invalid/graphql",
+      kind: "linear",
+      projectSlug: "io",
+      terminalStates: ["Done"],
+    },
+    undefined,
+    client as never,
+  );
+
+  const result = await tracker.applyManagedCommentMutation?.({
+    children: [
+      {
+        blockedBy: ["OPE-125"],
+        description: "Child description",
+        docs: ["./llm/topic/goals.md"],
+        labels: ["agent"],
+        priority: 2,
+        state: "Todo",
+        title: "Create child issue",
+      },
+    ],
+    comment: {
+      body: "@io backlog",
+      bodyHash: "hash",
+      command: "backlog",
+      commentId: "comment-1",
+      createdAt: "2024-01-02T00:00:00.000Z",
+      issue: createIssue({
+        description: "Parent description",
+        id: "issue-1",
+        identifier: "OPE-126",
+        labels: ["io", "agent"],
+        priority: 2,
+        teamId: "team-1",
+        title: "Managed parent",
+      }),
+      payload: {
+        docs: [],
+        dryRun: false,
+      },
+      updatedAt: "2024-01-02T00:00:00.000Z",
+    },
+    parentDescription: "Updated parent description",
+    replyBody: `<!-- io-managed:comment-result -->
+Command: backlog
+Result: updated
+Target: OPE-126
+
+- Updated the parent managed brief.`,
+  });
+
+  expect(result).toEqual({
+    createdChildIssueIdentifiers: ["OPE-127"],
+    dependencyCount: 1,
+    replyCommentId: "reply-1",
+    result: "updated",
+    updatedParentDescription: true,
+    warnings: [],
+  });
+  expect(calls.update).toEqual([{ description: "Updated parent description" }]);
+  expect(calls.createIssue[0]).toMatchObject({
+    description: "Child description",
+    parentId: "issue-1",
+    stateId: "state-todo",
+    teamId: "team-1",
+    title: "Create child issue",
+  });
+  expect(calls.issueAddLabel).toEqual([{ issueId: "child-1", labelId: "label-agent" }]);
+  expect(calls.attachmentLinkURL).toEqual([
+    {
+      issueId: "child-1",
+      title: "./llm/topic/goals.md",
+      url: "./llm/topic/goals.md",
+    },
+  ]);
+  expect(calls.createIssueRelation).toEqual([
+    {
+      issueId: "child-1",
+      relatedIssueId: "existing-child",
+      type: "blocks",
+    },
+  ]);
+  expect(calls.createComment[0]?.parentId).toBe("comment-1");
 });
 
 test("pickCandidateIssues prefers unblocked todo issues by priority", () => {
@@ -205,6 +433,121 @@ test("pickCandidateIssues prefers the locally active issue within an occupied st
     new Map([["os-1", "OS-3"]]),
   );
   expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-4"]);
+});
+
+test("AgentService records handled managed comments and skips them on the next poll", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-comments-"));
+  let mutations = 0;
+  const trigger = {
+    body: "@io help",
+    bodyHash: "hash-1",
+    command: "help" as const,
+    commentId: "comment-1",
+    createdAt: "2024-01-02T00:00:00.000Z",
+    issue: createIssue({
+      description: "Managed parent",
+      id: "issue-1",
+      identifier: "OPE-126",
+      labels: ["io", "agent"],
+      teamId: "team-1",
+      title: "Managed parent",
+    }),
+    payload: {
+      docs: [],
+      dryRun: false,
+    },
+    updatedAt: "2024-01-02T00:00:00.000Z",
+  };
+
+  await mkdir(resolve(root, "llm", "topic"), { recursive: true });
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        modules: {
+          agent: {
+            allowedSharedPaths: ["./llm/topic"],
+            docs: ["./llm/topic/agent.md"],
+            path: "./agent",
+          },
+        },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(resolve(root, "io.md"), "LOCAL {{ issue.identifier }}\n");
+  await writeFile(resolve(root, "llm", "topic", "agent.md"), "# Agent\n");
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "io";
+
+  try {
+    const service = new AgentService({
+      repoRoot: root,
+      trackerFactory: () => ({
+        applyManagedCommentMutation: async () => {
+          mutations += 1;
+          return {
+            createdChildIssueIdentifiers: [],
+            dependencyCount: 0,
+            replyCommentId: "reply-1",
+            result: "noop",
+            updatedParentDescription: false,
+            warnings: [],
+          };
+        },
+        fetchCandidateIssues: async () => [],
+        fetchIssueStatesByIds: async () => new Map(),
+        fetchManagedCommentTriggers: async () => [trigger],
+        setIssueState: async () => undefined,
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          reconcileTerminalIssues: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.runOnce();
+    await service.runOnce();
+
+    const state = JSON.parse(
+      await readFile(resolve(root, "workspace", "issue", "ope-126", "comment-state.json"), "utf8"),
+    );
+    expect(mutations).toBe(1);
+    expect(state.comments).toEqual([
+      {
+        bodyHash: "hash-1",
+        commentId: "comment-1",
+        handledAt: expect.any(String),
+      },
+    ]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
 });
 
 test("AgentService resumes an in-progress issue in its own occupied stream", async () => {
