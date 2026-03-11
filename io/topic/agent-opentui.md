@@ -48,12 +48,16 @@ TUI runtime:
 - `agent/src/tui.ts`
 - `agent/src/tui-runtime.ts`
 - `agent/src/tui.test.ts`
+- `tui/src/store.ts`
+- `tui/src/transcript.ts`
+- `tui/src/tui.tsx`
+- `tui/src/tui.test.ts`
 
 Related repo docs:
 
 - `io.md`
 - `agent/doc/stream-workflow.md`
-- `llm/topic/overview.md`
+- `io/topic/overview.md`
 
 ## Current Runtime Model
 
@@ -109,6 +113,14 @@ The TUI is session-oriented, not file-oriented. It is intended to answer:
 - which issues are active?
 - what readable output is each worker producing?
 - what raw Codex output is available if the readable path is insufficient?
+
+The current transcript direction is to keep the readable path literal and
+compact:
+
+- supervisor lines should read like operator status, for example `IO is supervising <repo>`
+- issue lifecycle lines should read like `OPE-81 Starting agent in ./.io/...`
+- command and tool blocks should prefer plain readable headers over bracketed
+  label prefixes
 
 ## Long-Term Goal
 

@@ -679,46 +679,15 @@ export function createStatusSummary(event: AgentStatusEvent): AgentTuiStatusSumm
 }
 
 function formatLifecycleEntry(entry: Extract<AgentTuiBlock, { kind: "lifecycle" }>) {
-  return [`[SESSION ${entry.phase.toUpperCase()}] ${entry.text}`];
+  return [entry.text];
 }
 
 function formatStatusEntry(entry: Extract<AgentTuiBlock, { kind: "status" }>) {
-  let label = "STATUS";
-  switch (entry.code) {
-    case "approval-required":
-      label = "APPROVAL";
-      break;
-    case "command":
-      label = "COMMAND";
-      break;
-    case "command-failed":
-      label = "COMMAND FAIL";
-      break;
-    case "error":
-      label = "ERROR";
-      break;
-    case "tool":
-      label = "TOOL";
-      break;
-    case "tool-failed":
-      label = "TOOL FAIL";
-      break;
-    case "waiting-on-user-input":
-      label = "WAIT";
-      break;
-    case "thread-started":
-    case "turn-started":
-    case "turn-completed":
-    case "turn-cancelled":
-    case "turn-failed":
-      label = "TURN";
-      break;
-  }
-  return [`[${label}] ${entry.text}`];
+  return [entry.text];
 }
 
 function formatApprovalEntry(entry: Extract<AgentTuiBlock, { kind: "approval" }>) {
-  return [`[APPROVAL] ${entry.text}`];
+  return [entry.text];
 }
 
 function formatAgentMessageEntry(entry: Extract<AgentTuiBlock, { kind: "agent-message" }>) {
@@ -732,10 +701,10 @@ function formatAgentMessageEntry(entry: Extract<AgentTuiBlock, { kind: "agent-me
 
 function formatCommandEntry(entry: Extract<AgentTuiBlock, { kind: "command" }>) {
   const header = `$ ${entry.command}`;
-  const lines = [`[COMMAND] ${header}`];
+  const lines = [header];
   if (entry.status === "failed") {
     lines.push(
-      `[COMMAND FAIL] Command failed${typeof entry.exitCode === "number" ? ` (exit ${entry.exitCode})` : ""}`,
+      `Command failed${typeof entry.exitCode === "number" ? ` (exit ${entry.exitCode})` : ""}`,
     );
   }
   if (entry.outputLines.length) {
@@ -767,7 +736,7 @@ function formatPlanEntry(entry: Extract<AgentTuiBlock, { kind: "plan" }>) {
   if (!entry.text.trim()) {
     return [];
   }
-  return [`[PLAN] ${entry.text.replace(/\r\n/g, "\n").replace(/\n+/g, " ").trim()}`];
+  return [`Plan: ${entry.text.replace(/\r\n/g, "\n").replace(/\n+/g, " ").trim()}`];
 }
 
 function formatReasoningEntry(entry: Extract<AgentTuiBlock, { kind: "reasoning" }>) {
@@ -776,15 +745,15 @@ function formatReasoningEntry(entry: Extract<AgentTuiBlock, { kind: "reasoning" 
     return [];
   }
   return [
-    `[REASONING] ${(combined.at(-1) ?? combined[0] ?? "").replace(/\r\n/g, "\n").replace(/\n+/g, " ").trim()}`,
+    `Reasoning: ${(combined.at(-1) ?? combined[0] ?? "").replace(/\r\n/g, "\n").replace(/\n+/g, " ").trim()}`,
   ];
 }
 
 function formatToolEntry(entry: Extract<AgentTuiBlock, { kind: "tool" }>) {
   const header = `Tool: ${entry.server}.${entry.tool}${entry.argumentsText ? ` ${entry.argumentsText}` : ""}`;
-  const lines = [`[TOOL] ${header}`];
+  const lines = [header];
   if (entry.errorText) {
-    lines.push(`[TOOL FAIL] ${entry.errorText}`);
+    lines.push(`Tool failed: ${entry.errorText}`);
   }
   return lines;
 }

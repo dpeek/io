@@ -104,7 +104,7 @@ test("AgentTuiStore tracks column hierarchy, summaries, and event history", () =
   expect(columns[2]?.parentSessionId).toBe("worker:OPE-68:1");
   expect(columns[2]?.status?.text).toBe('Tool: helper.spawn {"mode":"plan"}');
   expect(columns[2]?.eventHistory.at(-1)?.summary).toContain("tool");
-  expect(columns[1]?.body).toContain("[TURN] Session started");
+  expect(columns[1]?.body).toContain("Session started");
   expect(columns[1]?.blocks.map((entry) => entry.kind)).toEqual(["lifecycle", "status"]);
   expect(columns[2]?.blocks.at(-1)).toMatchObject({
     kind: "status",
@@ -114,7 +114,7 @@ test("AgentTuiStore tracks column hierarchy, summaries, and event history", () =
   const supervisorContent = buildAgentTuiRootComponentModel(snapshot, {
     selectedColumnId: supervisor.id,
   }).columns.find((column) => column.id === supervisor.id)?.content;
-  expect(supervisorContent).toContain("[SESSION STARTED] Session started | /Users/dpeek/code/io");
+  expect(supervisorContent).toContain("Session started | /Users/dpeek/code/io");
   expect(supervisorContent).not.toContain("OPE-68");
 });
 
@@ -172,7 +172,7 @@ test("AgentTuiStore prunes completed non-supervisor sessions when retention is d
   const supervisorContent = buildAgentTuiRootComponentModel(snapshot, {
     selectedColumnId: supervisor.id,
   }).columns[0]?.content;
-  expect(supervisorContent).toContain("[SESSION STARTED] Session started | /Users/dpeek/code/io");
+  expect(supervisorContent).toContain("Session started | /Users/dpeek/code/io");
 });
 
 test("buildAgentTuiRootComponentModel renders a single human-readable block stream", () => {
@@ -266,7 +266,7 @@ test("buildAgentTuiRootComponentModel renders a single human-readable block stre
   });
   const content = model.columns.find((column) => column.id === worker.id)?.content ?? "";
 
-  expect(content).toContain("[COMMAND] $ git status --short --branch");
+  expect(content).toContain("$ git status --short --branch");
   expect(content).toContain("| ## main");
   expect(content).toContain("|  M agent/src/runner/codex.ts");
   expect(content).toContain("Inspecting runtime state");
@@ -391,7 +391,7 @@ test("store renders codex v2 notifications as item blocks", () => {
       selectedColumnId: worker.id,
     }).columns.find((column) => column.id === worker.id)?.content ?? "";
 
-  expect(content).toContain("[COMMAND] $ git status --short --branch");
+  expect(content).toContain("$ git status --short --branch");
   expect(content).toContain("| ## main");
   expect(content).toContain("|  M tui/src/store.ts");
   expect(content).toContain("Inspecting runtime state");

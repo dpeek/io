@@ -72,6 +72,9 @@ Operator surfaces:
 - `agent/src/tui.ts`
 - `agent/src/tui-runtime.ts`
 - `agent/src/session-events.ts`
+- `tui/src/store.ts`
+- `tui/src/transcript.ts`
+- `tui/src/tui.tsx`
 
 Context, routing, and built-ins:
 
@@ -87,9 +90,11 @@ Planning and stream model docs:
 - `agent/doc/context.md`
 - `agent/doc/context-defaults.md`
 - `agent/doc/stream-workflow.md`
-- `llm/topic/overview.md`
-- `llm/topic/io-ts-config.md`
-- `llm/topic/agent-opentui.md`
+- `io/topic/goals.md`
+- `io/topic/managed-stream-comments.md`
+- `io/topic/overview.md`
+- `io/topic/io-ts-config.md`
+- `io/topic/agent-opentui.md`
 
 ## Long-Term Goal
 
@@ -107,6 +112,27 @@ That means:
 - the system keeps multiple streams moving without turning the repo into chaos
 
 The target is an agent loop that is both high-throughput and legible.
+
+## Current Repo State
+
+As of March 2026, the main operator foundation for this stream is already in
+place:
+
+- normalized session events drive stdout, retained logs, attach/replay, and the
+  TUI
+- the interactive operator UI now lives mostly in the standalone `tui/`
+  package rather than only under `agent/src/tui*`
+- stream-aware scheduling already prefers one active worker per stream while
+  allowing multiple streams to move in parallel
+
+The active work in the tree is focused on output readability rather than adding
+new orchestration features:
+
+- simplify supervisor and worker transcript text so the readable path does not
+  depend on `[STATUS]` or similar prefixes
+- show workspace paths relative to the repo root when possible
+- surface clearer supervisor lines when a worker is created, started, or
+  blocked
 
 ## Good Changes In This Stream
 

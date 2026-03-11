@@ -1,5 +1,5 @@
 import { appendFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 
 import { createLogger, type Logger } from "@io/lib";
 
@@ -295,7 +295,7 @@ export class AgentService {
     await workspaceManager.ensureSessionStartState();
     const workspace = await workspaceManager.prepare(issue);
     const session = this.#createWorkerSession(issue, workspace);
-    const assignmentLine = `${issue.identifier}: ${workspace.path} [${workspace.branchName}]\n`;
+    const workspaceLabel = this.#formatWorkspaceLabel(workspace.path);
     this.#sessionEvents.publish({
       data: {
         branchName: workspace.branchName,
@@ -305,19 +305,26 @@ export class AgentService {
       session,
       type: "session",
     });
-    this.#sessionEvents.publish({
-      code: "issue-assigned",
-      data: {
-        branchName: workspace.branchName,
-        childSessionId: session.id,
-        workspacePath: workspace.path,
-      },
-      format: "line",
-      session: this.#supervisorSession,
-      text: assignmentLine.trimEnd(),
-      type: "status",
-    });
-    await this.#appendIssueOutput(workspace.outputPath, assignmentLine);
+    if (workspace.createdNow) {
+      this.#publishSupervisorIssueLine(
+        "issue-assigned",
+        issue,
+        `Created work tree in ${workspaceLabel}`,
+        session,
+        workspace,
+      );
+    }
+    this.#publishSupervisorIssueLine(
+      "issue-assigned",
+      issue,
+      `Starting agent in ${workspaceLabel}`,
+      session,
+      workspace,
+    );
+    await this.#appendIssueOutput(
+      workspace.outputPath,
+      `${issue.identifier}: Starting agent in ${workspaceLabel}\n`,
+    );
     let beforeRunCompleted = false;
     let result: IssueRunResult;
     try {
@@ -377,9 +384,19 @@ export class AgentService {
       if (isResumableRunError(error)) {
         await workspaceManager.markInterrupted(workspace, issue);
         await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: interrupted\n`);
+        this.#publishSupervisorIssueLine(
+          "issue-blocked",
+          issue,
+          `Interrupted: ${reason}`,
+          session,
+          workspace,
+        );
       } else {
         await workspaceManager.markBlocked(workspace, issue);
-        await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked\n`);
+        await this.#appendIssueOutput(
+          workspace.outputPath,
+          `${issue.identifier}: blocked: ${reason}\n`,
+        );
         this.#sessionEvents.publish({
           code: "issue-blocked",
           format: "line",
@@ -387,6 +404,13 @@ export class AgentService {
           text: `${issue.identifier}: blocked`,
           type: "status",
         });
+        this.#publishSupervisorIssueLine(
+          "issue-blocked",
+          issue,
+          `Blocked: ${reason}`,
+          session,
+          workspace,
+        );
       }
       this.#sessionEvents.publish({
         data: { reason },
@@ -523,7 +547,7 @@ export class AgentService {
       code: "ready",
       format: "line",
       session: this.#supervisorSession,
-      text: `ready at ${path}`,
+      text: `IO is supervising ${this.#repoRoot ?? path}`,
       type: "status",
     });
     this.#ready = true;
@@ -553,5 +577,37 @@ export class AgentService {
       return;
     }
     await appendFile(path, text);
+  }
+
+  #formatWorkspaceLabel(path: string) {
+    if (!this.#repoRoot) {
+      return path;
+    }
+    const relativePath = relative(this.#repoRoot, path);
+    if (!relativePath || relativePath === ".") {
+      return this.#repoRoot;
+    }
+    return relativePath.startsWith(".") ? relativePath : `./${relativePath}`;
+  }
+
+  #publishSupervisorIssueLine(
+    code: "issue-assigned" | "issue-blocked",
+    issue: AgentIssue,
+    message: string,
+    session: AgentSessionRef,
+    workspace: PreparedWorkspace,
+  ) {
+    this.#sessionEvents.publish({
+      code,
+      data: {
+        branchName: workspace.branchName,
+        childSessionId: session.id,
+        workspacePath: workspace.path,
+      },
+      format: "line",
+      session: this.#supervisorSession,
+      text: `${issue.identifier} ${message}`,
+      type: "status",
+    });
   }
 }

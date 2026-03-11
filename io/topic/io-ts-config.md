@@ -361,13 +361,13 @@ clear: `io.ts` plus `io.md` is the primary model.
 ## Where Repo Context Lives
 
 For this repo specifically, the main project context entry points are currently
-the topic docs in `llm/topic/` rather than a separate `io/context/` tree.
+the topic docs in `io/topic/` rather than a separate `io/context/` tree.
 
 Start with:
 
-- `llm/topic/overview.md`
-- `llm/topic/agent-opentui.md`
-- `llm/topic/io-ts-config.md`
+- `io/topic/overview.md`
+- `io/topic/agent-opentui.md`
+- `io/topic/io-ts-config.md`
 
 Use issue-linked docs and stream-specific docs after those.
 

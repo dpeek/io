@@ -725,7 +725,7 @@ test("AgentService eagerly creates worker checkout on start", async () => {
     });
 
     await service.start();
-    expect(writes.some((entry) => entry.includes("ready at"))).toBe(true);
+    expect(writes.some((entry) => entry.includes("IO is supervising"))).toBe(true);
     expect(writes.some((entry) => entry.includes("No issues"))).toBe(true);
   } finally {
     globalThis.fetch = originalFetch;
@@ -997,7 +997,8 @@ test("AgentService publishes supervisor and worker session events", async () => 
         (event) =>
           event.type === "status" &&
           event.code === "issue-assigned" &&
-          event.session.id === "supervisor",
+          event.session.id === "supervisor" &&
+          event.text.includes("Starting agent in"),
       ),
     ).toBe(true);
 

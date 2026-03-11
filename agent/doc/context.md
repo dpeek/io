@@ -4,7 +4,7 @@ Status: Historical design record. The shipped runtime now defaults to
 `./io.ts` + `./io.md`, keeps `./io.json` as the compatibility config path, and
 keeps `./WORKFLOW.md` only as the legacy fallback. For the current contract,
 start with [`./context-defaults.md`](./context-defaults.md) plus the repo-root
-`io/context/*.md` docs.
+`io/topic/*.md` docs.
 
 ## Purpose
 
@@ -25,14 +25,14 @@ The first-version defaults in this proposal are now settled in `agent/doc/contex
 Today the agent runtime effectively uses two layers:
 
 1. config plus prompt body from `WORKFLOW.md`
-2. a hard-coded prompt override for io-labeled backlog issues via `llm/agent/backlog.md`
+2. a hard-coded prompt override for io-labeled backlog issues via `io/agent/backlog.md`
 
 Shared project context is still mostly implicit and path-based:
 
 - `WORKFLOW.md`
-- `llm/agent/execute.md`
-- `llm/agent/backlog.md`
-- `llm/topic/overview.md`
+- `io/agent/execute.md`
+- `io/agent/backlog.md`
+- `io/topic/overview.md`
 
 There is also already an `io.json` file in the repo today for install-oriented configuration. This proposal expands `io.json` into the main structured entrypoint rather than introducing a second config file.
 
@@ -110,9 +110,9 @@ Reusable project docs should usually be registered in `io.json`, but repo-relati
 
 Suggested default location:
 
-- `./io/context/**/*.md`
+- `./io/topic/**/*.md`
 
-This keeps them near the repo root, avoids the current `llm/topic` naming ambiguity, and makes the intent obvious.
+This keeps them near the repo root, avoids the current `io/topic` naming ambiguity, and makes the intent obvious.
 
 ## Proposed `io.json` Responsibilities
 
@@ -149,8 +149,8 @@ This keeps them near the repo root, avoids the current `llm/topic` naming ambigu
   "context": {
     "entrypoint": "./io.md",
     "docs": {
-      "project.overview": "./io/context/project-overview.md",
-      "project.architecture": "./io/context/architecture.md"
+      "project.overview": "./io/topic/project-overview.md",
+      "project.architecture": "./io/topic/architecture.md"
     },
     "profiles": {
       "execute": {
@@ -255,7 +255,7 @@ Example shape:
 {
   "context": {
     "overrides": {
-      "builtin:io.agent.execute.default": "./io/context/custom-execute-agent.md"
+      "builtin:io.agent.execute.default": "./io/topic/custom-execute-agent.md"
     }
   }
 }
@@ -382,7 +382,7 @@ agent: backlog
 profile: backlog
 docs:
   - project.architecture
-  - ./io/context/schema-rules.md
+  - ./io/topic/schema-rules.md
 -->
 ```
 
@@ -401,7 +401,7 @@ Users should be able to paste repo-relative doc paths or stable doc ids into iss
 
 Recommended supported forms:
 
-- repo-relative path: `./io/context/architecture.md`
+- repo-relative path: `./io/topic/architecture.md`
 - registered doc id: `project.architecture`
 - built-in doc id: `builtin:io.agent.backlog.default`
 

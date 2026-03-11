@@ -97,7 +97,7 @@ test("AgentTuiStore keeps supervisor first and records status plus raw output", 
     format: "line",
     sequence: 2,
     session: supervisor,
-    text: "ready at /Users/dpeek/code/io",
+    text: "IO is supervising /Users/dpeek/code/io",
     timestamp: "2026-03-10T02:00:01.000Z",
     type: "status",
   });
@@ -171,11 +171,11 @@ test("AgentTuiStore keeps supervisor first and records status plus raw output", 
     "worker:OPE-67:1",
   ]);
   expect(snapshot.sessions[0]?.body).toContain("Session started | /Users/dpeek/code/io");
-  expect(snapshot.sessions[0]?.body).toContain("[STATUS] ready at /Users/dpeek/code/io");
+  expect(snapshot.sessions[0]?.body).toContain("IO is supervising /Users/dpeek/code/io");
   expect(snapshot.sessions[1]?.body).toContain(
     "Session scheduled | ope-67 | /Users/dpeek/code/io/.io/tree/ope-67\n",
   );
-  expect(snapshot.sessions[1]?.body).toContain("[TURN] Session started\n");
+  expect(snapshot.sessions[1]?.body).toContain("Session started\n");
   expect(snapshot.sessions[1]?.body).toContain("Inspecting runtime state\n");
   expect(snapshot.sessions[1]?.body).toContain("stderr: stderr line");
 });
@@ -183,7 +183,7 @@ test("AgentTuiStore keeps supervisor first and records status plus raw output", 
 test("renderAgentTuiFrame lays out supervisor and worker columns", () => {
   const sessions = [
     createSnapshotColumn({
-      body: "Session started | /Users/dpeek/code/io\nready at /Users/dpeek/code/io\nNo issues\n",
+      body: "Session started | /Users/dpeek/code/io\nIO is supervising /Users/dpeek/code/io\nNo issues\n",
       firstSequence: 1,
       lastSequence: 3,
       phase: "started",
@@ -279,7 +279,7 @@ test("AgentTuiRetainedReader reconstructs events.log into supervisor and worker 
     ]);
     expect(snapshot.sessions[0]?.body).toContain("Attach OPE-67 from events.log\n");
     expect(snapshot.sessions[1]?.body).toContain("Session scheduled | ope-67");
-  expect(snapshot.sessions[1]?.body).toContain('[TOOL] Tool: spawned.run {"mode":"helper"}');
+  expect(snapshot.sessions[1]?.body).toContain('Tool: spawned.run {"mode":"helper"}');
   } finally {
     await rm(root, { force: true, recursive: true });
   }

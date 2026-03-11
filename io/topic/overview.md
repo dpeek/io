@@ -94,7 +94,7 @@ spec sandbox.
 
 ## How To Use These Topic Docs
 
-Use the docs in `llm/topic/` as repo-level entry points.
+Use the docs in `io/topic/` as repo-level entry points.
 
 Suggested order:
 
@@ -105,11 +105,14 @@ Suggested order:
 
 Current topic docs:
 
-- `llm/topic/overview.md`
-- `llm/topic/agent.md`
-- `llm/topic/graph.md`
-- `llm/topic/agent-opentui.md`
-- `llm/topic/io-ts-config.md`
+- `io/topic/overview.md`
+- `io/topic/agent.md`
+- `io/topic/graph.md`
+- `io/topic/agent-opentui.md`
+- `io/topic/io-ts-config.md`
+- `io/topic/goals.md`
+- `io/topic/managed-stream-comments.md`
+- `io/topic/module-stream-workflow-plan.md`
 
 ## Long-Term Goal
 
