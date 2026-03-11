@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@io/lib/tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["@types/bun"],
+    "resolveJsonModule": true,
+    "rootDir": "src",
+    "outDir": "out/tsc"
+  },
+  "include": ["src"]
+}

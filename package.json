@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
+    "app",
     "cli",
     "graph",
     "agent",
@@ -12,7 +13,7 @@
   ],
   "type": "module",
   "scripts": {
-    "check": "bun run --cwd graph check",
+    "check": "bun run --cwd graph check && bun run --cwd app check",
     "agent": "io agent start"
   },
   "devDependencies": {

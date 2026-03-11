@@ -11,7 +11,7 @@ Sources:
 
 - `graph/src/graph/sync.ts`
 - `graph/src/graph/store.ts`
-- `graph/src/graph/runtime.ts`
+- `app/src/graph/runtime.ts`
 
 The first landed client-facing contract is a total graph snapshot:
 

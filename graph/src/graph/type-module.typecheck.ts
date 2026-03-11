@@ -1,7 +1,7 @@
 import { booleanTypeModule } from "../type/boolean/index.js";
-import { statusTypeModule } from "../type/status/index.js";
+import { defineDefaultEnumTypeModule } from "../type/enum-module.js";
 import { stringTypeModule } from "../type/string/index.js";
-import { defineScalar, defineType } from "./schema.js";
+import { defineEnum, defineScalar, defineType } from "./schema.js";
 import { defineReferenceField, defineScalarModule } from "./type-module.js";
 import { existingEntityReferenceField } from "./web-policy.js";
 
@@ -15,6 +15,16 @@ const probeEntityType = defineType({
   values: { key: "probe:entity", name: "Probe Entity" },
   fields: {},
 });
+
+const probeStatusType = defineEnum({
+  values: { key: "probe:status", name: "Probe Status" },
+  options: {
+    active: { name: "Active" },
+    paused: { name: "Paused" },
+  },
+});
+
+const probeStatusTypeModule = defineDefaultEnumTypeModule(probeStatusType);
 
 void defineReferenceField({
   range: probeEntityType,
@@ -54,7 +64,7 @@ void stringTypeModule.field({
   },
 });
 
-void statusTypeModule.field({
+void probeStatusTypeModule.field({
   cardinality: "one",
   filter: {
     operators: ["is"] as const,

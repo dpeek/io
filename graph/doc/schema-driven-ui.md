@@ -95,7 +95,7 @@ Owns:
 - type-safe renderer/editor/filter capability declarations
 - optional platform-specific adapters
 
-### `src/web/*`
+### `app/src/web/*`
 
 Owns:
 
@@ -272,7 +272,7 @@ Define the strongly typed authoring contracts for:
 
 ### Phase 3: Web proof of concept
 
-Build a narrow vertical slice in `src/web`:
+Build a narrow vertical slice in `app/src/web`:
 
 - a few scalar types
 - one enum

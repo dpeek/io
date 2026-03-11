@@ -104,20 +104,20 @@ Core graph runtime:
 - `graph/src/graph/store.ts`
 - `graph/src/graph/sync.ts`
 - `graph/src/graph/bootstrap.ts`
-- `graph/src/graph/app.ts`
 - `graph/src/graph/core.ts`
 - `graph/src/graph/type-module.ts`
 
-Web and explorer surfaces:
+App and web proof surfaces:
 
-- `graph/src/web/bindings.ts`
-- `graph/src/web/resolver.tsx`
-- `graph/src/web/generic-fields.tsx`
-- `graph/src/web/filter.tsx`
-- `graph/src/web/generic-filter-editors.tsx`
-- `graph/src/web/company-proof.tsx`
-- `graph/src/web/relationship-proof.tsx`
-- `graph/src/web/explorer.tsx`
+- `app/src/graph/app.ts`
+- `app/src/web/bindings.ts`
+- `app/src/web/resolver.tsx`
+- `app/src/web/generic-fields.tsx`
+- `app/src/web/filter.tsx`
+- `app/src/web/generic-filter-editors.tsx`
+- `app/src/web/company-proof.tsx`
+- `app/src/web/relationship-proof.tsx`
+- `app/src/web/explorer.tsx`
 
 Architecture and roadmap docs:
 

@@ -64,13 +64,13 @@ Start here:
 - `graph/doc/typed-refs.md`
 - `graph/doc/type-modules.md`
 - `graph/doc/web-bindings.md`
-- `graph/src/graph/app.ts`
 - `graph/src/graph/client.ts`
-- `graph/src/web/bindings.ts`
-- `graph/src/web/resolver.tsx`
-- `graph/src/web/company-proof.tsx`
-- `graph/src/web/filter.tsx`
-- `graph/src/web/relationship-proof.tsx`
+- `app/src/graph/app.ts`
+- `app/src/web/bindings.ts`
+- `app/src/web/resolver.tsx`
+- `app/src/web/company-proof.tsx`
+- `app/src/web/filter.tsx`
+- `app/src/web/relationship-proof.tsx`
 
 ## What Has Landed
 

@@ -69,7 +69,7 @@ Notable semantics:
 Sources:
 
 - `graph/src/graph/core.json`
-- `graph/src/graph/app.json`
+- `app/src/graph/app.json`
 - CLI: `graph/src/graph/ids-cli.ts`
 
 Each namespace keeps its own `key -> id` map next to the schema file.
@@ -202,15 +202,15 @@ store.
 
 Sources:
 
-- `graph/src/graph/runtime.ts` example graph sync bootstrap and sample data.
-- `graph/src/server.ts` explorer API/UI for browsing schema + nodes.
+- `app/src/graph/runtime.ts` example graph sync bootstrap and sample data.
+- `app/src/server.ts` explorer API/UI for browsing schema + nodes.
 
 Explorer intentionally surfaces human-readable keys where helpful (`key` when available, fallback to id), but all internal querying uses resolved IDs.
 
 ### Explorer Dev Access
 
-- Start (and keep running) with `bun run dev`.
-- `dev` uses `portless graph bun run --hot-reload --watch ./src/server.ts`.
+- Start (and keep running) with `bun run --cwd app dev`.
+- `app` `dev` uses `portless graph bun run --hot-reload --watch ./src/server.ts`.
 - Explorer is available at `https://graph.localhost`.
 - Agent workflows should call `https://graph.localhost` (and its `/api/*` routes) instead of launching a separate local server process.
 

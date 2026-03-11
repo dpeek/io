@@ -7,7 +7,7 @@ This document specifies the web-facing layer that sits on top of:
 - `doc/typed-refs.md`
 - `doc/type-modules.md`
 
-It focuses on how `src/web` should:
+It focuses on how `app/src/web` should:
 
 - consume typed `EntityRef` and `PredicateRef` objects
 - resolve renderers and editors for those refs
@@ -33,7 +33,7 @@ The web layer needs to preserve the granularity and typing established by typed 
 This phase should define:
 
 - the React-facing expectations for `EntityRef` and `PredicateRef`
-- renderer and editor resolution in `src/web`
+- renderer and editor resolution in `app/src/web`
 - subscription behavior and invalidation goals
 - the relationship between generic field components and type-specific adapters
 
@@ -75,7 +75,7 @@ The capability may be generic or type-specific, but it should work from the ref 
 
 ### Resolver
 
-A runtime mechanism in `src/web` that selects the appropriate renderer or editor for a predicate ref based on:
+A runtime mechanism in `app/src/web` that selects the appropriate renderer or editor for a predicate ref based on:
 
 - field override metadata
 - type-family defaults
@@ -323,7 +323,7 @@ This is enough to validate the shape of the architecture without prematurely opt
 
 ## Concrete Phase 3 Proof Surface
 
-The remaining Phase 3 backlog should use the existing schema surface in `graph/src/graph/app.ts`.
+The remaining Phase 3 backlog should use the existing schema surface in `app/src/graph/app.ts`.
 
 Preferred field set:
 

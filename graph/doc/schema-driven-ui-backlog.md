@@ -16,16 +16,16 @@ The architecture docs describe the model. This document describes the proof surf
 
 The current repo already provides the main proof surfaces the remaining backlog should build on:
 
-- `graph/src/graph/app.ts`
+- `app/src/graph/app.ts`
   - `company.name`
   - `company.status`
   - `company.foundedYear`
   - `company.website`
   - `company.tags`
   - `person.worksAt`
-- `graph/src/type/address.ts`
+- `graph/src/type/address/index.ts`
   - an existing richer `address` type that is not yet wired into the app namespace
-- `graph/src/web/*`
+- `app/src/web/*`
   - the current web package and dev surface
 
 The remaining backlog should prefer additive work on those surfaces over inventing a separate demo domain.
@@ -78,7 +78,7 @@ Concrete proof surface:
 Implementation notes:
 
 - Reuse the generic renderer path from `OPE-47` rather than adding ad hoc company-specific components.
-- Prefer one small dev surface in `graph/src/web/*` over a broad explorer rewrite.
+- Prefer one small dev surface in `app/src/web/*` over a broad explorer rewrite.
 - Add light rerender instrumentation so the proof records whether predicate-local invalidation actually holds.
 
 Validation focus:

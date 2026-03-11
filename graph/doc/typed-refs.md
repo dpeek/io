@@ -279,7 +279,7 @@ The next ref-heavy backlog items already have concrete schema targets in the rep
 
 - `company.tags` for the first `many string` semantics
 - `person.worksAt` for the first entity-reference field semantics
-- `address` in `graph/src/type/address.ts` for an address-like nested group once it is wired into the app schema
+- `address` in `graph/src/type/address/index.ts` for an address-like nested group once it is wired into the app schema
 
 Those surfaces should drive the next ref decisions rather than abstract examples with no path to a real UI proof.
 

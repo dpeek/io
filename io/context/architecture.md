@@ -17,10 +17,11 @@ Context resolution works in layers:
 Package boundaries:
 
 - `agent` owns workflow parsing, issue routing, context assembly, execution, and retained TUI state
+- `app` owns the example schemas, seeded runtimes, and web proof/explorer surfaces built on top of `graph`
 - `cli` owns installation and command-line entrypoints
 - `lib` owns shared helpers, including the `io.ts` / `io.json` loader and normalization logic
 - `config` re-exports the repo-root config so workspace packages can import it through a stable module
-- `graph` is the separate product/runtime area with its own docs and validation surface
+- `graph` owns the reusable graph runtime, schema, sync, and type-module APIs
 
 Migration boundary:
 
