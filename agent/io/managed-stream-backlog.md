@@ -17,6 +17,7 @@ over repeated backlog runs.
 The result should be:
 
 - concrete child issues, not planning prose
+- implementation steps, not extra planning or review tiers
 - ordered delivery through `blockedBy`
 - descriptions that an execution agent can act on without reopening planning
 - a short speculative tail that can be refreshed safely later
@@ -85,7 +86,7 @@ labels:
   - agent
   - <primary module label>
 priority: <inherit parent priority unless there is a clear reason not to>
-state: "Todo"
+state: "Backlog"
 blockedBy:
   - <previous child issue id or identifier when ordering is required>
 ```
@@ -93,6 +94,28 @@ blockedBy:
 Keep the field set and section order stable. Child descriptions must stay
 execution-ready: concrete repository surfaces, concrete behavior, and concrete
 acceptance criteria.
+
+Rules:
+
+- child issues are implementation-step only for this first pass
+- canonical bootstrap seeds new child issues in `Backlog`
+- the current runtime still writes speculative `Todo` children today; treat
+  that as a compatibility gap to close, not as a competing contract
+- while that compatibility gap exists, treat legacy speculative `Todo`
+  children as the same backlog pool during reruns
+
+## Safe Bootstrap
+
+Seed new streams conservatively under the current runtime:
+
+1. set the parent issue to `In Review`
+2. create the initial implementation child backlog in `Backlog`
+3. keep the parent in `In Review` while humans edit and approve the brief
+4. move the parent to `In Progress` only when execution may begin
+
+This keeps the current 2-level parent/child model intact while preventing new
+child issues from becoming runnable before the parent stream is explicitly
+released.
 
 ## Expansion Pass
 
@@ -118,7 +141,7 @@ On later backlog runs for the same parent:
 3. avoid duplicates by matching on outcome, module scope, and nearby repository
    surfaces before creating anything new
 4. keep the next tasks stable unless the parent brief materially changed
-5. refresh only the speculative tail of untouched `Todo` children
+5. refresh only the speculative tail of untouched `Backlog` children
 6. top the stream back up to about five planned tasks when the tail gets short
 7. relink `blockedBy` edges if backlog edits changed ordering
 

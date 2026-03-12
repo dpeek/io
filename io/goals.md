@@ -11,8 +11,10 @@
 
 - Carry parent stream state into child scheduling so only parents in
   `In Progress` can release child execution.
-- Keep managed parent `Todo` as the backlog-grooming phase, then move
-  successful backlog runs to `In Review` for human editing and approval.
+- Treat parent `In Review` as the safe bootstrap and post-backlog hold state
+  for new streams until a human explicitly moves the stream to `In Progress`.
+- Seed new implementation children in `Backlog` so the current runtime cannot
+  auto-run them before the parent-phase gate exists.
 - Keep repo docs terse and current while the parent Linear issue holds the
   evolving brief, child backlog, and operator notes.
 
@@ -21,6 +23,8 @@
 - Preserve the existing 2-level parent/child hierarchy for this first pass.
 - Keep the parent issue as the canonical stream context source and respect
   managed-marker ownership boundaries.
+- Keep child issues scoped to implementation-step work; planning and review
+  remain parent-owned.
 - Do not create or auto-run child issues in active execution states before the
   parent-phase gate exists.
 - Keep one active child per stream and continue to respect `blockedBy` ordering.
