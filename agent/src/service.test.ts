@@ -60,6 +60,31 @@ function buildExpectedPrompt(
   );
 }
 
+async function writeServiceTestRepo(root: string, overrides: Record<string, unknown> = {}) {
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+        ...overrides,
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+}
+
 test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   const issue = normalizeLinearIssue({
     children: {
@@ -1513,32 +1538,206 @@ test("resolveIssueRouting rejects ambiguous io-managed parent module labels", ()
   });
 });
 
+test("AgentService moves backlog parent issues to In Review after success", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-57", "repo");
+  const transitions: string[] = [];
+
+  await writeServiceTestRepo(root, {
+    issues: {
+      defaultAgent: "execute",
+      routing: [
+        {
+          agent: "backlog",
+          if: {
+            labelsAny: ["backlog"],
+          },
+          profile: "backlog",
+        },
+      ],
+    },
+  });
+
+  try {
+    const issue = createIssue({
+      hasChildren: true,
+      id: "parent-1",
+      identifier: "OPE-57",
+      labels: ["backlog"],
+      priority: 0,
+      title: "Parent backlog issue",
+    });
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => ({
+          issue,
+          prompt,
+          stderr: [],
+          stdout: [],
+          success: true,
+          workspace,
+        }),
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => [issue],
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: workspacePath,
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          markBlocked: async () => undefined,
+          markInterrupted: async () => undefined,
+          prepare: async () => ({
+            branchName: "io/ope-57",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: workspacePath,
+            sourceRepoPath: root,
+            workerId: "OPE-57",
+          }),
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(transitions).toEqual(["parent-1:In Review"]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("AgentService leaves backlog parent issues out of execution states after failure", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-67", "repo");
+  const events: string[] = [];
+  const transitions: string[] = [];
+
+  await writeServiceTestRepo(root, {
+    issues: {
+      defaultAgent: "execute",
+      routing: [
+        {
+          agent: "backlog",
+          if: {
+            labelsAny: ["backlog"],
+          },
+          profile: "backlog",
+        },
+      ],
+    },
+  });
+
+  try {
+    const issue = createIssue({
+      hasChildren: true,
+      id: "parent-1",
+      identifier: "OPE-67",
+      labels: ["backlog"],
+      priority: 0,
+      title: "Parent backlog issue",
+    });
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => ({
+          issue,
+          prompt,
+          stderr: [],
+          stdout: [],
+          success: false,
+          workspace,
+        }),
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => [issue],
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: workspacePath,
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          markBlocked: async () => {
+            events.push("blocked");
+          },
+          markInterrupted: async () => undefined,
+          prepare: async () => ({
+            branchName: "io/ope-67",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: workspacePath,
+            sourceRepoPath: root,
+            workerId: "OPE-67",
+          }),
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(transitions).toEqual([]);
+    expect(events).toEqual(["blocked"]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("AgentService moves standalone issues to In Review after success", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
   const workspacePath = resolve(root, "workspace", "workers", "OPE-57", "repo");
   const transitions: string[] = [];
 
-  await writeFile(
-    resolve(root, "io.json"),
-    JSON.stringify(
-      {
-        agent: { maxConcurrentAgents: 1 },
-        tracker: {
-          apiKey: "$LINEAR_API_KEY",
-          kind: "linear",
-          projectSlug: "$LINEAR_PROJECT_SLUG",
-        },
-        workspace: {
-          root: resolve(root, "workspace"),
-        },
-      },
-      null,
-      2,
-    ),
-  );
-  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
-  process.env.LINEAR_API_KEY = "linear-token";
-  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+  await writeServiceTestRepo(root);
 
   try {
     const issue = createIssue({
@@ -1618,27 +1817,7 @@ test("AgentService marks child issues Done after landing on the stream branch", 
   const workspacePath = resolve(root, "workspace", "workers", "OPE-58", "repo");
   const transitions: string[] = [];
 
-  await writeFile(
-    resolve(root, "io.json"),
-    JSON.stringify(
-      {
-        agent: { maxConcurrentAgents: 1 },
-        tracker: {
-          apiKey: "$LINEAR_API_KEY",
-          kind: "linear",
-          projectSlug: "$LINEAR_PROJECT_SLUG",
-        },
-        workspace: {
-          root: resolve(root, "workspace"),
-        },
-      },
-      null,
-      2,
-    ),
-  );
-  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
-  process.env.LINEAR_API_KEY = "linear-token";
-  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+  await writeServiceTestRepo(root);
 
   try {
     const issue = createIssue({

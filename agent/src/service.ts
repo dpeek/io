@@ -29,6 +29,7 @@ import {
 } from "./session-events.js";
 import { LinearTrackerAdapter } from "./tracker/linear.js";
 import type {
+  AgentRole,
   AgentIssue,
   IssueRunResult,
   IssueTracker,
@@ -140,6 +141,27 @@ function uniqueOrdered(values: string[]) {
     unique.push(normalized);
   }
   return unique;
+}
+
+function resolveIssueStateTransitionPlan(options: {
+  agent: AgentRole;
+  issue: AgentIssue;
+}) {
+  if (options.issue.hasParent) {
+    return {
+      runStartState: "In Progress",
+      successState: "Done",
+    } as const;
+  }
+  if (options.agent === "backlog") {
+    return {
+      successState: "In Review",
+    } as const;
+  }
+  return {
+    runStartState: "In Progress",
+    successState: "In Review",
+  } as const;
 }
 
 export class AgentService {
@@ -525,6 +547,9 @@ export class AgentService {
       `${issue.identifier}: Starting agent in ${workspaceLabel}\n`,
     );
     let beforeRunCompleted = false;
+    let transitionPlan:
+      | ReturnType<typeof resolveIssueStateTransitionPlan>
+      | undefined;
     let result: IssueRunResult;
     try {
       let resolvedContext = await resolveIssueContext({
@@ -561,6 +586,10 @@ export class AgentService {
           });
         }
       }
+      transitionPlan = resolveIssueStateTransitionPlan({
+        agent: resolvedContext.selection.agent,
+        issue,
+      });
       this.#log.info("issue.context.resolved", {
         docs: resolvedContext.bundle.docs.map((doc) => ({
           id: doc.id,
@@ -595,7 +624,9 @@ export class AgentService {
         new CodexAppServerRunner(workflow.codex, this.#log, {
           sessionEvents: this.#sessionEvents,
         });
-      await tracker.setIssueState(issue.id, "In Progress");
+      if (transitionPlan.runStartState) {
+        await tracker.setIssueState(issue.id, transitionPlan.runStartState);
+      }
       await workspaceManager.runBeforeRunHook(workspace.path);
       beforeRunCompleted = true;
       result = await runner.run({ issue, prompt, session, workspace });
@@ -730,11 +761,10 @@ export class AgentService {
       issueIdentifier: issue.identifier,
       workspace: workspace.path,
     });
-    if (issue.hasParent) {
-      await tracker.setIssueState(issue.id, "Done");
-      return result;
-    }
-    await tracker.setIssueState(issue.id, "In Review");
+    await tracker.setIssueState(
+      issue.id,
+      transitionPlan?.successState ?? (issue.hasParent ? "Done" : "In Review"),
+    );
     return result;
   }
 
