@@ -1,392 +1,195 @@
 # Stream Workflow For Linear Parent Issues
 
+Status: Current-approach runtime contract for the first managed-stream pass.
+
+Use this doc for the branch, worktree, runtime-state, and finalization behavior
+that exists today. Use
+[`../io/module-stream-workflow-plan.md`](../io/module-stream-workflow-plan.md)
+for the higher-level managed-stream contract that defines parent phases,
+backlog behavior, and the current 2-level parent/child model.
+
 ## Purpose
 
-This document proposes a stream-based execution model for `io` where:
+The current runtime treats one parent Linear issue as one stream:
 
-- a parent Linear issue represents a larger stream of work
-- child Linear issues represent ordered execution units under that parent
-- all child work lands onto a single long-lived stream branch owned by the parent
-- child worktrees are easy to find locally and are cleaned up as soon as the child lands
+- the parent issue owns the long-lived stream branch
+- child issues are implementation steps that land onto that same branch
+- parent issue phase gates backlog work vs child execution
+- child and parent finalization stay separate so finished child work can be
+  cleaned up before the parent stream merges to `main`
 
-This model is optimized for accumulating a larger diff over time without forcing every issue to merge back to `main` before the next issue can continue.
+## Current Approach
 
-## Goals
+### Parent stream phases
 
-- Enforce dependency order within a parent stream.
-- Let a parent issue own a long-lived branch.
-- Keep child execution scoped to dedicated worktrees.
-- Clean up child worktrees promptly once their work has landed on the stream branch.
-- Make active worktrees easy to browse directly from the repo root.
-- Preserve the existing `backlog` and `execute` agent split.
+- parent `Todo`: explicit backlog-authoring state; this is the only state where
+  a managed parent is auto-scheduled for backlog work
+- parent `In Review`: safe bootstrap and post-backlog holding state; new
+  streams wait here while humans edit and approve the parent brief
+- parent `In Progress`: execution-released state; unblocked child issues may
+  run automatically
+- parent `Done`: stream-complete state; the runtime may finalize the parent
+  stream once its branch is on `main`
 
-## Non-goals
+### Child issue role
 
-- Maximizing parallelism within a single stream.
-- Allowing multiple child issues in the same stream to land concurrently.
-- Replacing Linear as the source of truth for issue hierarchy and dependency order.
+- child issues are implementation steps only in this first pass
+- new child issues are seeded in `Todo`
+- seeded `Todo` children stay parked until the parent moves to `In Progress`
+- child readiness still respects `blockedBy` ordering and one active child per
+  stream
+- successful child runs land on the parent stream branch and transition the
+  child to `Done`
+- child transitions do not change the parent issue state
 
-## Current Behavior
+## Branches And Worktrees
 
-Today the runtime is issue-branch oriented:
+### Stream branch ownership
 
-- branch names are derived from the current issue identifier
-- worktrees live under the runtime root in `worktrees/<issue-branch>`
-- issue cleanup waits until the issue commit has landed on `main`
-- the scheduler already respects `blockedBy`, so only unblocked issues are considered runnable
+- branch identity comes from the parent issue identifier
+- the current branch format is `io/<parent-key>`
+- parent backlog runs and child execution runs both use that same stream branch
 
-This works well for independent issue branches, but it is the wrong lifecycle for long-lived stream branches.
+Examples:
 
-## Proposed Model
+- parent `OPE-147` -> branch `io/ope-147`
+- child `OPE-152` under parent `OPE-147` also runs on `io/ope-147`
 
-### Core concepts
+### Worktree layout
 
-- `stream issue`
-  - a parent Linear issue
-  - owns the long-lived branch
-  - owns the stream workspace folder
+The runtime keeps worktrees flat under the configured workspace root. The
+current implementation does not nest child worktrees under a parent directory.
 
-- `child issue`
-  - a Linear issue with `parentId = <stream issue>`
-  - may declare dependencies through `blockedBy`
-  - runs in its own dedicated worktree
-  - lands onto the parent stream branch instead of `main`
+If the workspace root is `.io/`, the runtime layout looks like:
 
-- `stream branch`
-  - one branch per parent issue
-  - receives landed commits from all completed child issues
-  - remains alive until the parent issue is complete
+- `.io/tree/ope-147/`
+- `.io/tree/ope-152/`
+- `.io/issue/ope-147/issue-state.json`
+- `.io/issue/ope-152/issue-state.json`
+- `.io/stream/ope-147.json`
+- `.io/workers/<worker-id>/worker-state.json`
 
-### Operational rule
+Rules:
 
-Within a stream:
-
-- schedule only child issues with no unmet dependencies
-- default to one active child issue at a time
-- land child work onto the stream branch
-- remove the child worktree immediately after the child is safely landed
-
-Across streams:
-
-- multiple streams may run in parallel
-
-This yields:
-
-- serialized execution within a stream
-- parallel execution across streams
-
-## Branching
-
-### Branch ownership
-
-Branch identity should move from the child issue to the parent issue.
-
-Recommended branch format:
-
-- `stream/ope-12`
-
-Acceptable shorter format:
-
-- `ope-12`
-
-The important property is that the branch name is stable for the full lifetime of the parent stream.
-
-### Child landing
-
-Each child issue should:
-
-1. start from the current head of the parent stream branch
-2. make its changes in a dedicated child worktree
-3. commit with the child issue identifier in the message
-4. update the parent stream branch to include that commit
-5. mark the child issue as landed
-
-The system should not treat child completion as a merge to `main`.
-
-## Worktree Layout
-
-The current runtime-managed worktree paths are too hidden for day-to-day use.
-
-Recommended repo-local layout:
-
-- `.io/streams/OPE-12/stream-state.json`
-- `.io/streams/OPE-12/branch.txt`
-- `.io/streams/OPE-12/OPE-13/`
-- `.io/streams/OPE-12/OPE-14/`
-
-Why this layout:
-
-- easy to inspect from the repo root
-- groups all child work under the parent stream
-- gives the runtime a natural place for durable stream metadata
-- makes stream cleanup simple when the parent is finished
-
-If a less hidden path is preferred later, the same structure can move under `io/streams/`, but `.io/streams/` is a safer default because it is clearly runtime-owned and should be ignored by git.
-
-## Lifecycle
-
-### 1. Stream creation
-
-When a parent issue is selected for backlog work:
-
-- create or resolve the parent stream branch
-- create `.io/streams/<parent>/`
-- write a `stream-state.json` file
-- optionally add a Linear comment with the stream branch name and local path
-
-### 2. Backlog planning
-
-The backlog agent should:
-
-- read the parent issue
-- create child issues under the parent via `parentId`
-- add `blockedBy` edges for ordering
-- leave enough structure in the issue descriptions for execution
-
-The backlog agent should be able to run again later, but it should avoid destructive rewrites of already-executing child issues.
-
-### 3. Child execution
-
-When a child issue is scheduled:
-
-- resolve its parent stream
-- ensure the stream branch exists locally
-- create or reuse `.io/streams/<parent>/<child>/`
-- check out the stream branch in that worktree
-- run the child issue there
-
-The worktree is child-scoped, but the branch is stream-scoped.
-
-### 4. Child completion
-
-When a child completes successfully:
-
-- commit the child work
-- confirm the landed commit is reachable from the stream branch head
-- record the landed commit SHA in child runtime state
-- mark the child as completed in runtime state
-
-### 5. Child finalization
-
-When the child is marked done in Linear and its commit is on the stream branch:
-
-- run `beforeRemove` if configured
-- remove `.io/streams/<parent>/<child>/`
-- keep the child runtime record with `finalizedAt`
-- do not delete the stream branch
-- do not require the parent stream to be merged to `main`
-
-### 6. Parent completion
-
-When the parent stream is done:
-
-- merge the stream branch to `main`
-- clean up the stream folder if no active children remain
-- optionally delete the stream branch
-
-## Cleanup Semantics
-
-This is the key lifecycle change.
-
-### Current cleanup rule
-
-- preserve the issue worktree until the issue branch has landed on `main`
-
-### Proposed cleanup rule
-
-- preserve the child worktree until the child commit has landed on the parent stream branch
-
-This means child worktrees disappear much earlier, while the parent stream remains active.
-
-## Scheduler Rules
-
-### Candidate selection
-
-The scheduler should continue to use dependency order:
-
-- ignore blocked child issues
-- prefer the next unblocked child in a stream
-- do not schedule a child if another child in the same stream is currently running
-
-### Parent issue handling
-
-A parent issue with no children or with a planning label can still route to the `backlog` agent.
-
-A parent issue with child issues already created should not route to `execute` directly unless explicitly requested.
-
-### Stream-level concurrency
-
-The default stream policy should be:
-
-- `max active child runs per stream = 1`
-
-The global scheduler can still allow:
-
-- `max concurrent streams > 1`
+- worktree paths are keyed by the current issue identifier
+- issue runtime state is keyed per issue under `issue/<issue>/`
+- stream runtime state is keyed per parent under `stream/<parent>.json`
+- `worktreeRoot` in stream state points at the shared flat `tree/` directory
 
 ## Runtime State
 
-The current issue runtime state should gain a stream-level layer.
+### Stream runtime state
 
-### Stream state
-
-Recommended file:
-
-- `.io/streams/<parent>/stream-state.json`
-
-Suggested fields:
+`stream/<parent>.json` records the current stream-level state:
 
 - `parentIssueId`
 - `parentIssueIdentifier`
 - `branchName`
-- `status`
-- `activeChildIssueId`
-- `activeChildIssueIdentifier`
+- `activeIssueId`
+- `activeIssueIdentifier`
 - `latestLandedCommitSha`
+- `status`
 - `worktreeRoot`
 - `createdAt`
 - `updatedAt`
 
-### Child issue state
+Current meaning:
 
-The existing issue runtime state should gain:
+- `status: "active"` means the stream still owns a live branch, even if no
+  child is currently active
+- `status: "completed"` is reserved for the parent stream after it has been
+  finalized against `main`
 
+### Issue runtime state
+
+`issue/<issue>/issue-state.json` records per-run issue state:
+
+- `issueId`
+- `issueIdentifier`
 - `parentIssueId`
 - `parentIssueIdentifier`
-- `streamBranchName`
-- `streamPath`
+- `streamIssueId`
+- `streamIssueIdentifier`
+- `branchName`
+- `commitSha`
 - `landedCommitSha`
 - `landedAt`
+- `finalizedAt`
+- `finalizedLinearState`
+- `status`
+- `worktreePath`
 
-The existing `branchName` field should refer to the stream branch for child issues rather than a child-specific branch.
+For child issues, `branchName` points at the parent stream branch rather than a
+child-only branch.
 
-## Linear Behavior
+## Scheduling And Transitions
 
-### Parent issue
+### Automatic scheduling
 
-The parent issue should be the stream container:
+- managed parents still route to the backlog profile for explicit runs
+- automatic backlog scheduling for a managed parent stops once the parent
+  leaves `Todo`
+- managed parent comment polling also includes `In Review` so top-level
+  `@io backlog`, `@io focus`, `@io status`, and `@io help` stay available
+  during the review hold
+- child auto-scheduling requires:
+  - a parent in `In Progress`
+  - no unresolved `blockedBy` issues
+  - no other active issue in the same stream
 
-- owns the thematic goal
-- owns the long-lived branch
-- remains open while child issues are executed
+### Successful state transitions
 
-Suggested labels:
+- parent backlog run:
+  - service moves the parent to `In Progress` while the run is active
+  - success returns the parent to `In Review`
+- child execution run:
+  - service moves the child to `In Progress` while the run is active
+  - success moves the child to `Done`
 
-- `stream`
-- `planning`
+This keeps backlog and execution transitions separate. Moving the parent to
+`In Progress` releases execution, but it does not mutate child states.
 
-### Child issues
+## Finalization Semantics
 
-Child issues should:
+### Child finalization
 
-- have `parentId` set to the parent issue
-- use `blockedBy` for execution order
-- carry execution-specific acceptance criteria
+When a child reaches a terminal Linear state:
 
-### Comments
+- the runtime first verifies that the child commit is reachable from the stream
+  branch
+- if the commit has landed, the child worktree can be removed
+- the child issue runtime state is marked `finalized`
+- the stream runtime stays `active`
+- the stream branch is preserved
 
-Useful automatic comments:
+This means child cleanup depends on stream-branch landing, not on `main`.
 
-- stream branch created
-- child issue landed on stream branch at `<sha>`
-- child worktree finalized and removed
-- parent stream ready to merge to `main`
+### Parent finalization
 
-## Code Changes
+When the parent reaches a terminal Linear state:
 
-### `agent/src/tracker/linear.ts`
+- if the parent is `Done`, the runtime merges the stream branch to `main`
+- the parent worktree is kept until the stream branch is confirmed on `main`
+- once landed, the parent worktree is removed
+- the local stream branch may be deleted
+- the stream runtime state moves to `completed`
 
-Add enough issue metadata to reason about parent streams directly:
+This keeps parent cleanup separate from child cleanup.
 
-- include parent identifiers, not just `hasParent`
-- optionally include parent issue details when normalizing issues
-- keep existing dependency handling based on blocking relations
+## Proof Surfaces
 
-This makes it possible to resolve the stream owner without extra fetches during scheduling.
+- runtime routing and parent-phase gating:
+  `agent/src/issue-routing.ts`, `agent/src/service.ts`,
+  `agent/src/service.test.ts`
+- parent stream metadata on child candidates:
+  `agent/src/tracker/linear.ts`, `agent/src/types.ts`,
+  `agent/src/service.test.ts`
+- branch, runtime-state, and finalization behavior:
+  `agent/src/workspace.ts`, `agent/src/workspace.test.ts`
 
-### `agent/src/types.ts`
+## Out Of Scope
 
-Extend runtime types to include:
-
-- stream-level metadata on `AgentIssue`
-- a new `StreamRuntimeState`
-- child issue runtime fields for parent and stream linkage
-
-### `agent/src/service.ts`
-
-Update scheduling rules:
-
-- group child issues by parent stream
-- pick only one runnable child per stream
-- keep the existing unblocked-first behavior
-- route parent planning issues to `backlog`
-- route child execution issues to `execute`
-
-### `agent/src/workspace.ts`
-
-This file will need the largest semantic change.
-
-Replace:
-
-- issue branch creation
-- issue worktree under the runtime root
-- cleanup on merge to `main`
-
-With:
-
-- stream branch resolution from the parent issue
-- child worktree creation under `.io/streams/<parent>/<child>/`
-- child finalization after landing on the stream branch
-- parent stream cleanup only after the parent completes
-
-The current finalize path should be split into:
-
-- child finalization against the stream branch
-- parent stream finalization against `main`
-
-## Migration Strategy
-
-### Phase 1
-
-Introduce the stream model but keep execution serialized everywhere:
-
-- one active child globally
-- child worktrees under `.io/streams`
-- cleanup on landing to stream branch
-
-This validates the lifecycle changes with minimal scheduler complexity.
-
-### Phase 2
-
-Allow multiple streams to execute in parallel:
-
-- one active child per stream
-- multiple parent streams across the repo
-
-### Phase 3
-
-Add richer backlog automation:
-
-- parent issue expansion into children
-- dependency graph refinement
-- automatic parent progress summaries
-
-## Open Questions
-
-- Should the parent branch be `stream/<identifier>` or just `<identifier>`?
-- Should `.io/streams/` live inside the repo, or should it be a sibling directory with a repo-local symlink?
-- Should a child move to `Done` automatically when landed, or stop at `In Review` until a human approves the stream diff?
-- Should parent streams auto-open a PR against `main`, or only do so when all child issues are complete?
-
-## Recommendation
-
-Implement the stream model with these defaults:
-
-- one parent Linear issue equals one stream
-- one stream branch per parent
-- one active child at a time per stream
-- child worktrees under `.io/streams/<parent>/<child>/`
-- child cleanup when landed on the stream branch
-- parent cleanup only when the full stream merges to `main`
-
-This best matches the desired operating model: ordered, low-conflict accumulation on a long-lived issue branch with accessible local worktrees and prompt cleanup of finished child work.
+- a 3-level stream/planning/implementation hierarchy
+- nesting child worktrees under `.io/streams/<parent>/<child>/`
+- automatic PR creation or merge automation beyond the current parent merge
+- redesigning managed comment commands beyond the current contract

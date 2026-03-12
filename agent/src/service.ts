@@ -69,6 +69,7 @@ export function pickCandidateIssues(
   const selected: AgentIssue[] = [];
   const reservedStreams = new Set<string>();
   for (const issue of [...issues]
+    .filter((issue) => !issue.hasParent || normalizeState(issue.parentIssueState) === "in progress")
     .filter((issue) => issue.blockedBy.length === 0)
     .sort((left, right) => {
       const leftPreferred =
@@ -102,7 +103,7 @@ export function pickCandidateIssues(
 }
 
 function scoreState(state: string) {
-  const normalized = state.trim().toLowerCase();
+  const normalized = normalizeState(state);
   if (normalized === "todo") {
     return 0;
   }
@@ -114,6 +115,10 @@ function scoreState(state: string) {
 
 function getStreamKey(issue: AgentIssue) {
   return toWorkspaceKey(issue.parentIssueIdentifier ?? issue.identifier);
+}
+
+function normalizeState(state?: string) {
+  return state?.trim().toLowerCase() ?? "";
 }
 
 function isResumableRunError(error: unknown) {
@@ -472,6 +477,13 @@ export class AgentService {
   }
 
   #shouldAutoScheduleIssue(workflow: Workflow, issue: AgentIssue) {
+    const isManagedParent =
+      !issue.hasParent &&
+      hasIssueLabel(issue, "io") &&
+      Boolean(resolveIssueModule(workflow.modules, issue));
+    if (isManagedParent) {
+      return normalizeState(issue.state) === "todo";
+    }
     if (!issue.hasChildren || issue.hasParent) {
       return true;
     }

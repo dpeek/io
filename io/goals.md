@@ -1,40 +1,55 @@
-# IO Goals
+# Current Approach Stream
 
 ## Objective
 
-- Keep the repo-level IO contract legible: one root map, one current-goals doc,
-  and package-local docs under `*/io`.
-- Keep repo docs current and concise so agents can refresh them as code lands
-  without carrying stale roadmap tone.
+- Make Linear the canonical source for evolving stream context, backlog order,
+  and human review edits.
+- Separate backlog grooming from child execution by parent stream phase without
+  forcing the 3-level model yet.
 
-## This Week
+## Current Focus
 
-- Finish the doc-layout migration to `./io` plus `./package/io`.
-- Keep `io.ts`, context profiles, and package docs aligned with the live repo.
-- Let Linear hold evolving stream/task planning while repo docs summarize the
-  current state and proof surfaces.
+- Keep parent `Todo` as the only automatic backlog-entry phase for managed
+  streams.
+- Treat parent `In Review` as the safe bootstrap and post-backlog hold state
+  for new streams until a human explicitly moves the stream to `In Progress`.
+- Keep explicit managed-parent reruns available while the parent is in
+  `In Review` without reopening automatic backlog scheduling.
+- Seed new implementation children in `Todo` and rely on the parent-phase gate
+  to keep them parked until the stream is released.
+- Keep parent and child Linear transitions separate: backlog success returns
+  the parent to `In Review`, while child execution still lands on `Done`.
+- Keep repo docs terse and current while the parent Linear issue holds the
+  evolving brief, child backlog, and operator notes.
 
 ## Constraints
 
-- Root `io/` docs stay lightweight and current; deeper module detail lives in
-  package-local docs.
-- Repo docs should describe the current contract, not preserve historical design
-  prose that quickly goes stale.
-- Agents may refresh these docs as part of code changes, but the result should
-  stay concise and directly useful in prompt context.
+- Preserve the existing 2-level parent/child hierarchy for this first pass.
+- Keep the parent issue as the canonical stream context source and respect
+  managed-marker ownership boundaries.
+- Keep child issues scoped to implementation-step work; planning and review
+  remain parent-owned.
+- Do not auto-run managed backlog after a parent leaves `Todo`.
+- Do not auto-run child issues unless their parent stream is `In Progress`.
+- Keep one active child per stream and continue to respect `blockedBy` ordering.
 
 ## Proof Surfaces
 
 - `../io.ts`
-- `../io.md`
-- `../agent/src/context.ts`
-- `../agent/src/workflow.ts`
-- `../config/src/index.test.ts`
-
-## Related Docs
-
 - `./overview.md`
-- `../agent/io/overview.md`
-- `../graph/io/overview.md`
-- `../cli/io/overview.md`
-- `../lib/io/overview.md`
+- `../agent/io/module-stream-workflow-plan.md`
+- `../agent/doc/stream-workflow.md`
+- `../agent/src/types.ts`
+- `../agent/src/issue-routing.ts`
+- `../agent/src/service.ts`
+- `../agent/src/tracker/linear.ts`
+- `../agent/src/service.test.ts`
+- `../agent/src/workspace.ts`
+- `../agent/src/workspace.test.ts`
+
+## Deferred
+
+- A full 3-level stream/planning/implementation hierarchy.
+- Stream merge or PR automation beyond parent-phase gating.
+- Broader doc-layout cleanup outside the current routing, tracker, and
+  scheduling slice.

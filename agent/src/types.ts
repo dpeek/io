@@ -14,6 +14,7 @@ export interface AgentIssue {
   labels: string[];
   parentIssueId?: string;
   parentIssueIdentifier?: string;
+  parentIssueState?: string;
   priority: number | null;
   projectSlug?: string;
   state: string;

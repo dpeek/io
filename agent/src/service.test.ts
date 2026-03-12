@@ -60,6 +60,31 @@ function buildExpectedPrompt(
   );
 }
 
+async function writeServiceTestRepo(root: string, overrides: Record<string, unknown> = {}) {
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+        ...overrides,
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+}
+
 test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   const issue = normalizeLinearIssue({
     children: {
@@ -90,7 +115,7 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
       ],
     },
     labels: { nodes: [{ name: "Bug" }, { name: " P1 " }, null] },
-    parent: { id: "parent-1", identifier: "OS-1" },
+    parent: { id: "parent-1", identifier: "OS-1", state: { name: "In Progress" } },
     priority: 2,
     project: { slugId: "OpenSurf" },
     state: { name: "Todo" },
@@ -105,14 +130,145 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   expect(issue.hasChildren).toBe(true);
   expect(issue.parentIssueId).toBe("parent-1");
   expect(issue.parentIssueIdentifier).toBe("OS-1");
+  expect(issue.parentIssueState).toBe("In Progress");
   expect(issue.teamId).toBeUndefined();
 });
 
-test("LinearTrackerAdapter fetches top-level managed comment triggers on managed parents", async () => {
+test("normalizeLinearIssue leaves parent stream fields empty for standalone issues", () => {
+  const issue = normalizeLinearIssue({
+    children: {
+      nodes: [],
+    },
+    createdAt: "2024-01-01T00:00:00.000Z",
+    description: "Standalone stream",
+    id: "10",
+    identifier: "OPE-147",
+    inverseRelations: {
+      nodes: [],
+    },
+    labels: { nodes: [{ name: "io" }, { name: "agent" }] },
+    parent: {
+      id: "   ",
+      identifier: "OPE-147",
+      state: { name: "In Review" },
+    },
+    priority: 0,
+    project: { slugId: "io" },
+    state: { name: "In Review" },
+    team: { id: "team-1" },
+    title: "Current Approach Stream",
+    updatedAt: "2024-01-01T00:00:00.000Z",
+  });
+
+  expect(issue.hasParent).toBe(false);
+  expect(issue.parentIssueId).toBeUndefined();
+  expect(issue.parentIssueIdentifier).toBeUndefined();
+  expect(issue.parentIssueState).toBeUndefined();
+  expect(issue.teamId).toBe("team-1");
+});
+
+test("LinearTrackerAdapter fetches parent stream state for child issue candidates", async () => {
   const originalFetch = globalThis.fetch;
+  let requestBody: { query?: string; variables?: Record<string, unknown> } | undefined;
+  globalThis.fetch = mock(async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}")) as typeof requestBody;
+
+    return new Response(
+      JSON.stringify({
+        data: {
+          issues: {
+            nodes: [
+              {
+                children: { nodes: [] },
+                createdAt: "2024-01-02T00:00:00.000Z",
+                description: "Child execution issue",
+                id: "child-1",
+                identifier: "OPE-149",
+                inverseRelations: { nodes: [] },
+                labels: { nodes: [{ name: "agent" }] },
+                parent: {
+                  id: "parent-1",
+                  identifier: "OPE-147",
+                  state: { name: "In Review" },
+                },
+                priority: 0,
+                project: { slugId: "io" },
+                state: { name: "Todo" },
+                team: { id: "team-1" },
+                title: "Teach candidate issues to carry parent stream state",
+                updatedAt: "2024-01-02T00:00:00.000Z",
+              },
+              {
+                children: { nodes: [{ id: "child-1" }] },
+                createdAt: "2024-01-01T00:00:00.000Z",
+                description: "Managed parent",
+                id: "parent-1",
+                identifier: "OPE-147",
+                inverseRelations: { nodes: [] },
+                labels: { nodes: [{ name: "io" }, { name: "agent" }] },
+                parent: null,
+                priority: 0,
+                project: { slugId: "io" },
+                state: { name: "In Review" },
+                team: { id: "team-1" },
+                title: "Current Approach Stream",
+                updatedAt: "2024-01-01T00:00:00.000Z",
+              },
+            ],
+            pageInfo: {
+              endCursor: null,
+              hasNextPage: false,
+            },
+          },
+        },
+      }),
+      { status: 200 },
+    );
+  }) as unknown as typeof fetch;
+
+  try {
+    const tracker = new LinearTrackerAdapter({
+      activeStates: ["Todo", "In Review"],
+      apiKey: "token",
+      endpoint: "https://linear.invalid/graphql",
+      kind: "linear",
+      projectSlug: "io",
+      terminalStates: ["Done"],
+    });
+
+    const issues = await tracker.fetchCandidateIssues();
+
+    expect(requestBody?.query).toContain("parent {");
+    expect(requestBody?.query).toContain("identifier");
+    expect(requestBody?.query).toContain("state { name }");
+    expect(issues).toHaveLength(2);
+    expect(issues[0]).toMatchObject({
+      hasParent: true,
+      identifier: "OPE-149",
+      parentIssueId: "parent-1",
+      parentIssueIdentifier: "OPE-147",
+      parentIssueState: "In Review",
+    });
+    expect(issues[1]).toMatchObject({
+      hasChildren: true,
+      hasParent: false,
+      identifier: "OPE-147",
+    });
+    expect(issues[1]?.parentIssueId).toBeUndefined();
+    expect(issues[1]?.parentIssueIdentifier).toBeUndefined();
+    expect(issues[1]?.parentIssueState).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("LinearTrackerAdapter fetches top-level managed comment triggers on managed parents in review hold", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestBody: { variables?: { states?: string[] } } | undefined;
   globalThis.fetch = mock(
-    async () =>
-      new Response(
+    async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body ?? "{}")) as typeof requestBody;
+      return new Response(
         JSON.stringify({
           data: {
             issues: {
@@ -145,7 +301,7 @@ test("LinearTrackerAdapter fetches top-level managed comment triggers on managed
                   labels: { nodes: [{ name: "io" }, { name: "agent" }] },
                   priority: 2,
                   project: { slugId: "io" },
-                  state: { name: "Todo" },
+                  state: { name: "In Review" },
                   team: { id: "team-1" },
                   title: "Managed stream",
                   updatedAt: "2024-01-01T00:00:00.000Z",
@@ -159,12 +315,13 @@ test("LinearTrackerAdapter fetches top-level managed comment triggers on managed
           },
         }),
         { status: 200 },
-      ),
+      );
+    },
   ) as unknown as typeof fetch;
 
   try {
     const tracker = new LinearTrackerAdapter({
-      activeStates: ["Todo"],
+      activeStates: ["Todo", "In Progress"],
       apiKey: "token",
       endpoint: "https://linear.invalid/graphql",
       kind: "linear",
@@ -173,6 +330,7 @@ test("LinearTrackerAdapter fetches top-level managed comment triggers on managed
     });
 
     const comments = await tracker.fetchManagedCommentTriggers?.();
+    expect(requestBody?.variables?.states).toEqual(["Todo", "In Progress", "In Review"]);
     expect(comments).toHaveLength(1);
     expect(comments?.[0]).toMatchObject({
       command: "backlog",
@@ -576,6 +734,7 @@ test("pickCandidateIssues keeps stream execution to one issue per parent", () =>
         identifier: "OS-2",
         parentIssueId: "1",
         parentIssueIdentifier: "OS-1",
+        parentIssueState: "In Progress",
         hasParent: true,
         priority: 2,
         updatedAt: "2024-01-01T00:00:00.000Z",
@@ -585,6 +744,7 @@ test("pickCandidateIssues keeps stream execution to one issue per parent", () =>
         identifier: "OS-3",
         parentIssueId: "1",
         parentIssueIdentifier: "OS-1",
+        parentIssueState: "In Progress",
         hasParent: true,
         priority: 1,
         updatedAt: "2024-01-02T00:00:00.000Z",
@@ -601,6 +761,61 @@ test("pickCandidateIssues keeps stream execution to one issue per parent", () =>
   expect(selected.map((issue) => issue.identifier)).toEqual(["OS-2", "OS-4"]);
 });
 
+test("pickCandidateIssues gates child issues on the parent stream state", () => {
+  const selected = pickCandidateIssues(
+    [
+      createIssue({
+        id: "2",
+        identifier: "OS-2",
+        parentIssueId: "1",
+        parentIssueIdentifier: "OS-1",
+        parentIssueState: "In Review",
+        hasParent: true,
+        priority: 3,
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      }),
+      createIssue({
+        id: "3",
+        identifier: "OS-3",
+        parentIssueId: "10",
+        parentIssueIdentifier: "OS-10",
+        parentIssueState: "In Progress",
+        hasParent: true,
+        priority: 2,
+        updatedAt: "2024-01-02T00:00:00.000Z",
+      }),
+      createIssue({
+        id: "4",
+        identifier: "OS-4",
+        parentIssueId: "11",
+        parentIssueIdentifier: "OS-11",
+        parentIssueState: "Todo",
+        hasParent: true,
+        priority: 1,
+        updatedAt: "2024-01-03T00:00:00.000Z",
+      }),
+      createIssue({
+        id: "5",
+        identifier: "OS-5",
+        parentIssueId: "12",
+        parentIssueIdentifier: "OS-12",
+        parentIssueState: "Done",
+        hasParent: true,
+        priority: 0,
+        updatedAt: "2024-01-04T00:00:00.000Z",
+      }),
+      createIssue({
+        id: "6",
+        identifier: "OS-4",
+        priority: 1,
+        updatedAt: "2024-01-05T00:00:00.000Z",
+      }),
+    ],
+    3,
+  );
+  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-4"]);
+});
+
 test("pickCandidateIssues prefers the locally active issue within an occupied stream", () => {
   const selected = pickCandidateIssues(
     [
@@ -609,6 +824,7 @@ test("pickCandidateIssues prefers the locally active issue within an occupied st
         identifier: "OS-2",
         parentIssueId: "1",
         parentIssueIdentifier: "OS-1",
+        parentIssueState: "In Progress",
         hasParent: true,
         priority: 2,
         updatedAt: "2024-01-01T00:00:00.000Z",
@@ -618,6 +834,7 @@ test("pickCandidateIssues prefers the locally active issue within an occupied st
         identifier: "OS-3",
         parentIssueId: "1",
         parentIssueIdentifier: "OS-1",
+        parentIssueState: "In Progress",
         hasParent: true,
         priority: 1,
         updatedAt: "2024-01-02T00:00:00.000Z",
@@ -633,6 +850,101 @@ test("pickCandidateIssues prefers the locally active issue within an occupied st
     new Map([["os-1", "OS-3"]]),
   );
   expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-4"]);
+});
+
+test("AgentService does not auto-run child issues while the parent stream is not In Progress", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  let runnerCalls = 0;
+  const transitions: string[] = [];
+
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+
+  try {
+    const issue = createIssue({
+      hasParent: true,
+      id: "child-1",
+      identifier: "OPE-59",
+      parentIssueId: "parent-1",
+      parentIssueIdentifier: "OPE-12",
+      parentIssueState: "In Review",
+      priority: 0,
+      title: "Child issue",
+    });
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => {
+          runnerCalls += 1;
+          return {
+            issue,
+            prompt,
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => [issue],
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          reconcileTerminalIssues: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(runnerCalls).toBe(0);
+    expect(transitions).toEqual([]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
 });
 
 test("AgentService records handled managed comments and skips them on the next poll", async () => {
@@ -1200,6 +1512,32 @@ test("resolveIssueRouting routes io-managed parent issues to backlog from module
       },
       createIssue({
         hasChildren: true,
+        labels: ["io", "agent"],
+        state: "In Review",
+      }),
+      {
+        agent: {
+          allowedSharedPaths: [],
+          docs: [],
+          id: "agent",
+          path: "/tmp/agent",
+        },
+      },
+    ),
+  ).toEqual({
+    agent: "backlog",
+    profile: "backlog",
+  });
+
+  expect(
+    resolveIssueRouting(
+      {
+        defaultAgent: "execute",
+        defaultProfile: "execute",
+        routing: [],
+      },
+      createIssue({
+        hasChildren: true,
         labels: ["io", "graph"],
       }),
       {
@@ -1208,6 +1546,32 @@ test("resolveIssueRouting routes io-managed parent issues to backlog from module
           docs: ["./graph/io/goals.md", "./graph/doc/overview.md"],
           id: "graph",
           path: "/tmp/graph",
+        },
+      },
+    ),
+  ).toEqual({
+    agent: "backlog",
+    profile: "backlog",
+  });
+
+  expect(
+    resolveIssueRouting(
+      {
+        defaultAgent: "execute",
+        defaultProfile: "execute",
+        routing: [],
+      },
+      createIssue({
+        hasChildren: true,
+        labels: ["io", "agent"],
+        state: "In Progress",
+      }),
+      {
+        agent: {
+          allowedSharedPaths: [],
+          docs: [],
+          id: "agent",
+          path: "/tmp/agent",
         },
       },
     ),
@@ -1250,32 +1614,206 @@ test("resolveIssueRouting rejects ambiguous io-managed parent module labels", ()
   });
 });
 
+test("AgentService moves backlog parent issues to In Review after success", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-57", "repo");
+  const transitions: string[] = [];
+
+  await writeServiceTestRepo(root, {
+    issues: {
+      defaultAgent: "execute",
+      routing: [
+        {
+          agent: "backlog",
+          if: {
+            labelsAny: ["backlog"],
+          },
+          profile: "backlog",
+        },
+      ],
+    },
+  });
+
+  try {
+    const issue = createIssue({
+      hasChildren: true,
+      id: "parent-1",
+      identifier: "OPE-57",
+      labels: ["backlog"],
+      priority: 0,
+      title: "Parent backlog issue",
+    });
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => ({
+          issue,
+          prompt,
+          stderr: [],
+          stdout: [],
+          success: true,
+          workspace,
+        }),
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => [issue],
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: workspacePath,
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          markBlocked: async () => undefined,
+          markInterrupted: async () => undefined,
+          prepare: async () => ({
+            branchName: "io/ope-57",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: workspacePath,
+            sourceRepoPath: root,
+            workerId: "OPE-57",
+          }),
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(transitions).toEqual(["parent-1:In Progress", "parent-1:In Review"]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("AgentService keeps backlog parent issues in In Progress when the run fails", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-67", "repo");
+  const events: string[] = [];
+  const transitions: string[] = [];
+
+  await writeServiceTestRepo(root, {
+    issues: {
+      defaultAgent: "execute",
+      routing: [
+        {
+          agent: "backlog",
+          if: {
+            labelsAny: ["backlog"],
+          },
+          profile: "backlog",
+        },
+      ],
+    },
+  });
+
+  try {
+    const issue = createIssue({
+      hasChildren: true,
+      id: "parent-1",
+      identifier: "OPE-67",
+      labels: ["backlog"],
+      priority: 0,
+      title: "Parent backlog issue",
+    });
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => ({
+          issue,
+          prompt,
+          stderr: [],
+          stdout: [],
+          success: false,
+          workspace,
+        }),
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => [issue],
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: workspacePath,
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          markBlocked: async () => {
+            events.push("blocked");
+          },
+          markInterrupted: async () => undefined,
+          prepare: async () => ({
+            branchName: "io/ope-67",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: workspacePath,
+            sourceRepoPath: root,
+            workerId: "OPE-67",
+          }),
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(transitions).toEqual(["parent-1:In Progress"]);
+    expect(events).toEqual(["blocked"]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("AgentService moves standalone issues to In Review after success", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
   const workspacePath = resolve(root, "workspace", "workers", "OPE-57", "repo");
   const transitions: string[] = [];
 
-  await writeFile(
-    resolve(root, "io.json"),
-    JSON.stringify(
-      {
-        agent: { maxConcurrentAgents: 1 },
-        tracker: {
-          apiKey: "$LINEAR_API_KEY",
-          kind: "linear",
-          projectSlug: "$LINEAR_PROJECT_SLUG",
-        },
-        workspace: {
-          root: resolve(root, "workspace"),
-        },
-      },
-      null,
-      2,
-    ),
-  );
-  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
-  process.env.LINEAR_API_KEY = "linear-token";
-  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+  await writeServiceTestRepo(root);
 
   try {
     const issue = createIssue({
@@ -1350,9 +1888,9 @@ test("AgentService moves standalone issues to In Review after success", async ()
   }
 });
 
-test("AgentService marks child issues Done after landing on the stream branch", async () => {
+test("AgentService does not auto-run managed parent backlog after the parent leaves Todo", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
-  const workspacePath = resolve(root, "workspace", "workers", "OPE-58", "repo");
+  let runnerCalls = 0;
   const transitions: string[] = [];
 
   await writeFile(
@@ -1360,6 +1898,13 @@ test("AgentService marks child issues Done after landing on the stream branch", 
     JSON.stringify(
       {
         agent: { maxConcurrentAgents: 1 },
+        modules: {
+          agent: {
+            allowedSharedPaths: ["./io"],
+            docs: ["./agent/io/goals.md"],
+            path: "./agent",
+          },
+        },
         tracker: {
           apiKey: "$LINEAR_API_KEY",
           kind: "linear",
@@ -1373,9 +1918,85 @@ test("AgentService marks child issues Done after landing on the stream branch", 
       2,
     ),
   );
+  await mkdir(resolve(root, "agent", "io"), { recursive: true });
+  await writeFile(resolve(root, "agent", "io", "goals.md"), "# Agent\n");
   await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "project-slug";
+
+  try {
+    const issue = createIssue({
+      hasChildren: true,
+      id: "parent-1",
+      identifier: "OPE-147",
+      labels: ["io", "agent"],
+      priority: 0,
+      state: "In Progress",
+      title: "Current Approach Stream",
+    });
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => {
+          runnerCalls += 1;
+          return {
+            issue,
+            prompt,
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => [issue],
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          reconcileTerminalIssues: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(runnerCalls).toBe(0);
+    expect(transitions).toEqual([]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("AgentService marks child issues Done after landing on the stream branch", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-58", "repo");
+  const transitions: string[] = [];
+
+  await writeServiceTestRepo(root);
 
   try {
     const issue = createIssue({
@@ -1384,6 +2005,7 @@ test("AgentService marks child issues Done after landing on the stream branch", 
       identifier: "OPE-58",
       parentIssueId: "parent-1",
       parentIssueIdentifier: "OPE-12",
+      parentIssueState: "In Progress",
       priority: 0,
       title: "Child issue",
     });
@@ -1450,6 +2072,188 @@ test("AgentService marks child issues Done after landing on the stream branch", 
 
     await service.start();
     expect(transitions).toEqual(["child-1:In Progress", "child-1:Done"]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("AgentService proves the current approach stream flow end to end", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const transitions: string[] = [];
+  const runs: string[] = [];
+  const parentIssueId = "parent-1";
+  const childIssueId = "child-1";
+  const parentIssue = createIssue({
+    hasChildren: true,
+    id: parentIssueId,
+    identifier: "OPE-147",
+    labels: ["io", "agent"],
+    priority: 0,
+    state: "Todo",
+    title: "Current Approach Stream",
+  });
+  const childIssue = createIssue({
+    hasParent: true,
+    id: childIssueId,
+    identifier: "OPE-152",
+    parentIssueId,
+    parentIssueIdentifier: "OPE-147",
+    parentIssueState: "Todo",
+    priority: 0,
+    state: "Todo",
+    title: "Update docs and prove the current approach end to end",
+  });
+  const streamState = {
+    childSeeded: false,
+    childState: childIssue.state,
+    parentState: parentIssue.state,
+  };
+
+  await writeFile(
+    resolve(root, "io.json"),
+    JSON.stringify(
+      {
+        agent: { maxConcurrentAgents: 1 },
+        modules: {
+          agent: {
+            allowedSharedPaths: ["./io"],
+            docs: ["./agent/io/goals.md"],
+            path: "./agent",
+          },
+        },
+        tracker: {
+          apiKey: "$LINEAR_API_KEY",
+          kind: "linear",
+          projectSlug: "$LINEAR_PROJECT_SLUG",
+        },
+        workspace: {
+          root: resolve(root, "workspace"),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await mkdir(resolve(root, "agent", "io"), { recursive: true });
+  await writeFile(resolve(root, "agent", "io", "goals.md"), "# Agent\n");
+  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+
+  try {
+    const service = new AgentService({
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => {
+          runs.push(issue.identifier);
+          return {
+            issue,
+            prompt,
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => {
+          const issues: AgentIssue[] = [];
+          if (streamState.parentState === "Todo") {
+            issues.push({
+              ...parentIssue,
+              state: streamState.parentState,
+            });
+          }
+          if (streamState.childSeeded && streamState.childState === "Todo") {
+            issues.push({
+              ...childIssue,
+              parentIssueState: streamState.parentState,
+              state: streamState.childState,
+            });
+          }
+          return issues;
+        },
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+          if (issueId === parentIssueId) {
+            streamState.parentState = stateName;
+            if (stateName === "In Review") {
+              streamState.childSeeded = true;
+            }
+          }
+          if (issueId === childIssueId) {
+            streamState.childState = stateName;
+          }
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          markBlocked: async () => undefined,
+          markInterrupted: async () => undefined,
+          prepare: async () => ({
+            branchName: "io/ope-147",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            streamIssueId: parentIssueId,
+            streamIssueIdentifier: "OPE-147",
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.runOnce(undefined, true);
+    expect(runs).toEqual(["OPE-147"]);
+    expect(transitions).toEqual([`${parentIssueId}:In Progress`, `${parentIssueId}:In Review`]);
+    expect(streamState.parentState).toBe("In Review");
+    expect(streamState.childState).toBe("Todo");
+    expect(streamState.childSeeded).toBe(true);
+
+    await service.runOnce(undefined, true);
+    expect(runs).toEqual(["OPE-147"]);
+    expect(transitions).toEqual([`${parentIssueId}:In Progress`, `${parentIssueId}:In Review`]);
+    expect(streamState.parentState).toBe("In Review");
+    expect(streamState.childState).toBe("Todo");
+
+    streamState.parentState = "In Progress";
+
+    await service.runOnce(undefined, true);
+    expect(runs).toEqual(["OPE-147", "OPE-152"]);
+    expect(transitions).toEqual([
+      `${parentIssueId}:In Progress`,
+      `${parentIssueId}:In Review`,
+      `${childIssueId}:In Progress`,
+      `${childIssueId}:Done`,
+    ]);
+    expect(streamState.parentState).toBe("In Progress");
+    expect(streamState.childState).toBe("Done");
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -2446,7 +3250,11 @@ test("AgentService uses backlog built-ins for routed issues", async () => {
                   id: "1",
                   identifier: "OPE-55",
                   labels: { nodes: [{ name: " planning " }, { name: "Docs" }] },
-                  parent: { id: "parent-1", identifier: "OPE-12" },
+                  parent: {
+                    id: "parent-1",
+                    identifier: "OPE-12",
+                    state: { name: "In Progress" },
+                  },
                   priority: 0,
                   project: { slugId: "docs-project" },
                   state: { name: "Todo" },
@@ -2542,6 +3350,7 @@ test("AgentService uses backlog built-ins for routed issues", async () => {
           labels: ["planning", "docs"],
           parentIssueId: "parent-1",
           parentIssueIdentifier: "OPE-12",
+          parentIssueState: "In Progress",
           priority: 0,
           projectSlug: "docs-project",
           state: "Todo",
