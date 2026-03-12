@@ -495,6 +495,16 @@ function appendCommandOutputEntry(
   if (!lines.length) {
     return;
   }
+  const commandEntry = [...target.blocks]
+    .reverse()
+    .find((entry) => entry.kind === "command" && (!event.itemId || entry.itemId === event.itemId));
+  if (commandEntry?.kind === "command") {
+    commandEntry.count += lines.length;
+    commandEntry.outputLines.push(...lines);
+    commandEntry.sequenceEnd = event.sequence;
+    commandEntry.timestamp = event.timestamp;
+    return;
+  }
   const lastEntry = target.blocks.at(-1);
   if (lastEntry?.kind === "command-output") {
     lastEntry.count += lines.length;
@@ -514,6 +524,60 @@ function appendCommandOutputEntry(
       timestamp: event.timestamp,
     },
   );
+}
+
+function appendCommandStatusEntry(
+  target: BlockTarget,
+  event: AgentStatusEvent,
+) {
+  const commandText = formatCommandText(event.data) ?? event.text?.replace(/^\$\s*/, "").trim();
+  if (!commandText) {
+    return false;
+  }
+  const existing = findBlockByItemId(target, event.itemId);
+  if (existing?.kind === "command") {
+    existing.command = commandText.replace(/^\$\s*/, "");
+    existing.cwd = asString(event.data?.cwd) ?? existing.cwd;
+    existing.count += 1;
+    existing.sequenceEnd = event.sequence;
+    existing.timestamp = event.timestamp;
+    return true;
+  }
+
+  appendBlock(
+    target,
+    {
+      command: commandText.replace(/^\$\s*/, ""),
+      count: 1,
+      cwd: asString(event.data?.cwd),
+      itemId: event.itemId,
+      kind: "command",
+      outputLines: [],
+      sequenceEnd: event.sequence,
+      sequenceStart: event.sequence,
+      status: "running",
+      timestamp: event.timestamp,
+    },
+  );
+  return true;
+}
+
+function appendCommandFailureEntry(
+  target: BlockTarget,
+  event: AgentStatusEvent,
+) {
+  const existing = [...target.blocks]
+    .reverse()
+    .find((entry) => entry.kind === "command" && (!event.itemId || entry.itemId === event.itemId));
+  if (existing?.kind === "command") {
+    existing.count += 1;
+    existing.exitCode = asNumber(event.data?.exitCode) ?? existing.exitCode;
+    existing.sequenceEnd = event.sequence;
+    existing.status = "failed";
+    existing.timestamp = event.timestamp;
+    return true;
+  }
+  return false;
 }
 
 function getBlockItemId(entry: AgentTuiBlock) {
@@ -544,6 +608,75 @@ function findBlockByItemId(
     }
   }
   return undefined;
+}
+
+function appendToolStatusEntry(
+  target: BlockTarget,
+  event: AgentStatusEvent,
+) {
+  const parsedToolText = parseToolText(event.text);
+  const server = asString(event.data?.server) ?? parsedToolText?.server;
+  const tool = asString(event.data?.tool) ?? parsedToolText?.tool;
+  if (!server || !tool) {
+    return false;
+  }
+
+  const existing =
+    findBlockByItemId(target, event.itemId) ??
+    [...target.blocks]
+      .reverse()
+      .find(
+        (entry) =>
+          entry.kind === "tool" &&
+          entry.server === server &&
+          entry.tool === tool,
+      );
+  const hasResultData = Object.prototype.hasOwnProperty.call(event.data ?? {}, "result");
+  const resultData = hasResultData ? event.data?.result : undefined;
+  const resultText = asString(event.data?.resultText);
+  const errorText = asString(event.data?.message);
+  const status =
+    event.code === "tool-failed"
+      ? "failed"
+      : hasResultData || resultText
+        ? "completed"
+        : existing?.kind === "tool"
+          ? existing.status
+          : "running";
+
+  if (existing?.kind === "tool") {
+    existing.argumentsData = event.data?.arguments ?? existing.argumentsData;
+    existing.argumentsText = parsedToolText?.argumentsText ?? existing.argumentsText;
+    existing.count += 1;
+    existing.errorText = errorText ?? existing.errorText;
+    existing.resultData = resultData ?? existing.resultData;
+    existing.resultText = resultText ?? existing.resultText;
+    existing.sequenceEnd = event.sequence;
+    existing.status = status;
+    existing.timestamp = event.timestamp;
+    return true;
+  }
+
+  appendBlock(
+    target,
+    {
+      argumentsData: event.data?.arguments,
+      argumentsText: parsedToolText?.argumentsText,
+      count: 1,
+      errorText,
+      itemId: event.itemId,
+      kind: "tool",
+      resultData,
+      resultText,
+      server,
+      sequenceEnd: event.sequence,
+      sequenceStart: event.sequence,
+      status,
+      timestamp: event.timestamp,
+      tool,
+    },
+  );
+  return true;
 }
 
 export function appendBlocksForEvent(
@@ -615,8 +748,17 @@ export function appendBlocksForEvent(
     appendAgentMessageEntry(target, event);
     return;
   }
+  if (event.code === "command" && appendCommandStatusEntry(target, event)) {
+    return;
+  }
   if (event.code === "command-output") {
     appendCommandOutputEntry(target, event);
+    return;
+  }
+  if (event.code === "command-failed" && appendCommandFailureEntry(target, event)) {
+    return;
+  }
+  if ((event.code === "tool" || event.code === "tool-failed") && appendToolStatusEntry(target, event)) {
     return;
   }
 
@@ -826,6 +968,33 @@ function getToolArgumentLines(
   return formatJsonBlock(parsedArguments);
 }
 
+function getToolResultLines(
+  resultData: unknown,
+  resultText: string | undefined,
+) {
+  if (resultData !== undefined) {
+    const record = asRecord(resultData);
+    if (record) {
+      return formatRecordSummaryLines(record, ["id", "identifier", "title", "status", "state", "url"]);
+    }
+    if (typeof resultData === "string") {
+      return normalizeBlockLines(resultData);
+    }
+    return formatJsonBlock(resultData);
+  }
+
+  if (!resultText) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(resultText);
+    return getToolResultLines(parsed, undefined);
+  } catch {
+    return normalizeBlockLines(resultText);
+  }
+}
+
 function parseToolText(text: string | undefined) {
   if (!text) {
     return undefined;
@@ -893,6 +1062,11 @@ function formatToolBlock(options: {
   if (options.errorText) {
     lines.push("error:");
     lines.push(...indentBlockLines(normalizeBlockLines(options.errorText)));
+  }
+  const resultLines = getToolResultLines(options.resultData, options.resultText);
+  if (resultLines.length) {
+    lines.push("result:");
+    lines.push(...indentBlockLines(resultLines));
   }
   return lines;
 }

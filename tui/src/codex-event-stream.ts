@@ -109,6 +109,27 @@ function getCodexToolResultData(result: unknown) {
   return undefined;
 }
 
+function getCodexToolResultText(result: unknown) {
+  const record = asRecord(result);
+  if (!record) {
+    return undefined;
+  }
+
+  if (typeof record.structuredContent === "string") {
+    return record.structuredContent;
+  }
+
+  const content = Array.isArray(record.content) ? record.content : [];
+  const textParts = content
+    .map((entry) => {
+      const contentRecord = asRecord(entry);
+      return contentRecord?.type === "text" ? asString(contentRecord.text) : undefined;
+    })
+    .filter((entry): entry is string => Boolean(entry));
+
+  return textParts.length ? textParts.join("\n\n") : undefined;
+}
+
 function getLinearToolSummaryText(options: {
   argumentsData?: unknown;
   resultData?: unknown;
@@ -272,6 +293,7 @@ function toDisplayStatusEventsForCodexNotification(
           const server = asString(item?.server);
           const tool = asString(item?.tool);
           const resultData = getCodexToolResultData(item?.result);
+          const resultText = getCodexToolResultText(item?.result);
           const summaryText = getLinearToolSummaryText({
             argumentsData: item?.arguments,
             resultData,
@@ -285,7 +307,7 @@ function toDisplayStatusEventsForCodexNotification(
               {
                 ...base,
                 code: "tool-failed",
-                data: summaryText ? undefined : { message },
+                data: { arguments: item?.arguments, message, result: resultData, resultText, server, tool },
                 format: "line",
                 text: getLinearFailureText(summaryText, message),
               },
@@ -296,6 +318,7 @@ function toDisplayStatusEventsForCodexNotification(
               {
                 ...base,
                 code: "tool",
+                data: { arguments: item?.arguments, result: resultData, resultText, server, tool },
                 format: "line",
                 text: summaryText,
               },
@@ -568,8 +591,7 @@ function appendCodexToolCompletionEntry(
   const errorText = asString(asRecord(item?.error)?.message);
   const result = asRecord(item?.result);
   const resultData = getCodexToolResultData(result);
-  const resultContent = Array.isArray(result?.content) ? result.content : [];
-  const resultText = asString(resultContent.length ? asRecord(resultContent[0])?.text : undefined);
+  const resultText = getCodexToolResultText(result);
 
   if (existing?.kind === "tool") {
     existing.argumentsData = item?.arguments ?? existing.argumentsData;
@@ -967,9 +989,11 @@ export function createStatusSummaryFromCodexNotification(
       }
       if (asString(item?.type) === "mcpToolCall") {
         const error = asString(asRecord(item?.error)?.message);
+        const resultData = getCodexToolResultData(item?.result);
+        const resultText = getCodexToolResultText(item?.result);
         const summaryText = getLinearToolSummaryText({
           argumentsData: item?.arguments,
-          resultData: getCodexToolResultData(item?.result),
+          resultData,
           server: asString(item?.server),
           status: error ? "failed" : "completed",
           tool: asString(item?.tool),
@@ -977,7 +1001,14 @@ export function createStatusSummaryFromCodexNotification(
         if (error) {
           return {
             code: "tool-failed",
-            data: summaryText ? undefined : { message: error },
+            data: {
+              arguments: item?.arguments,
+              message: error,
+              result: resultData,
+              resultText,
+              server: asString(item?.server),
+              tool: asString(item?.tool),
+            },
             format: "line",
             itemId: asString(item?.id),
             text: getLinearFailureText(summaryText, error),
@@ -987,6 +1018,13 @@ export function createStatusSummaryFromCodexNotification(
         if (summaryText) {
           return {
             code: "tool",
+            data: {
+              arguments: item?.arguments,
+              result: resultData,
+              resultText,
+              server: asString(item?.server),
+              tool: asString(item?.tool),
+            },
             format: "line",
             itemId: asString(item?.id),
             text: summaryText,

@@ -107,8 +107,11 @@ test("AgentTuiStore tracks column hierarchy, summaries, and event history", () =
   expect(columns[1]?.body).toContain("Session started");
   expect(columns[1]?.blocks.map((entry) => entry.kind)).toEqual(["lifecycle", "status"]);
   expect(columns[2]?.blocks.at(-1)).toMatchObject({
-    kind: "status",
-    text: 'Tool: helper.spawn {"mode":"plan"}',
+    argumentsText: '{"mode":"plan"}',
+    kind: "tool",
+    server: "helper",
+    status: "running",
+    tool: "spawn",
   });
   expect(columns[0]?.blocks.map((entry) => entry.kind)).toEqual(["lifecycle"]);
   const supervisorContent = buildAgentTuiRootComponentModel(snapshot, {
@@ -265,6 +268,7 @@ test("buildAgentTuiRootComponentModel renders a single human-readable block stre
     selectedColumnId: worker.id,
   });
   const content = model.columns.find((column) => column.id === worker.id)?.content ?? "";
+  const snapshotColumn = snapshot.columns.find((column) => column.session.id === worker.id);
 
   expect(content).toContain("$ git status --short --branch");
   expect(content).toContain("output:");
@@ -272,6 +276,17 @@ test("buildAgentTuiRootComponentModel renders a single human-readable block stre
   expect(content).toContain("   M agent/src/runner/codex.ts");
   expect(content).toContain("Inspecting runtime state");
   expect(content).not.toContain('jsonl: {"method":"thread/started"}');
+  expect(content).not.toContain("| ## main");
+  expect(snapshotColumn?.blocks.map((entry) => entry.kind)).toEqual([
+    "lifecycle",
+    "command",
+    "agent-message",
+    "raw",
+  ]);
+  expect(snapshotColumn?.blocks.find((entry) => entry.kind === "command")).toMatchObject({
+    kind: "command",
+    outputLines: ["## main", " M agent/src/runner/codex.ts"],
+  });
 });
 
 test("content flattens newline-heavy agent message chunks", () => {
@@ -634,6 +649,87 @@ test("buildAgentTuiRootComponentModel keeps failed Linear writes visible", () =>
   expect(content).toContain("error:");
   expect(content).toContain("  user cancelled MCP tool call");
   expect(content).not.toContain("Tool: linear.save_issue [failed]");
+});
+
+test("buildAgentTuiRootComponentModel shows successful generic tool results", () => {
+  const store = createAgentTuiStore();
+  const worker = createWorkerSession();
+
+  store.observe({
+    phase: "started",
+    sequence: 1,
+    session: worker,
+    timestamp: "2026-03-10T02:09:35.000Z",
+    type: "session",
+  });
+  store.observe({
+    method: "item/started",
+    params: {
+      item: {
+        arguments: {
+          mode: "helper",
+          task: "summarize",
+        },
+        id: "tool-success-1",
+        server: "spawned",
+        tool: "run",
+        type: "mcpToolCall",
+      },
+    },
+    sequence: 2,
+    session: worker,
+    timestamp: "2026-03-10T02:09:36.000Z",
+    type: "codex-notification",
+  });
+  store.observe({
+    method: "item/completed",
+    params: {
+      item: {
+        arguments: {
+          mode: "helper",
+          task: "summarize",
+        },
+        id: "tool-success-1",
+        result: {
+          content: [
+            {
+              text: "summary ready\nnext: review",
+              type: "text",
+            },
+          ],
+        },
+        server: "spawned",
+        tool: "run",
+        type: "mcpToolCall",
+      },
+    },
+    sequence: 3,
+    session: worker,
+    timestamp: "2026-03-10T02:09:37.000Z",
+    type: "codex-notification",
+  });
+
+  const snapshot = store.getSnapshot();
+  const content =
+    buildAgentTuiRootComponentModel(snapshot, {
+      selectedColumnId: worker.id,
+    }).columns.find((column) => column.id === worker.id)?.content ?? "";
+  const toolEntry = snapshot.columns
+    .find((column) => column.session.id === worker.id)
+    ?.blocks.find((entry) => entry.kind === "tool");
+
+  expect(content).toContain("Tool: spawned.run");
+  expect(content).toContain("args:");
+  expect(content).toContain("  mode: helper");
+  expect(content).toContain("  task: summarize");
+  expect(content).toContain("result:");
+  expect(content).toContain("  summary ready");
+  expect(content).toContain("  next: review");
+  expect(toolEntry).toMatchObject({
+    kind: "tool",
+    resultText: "summary ready\nnext: review",
+    status: "completed",
+  });
 });
 
 test("buildAgentTuiRootComponentModel keeps live transcript slices readable in replayable snapshots", () => {
