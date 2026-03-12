@@ -53,6 +53,24 @@ export type AuthoritativeGraphWriteResult = {
   readonly transaction: GraphWriteTransaction
 }
 
+export type AuthoritativeGraphWriteHistory = {
+  readonly cursorPrefix: string
+  readonly baseSequence: number
+  readonly results: readonly AuthoritativeGraphWriteResult[]
+}
+
+export type AuthoritativeGraphChangesAfterResult =
+  | {
+      readonly kind: "changes"
+      readonly cursor: string
+      readonly changes: readonly AuthoritativeGraphWriteResult[]
+    }
+  | {
+      readonly kind: "reset"
+      readonly cursor: string
+      readonly changes: readonly []
+    }
+
 export type GraphWriteSink = (
   transaction: GraphWriteTransaction,
 ) => AuthoritativeGraphWriteResult | Promise<AuthoritativeGraphWriteResult>
@@ -1113,6 +1131,9 @@ export interface TotalSyncSession {
 export interface AuthoritativeGraphWriteSession {
   apply(transaction: GraphWriteTransaction): AuthoritativeGraphWriteResult
   getCursor(): string | undefined
+  getBaseCursor(): string
+  getChangesAfter(cursor?: string): AuthoritativeGraphChangesAfterResult
+  getHistory(): AuthoritativeGraphWriteHistory
 }
 
 export function validateAuthoritativeTotalSyncPayload<
@@ -1213,6 +1234,20 @@ function buildAuthoritativeGraphWriteReplayResult(
   return cloneAuthoritativeGraphWriteResult(result, { replayed: true })
 }
 
+function formatAuthoritativeGraphCursor(cursorPrefix: string, sequence: number): string {
+  return `${cursorPrefix}${sequence}`
+}
+
+function cloneAuthoritativeGraphWriteHistory(
+  history: AuthoritativeGraphWriteHistory,
+): AuthoritativeGraphWriteHistory {
+  return {
+    cursorPrefix: history.cursorPrefix,
+    baseSequence: history.baseSequence,
+    results: history.results.map((result) => cloneAuthoritativeGraphWriteResult(result)),
+  }
+}
+
 type AuthoritativeGraphWriteRecord =
   | {
       ok: true
@@ -1233,14 +1268,104 @@ export function createAuthoritativeGraphWriteSession<
   options: {
     cursorPrefix?: string
     initialSequence?: number
+    history?: readonly AuthoritativeGraphWriteResult[]
   } = {},
 ): AuthoritativeGraphWriteSession {
   const cursorPrefix = options.cursorPrefix ?? "tx:"
+  const baseSequence = options.initialSequence ?? 0
+  if (!Number.isInteger(baseSequence) || baseSequence < 0) {
+    throw new Error("Authoritative graph write sessions require a non-negative integer initial sequence.")
+  }
   const txRecords = new Map<string, AuthoritativeGraphWriteRecord>()
-  let sequence = options.initialSequence ?? 0
+  const acceptedResults: AuthoritativeGraphWriteResult[] = []
+  const cursorToIndex = new Map<string, number>()
+  let sequence = baseSequence
+
+  function baseCursor(): string {
+    return formatAuthoritativeGraphCursor(cursorPrefix, baseSequence)
+  }
 
   function currentCursor(): string | undefined {
-    return sequence > 0 ? `${cursorPrefix}${sequence}` : undefined
+    return sequence > 0 ? formatAuthoritativeGraphCursor(cursorPrefix, sequence) : undefined
+  }
+
+  function currentHeadCursor(): string {
+    return currentCursor() ?? baseCursor()
+  }
+
+  function cloneAcceptedResults(startIndex = 0): AuthoritativeGraphWriteResult[] {
+    return acceptedResults
+      .slice(startIndex)
+      .map((result) => cloneAuthoritativeGraphWriteResult(result))
+  }
+
+  function getChangesAfter(cursor?: string): AuthoritativeGraphChangesAfterResult {
+    if (cursor === undefined || cursor === baseCursor()) {
+      return {
+        kind: "changes",
+        cursor: currentHeadCursor(),
+        changes: cloneAcceptedResults(),
+      }
+    }
+
+    if (cursor === currentHeadCursor()) {
+      return {
+        kind: "changes",
+        cursor,
+        changes: [],
+      }
+    }
+
+    const index = cursorToIndex.get(cursor)
+    if (index === undefined) {
+      return {
+        kind: "reset",
+        cursor: currentHeadCursor(),
+        changes: [],
+      }
+    }
+
+    return {
+      kind: "changes",
+      cursor: currentHeadCursor(),
+      changes: cloneAcceptedResults(index + 1),
+    }
+  }
+
+  const history = options.history ?? []
+  history.forEach((result, index) => {
+    const prepared = prepareAuthoritativeGraphWriteResult(result)
+    if (!prepared.ok) throw new GraphValidationError(prepared.result)
+
+    const normalized = cloneAuthoritativeGraphWriteResult(prepared.value, { replayed: false })
+    const expectedCursor = formatAuthoritativeGraphCursor(cursorPrefix, baseSequence + index + 1)
+    if (normalized.cursor !== expectedCursor) {
+      throw new Error(
+        `Invalid authoritative graph write history at index ${index}: expected cursor "${expectedCursor}".`,
+      )
+    }
+    if (txRecords.has(normalized.txId)) {
+      throw new Error(
+        `Invalid authoritative graph write history at index ${index}: duplicate transaction id "${normalized.txId}".`,
+      )
+    }
+
+    txRecords.set(normalized.txId, {
+      ok: true,
+      transaction: normalized.transaction,
+      result: normalized,
+    })
+    acceptedResults.push(normalized)
+    cursorToIndex.set(normalized.cursor, acceptedResults.length - 1)
+  })
+  sequence = baseSequence + acceptedResults.length
+
+  function getHistory(): AuthoritativeGraphWriteHistory {
+    return cloneAuthoritativeGraphWriteHistory({
+      cursorPrefix,
+      baseSequence,
+      results: acceptedResults,
+    })
   }
 
   function apply(transaction: GraphWriteTransaction): AuthoritativeGraphWriteResult {
@@ -1287,23 +1412,28 @@ export function createAuthoritativeGraphWriteSession<
 
     store.replace(materialized.value)
     sequence += 1
-    const result: AuthoritativeGraphWriteResult = {
+    const storedResult: AuthoritativeGraphWriteResult = {
       txId: prepared.value.id,
-      cursor: `${cursorPrefix}${sequence}`,
+      cursor: formatAuthoritativeGraphCursor(cursorPrefix, sequence),
       replayed: false,
       transaction: prepared.value,
     }
     txRecords.set(prepared.value.id, {
       ok: true,
       transaction: prepared.value,
-      result,
+      result: storedResult,
     })
-    return cloneAuthoritativeGraphWriteResult(result)
+    acceptedResults.push(storedResult)
+    cursorToIndex.set(storedResult.cursor, acceptedResults.length - 1)
+    return cloneAuthoritativeGraphWriteResult(storedResult)
   }
 
   return {
     apply,
+    getBaseCursor: baseCursor,
+    getChangesAfter,
     getCursor: currentCursor,
+    getHistory,
   }
 }
 

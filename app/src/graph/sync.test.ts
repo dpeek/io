@@ -2101,6 +2101,69 @@ describe("authoritative graph writes", () => {
     expect(server.graph.company.get(companyId).name).toBe("Acme Graph Labs");
   });
 
+  it("surfaces accepted changes after a cursor and resumes from durable history across restart", () => {
+    const server = createServerGraph();
+    const companyId = server.graph.company.create({
+      name: "Acme Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://acme.com"),
+    });
+    const authority = createAuthoritativeGraphWriteSession(server.store, app, {
+      cursorPrefix: "server:",
+    });
+
+    const first = authority.apply(
+      createCompanyNameWriteTransaction(server.store, companyId, "Acme Durable One", "tx:1"),
+    );
+    const second = authority.apply(
+      createCompanyNameWriteTransaction(server.store, companyId, "Acme Durable Two", "tx:2"),
+    );
+    const history = authority.getHistory();
+
+    expect(authority.getBaseCursor()).toBe("server:0");
+    expect(authority.getChangesAfter(authority.getBaseCursor())).toEqual({
+      kind: "changes",
+      cursor: "server:2",
+      changes: [first, second],
+    });
+    expect(authority.getChangesAfter(first.cursor)).toEqual({
+      kind: "changes",
+      cursor: "server:2",
+      changes: [second],
+    });
+    expect(authority.getChangesAfter("server:unknown")).toEqual({
+      kind: "reset",
+      cursor: "server:2",
+      changes: [],
+    });
+
+    const restartedStore = createStore();
+    bootstrap(restartedStore, core);
+    bootstrap(restartedStore, app);
+    restartedStore.replace(server.store.snapshot());
+    const restartedGraph = createTypeClient(restartedStore, app);
+    const restarted = createAuthoritativeGraphWriteSession(restartedStore, app, {
+      cursorPrefix: history.cursorPrefix,
+      initialSequence: history.baseSequence,
+      history: history.results,
+    });
+    const third = restarted.apply(
+      createCompanyNameWriteTransaction(restartedStore, companyId, "Acme Durable Three", "tx:3"),
+    );
+
+    expect(third).toMatchObject({
+      txId: "tx:3",
+      replayed: false,
+      cursor: "server:3",
+    });
+    expect(restarted.getChangesAfter(second.cursor)).toEqual({
+      kind: "changes",
+      cursor: "server:3",
+      changes: [third],
+    });
+    expect(restartedGraph.company.get(companyId).name).toBe("Acme Durable Three");
+  });
+
   it("rejects invalid write transactions with structured validation results and leaves authority state unchanged", () => {
     const server = createServerGraph();
     const companyId = server.graph.company.create({

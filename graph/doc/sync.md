@@ -111,6 +111,15 @@ path:
     structured runtime validation issue
 - authoritative cursors are also required to be non-empty strings and remain
   monotonic within the authority session
+- authoritative sessions now also expose the minimal history surface needed for
+  incremental proofs:
+  - `getBaseCursor()` returns the snapshot/reset cursor that precedes retained
+    history
+  - `getChangesAfter(cursor)` returns ordered accepted write results after a
+    known cursor, or `{ kind: "reset" }` when callers must recover by full
+    snapshot
+  - `getHistory()` returns the accepted-write log state needed to persist and
+    later rehydrate the same monotonic cursor progression
 - direct non-throwing checks can use
   `validateAuthoritativeGraphWriteTransaction(tx, store, namespace)`
 
@@ -175,6 +184,10 @@ Failure handling is still intentionally conservative.
 - A synced client that needs to discard pending optimistic state or recover
   from divergence can still fall back to total sync via `sync.sync()` or
   `sync.apply(payload)`, which replaces the local view authoritatively.
+- Authority persistence should treat a durable snapshot plus durable write
+  history as one consistency boundary. If retained history is unavailable or
+  malformed after restart, the authority keeps the snapshot and resets history,
+  so callers must recover from that new snapshot cursor instead of replay.
 - There is not yet a rollback protocol, cursor-based incremental pull, or
   query-scoped repair path.
 
