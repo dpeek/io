@@ -14,14 +14,15 @@ test("@io/config re-exports the repo root config", () => {
 
 test("@io/config exposes the repo context bundle and routing defaults", () => {
   expect(config.context?.entrypoint).toBe("./io/overview.md");
-  expect(config.context?.docs).toEqual({
+  const docs = config.context?.docs as Record<string, string> | undefined;
+  expect(docs).toEqual({
     "project.managed-stream-comments": "./agent/io/managed-stream-comments.md",
     "project.managed-stream-backlog": "./agent/io/managed-stream-backlog.md",
-    "project.managed-stream-goals": "./agent/io/managed-stream-goals.md",
+    "project.managed-stream-contract": "./agent/io/managed-stream-contract.md",
     "project.module-stream-workflow-plan": "./agent/io/module-stream-workflow-plan.md",
     "project.overview": "./io/overview.md",
   });
-  expect(config.context?.profiles?.backlog?.include).toContain("project.managed-stream-goals");
+  expect(config.context?.profiles?.backlog?.include).toContain("project.managed-stream-contract");
   expect(config.context?.profiles?.backlog?.include).toContain("project.managed-stream-backlog");
   expect(config.context?.profiles?.backlog?.include).toContain("project.managed-stream-comments");
   expect(config.modules?.agent).toEqual({
@@ -72,17 +73,17 @@ test("repo managed stream backlog doc captures direct description refresh, expan
 });
 
 test("repo managed stream contract docs lock the label, comment, and current-approach workflow shapes", () => {
-  const goals = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-goals.md"), "utf8");
+  const contract = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-contract.md"), "utf8");
   const comments = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-comments.md"), "utf8");
   const workflowPlan = readFileSync(
     resolve(repoRoot, "./agent/io/module-stream-workflow-plan.md"),
     "utf8",
   );
 
-  expect(goals).toContain("## Current Managed Parent Contract");
-  expect(goals).toContain("## Current Module Boundaries");
-  expect(goals).toContain("## Current Ownership Split");
-  expect(goals).toContain("The code already assumes shared ownership of the parent description");
+  expect(contract).toContain("## Current Managed Parent Contract");
+  expect(contract).toContain("## Current Module Boundaries");
+  expect(contract).toContain("## Current Ownership Split");
+  expect(contract).toContain("The code already assumes shared ownership of the parent description");
 
   expect(comments).toContain("## Current Command Shape");
   expect(comments).toContain("@io <command>");
@@ -100,14 +101,14 @@ test("repo managed stream contract docs lock the label, comment, and current-app
 });
 
 test("repo managed stream contract docs capture label, ownership, and comment rules", () => {
-  const goalsPath = resolve(repoRoot, "./agent/io/managed-stream-goals.md");
-  const goals = readFileSync(goalsPath, "utf8");
-  expect(goals).toContain("- it has the `io` label");
-  expect(goals).toContain("exactly one label that matches a configured module id");
-  expect(goals).toContain("Module identity comes from `workflow.modules.<id>` in `io.ts`.");
-  expect(goals).toContain("## Current Ownership Split");
-  expect(goals).toContain("Humans still own:");
-  expect(goals).toContain("The agent currently owns:");
+  const contractPath = resolve(repoRoot, "./agent/io/managed-stream-contract.md");
+  const contract = readFileSync(contractPath, "utf8");
+  expect(contract).toContain("- it has the `io` label");
+  expect(contract).toContain("exactly one label that matches a configured module id");
+  expect(contract).toContain("Module identity comes from `workflow.modules.<id>` in `io.ts`.");
+  expect(contract).toContain("## Current Ownership Split");
+  expect(contract).toContain("Humans still own:");
+  expect(contract).toContain("The agent currently owns:");
 
   const commentsPath = resolve(repoRoot, "./agent/io/managed-stream-comments.md");
   const comments = readFileSync(commentsPath, "utf8");
@@ -121,19 +122,4 @@ test("repo managed stream contract docs capture label, ownership, and comment ru
   expect(plan).toContain("## Current Constraints");
   expect(plan).toContain("workflow loading is repo-local and file-based");
   expect(plan).toContain("## Future Work Suggestions");
-});
-
-test("repo current focus doc captures the phase gate and separated transitions", () => {
-  const focus = readFileSync(resolve(repoRoot, "./io/goals.md"), "utf8");
-
-  expect(focus).toContain("# Current Approach Stream");
-  expect(focus).toContain("Keep parent `Todo` as the only automatic backlog-entry phase");
-  expect(focus).toContain("Treat parent `In Review` as the safe bootstrap");
-  expect(focus).toContain("Seed new implementation children in `Todo`");
-  expect(focus).toContain("Keep parent and child Linear transitions separate");
-  expect(focus).toContain("child execution still lands on `Done`");
-  expect(focus).toContain(
-    "Do not auto-run child issues unless their parent stream is `In Progress`",
-  );
-  expect(focus).toContain("Keep one active child per stream");
 });

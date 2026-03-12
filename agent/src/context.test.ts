@@ -301,7 +301,7 @@ test("repo backlog context includes managed stream maintenance guidance", async 
     agent: "backlog",
     profile: "backlog",
   });
-  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-goals");
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-contract");
   expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-backlog");
   expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-comments");
   expect(rendered).toContain("exactly one label that matches a configured module id");
@@ -422,7 +422,6 @@ test("resolveIssueContext assembles the graph module bundle and keeps refs withi
   await mkdir(resolve(root, "graph", "io"), { recursive: true });
   await mkdir(resolve(root, "io"), { recursive: true });
   await writeFile(promptPath, "LOCAL {{ selection.agent }} {{ selection.profile }}\n");
-  await writeFile(resolve(root, "graph", "io", "goals.md"), "GRAPH STREAM DOC\n");
   await writeFile(resolve(root, "graph", "io", "overview.md"), "GRAPH IO OVERVIEW DOC\n");
   await writeFile(resolve(root, "graph", "io", "architecture.md"), "GRAPH ARCHITECTURE DOC\n");
   await writeFile(resolve(root, "graph", "io", "linked.md"), "GRAPH LINKED DOC\n");

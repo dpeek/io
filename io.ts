@@ -18,7 +18,7 @@ export default defineIoConfig({
     docs: {
       "project.managed-stream-comments": "./agent/io/managed-stream-comments.md",
       "project.managed-stream-backlog": "./agent/io/managed-stream-backlog.md",
-      "project.managed-stream-goals": "./agent/io/managed-stream-goals.md",
+      "project.managed-stream-contract": "./agent/io/managed-stream-contract.md",
       "project.module-stream-workflow-plan": "./agent/io/module-stream-workflow-plan.md",
       "project.overview": "./io/overview.md",
     },
@@ -30,7 +30,7 @@ export default defineIoConfig({
           "builtin:io.linear.status-updates",
           "builtin:io.core.git-safety",
           "project.overview",
-          "project.managed-stream-goals",
+          "project.managed-stream-contract",
           "project.managed-stream-backlog",
           "project.managed-stream-comments",
         ],

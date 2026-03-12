@@ -7,7 +7,7 @@
 ## Entry Points
 
 - `./module-stream-workflow-plan.md`: workflow loading, context assembly, routing, and module scoping
-- `./managed-stream-goals.md`: managed-parent contract and parent/child phase model
+- `./managed-stream-contract.md`: managed-parent contract and parent/child phase model
 - `./managed-stream-backlog.md`: parent brief refresh and child backlog maintenance contract
 - `./managed-stream-comments.md`: `@io` comment parsing, writeback, and dedupe behavior
 - `../src/workspace.ts`: lower-level branch and worktree lifecycle reference

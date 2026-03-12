@@ -1083,10 +1083,9 @@ test("AgentService routes @io backlog comments to parent description refresh and
     resolve(root, "agent", "io", "overview.md"),
     `# Agent Stream
 
-## Current Focus
+## Current vs Roadmap
 
-- refresh managed write surfaces
-- keep reruns deterministic
+Current code already refreshes managed write surfaces and keeps reruns deterministic.
 `,
   );
   process.env.LINEAR_API_KEY = "linear-token";
@@ -1186,7 +1185,7 @@ test("AgentService routes @io backlog comments to parent description refresh and
   }
 });
 
-test("AgentService reports removed @io focus commands as blocked parse errors", async () => {
+test("AgentService reports unknown @io commands as blocked parse errors", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-focus-removed-"));
   const replies: string[] = [];
 
@@ -2486,10 +2485,9 @@ test("AgentService rewrites managed parent backlog issues before running the bac
     resolve(root, "agent", "io", "overview.md"),
     `# IO Agent Stream
 
-## Current Focus
+## Current vs Roadmap
 
-- improve operator utility
-- improve planning and context quality
+Current code already improves operator utility and planning/context quality, while the remaining roadmap is around richer observability and operator tooling.
 
 ## Good Changes In This Stream
 
@@ -2524,11 +2522,11 @@ test("AgentService rewrites managed parent backlog issues before running the bac
             identifier: "OPE-127",
             labels: ["io", "agent"],
             priority: 2,
-            description: `## Outcome
+            description: `## Objective
 
 A fresh managed parent issue should be transformable into a durable planning brief.
 
-## Deliverables
+## Current Focus
 
 - define the parent issue section format so reruns can update only agent-owned sections
 - implement proposal generation in the backlog path
@@ -2630,10 +2628,9 @@ test("AgentService rewrites managed graph parent backlog issues with graph modul
     resolve(root, "graph", "io", "overview.md"),
     `# IO Graph Stream
 
-## Current Focus
+## Current vs Roadmap
 
-- prove the managed graph stream path
-- keep the next module adoption small
+Current code already proves the managed graph stream path, while the remaining roadmap is to keep the next module adoption small and reviewable.
 
 ## Good Changes In This Stream
 
@@ -2668,11 +2665,11 @@ test("AgentService rewrites managed graph parent backlog issues with graph modul
             identifier: "OPE-135",
             labels: ["io", "graph"],
             priority: 2,
-            description: `## Outcome
+            description: `## Objective
 
 Make the managed module stream flow portable on graph.
 
-## Deliverables
+## Current Focus
 
 - prove managed parent detection and context assembly on graph
 - keep backlog writeback aligned with graph module docs

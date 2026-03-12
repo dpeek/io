@@ -1,4 +1,4 @@
-# Managed Streams
+# Managed Stream Contract
 
 ## Purpose
 

@@ -3,24 +3,13 @@ import { relative } from "node:path";
 import { hasIssueLabel, resolveIssueModule } from "./issue-routing.js";
 import type { AgentIssue, ResolvedContextBundle, Workflow, WorkflowModule } from "./types.js";
 
-const OBJECTIVE_HEADING_PATTERNS = [/^objective$/i, /^outcome$/i, /^goals?$/i, /^purpose$/i] as const;
-const CURRENT_FOCUS_HEADING_PATTERNS = [
-  /^current focus$/i,
-  /^this week$/i,
-  /^deliverables$/i,
-  /^target workflow$/i,
-  /^current state$/i,
-] as const;
-const CONSTRAINT_HEADING_PATTERNS = [
-  /^constraints$/i,
-  /^scope$/i,
-  /^notes$/i,
-  /^validation$/i,
-  /^module guardrails$/i,
-] as const;
-const PROOF_SURFACE_HEADING_PATTERNS = [/^proof surfaces?$/i, /^docs$/i, /^context$/i] as const;
+const OBJECTIVE_HEADING_PATTERNS = [/^objective$/i] as const;
+const CURRENT_FOCUS_HEADING_PATTERNS = [/^current focus$/i] as const;
+const CONSTRAINT_HEADING_PATTERNS = [/^constraints$/i] as const;
+const PROOF_SURFACE_HEADING_PATTERNS = [/^proof surfaces?$/i] as const;
 const WORK_OPTION_HEADING_PATTERNS = [/^work options$/i] as const;
-const DEFERRED_HEADING_PATTERNS = [/^deferred$/i, /^out of scope$/i] as const;
+const DEFERRED_HEADING_PATTERNS = [/^deferred$/i] as const;
+const LEGACY_GOALS_PATH_PATTERN = /(?:^|\/)io\/goals\.md$/i;
 const PRESERVED_SECTION_PATTERNS = [
   /decision/i,
   /approval/i,
@@ -29,8 +18,6 @@ const PRESERVED_SECTION_PATTERNS = [
   /note/i,
   /success criteria/i,
   /context/i,
-  /current state/i,
-  /target workflow/i,
 ] as const;
 
 interface MarkdownSection {
@@ -152,7 +139,9 @@ function renderManagedParentDescription(options: {
     modulePath,
     ...module.docs,
     ...bundle.docs.map((doc) => (doc.path ? toRepoRelativePath(repoRoot, doc.path) : undefined)),
-  ]).slice(0, 6);
+  ])
+    .filter((line) => !isLegacyGoalsPath(line))
+    .slice(0, 6);
   const deferred = findSectionBullets({
     docs: analysisDocs,
     fallback: ["Non-essential work outside the current managed stream slice."],
@@ -276,10 +265,10 @@ function createOptionTitle(focus: string, index: number) {
 function extractIssueThemes(description: string) {
   const sections = splitMarkdownSections(description);
   const prioritizedSections = [
-    { limit: 3, patterns: [/^deliverables$/i, /^current focus$/i] as const },
-    { limit: 2, patterns: [/^scope$/i, /^target workflow$/i] as const },
-    { limit: 1, patterns: [/^objective$/i, /^outcome$/i] as const },
-    { limit: 1, patterns: [/^notes$/i, /^context$/i] as const },
+    { limit: 3, patterns: CURRENT_FOCUS_HEADING_PATTERNS },
+    { limit: 2, patterns: CONSTRAINT_HEADING_PATTERNS },
+    { limit: 1, patterns: OBJECTIVE_HEADING_PATTERNS },
+    { limit: 1, patterns: PROOF_SURFACE_HEADING_PATTERNS },
   ] as const;
   const prioritizedThemes: string[] = [];
 
@@ -397,14 +386,27 @@ function trimTrailingBlankLines(lines: string[]) {
 
 function extractRepoPaths(content: string) {
   const matches = content.match(/(?:\.\/|\.\.\/)[A-Za-z0-9_./-]+/g) ?? [];
-  return uniqueOrdered(matches);
+  return uniqueOrdered(matches).filter((path) => !isLegacyGoalsPath(path));
 }
 
 function normalizeDescriptionText(description: string) {
   return description
-    .replace(/<!--\s*io-managed:backlog-proposal:start\s*-->/g, "")
-    .replace(/<!--\s*io-managed:backlog-proposal:end\s*-->/g, "")
+    .split("\n")
+    .filter((line) => !isLegacyGoalsPathLine(line))
+    .join("\n")
     .trim();
+}
+
+function isLegacyGoalsPath(value: string) {
+  return LEGACY_GOALS_PATH_PATTERN.test(value.trim().replace(/`/g, ""));
+}
+
+function isLegacyGoalsPathLine(line: string) {
+  const normalized = line
+    .trim()
+    .replace(/^\s*(?:[-*+]|\d+\.)\s+/, "")
+    .replace(/^`(.+)`$/, "$1");
+  return isLegacyGoalsPath(normalized);
 }
 
 function normalizeHighlight(value: string) {

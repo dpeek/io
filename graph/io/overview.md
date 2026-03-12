@@ -6,7 +6,6 @@
 
 ## Entry Points
 
-- `./goals.md`: cross-cutting package direction, constraints, and deferred work
 - `./architecture.md`: durable engine model, current primitives, and longer-range platform shape
 - `./authority.md`: authority boundaries, predicate visibility, typed business methods, and secrets
 - `./runtime.md`: schema authoring, id maps, core schema, bootstrap, and store behavior

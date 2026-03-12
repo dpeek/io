@@ -10,7 +10,7 @@ application direction the rest of the workspace is proving.
 
 - `../io.md`
 - `../agent/io/overview.md`
-- `../agent/io/managed-stream-goals.md`
+- `../agent/io/managed-stream-contract.md`
 - `../graph/io/overview.md`
 - `../tui/io/overview.md`
 

@@ -4,14 +4,7 @@ import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { createLogger } from "@io/lib";
-import {
-  IO_TS_FILE,
-  loadIoConfig,
-  type AskForApproval,
-  type NormalizedIoConfig,
-  type SandboxMode,
-  type SandboxPolicy,
-} from "@io/lib/config";
+import { IO_TS_FILE, loadIoConfig, type NormalizedIoConfig } from "@io/lib/config";
 import z from "zod";
 
 import { DEFAULT_BACKLOG_BUILTIN_DOC_IDS, DEFAULT_EXECUTE_BUILTIN_DOC_IDS } from "./builtins.js";
@@ -29,58 +22,6 @@ import { toId } from "./util.js";
 const log = createLogger({ pkg: "agent" });
 
 const IO_PROMPT_FILE = "io.md";
-
-const approvalPolicySchema: z.ZodType<AskForApproval> = z.union([
-  z.enum(["untrusted", "on-failure", "on-request", "never"]),
-  z.object({
-    reject: z.object({
-      mcp_elicitations: z.boolean(),
-      rules: z.boolean(),
-      sandbox_approval: z.boolean(),
-    }),
-  }),
-]);
-
-const sandboxModeSchema: z.ZodType<SandboxMode> = z.enum([
-  "read-only",
-  "workspace-write",
-  "danger-full-access",
-]);
-
-const sandboxPolicySchema: z.ZodType<SandboxPolicy> = z.union([
-  z.object({ type: z.literal("dangerFullAccess") }),
-  z.object({
-    access: z.union([
-      z.object({ type: z.literal("fullAccess") }),
-      z.object({
-        includePlatformDefaults: z.boolean(),
-        readableRoots: z.array(z.string().min(1)),
-        type: z.literal("restricted"),
-      }),
-    ]),
-    networkAccess: z.boolean(),
-    type: z.literal("readOnly"),
-  }),
-  z.object({
-    networkAccess: z.enum(["restricted", "enabled", "disabled"]),
-    type: z.literal("externalSandbox"),
-  }),
-  z.object({
-    excludeSlashTmp: z.boolean(),
-    excludeTmpdirEnvVar: z.boolean(),
-    networkAccess: z.boolean(),
-    readOnlyAccess: z.union([
-      z.object({ type: z.literal("fullAccess") }),
-      z.object({
-        includePlatformDefaults: z.boolean(),
-        readableRoots: z.array(z.string().min(1)),
-        type: z.literal("restricted"),
-      }),
-    ]),
-    type: z.literal("workspaceWrite"),
-    writableRoots: z.array(z.string().min(1)),
-  }),
-]);
 
 const stateListSchema = z.union([
   z.array(z.string().min(1)),
@@ -446,7 +387,9 @@ function resolveEntrypoint(
     };
   }
   if (hasIoPrompt) {
-    return invalidResult(`Incomplete IO entrypoints. Expected ${IO_TS_FILE} with ${IO_PROMPT_FILE}.`);
+    return invalidResult(
+      `Incomplete IO entrypoints. Expected ${IO_TS_FILE} with ${IO_PROMPT_FILE}.`,
+    );
   }
   return invalidResult(`No agent entrypoint found. Add ${IO_TS_FILE} and ${IO_PROMPT_FILE}.`);
 }

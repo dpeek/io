@@ -62,10 +62,9 @@ function createBundle(root: string): ResolvedContextBundle {
       {
         content: `# IO Agent Stream
 
-## Current Focus
+## Current vs Roadmap
 
-- improve operator utility
-- improve planning and context quality
+Current code already improves operator utility and planning/context quality, while the remaining work is mostly around richer observability and operator tooling.
 
 ## Good Changes In This Stream
 
@@ -76,7 +75,7 @@ function createBundle(root: string): ResolvedContextBundle {
         label: "./agent/io/overview.md",
         order: 2,
         overridden: false,
-        path: resolve(root, "io", "goals.md"),
+        path: resolve(root, "agent", "io", "overview.md"),
         source: "repo-path",
       },
     ],
@@ -85,17 +84,17 @@ function createBundle(root: string): ResolvedContextBundle {
 
 test("rewriteManagedBacklogDescription normalizes the parent description toward the shared template", () => {
   const root = "/repo";
-  const description = `## Outcome
+  const description = `## Objective
 
 Turn a fresh parent issue into a durable planning brief.
 
-## Deliverables
+## Current Focus
 
 - define stable managed sections
 - implement proposal generation in the backlog path
 - preserve human-authored decisions on rerun
 
-## Notes
+## Constraints
 
 - Keep it useful, not verbose.
 `;
@@ -122,26 +121,25 @@ Turn a fresh parent issue into a durable planning brief.
   expect(rewritten).toContain("## Deferred");
 });
 
-test("rewriteManagedBacklogDescription removes legacy markers and preserves useful human sections", () => {
+test("rewriteManagedBacklogDescription refreshes managed sections and preserves useful human sections", () => {
   const root = "/repo";
-  const original = `## Outcome
+  const original = `## Objective
 
 Turn a fresh parent issue into a durable planning brief.
 
-<!-- io-managed:backlog-proposal:start -->
-## Managed Brief
+## Current Focus
 
-### Current Module State
 - old state
 
-### Constraints
+## Constraints
+
 - old constraint
 
-### Work Options
+## Work Options
+
 1. **Old option**
    Focus: old focus
    Alignment: old alignment
-<!-- io-managed:backlog-proposal:end -->
 
 ## Decisions
 
@@ -155,11 +153,44 @@ Turn a fresh parent issue into a durable planning brief.
     workflow: createWorkflow(root),
   });
 
-  expect(rewritten).not.toContain("io-managed:backlog-proposal:start");
-  expect(rewritten).not.toContain("old state");
-  expect(rewritten).not.toContain("old option");
+  expect(rewritten).toContain("## Objective");
+  expect(rewritten).toContain("## Current Focus");
+  expect(rewritten).toContain("## Constraints");
   expect(rewritten).toContain("## Decisions");
   expect(rewritten).toContain("Keep the operator summary outside the managed block.");
   expect(rewritten).toContain("Keep the operator summary outside the managed block.");
   expect(rewritten).toContain("## Work Options");
+});
+
+test("rewriteManagedBacklogDescription drops legacy module goals paths from the refreshed brief", () => {
+  const root = "/repo";
+  const original = `## Objective
+
+Make the managed graph stream flow portable on graph.
+
+## Proof Surfaces
+
+- ./graph/io/goals.md
+- ./graph/io/overview.md
+
+## Constraints
+
+- Keep the next slice easy to review.
+`;
+
+  const rewritten = rewriteManagedBacklogDescription({
+    bundle: createBundle(root),
+    issue: {
+      ...createIssue(original),
+      identifier: "OPE-133",
+      labels: ["io", "agent"],
+    },
+    repoRoot: root,
+    workflow: createWorkflow(root),
+  });
+
+  expect(rewritten).toContain("## Proof Surfaces");
+  expect(rewritten).not.toContain("./graph/io/goals.md");
+  expect(rewritten).toContain("./agent");
+  expect(rewritten).toContain("./agent/io/overview.md");
 });

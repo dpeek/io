@@ -74,7 +74,7 @@ invalid: true`,
   });
 });
 
-test("parseManagedComment rejects removed commands", () => {
+test("parseManagedComment rejects unknown commands", () => {
   const parsed = parseManagedComment({
     body: "@io focus",
     commentId: "comment-3",

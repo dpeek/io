@@ -6,7 +6,6 @@
 
 ## Docs
 
-- `./goals.md`
 - `../../io/overview.md`
 
 ## Layout

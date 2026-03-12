@@ -6,7 +6,6 @@
 
 ## Docs
 
-- `./goals.md`
 - `../../agent/io/overview.md`
 - `../../agent/io/module-stream-workflow-plan.md`
 

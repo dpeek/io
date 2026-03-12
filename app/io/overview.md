@@ -6,7 +6,6 @@
 
 ## Docs
 
-- `./goals.md`
 - `../../graph/io/overview.md`
 - `../../graph/io/type-modules.md`
 - `../../graph/io/refs-and-ui.md`
