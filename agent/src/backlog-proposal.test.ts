@@ -60,7 +60,7 @@ function createBundle(root: string): ResolvedContextBundle {
         label: "project.overview",
         order: 1,
         overridden: false,
-        path: resolve(root, "llm", "topic", "overview.md"),
+        path: resolve(root, "io", "overview.md"),
         source: "registered",
       },
       {
@@ -80,7 +80,7 @@ function createBundle(root: string): ResolvedContextBundle {
         label: "./agent/io/goals.md",
         order: 2,
         overridden: false,
-        path: resolve(root, "agent", "io", "goals.md"),
+        path: resolve(root, "io", "goals.md"),
         source: "repo-path",
       },
     ],
