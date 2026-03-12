@@ -155,6 +155,15 @@ describe("app authority", () => {
       cursor: second.cursor,
       changes: [first, second],
     });
+    expect(restarted.getIncrementalSyncResult(initialCursor)).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: initialCursor,
+      transactions: [first, second],
+      cursor: second.cursor,
+      completeness: "complete",
+      freshness: "current",
+    });
     expect(second).toMatchObject({
       txId: "tx:2",
       replayed: false,
@@ -164,6 +173,15 @@ describe("app authority", () => {
       kind: "changes",
       cursor: second.cursor,
       changes: [second],
+    });
+    expect(restarted.getIncrementalSyncResult(first.cursor)).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: first.cursor,
+      transactions: [second],
+      cursor: second.cursor,
+      completeness: "complete",
+      freshness: "current",
     });
     expect(restarted.graph.company.get(companyId).name).toBe("Acme Durable Two");
   });
@@ -190,6 +208,16 @@ describe("app authority", () => {
       kind: "reset",
       cursor: resetCursor,
       changes: [],
+    });
+    expect(authority.getIncrementalSyncResult(first.cursor)).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: first.cursor,
+      transactions: [],
+      cursor: resetCursor,
+      completeness: "complete",
+      freshness: "current",
+      fallback: "reset",
     });
     expect(restarted.createSyncPayload().cursor).toBe(resetCursor);
     expect(restarted.graph.company.get(companyId).name).toBe("Acme Snapshot Reset");

@@ -693,41 +693,77 @@ describe("total sync", () => {
     unsubscribeWebsite();
   });
 
-  it("proves authority-backed local writes become visible to synced peers without per-write total sync", async () => {
+  it("proves peers catch up through ordered incremental delivery without extra total snapshots", async () => {
     const runtime = createExampleRuntime();
     const peer = runtime.createPeer();
+    const baseCursor = peer.sync.getState().cursor;
     const syncPayloadCount = runtime.authority.getSyncPayloadCount();
 
+    if (!baseCursor) throw new Error("Expected peer bootstrap cursor.");
     expect(runtime.graph.company.get(runtime.ids.acme).name).toBe("Acme Corp");
     expect(peer.graph.company.get(runtime.ids.acme).name).toBe("Acme Corp");
 
-    const result = await runtime.commitLocalMutation(runtime, "tx:runtime:1", (graph) => {
+    const first = await runtime.commitLocalMutation(runtime, "tx:runtime:1", (graph) => {
       graph.company.update(runtime.ids.acme, {
         name: "Acme Runtime Labs",
       });
     });
+    const second = await runtime.commitLocalMutation(runtime, "tx:runtime:2", (graph) => {
+      graph.company.update(runtime.ids.acme, {
+        name: "Acme Runtime Labs Two",
+      });
+    });
 
-    expect(result).toMatchObject({
+    expect(first).toMatchObject({
       txId: "tx:runtime:1",
       cursor: "example:1",
       replayed: false,
     });
-    expect(runtime.authority.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs");
-    expect(runtime.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs");
-    expect(peer.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs");
+    expect(second).toMatchObject({
+      txId: "tx:runtime:2",
+      cursor: "example:2",
+      replayed: false,
+    });
+    expect(runtime.authority.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs Two");
+    expect(runtime.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs Two");
+    expect(peer.graph.company.get(runtime.ids.acme).name).toBe("Acme Corp");
+
+    const applied = await peer.sync.sync();
+
+    expect(applied.mode).toBe("incremental");
+    expect("fallback" in applied).toBe(false);
+    if (applied.mode !== "incremental" || "fallback" in applied) {
+      throw new Error("Expected a data-bearing incremental sync result.");
+    }
+    expect(applied.after).toBe(baseCursor);
+    expect(applied.cursor).toBe(second.cursor);
+    expect(applied.transactions).toEqual([first, second]);
     expect(runtime.authority.getSyncPayloadCount()).toBe(syncPayloadCount);
     expect(runtime.sync.getState()).toMatchObject({
       status: "ready",
-      cursor: "example:1",
+      cursor: second.cursor,
       completeness: "complete",
       freshness: "current",
     });
+    expect(peer.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs Two");
     expect(peer.sync.getState()).toMatchObject({
       status: "ready",
-      cursor: "example:1",
+      cursor: second.cursor,
       completeness: "complete",
       freshness: "current",
     });
+    expect(peer.sync.getState().recentActivities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "incremental",
+          after: baseCursor,
+          cursor: second.cursor,
+          txIds: [first.txId, second.txId],
+          transactionCount: 2,
+          freshness: "current",
+        }),
+      ]),
+    );
   });
 
   it("bootstraps the example runtime on the authority base cursor and records incremental pull activity", async () => {
@@ -748,7 +784,7 @@ describe("total sync", () => {
       }),
     ]);
 
-    const result = runtime.authority.writes.apply(
+    const result = runtime.authority.applyTransaction(
       createCompanyNameWriteTransaction(
         runtime.authority.store,
         runtime.ids.acme,

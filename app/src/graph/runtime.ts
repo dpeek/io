@@ -8,8 +8,11 @@ import {
   createAuthoritativeGraphWriteSession,
   createSyncedTypeClient,
   createTotalSyncPayload,
+  type GraphWriteTransaction,
+  type IncrementalSyncResult,
   type AuthoritativeGraphWriteResult,
   type SyncedTypeClient,
+  type SyncFreshness,
   type TotalSyncPayload,
 } from "./sync"
 
@@ -46,6 +49,21 @@ export function createExampleRuntime() {
     })
   }
 
+  function getIncrementalSyncResult(
+    after?: string,
+    options?: {
+      freshness?: SyncFreshness
+    },
+  ): IncrementalSyncResult {
+    return writes.getIncrementalSyncResult(after, options)
+  }
+
+  function applyTransaction(
+    transaction: GraphWriteTransaction,
+  ): AuthoritativeGraphWriteResult {
+    return writes.apply(transaction)
+  }
+
   function resetAuthorityStream(cursorPrefix = "reset:"): string {
     writes = createAuthoritativeGraphWriteSession(authority.store, app, {
       cursorPrefix,
@@ -59,19 +77,12 @@ export function createExampleRuntime() {
     client = createSyncedTypeClient(app, {
       pull: (state) =>
         state.cursor
-          ? writes.getIncrementalSyncResult(state.cursor)
+          ? getIncrementalSyncResult(state.cursor)
           : createSyncPayload(),
       createTxId() {
         return queuedTxIds.shift() ?? "example:local"
       },
-      push(transaction) {
-        const result = writes.apply(transaction)
-        for (const peer of clients) {
-          if (peer === client) continue
-          peer.sync.applyWriteResult(result)
-        }
-        return result
-      },
+      push: applyTransaction,
     })
     client.sync.apply(createSyncPayload())
     pendingTxIds.set(client, queuedTxIds)
@@ -117,13 +128,12 @@ export function createExampleRuntime() {
     applyAuthoritativeWrite,
     authority: {
       ...authority,
+      applyTransaction,
       createSyncPayload,
+      getIncrementalSyncResult,
       resetAuthorityStream,
       getBaseCursor() {
         return writes.getBaseCursor()
-      },
-      get writes() {
-        return writes
       },
       getSyncPayloadCount() {
         return syncPayloadCount

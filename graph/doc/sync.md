@@ -212,11 +212,12 @@ multiple synced clients:
   queued write tx
 - the authority remains the only place that decides whether the write is
   accepted
-- peer clients observe the accepted write through `applyWriteResult(...)`
-  instead of calling `sync.sync()` for every mutation
-- `sync.sync()` can now also request and apply retained authoritative tx
-  batches after the client’s current cursor, without changing the typed local
-  mutation API
+- the writing client reconciles its acknowledged write through the built-in
+  flush path, while peer clients catch up by calling `sync.sync()` after their
+  current cursor
+- those peer pulls apply retained authoritative tx batches in order, without
+  changing the typed local mutation API or forcing a fresh total snapshot per
+  write
 - if the authority resets retained history, the proof runtime exposes that by
   returning an explicit incremental fallback and leaves total recovery as an
   intentional caller step

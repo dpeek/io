@@ -15,6 +15,8 @@ import {
   type AuthoritativeGraphWriteHistory,
   type AuthoritativeGraphWriteResult,
   type GraphWriteTransaction,
+  type IncrementalSyncResult,
+  type SyncFreshness,
   type TotalSyncPayload,
 } from "./graph/sync.js";
 import { createStore, type StoreSnapshot } from "./graph/store.js";
@@ -26,6 +28,12 @@ export type AppAuthority = {
   createSyncPayload(): TotalSyncPayload;
   applyTransaction(transaction: GraphWriteTransaction): Promise<AuthoritativeGraphWriteResult>;
   getChangesAfter(cursor?: string): AuthoritativeGraphChangesAfterResult;
+  getIncrementalSyncResult(
+    after?: string,
+    options?: {
+      freshness?: SyncFreshness;
+    },
+  ): IncrementalSyncResult;
   persist(): Promise<void>;
 };
 
@@ -237,6 +245,9 @@ export async function createAppAuthority(
     },
     getChangesAfter(cursor) {
       return writes.getChangesAfter(cursor);
+    },
+    getIncrementalSyncResult(after, options) {
+      return writes.getIncrementalSyncResult(after, options);
     },
     persist,
   };
