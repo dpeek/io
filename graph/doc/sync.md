@@ -278,3 +278,96 @@ That path:
 This is the point where "graph stream" becomes literal: normal sync traffic is
 an ordered transaction stream, while total snapshots become a fallback for
 bootstrap, reset, or resubscribe flows.
+
+## Execution Plan
+
+The next execution slice should stay narrowly focused on whole-graph
+transaction-stream delivery. Use the following order.
+
+### 1. Persist authoritative transaction history and cursor progression
+
+Goal:
+keep enough durable authority state to answer "what changed after cursor X?"
+without replacing the existing total-snapshot bootstrap flow.
+
+Proof surfaces:
+
+- `graph/src/graph/sync.ts`
+- `app/src/authority.ts`
+- `app/src/authority.test.ts`
+
+Out of scope:
+
+- multi-backend persistence adapters
+- query-scoped replication storage
+
+### 2. Define one incremental pull envelope beside total snapshots
+
+Goal:
+ship one stable response shape for ordered authoritative tx delivery after a
+cursor, including the cases that require clients to fall back to total sync.
+
+Proof surfaces:
+
+- `graph/src/graph/sync.ts`
+- `graph/doc/sync.md`
+- `app/src/graph/sync.test.ts`
+
+Out of scope:
+
+- live transport wiring
+- partial or query-scoped completeness semantics
+
+### 3. Apply pulled tx batches through the shared sync session
+
+Goal:
+teach the session and synced-client surfaces to consume ordered tx batches,
+preserve predicate-slot notification behavior, and reset cleanly to total sync
+when a cursor gap or invalid batch is detected.
+
+Proof surfaces:
+
+- `graph/src/graph/sync.ts`
+- `graph/src/graph/store.ts`
+- `app/src/graph/sync.test.ts`
+
+Out of scope:
+
+- conflict resolution beyond snapshot reset
+- new typed-read APIs
+
+### 4. Prove multi-client incremental delivery in the app runtime
+
+Goal:
+extend the existing authority/runtime proof so one client can push, other
+clients can pull or subscribe to the resulting tx stream, and the system can
+still recover by snapshot when needed.
+
+Proof surfaces:
+
+- `app/src/authority.ts`
+- `app/src/graph/runtime.ts`
+- `app/src/graph/sync.test.ts`
+
+Out of scope:
+
+- generalized production transport infrastructure
+- polished UI beyond the proof surfaces already in `app`
+
+### 5. Surface tx-stream state in explorer and docs
+
+Goal:
+make the new delivery path inspectable enough that future query, partial-sync,
+and devtool work has one concrete operator-visible baseline.
+
+Proof surfaces:
+
+- `graph/doc/sync.md`
+- `graph/doc/big-picture.md`
+- `app/src/web/explorer.tsx`
+
+Out of scope:
+
+- time travel
+- policy simulation
+- full devtools packaging

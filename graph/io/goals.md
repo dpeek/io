@@ -2,33 +2,36 @@
 
 ## Objective
 
-- Turn the graph stack into the default application model for IO, not just a schema and UI experiment.
-- Keep schema, validation, query, sync, and explorer semantics coherent enough that new work naturally uses the graph surface.
+- Make graph sync transaction-stream-first in steady state while keeping total snapshots as the bootstrap and recovery path.
+- Keep typed reads, validation, and explorer/devtool semantics coherent as authoritative state moves from snapshot replacement to cursored transaction delivery.
 
-## This Week
+## Current Focus
 
-- Finish the migration to the new type-module and field-authoring APIs so remaining compatibility seams shrink instead of growing.
-- Harden the validation lifecycle with richer built-in scalar and field helpers while preserving one shared result surface across local and sync flows.
-- Keep the typed client and sync story simple:
-  typed queries, predictable completeness, and a total-sync baseline that can later grow into partial replication.
-- Expand explorer/devtool coverage so schema, data, query, and validation state remain inspectable.
+- Persist authoritative transaction history and cursor progression beside the current snapshot-backed authority proof.
+- Teach sync sessions and synced clients to pull and apply ordered transaction batches after a cursor without widening predicate-local invalidation.
+- Expose enough runtime and explorer visibility to inspect pending writes, applied transactions, and snapshot fallback behavior.
 
 ## Constraints
 
 - Reusable value semantics belong with scalar and enum definitions; predicate-specific rules belong with fields; runtime invariants stay centralized in validation/apply boundaries.
-- The user-facing API should get simpler over time, not more generic for its own sake.
-- Sync design should start from a coherent total-sync contract instead of overfitting to incremental cases too early.
+- Keep total snapshots as the bootstrap and reset path; do not introduce query-scoped partial sync in this slice.
+- Preserve the existing typed client, predicate-ref, and validation contracts while delivery mechanics change under them.
 
 ## Proof Surfaces
 
-- `../src/graph/schema.ts`
-- `../src/graph/client.ts`
 - `../src/graph/store.ts`
 - `../src/graph/sync.ts`
-- `../src/graph/bootstrap.ts`
-- `../src/graph/core.ts`
-- `../src/graph/type-module.ts`
-- `../src/type`
+- `../src/graph/client.ts`
+- `../../app/src/authority.ts`
+- `../../app/src/graph/runtime.ts`
+- `../../app/src/graph/sync.test.ts`
+- `../../app/src/web/explorer.tsx`
+
+## Deferred
+
+- Query-scoped partial sync and per-query completeness surfaces.
+- Persistence backend work beyond the current app authority proof.
+- ACL, secrets, and server-action policy work.
 
 ## Related Docs
 
