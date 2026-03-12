@@ -758,8 +758,28 @@ test("pickCandidateIssues gates child issues on the parent stream state", () => 
       createIssue({
         id: "4",
         identifier: "OS-4",
+        parentIssueId: "11",
+        parentIssueIdentifier: "OS-11",
+        parentIssueState: "Todo",
+        hasParent: true,
         priority: 1,
         updatedAt: "2024-01-03T00:00:00.000Z",
+      }),
+      createIssue({
+        id: "5",
+        identifier: "OS-5",
+        parentIssueId: "12",
+        parentIssueIdentifier: "OS-12",
+        parentIssueState: "Done",
+        hasParent: true,
+        priority: 0,
+        updatedAt: "2024-01-04T00:00:00.000Z",
+      }),
+      createIssue({
+        id: "6",
+        identifier: "OS-4",
+        priority: 1,
+        updatedAt: "2024-01-05T00:00:00.000Z",
       }),
     ],
     3,
@@ -1463,6 +1483,32 @@ test("resolveIssueRouting routes io-managed parent issues to backlog from module
       },
       createIssue({
         hasChildren: true,
+        labels: ["io", "agent"],
+        state: "In Review",
+      }),
+      {
+        agent: {
+          allowedSharedPaths: [],
+          docs: [],
+          id: "agent",
+          path: "/tmp/agent",
+        },
+      },
+    ),
+  ).toEqual({
+    agent: "backlog",
+    profile: "backlog",
+  });
+
+  expect(
+    resolveIssueRouting(
+      {
+        defaultAgent: "execute",
+        defaultProfile: "execute",
+        routing: [],
+      },
+      createIssue({
+        hasChildren: true,
         labels: ["io", "graph"],
       }),
       {
@@ -2003,10 +2049,15 @@ test("AgentService proves the current approach stream flow end to end", async ()
     await service.runOnce(undefined, true);
     expect(runs).toEqual(["OPE-147"]);
     expect(transitions).toEqual([`${parentIssueId}:In Progress`, `${parentIssueId}:In Review`]);
+    expect(streamState.parentState).toBe("In Review");
+    expect(streamState.childState).toBe("Todo");
+    expect(streamState.childSeeded).toBe(true);
 
     await service.runOnce(undefined, true);
     expect(runs).toEqual(["OPE-147"]);
     expect(transitions).toEqual([`${parentIssueId}:In Progress`, `${parentIssueId}:In Review`]);
+    expect(streamState.parentState).toBe("In Review");
+    expect(streamState.childState).toBe("Todo");
 
     streamState.parentState = "In Progress";
 
@@ -2018,6 +2069,8 @@ test("AgentService proves the current approach stream flow end to end", async ()
       `${childIssueId}:In Progress`,
       `${childIssueId}:Done`,
     ]);
+    expect(streamState.parentState).toBe("In Progress");
+    expect(streamState.childState).toBe("Done");
   } finally {
     await rm(root, { force: true, recursive: true });
   }

@@ -35,6 +35,9 @@ canonical evolving brief.
   `Todo`
 - successful parent backlog runs move the parent to `In Review`; successful
   child runs move the child to `Done`
+- workspace runtime state is split into flat child worktrees under `tree/`,
+  per-issue runtime state under `issue/`, and per-parent stream state under
+  `stream/`
 
 ## Current Approach Linear Contract
 
@@ -74,7 +77,8 @@ canonical evolving brief.
 - explicit backlog/context routing stays available on managed parents:
   `agent/src/issue-routing.ts`, `agent/src/workflow.test.ts`
 - parent and child transitions stay separate:
-  `agent/src/service.ts`, `agent/src/service.test.ts`
+  `agent/src/service.ts`, `agent/src/service.test.ts`,
+  `agent/src/workspace.ts`, `agent/src/workspace.test.ts`
 - current repo docs summarize the contract tersely:
   `io/goals.md`, `agent/io/managed-stream-backlog.md`,
   `agent/io/module-stream-workflow-plan.md`

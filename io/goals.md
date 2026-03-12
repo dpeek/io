@@ -36,11 +36,14 @@
 - `../io.ts`
 - `./overview.md`
 - `../agent/io/module-stream-workflow-plan.md`
+- `../agent/doc/stream-workflow.md`
 - `../agent/src/types.ts`
 - `../agent/src/issue-routing.ts`
 - `../agent/src/service.ts`
 - `../agent/src/tracker/linear.ts`
 - `../agent/src/service.test.ts`
+- `../agent/src/workspace.ts`
+- `../agent/src/workspace.test.ts`
 
 ## Deferred
 

@@ -51,6 +51,44 @@ Rules:
 - cross-module work requires an explicit exception in the child description;
   touching shared code does not change primary module identity
 
+## Current Approach Parent Phase Contract
+
+For the current 2-level bootstrap, the parent issue state is the only automatic
+phase gate between backlog work and child execution.
+
+Parent phases:
+
+- `Todo`: backlog-authoring phase; automatic backlog polling may select the
+  managed parent only in this state
+- `In Review`: human review and edit hold state after backlog work; keep the
+  parent parked here until a human is ready to release execution
+- `In Progress`: execution-released state; unblocked child issues may now run
+- `Done`: stream-complete state; no new backlog or child execution should be
+  scheduled automatically
+
+Rules:
+
+- managed parents keep backlog routing in every phase so explicit backlog reruns
+  and `@io backlog` commands still land on the backlog agent
+- automatic backlog scheduling stops once the parent leaves `Todo`
+- child readiness is determined by the parent phase plus child-local
+  `blockedBy` ordering and the one-active-child-per-stream rule
+- the current approach keeps planning, review, and approval on the parent;
+  children remain implementation-only
+
+## Current Approach Transition Contract
+
+Parent backlog work and child execution keep separate Linear transitions even
+while they share one stream branch.
+
+Rules:
+
+- a successful parent backlog run moves the parent to `In Review`
+- moving the parent to `In Progress` is a human-controlled release step; it
+  does not imply any child state transition
+- a successful child execution run moves only that child to `Done`
+- child completion does not move the parent out of its current phase
+
 ## Repo-Wide Focus Document Shape
 
 Managed streams may maintain one repo-wide focus doc at `./io/goals.md`. The
