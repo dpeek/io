@@ -382,16 +382,15 @@ function logicalFactKey(edge: StoreSnapshot["edges"][number]): string {
   return `${edge.s}\0${edge.p}\0${edge.o}`
 }
 
-function createGraphWriteTransactionFromSnapshots(
+export function createGraphWriteOperationsFromSnapshots(
   before: StoreSnapshot,
   after: StoreSnapshot,
-  txId: string,
-): GraphWriteTransaction {
+): readonly GraphWriteOperation[] {
   const beforeEdgeIds = new Set(before.edges.map((edge) => edge.id))
   const beforeRetractedIds = new Set(before.retracted)
 
   return canonicalizeGraphWriteTransaction({
-    id: txId,
+    id: "$sync:derived",
     ops: [
       ...after.retracted
         .filter((edgeId) => !beforeRetractedIds.has(edgeId))
@@ -410,6 +409,17 @@ function createGraphWriteTransactionFromSnapshots(
           }),
         ),
     ],
+  }).ops
+}
+
+export function createGraphWriteTransactionFromSnapshots(
+  before: StoreSnapshot,
+  after: StoreSnapshot,
+  txId: string,
+): GraphWriteTransaction {
+  return canonicalizeGraphWriteTransaction({
+    id: txId,
+    ops: createGraphWriteOperationsFromSnapshots(before, after),
   })
 }
 
@@ -475,6 +485,14 @@ function validateGraphWriteTransactionShape(
         ["id"],
         "sync.tx.id",
         'Field "id" must be a string.',
+      ),
+    )
+  } else if (candidate.id.length === 0) {
+    issues.push(
+      createTransactionValidationIssue(
+        ["id"],
+        "sync.tx.id.empty",
+        'Field "id" must not be empty.',
       ),
     )
   }
@@ -715,6 +733,14 @@ function prepareAuthoritativeGraphWriteResult(
         'Field "txId" must be a string.',
       ),
     )
+  } else if (candidate.txId.length === 0) {
+    issues.push(
+      createGraphWriteResultValidationIssue(
+        ["txId"],
+        "sync.txResult.txId.empty",
+        'Field "txId" must not be empty.',
+      ),
+    )
   }
 
   if (typeof candidate.cursor !== "string") {
@@ -723,6 +749,14 @@ function prepareAuthoritativeGraphWriteResult(
         ["cursor"],
         "sync.txResult.cursor",
         'Field "cursor" must be a string.',
+      ),
+    )
+  } else if (candidate.cursor.length === 0) {
+    issues.push(
+      createGraphWriteResultValidationIssue(
+        ["cursor"],
+        "sync.txResult.cursor.empty",
+        'Field "cursor" must not be empty.',
       ),
     )
   }

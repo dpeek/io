@@ -86,7 +86,7 @@ Design goal: standardize the smallest set of durable primitives and keep higher-
 ### 4) Mutation primitive (`Patch` / `Op`)
 
 - **Responsibilities**: express changes as deterministic, replayable operations (`assert`, `retract`, `set-one`, `add-many`, etc.).
-- **Constraints**: every accepted mutation must produce a canonical operation list; operation ordering deterministic inside transaction.
+- **Constraints**: every accepted mutation must produce a canonical operation list; operation ordering deterministic inside transaction, and tx identities must be non-empty idempotency keys.
 - **Composes with**: optimistic UI, conflict detection, event log, undo/redo, server actions.
 - **Stable now**: canonical op envelope + transaction boundary.
 - **Can evolve**: derived operations (upsert helpers), compression, batched transport forms.
@@ -96,7 +96,7 @@ Design goal: standardize the smallest set of durable primitives and keep higher-
 - **Responsibilities**: support incremental sync, subscriptions, and optimistic concurrency checks.
 - **Constraints**: monotonic per-graph or per-partition ordering; idempotent replay.
 - **Composes with**: sync protocol, live queries, observability.
-- **Stable now**: cursor monotonicity and replay semantics.
+- **Stable now**: cursor monotonicity, non-empty tx/cursor identities, replay semantics, and snapshot-diff helpers that derive canonical tx ops from local typed mutations.
 - **Can evolve**: sharded clocks/vector metadata for multi-writer scaling.
 
 ### 6) Query primitive (`QuerySpec`)

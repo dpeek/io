@@ -90,6 +90,11 @@ path:
 - `ops` currently use canonical low-level graph mutations:
   - `{ op: "retract", edgeId }`
   - `{ op: "assert", edge: { id, s, p, o } }`
+- `createGraphWriteOperationsFromSnapshots(before, after)` derives the
+  canonical op sequence from an already-committed local mutation without
+  changing transport
+- `createGraphWriteTransactionFromSnapshots(before, after, txId)` wraps that
+  diff in the stable transaction envelope used by the sync layer
 - `canonicalizeGraphWriteTransaction(...)` normalizes a transaction into one
   deterministic op order:
   - retract ops first, sorted by `edgeId`
@@ -100,9 +105,12 @@ path:
   on a cloned store, and only then replaces the real store snapshot atomically
 - successful writes return `{ txId, cursor, replayed, transaction }`
 - transaction ids are idempotency keys for this authority session:
+  - `transaction.id` and `result.txId` must be non-empty strings
   - exact replays return the original cursor with `replayed: true`
   - reusing an accepted id for a different canonical transaction fails with a
     structured runtime validation issue
+- authoritative cursors are also required to be non-empty strings and remain
+  monotonic within the authority session
 - direct non-throwing checks can use
   `validateAuthoritativeGraphWriteTransaction(tx, store, namespace)`
 

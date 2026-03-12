@@ -15,10 +15,13 @@ import {
   type GraphWriteTransaction,
   createAuthoritativeGraphWriteSession,
   createAuthoritativeTotalSyncValidator,
+  createGraphWriteOperationsFromSnapshots,
+  createGraphWriteTransactionFromSnapshots,
   createSyncedTypeClient,
   createTotalSyncController,
   createTotalSyncPayload,
   createTotalSyncSession,
+  validateAuthoritativeGraphWriteResult,
   validateAuthoritativeGraphWriteTransaction,
   validateAuthoritativeTotalSyncPayload,
 } from "./sync";
@@ -1922,6 +1925,144 @@ describe("total sync", () => {
 });
 
 describe("authoritative graph writes", () => {
+  it("derives canonical write ops and transactions from before and after snapshots", () => {
+    const before = {
+      edges: [
+        {
+          id: "edge:existing",
+          s: "node:existing",
+          p: "predicate:existing",
+          o: "value:existing",
+        },
+      ],
+      retracted: ["edge:2"],
+    };
+    const after = {
+      edges: [
+        {
+          id: "edge:z",
+          s: "node:z",
+          p: "predicate:z",
+          o: "value:z",
+        },
+        {
+          id: "edge:existing",
+          s: "node:existing",
+          p: "predicate:existing",
+          o: "value:existing",
+        },
+        {
+          id: "edge:a",
+          s: "node:a",
+          p: "predicate:a",
+          o: "value:a",
+        },
+      ],
+      retracted: ["edge:3", "edge:1", "edge:2"],
+    };
+
+    const ops = createGraphWriteOperationsFromSnapshots(before, after);
+    const transaction = createGraphWriteTransactionFromSnapshots(before, after, "tx:derived");
+
+    expect(ops).toEqual([
+      {
+        op: "retract",
+        edgeId: "edge:1",
+      },
+      {
+        op: "retract",
+        edgeId: "edge:3",
+      },
+      {
+        op: "assert",
+        edge: {
+          id: "edge:a",
+          s: "node:a",
+          p: "predicate:a",
+          o: "value:a",
+        },
+      },
+      {
+        op: "assert",
+        edge: {
+          id: "edge:z",
+          s: "node:z",
+          p: "predicate:z",
+          o: "value:z",
+        },
+      },
+    ]);
+    expect(transaction).toEqual({
+      id: "tx:derived",
+      ops,
+    });
+  });
+
+  it("rejects empty transaction identities and cursors", () => {
+    const server = createServerGraph();
+    const companyId = server.graph.company.create({
+      name: "Acme Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://acme.com"),
+    });
+    const transaction = createCompanyNameWriteTransaction(server.store, companyId, "Acme Graph Labs", "");
+
+    const txValidation = validateAuthoritativeGraphWriteTransaction(transaction, server.store, app);
+
+    expect(txValidation).toMatchObject({
+      ok: false,
+      phase: "authoritative",
+      event: "reconcile",
+    });
+    if (txValidation.ok) throw new Error("Expected empty transaction ids to fail validation");
+    expect(txValidation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "runtime",
+          code: "sync.tx.id.empty",
+          predicateKey: "$sync:tx",
+        }),
+      ]),
+    );
+
+    const resultValidation = validateAuthoritativeGraphWriteResult(
+      {
+        txId: "",
+        cursor: "",
+        replayed: false,
+        transaction,
+      },
+      server.store,
+      app,
+    );
+
+    expect(resultValidation).toMatchObject({
+      ok: false,
+      phase: "authoritative",
+      event: "reconcile",
+    });
+    if (resultValidation.ok) throw new Error("Expected empty write-result identities to fail validation");
+    expect(resultValidation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "runtime",
+          code: "sync.txResult.txId.empty",
+          predicateKey: "$sync:txResult",
+        }),
+        expect.objectContaining({
+          source: "runtime",
+          code: "sync.txResult.cursor.empty",
+          predicateKey: "$sync:txResult",
+        }),
+        expect.objectContaining({
+          source: "runtime",
+          code: "sync.tx.id.empty",
+          predicateKey: "$sync:txResult",
+        }),
+      ]),
+    );
+  });
+
   it("applies valid write transactions atomically and advances the authority cursor", () => {
     const server = createServerGraph();
     const companyId = server.graph.company.create({
