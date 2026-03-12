@@ -2,8 +2,9 @@
 
 ## Goal
 
-Ship one real sync entry point now, but keep the contract compatible with
-partial or incremental sync later.
+Ship one real sync entry point now, with total bootstrap/recovery plus
+incremental authoritative transaction batches, while keeping the contract
+compatible with partial sync later.
 
 ## Current Contract
 
@@ -25,7 +26,7 @@ The first landed client-facing contract is a total graph snapshot:
 The high-level entry point is `createSyncedTypeClient(...)`.
 
 It creates a local store plus the existing typed client, then exposes a
-pre-bound `sync.sync()` method for the configured total-sync source.
+pre-bound `sync.sync()` method for the configured sync source.
 That fresh local store is bootstrapped with the local schema first, so typed
 reads and optimistic local edits can use the same validation boundary before
 the first authoritative sync arrives.
@@ -53,6 +54,15 @@ successful total replace clears any locally pending write queue. Steady-state
 local edits now use queued `GraphWriteTransaction`s plus `sync.flush()`, while
 total sync remains the bootstrap and recovery boundary.
 
+The shared sync transport surface is now:
+
+- `SyncPayload = TotalSyncPayload | IncrementalSyncResult`
+- `pull(source)` passes the current sync state into `source(state)`, so callers
+  can request authoritative transaction batches after the current cursor
+- successful incremental apply keeps the pending local write queue intact, then
+  replays those local optimistic transactions on top of the updated
+  authoritative state
+
 That authoritative pass now also rejects data-bearing nodes that have lost all
 current `core:node:type` edges, so sync cannot silently install untyped ghost
 entities into the local store.
@@ -79,6 +89,12 @@ The shared apply boundary now lives in the total-sync session itself.
 - Successful `apply(...)` and `pull(...)` calls return the materialized payload
   that was actually validated and installed, including any preserved schema
   baseline layered in at the apply boundary.
+- The same shared boundary now also accepts validated incremental pull results:
+  ordered authoritative write results are checked against the current cursor,
+  validated on a cloned store in order, and only then installed atomically.
+- Incremental pull fallbacks, cursor mismatches, and invalid batches leave the
+  previous local state intact and route callers back to total snapshot
+  recovery.
 - `preserveSnapshot` should usually be the store snapshot captured immediately
   after local schema bootstrap. That keeps compiled schema facts durable across
   authoritative replace without merging pending local data writes.
@@ -180,6 +196,9 @@ multiple synced clients:
   accepted
 - peer clients observe the accepted write through `applyWriteResult(...)`
   instead of calling `sync.sync()` for every mutation
+- `sync.sync()` can now also request and apply retained authoritative tx
+  batches after the client’s current cursor, without changing the typed local
+  mutation API
 
 ## Failure Handling Today
 
@@ -194,13 +213,17 @@ Failure handling is still intentionally conservative.
 - A synced client that needs to discard pending optimistic state or recover
   from divergence can still fall back to total sync via `sync.sync()` or
   `sync.apply(payload)`, which replaces the local view authoritatively.
+- Incremental pull gaps, explicit fallback results, cursor mismatches, and
+  invalid write batches mark sync state stale/error on `pull(...)`, leave the
+  last ready cursor and local graph intact, and require the caller to recover
+  with a later total snapshot.
 - Authority persistence should treat a durable snapshot plus durable write
   history as one consistency boundary. If retained history is unavailable or
   malformed after restart, the authority keeps the snapshot and resets history,
   so callers must recover from that new snapshot cursor instead of replay.
-- There is now a stable cursor-based incremental pull envelope, but there is
-  not yet session/client apply logic for pulled tx batches, a rollback
-  protocol, or a query-scoped repair path.
+- There is now a stable cursor-based incremental pull envelope plus shared
+  session/client apply logic for pulled tx batches, but there is still not a
+  rollback protocol or a query-scoped repair path.
 
 So the durable v1 rule is:
 
@@ -211,10 +234,12 @@ So the durable v1 rule is:
 
 For lower-level integration, `createTotalSyncSession(store)` still exposes:
 
-- `apply(payload)` to install a total snapshot into the local store
+- `apply(payload)` to install either a total snapshot or a validated
+  authoritative incremental batch into the local store
 - `applyWriteResult(result)` to reconcile an authoritative write result into the
   existing local store without replacing the whole snapshot
-- `pull(source)` to fetch a payload and apply it with sync-state transitions
+- `pull(source)` to fetch `source(currentState)` and apply the returned payload
+  with sync-state transitions
 - `getState()` to read current sync metadata
 - `subscribe(listener)` to observe sync-state changes
 
@@ -232,7 +257,9 @@ scope, that means:
 Predicate-slot subscriptions stay local and keep the same contract they already
 used for UI bindings. A total resync replaces the store snapshot, then only
 re-notifies subscribed `(subject, predicate)` slots whose logical value changed.
-That keeps sync delivery aligned with the current local subscription model.
+Incremental batch apply follows that same logical-slot contract, so unrelated
+predicate slots do not notify or rerender when pulled authoritative batches
+change local state elsewhere.
 
 ## Compatibility Path
 

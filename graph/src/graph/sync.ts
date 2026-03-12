@@ -53,6 +53,7 @@ export type IncrementalSyncFallback = {
 }
 
 export type IncrementalSyncResult = IncrementalSyncPayload | IncrementalSyncFallback
+export type SyncPayload = TotalSyncPayload | IncrementalSyncResult
 
 export type GraphWriteAssertOperation = {
   readonly op: "assert"
@@ -1484,6 +1485,190 @@ export function validateIncrementalSyncResult(
   })
 }
 
+function validateIncrementalSyncCursorSequence(
+  result: IncrementalSyncPayload,
+): readonly GraphValidationIssue[] {
+  const issues: GraphValidationIssue[] = []
+  const after = parseAuthoritativeGraphCursor(result.after)
+
+  if (!after) {
+    issues.push(
+      createIncrementalSyncValidationIssue(
+        ["after"],
+        "sync.incremental.after.cursor",
+        'Field "after" must be a cursor with a trailing numeric sequence before incremental apply.',
+      ),
+    )
+    return issues
+  }
+
+  let previous = after
+  for (const [index, transaction] of result.transactions.entries()) {
+    const current = parseAuthoritativeGraphCursor(transaction.cursor)
+    if (!current) {
+      issues.push(
+        createIncrementalSyncValidationIssue(
+          [`transactions[${index}]`, "cursor"],
+          "sync.incremental.transaction.cursor.sequence",
+          `Field "transactions[${index}].cursor" must be a cursor with a trailing numeric sequence.`,
+        ),
+      )
+      continue
+    }
+
+    if (current.prefix !== previous.prefix || current.sequence !== previous.sequence + 1) {
+      issues.push(
+        createIncrementalSyncValidationIssue(
+          [`transactions[${index}]`, "cursor"],
+          "sync.incremental.transaction.cursor.sequence",
+          `Field "transactions[${index}].cursor" must advance contiguously from the previous cursor.`,
+        ),
+      )
+      continue
+    }
+
+    previous = current
+  }
+
+  if (result.transactions.length === 0) {
+    const cursor = parseAuthoritativeGraphCursor(result.cursor)
+    if (!cursor) {
+      issues.push(
+        createIncrementalSyncValidationIssue(
+          ["cursor"],
+          "sync.incremental.cursor.sequence",
+          'Field "cursor" must be a cursor with a trailing numeric sequence.',
+        ),
+      )
+    } else if (cursor.prefix !== after.prefix || cursor.sequence !== after.sequence) {
+      issues.push(
+        createIncrementalSyncValidationIssue(
+          ["cursor"],
+          "sync.incremental.cursor.sequence",
+          'Field "cursor" must match "after" when no transactions are delivered.',
+        ),
+      )
+    }
+  }
+
+  return issues
+}
+
+function prepareIncrementalSyncResultForApply(
+  store: Store,
+  result: IncrementalSyncResult,
+  currentCursor: string | undefined,
+  options: {
+    validateWriteResult?: AuthoritativeGraphWriteResultValidator
+  } = {},
+):
+  | {
+      ok: true
+      value: IncrementalSyncPayload
+      snapshot?: StoreSnapshot
+    }
+  | {
+      ok: false
+      result:
+        | Extract<GraphValidationResult<IncrementalSyncResult>, { ok: false }>
+        | Extract<GraphValidationResult<AuthoritativeGraphWriteResult>, { ok: false }>
+    } {
+  const validation = validateIncrementalSyncResult(result)
+  if (!validation.ok) {
+    return {
+      ok: false,
+      result: validation,
+    }
+  }
+
+  const materialized = validation.value
+  if ("fallback" in materialized) {
+    return {
+      ok: false,
+      result: invalidIncrementalSyncResult(materialized, [
+        createIncrementalSyncValidationIssue(
+          ["fallback"],
+          "sync.incremental.recovery",
+          `Incremental sync requires total snapshot recovery because the authority reported "${materialized.fallback}".`,
+        ),
+      ]),
+    }
+  }
+
+  if (typeof currentCursor !== "string" || currentCursor.length === 0 || materialized.after !== currentCursor) {
+    return {
+      ok: false,
+      result: invalidIncrementalSyncResult(materialized, [
+        createIncrementalSyncValidationIssue(
+          ["after"],
+          "sync.incremental.after.current",
+          'Field "after" must match the current sync cursor before incremental apply.',
+        ),
+      ]),
+    }
+  }
+
+  const cursorIssues = validateIncrementalSyncCursorSequence(materialized)
+  if (cursorIssues.length > 0) {
+    return {
+      ok: false,
+      result: invalidIncrementalSyncResult(materialized, cursorIssues),
+    }
+  }
+
+  if (materialized.transactions.length === 0) {
+    return {
+      ok: true,
+      value: materialized,
+    }
+  }
+
+  const validationStore = createStore()
+  validationStore.replace(store.snapshot())
+
+  for (const transaction of materialized.transactions) {
+    const candidateSnapshot = materializeGraphWriteTransactionSnapshot(
+      validationStore,
+      transaction.transaction,
+      {
+        allowExistingAssertEdgeIds: true,
+      },
+    )
+    if (!candidateSnapshot.ok) {
+      return {
+        ok: false,
+        result: invalidGraphWriteResult(
+          transaction,
+          prefixGraphWriteResultIssues(candidateSnapshot.result.issues),
+        ),
+      }
+    }
+
+    try {
+      options.validateWriteResult?.(transaction, validationStore)
+    } catch (error) {
+      if (error instanceof GraphValidationError) {
+        return {
+          ok: false,
+          result: error.result as Extract<
+            GraphValidationResult<AuthoritativeGraphWriteResult>,
+            { ok: false }
+          >,
+        }
+      }
+      throw error
+    }
+
+    validationStore.replace(candidateSnapshot.value)
+  }
+
+  return {
+    ok: true,
+    value: materialized,
+    snapshot: validationStore.snapshot(),
+  }
+}
+
 export type SyncState = {
   readonly mode: "total"
   readonly scope: SyncScope
@@ -1497,16 +1682,18 @@ export type SyncState = {
 }
 
 export type SyncStateListener = (state: SyncState) => void
-export type TotalSyncSource = () => TotalSyncPayload | Promise<TotalSyncPayload>
+export type SyncSource = (state: SyncState) => SyncPayload | Promise<SyncPayload>
+export type TotalSyncSource = SyncSource
 export type TotalSyncPayloadValidator = (payload: TotalSyncPayload) => void
 export type AuthoritativeGraphWriteResultValidator = (
   result: AuthoritativeGraphWriteResult,
+  store?: Store,
 ) => void
 
 export interface TotalSyncController {
-  apply(payload: TotalSyncPayload): TotalSyncPayload
+  apply(payload: SyncPayload): SyncPayload
   applyWriteResult(result: AuthoritativeGraphWriteResult): AuthoritativeGraphWriteResult
-  sync(): Promise<TotalSyncPayload>
+  sync(): Promise<SyncPayload>
   getState(): SyncState
   subscribe(listener: SyncStateListener): () => void
 }
@@ -1523,9 +1710,9 @@ export type SyncedTypeClient<T extends Record<string, AnyTypeOutput>> = {
 }
 
 export interface TotalSyncSession {
-  apply(payload: TotalSyncPayload): TotalSyncPayload
+  apply(payload: SyncPayload): SyncPayload
   applyWriteResult(result: AuthoritativeGraphWriteResult): AuthoritativeGraphWriteResult
-  pull(source: TotalSyncSource): Promise<TotalSyncPayload>
+  pull(source: SyncSource): Promise<SyncPayload>
   getState(): SyncState
   subscribe(listener: SyncStateListener): () => void
 }
@@ -1630,8 +1817,8 @@ export function createAuthoritativeGraphWriteResultValidator<
   store: Store,
   namespace: T,
 ): AuthoritativeGraphWriteResultValidator {
-  return (result) => {
-    const validation = validateAuthoritativeGraphWriteResult(result, store, namespace)
+  return (result, validationStore = store) => {
+    const validation = validateAuthoritativeGraphWriteResult(result, validationStore, namespace)
     if (!validation.ok) throw new GraphValidationError(validation)
   }
 }
@@ -1977,7 +2164,7 @@ export function createTotalSyncSession(
     for (const listener of new Set(listeners)) listener(snapshot)
   }
 
-  function apply(payload: TotalSyncPayload): TotalSyncPayload {
+  function applyTotalPayload(payload: TotalSyncPayload): TotalSyncPayload {
     const prepared = prepareTotalSyncPayload(payload, options)
     if (!prepared.ok) throw new GraphValidationError(prepared.result)
 
@@ -1995,6 +2182,39 @@ export function createTotalSyncSession(
       lastSyncedAt: new Date(),
     })
     return materialized
+  }
+
+  function applyIncrementalResult(result: IncrementalSyncResult): IncrementalSyncResult {
+    const prepared = prepareIncrementalSyncResultForApply(store, result, state.cursor, {
+      validateWriteResult: options.validateWriteResult,
+    })
+    if (!prepared.ok) {
+      throw new GraphValidationError<IncrementalSyncResult | AuthoritativeGraphWriteResult>(
+        prepared.result as Extract<
+          GraphValidationResult<IncrementalSyncResult | AuthoritativeGraphWriteResult>,
+          { ok: false }
+        >,
+      )
+    }
+
+    if (prepared.snapshot) {
+      store.replace(prepared.snapshot)
+    }
+
+    publish({
+      ...state,
+      status: "ready",
+      completeness: prepared.value.completeness,
+      freshness: prepared.value.freshness,
+      cursor: prepared.value.cursor,
+      lastSyncedAt: new Date(),
+      error: undefined,
+    })
+    return prepared.value
+  }
+
+  function apply(payload: SyncPayload): SyncPayload {
+    return payload.mode === "incremental" ? applyIncrementalResult(payload) : applyTotalPayload(payload)
   }
 
   function applyWriteResult(result: AuthoritativeGraphWriteResult): AuthoritativeGraphWriteResult {
@@ -2023,7 +2243,8 @@ export function createTotalSyncSession(
     return cloneAuthoritativeGraphWriteResult(materialized)
   }
 
-  async function pull(source: TotalSyncSource): Promise<TotalSyncPayload> {
+  async function pull(source: SyncSource): Promise<SyncPayload> {
+    const sourceState = cloneState(state)
     publish({
       ...state,
       status: "syncing",
@@ -2031,7 +2252,7 @@ export function createTotalSyncSession(
     })
 
     try {
-      return apply(await source())
+      return apply(await source(sourceState))
     } catch (error) {
       publish({
         ...state,
@@ -2084,7 +2305,7 @@ export function createTotalSyncPayload(
 export function createTotalSyncController(
   store: Store,
   options: {
-    pull: TotalSyncSource
+    pull: SyncSource
     validate?: TotalSyncPayloadValidator
     validateWriteResult?: AuthoritativeGraphWriteResultValidator
     preserveSnapshot?: StoreSnapshot
@@ -2110,7 +2331,7 @@ export function createTotalSyncController(
 export function createSyncedTypeClient<const T extends Record<string, AnyTypeOutput>>(
   namespace: T,
   options: {
-    pull: TotalSyncSource
+    pull: SyncSource
     push?: GraphWriteSink
     createTxId?: () => string
   },
@@ -2375,7 +2596,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
         clearOverrides()
         try {
           const applied = session.apply(payload)
-          pendingTransactions = []
+          if (applied.mode === "total") pendingTransactions = []
           replaceLocalFromAuthority()
           publishState()
           return applied
@@ -2441,7 +2662,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
         clearOverrides()
         try {
           const applied = await session.pull(options.pull)
-          pendingTransactions = []
+          if (applied.mode === "total") pendingTransactions = []
           replaceLocalFromAuthority()
           publishState()
           return applied

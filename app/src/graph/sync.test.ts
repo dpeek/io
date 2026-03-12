@@ -14,6 +14,7 @@ import {
   GraphSyncWriteError,
   type GraphWriteTransaction,
   createAuthoritativeGraphWriteSession,
+  createAuthoritativeGraphWriteResultValidator,
   createAuthoritativeTotalSyncValidator,
   createGraphWriteOperationsFromSnapshots,
   createGraphWriteTransactionFromSnapshots,
@@ -544,6 +545,8 @@ describe("total sync", () => {
 
     const payload = await client.sync.sync();
 
+    expect(payload.mode).toBe("total");
+    if (payload.mode !== "total") throw new Error("Expected total sync bootstrap payload.");
     expect(payload.cursor).toBe("server:data-only:1");
     expect(dataOnlyPayload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(false);
     expect(payload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(true);
@@ -588,6 +591,8 @@ describe("total sync", () => {
 
     const payload = client.sync.apply(dataOnlyPayload);
 
+    expect(payload.mode).toBe("total");
+    if (payload.mode !== "total") throw new Error("Expected total sync apply payload.");
     expect(payload.cursor).toBe("server:data-only:apply");
     expect(dataOnlyPayload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(false);
     expect(payload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(true);
@@ -765,6 +770,258 @@ describe("total sync", () => {
     });
 
     unsubscribeName();
+  });
+
+  it("pulls incremental authoritative batches after the current cursor without notifying unrelated predicate slots", async () => {
+    const server = createServerGraph();
+    const acmeId = server.graph.company.create({
+      name: "Acme Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://acme.com"),
+    });
+    const betaId = server.graph.company.create({
+      name: "Beta Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://beta.example"),
+    });
+    const authority = createAuthoritativeGraphWriteSession(server.store, app, {
+      cursorPrefix: "server:",
+    });
+
+    const client = createSyncedTypeClient(app, {
+      pull: (state) =>
+        state.cursor
+          ? authority.getIncrementalSyncResult(state.cursor)
+          : createTotalSyncPayload(server.store, {
+              cursor: authority.getBaseCursor(),
+            }),
+    });
+
+    await client.sync.sync();
+
+    const acme = client.graph.company.ref(acmeId);
+    const beta = client.graph.company.ref(betaId);
+    let acmeNameNotifications = 0;
+    let acmeWebsiteNotifications = 0;
+    let betaNameNotifications = 0;
+    const unsubscribeAcmeName = acme.fields.name.subscribe(() => {
+      acmeNameNotifications += 1;
+    });
+    const unsubscribeAcmeWebsite = acme.fields.website.subscribe(() => {
+      acmeWebsiteNotifications += 1;
+    });
+    const unsubscribeBetaName = beta.fields.name.subscribe(() => {
+      betaNameNotifications += 1;
+    });
+
+    const first = authority.apply(
+      createCompanyNameWriteTransaction(server.store, acmeId, "Acme Incremental One", "tx:1"),
+    );
+    const second = authority.apply(
+      createCompanyNameWriteTransaction(server.store, acmeId, "Acme Incremental Two", "tx:2"),
+    );
+
+    const applied = await client.sync.sync();
+
+    expect(applied.mode).toBe("incremental");
+    expect("fallback" in applied).toBe(false);
+    if ("fallback" in applied) {
+      throw new Error("Expected a data-bearing incremental sync result.");
+    }
+    expect(applied).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: authority.getBaseCursor(),
+      transactions: [first, second],
+      cursor: second.cursor,
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(client.graph.company.get(acmeId).name).toBe("Acme Incremental Two");
+    expect(client.graph.company.get(acmeId).website.toString()).toBe("https://acme.com/");
+    expect(client.graph.company.get(betaId).name).toBe("Beta Corp");
+    expect(acmeNameNotifications).toBe(1);
+    expect(acmeWebsiteNotifications).toBe(0);
+    expect(betaNameNotifications).toBe(0);
+    expect(client.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: second.cursor,
+      completeness: "complete",
+      freshness: "current",
+    });
+
+    unsubscribeAcmeName();
+    unsubscribeAcmeWebsite();
+    unsubscribeBetaName();
+  });
+
+  it("preserves queued local mutations when synced clients pull incremental authoritative batches", async () => {
+    const server = createServerGraph();
+    const acmeId = server.graph.company.create({
+      name: "Acme Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://acme.com"),
+    });
+    const betaId = server.graph.company.create({
+      name: "Beta Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://beta.example"),
+    });
+    const authority = createAuthoritativeGraphWriteSession(server.store, app, {
+      cursorPrefix: "server:",
+    });
+    const client = createSyncedTypeClient(app, {
+      pull: (state) =>
+        state.cursor
+          ? authority.getIncrementalSyncResult(state.cursor)
+          : createTotalSyncPayload(server.store, {
+              cursor: authority.getBaseCursor(),
+            }),
+    });
+
+    await client.sync.sync();
+
+    client.graph.company.update(betaId, {
+      name: "Beta Local Draft",
+    });
+    const peerResult = authority.apply(
+      createCompanyNameWriteTransaction(server.store, acmeId, "Acme From Peer", "tx:peer"),
+    );
+
+    const applied = await client.sync.sync();
+
+    expect(applied.mode).toBe("incremental");
+    expect("fallback" in applied).toBe(false);
+    if ("fallback" in applied) {
+      throw new Error("Expected a data-bearing incremental sync result.");
+    }
+    expect(applied.cursor).toBe(peerResult.cursor);
+    expect(client.sync.getPendingTransactions()).toEqual([
+      expect.objectContaining({
+        id: "local:1",
+      }),
+    ]);
+    expect(client.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: peerResult.cursor,
+      completeness: "complete",
+      freshness: "current",
+      pendingCount: 1,
+    });
+    expect(client.graph.company.get(acmeId).name).toBe("Acme From Peer");
+    expect(client.graph.company.get(betaId).name).toBe("Beta Local Draft");
+  });
+
+  it("routes invalid incremental batches back to total snapshot recovery without partial local state", async () => {
+    const server = createServerGraph();
+    const acmeId = server.graph.company.create({
+      name: "Acme Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://acme.com"),
+    });
+    const authority = createAuthoritativeGraphWriteSession(server.store, app, {
+      cursorPrefix: "server:",
+    });
+    let first: ReturnType<typeof authority.apply> | undefined;
+    let second: ReturnType<typeof authority.apply> | undefined;
+    let invalidResult:
+      | (ReturnType<typeof authority.apply> & {
+          transaction: GraphWriteTransaction;
+        })
+      | undefined;
+    let pullCount = 0;
+
+    const client = createSyncedTypeClient(app, {
+      pull: (state) => {
+        if (!state.cursor) {
+          return createTotalSyncPayload(server.store, {
+            cursor: authority.getBaseCursor(),
+          });
+        }
+
+        pullCount += 1;
+        if (pullCount === 1) {
+          if (!first || !invalidResult || !second) {
+            throw new Error("Expected incremental batch fixtures to be initialized before pull.");
+          }
+          return {
+            mode: "incremental",
+            scope: { kind: "graph" },
+            after: state.cursor,
+            transactions: [first, invalidResult],
+            cursor: second.cursor,
+            completeness: "complete",
+            freshness: "current",
+          };
+        }
+
+        return createTotalSyncPayload(server.store, {
+          cursor: authority.getCursor() ?? authority.getBaseCursor(),
+        });
+      },
+    });
+
+    await client.sync.sync();
+    expect(client.graph.company.get(acmeId).name).toBe("Acme Corp");
+
+    first = authority.apply(
+      createCompanyNameWriteTransaction(server.store, acmeId, "Acme Incremental One", "tx:1"),
+    );
+    const afterFirstStore = createStore();
+    afterFirstStore.replace(server.store.snapshot());
+    second = authority.apply(
+      createCompanyNameWriteTransaction(server.store, acmeId, "Acme Incremental Two", "tx:2"),
+    );
+    invalidResult = {
+      ...second,
+      transaction: createCompanyNameWriteTransaction(afterFirstStore, acmeId, "   ", second.txId),
+    };
+    if (!first || !second || !invalidResult) {
+      throw new Error("Expected invalid incremental batch fixtures to be initialized.");
+    }
+
+    let error: unknown;
+    try {
+      await client.sync.sync();
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(GraphValidationError);
+    const validationError = error as GraphValidationError<unknown>;
+    expect(validationError.result).toMatchObject({
+      ok: false,
+      phase: "authoritative",
+      event: "reconcile",
+    });
+    expect(validationError.result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "field",
+          code: "string.blank",
+          predicateKey: app.company.fields.name.key,
+          nodeId: acmeId,
+        }),
+      ]),
+    );
+    expect(client.sync.getState()).toMatchObject({
+      status: "error",
+      cursor: authority.getBaseCursor(),
+      completeness: "complete",
+      freshness: "stale",
+    });
+    expect(client.graph.company.get(acmeId).name).toBe("Acme Corp");
+
+    const recovered = await client.sync.sync();
+
+    expect(recovered.mode).toBe("total");
+    expect(client.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: second.cursor,
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(client.graph.company.get(acmeId).name).toBe("Acme Incremental Two");
   });
 
   it("lets non-throwing authoritative validation reuse the preserved schema baseline", () => {
@@ -1599,6 +1856,101 @@ describe("total sync", () => {
     expect(clientGraph.company.get(acmeId).name).toBe("Acme Corp");
   });
 
+  it("lets lower-level total sync sessions apply incremental batches in cursor order and recover from gaps with total sync", async () => {
+    const server = createServerGraph();
+    const acmeId = server.graph.company.create({
+      name: "Acme Corp",
+      status: app.status.values.active.id,
+      website: new URL("https://acme.com"),
+    });
+    const authority = createAuthoritativeGraphWriteSession(server.store, app, {
+      cursorPrefix: "server:",
+    });
+
+    const clientStore = createStore();
+    bootstrap(clientStore, core);
+    bootstrap(clientStore, app);
+    const clientGraph = createTypeClient(clientStore, app);
+    const session = createTotalSyncSession(clientStore, {
+      validate: createAuthoritativeTotalSyncValidator(app),
+      validateWriteResult: createAuthoritativeGraphWriteResultValidator(clientStore, app),
+    });
+
+    session.apply(
+      createTotalSyncPayload(server.store, {
+        cursor: authority.getBaseCursor(),
+      }),
+    );
+
+    const first = authority.apply(
+      createCompanyNameWriteTransaction(server.store, acmeId, "Acme Incremental One", "tx:1"),
+    );
+    const second = authority.apply(
+      createCompanyNameWriteTransaction(server.store, acmeId, "Acme Incremental Two", "tx:2"),
+    );
+    const incremental = authority.getIncrementalSyncResult(authority.getBaseCursor());
+    const applied = session.apply(incremental);
+
+    expect(applied.mode).toBe("incremental");
+    if (applied.mode !== "incremental" || "fallback" in applied) {
+      throw new Error("Expected a data-bearing incremental sync result.");
+    }
+    expect(applied.transactions).toEqual([first, second]);
+    expect(clientGraph.company.get(acmeId).name).toBe("Acme Incremental Two");
+    expect(session.getState()).toMatchObject({
+      status: "ready",
+      cursor: second.cursor,
+      completeness: "complete",
+      freshness: "current",
+    });
+
+    const gapAuthority = createAuthoritativeGraphWriteSession(server.store, app, {
+      cursorPrefix: "server:",
+      initialSequence: 4,
+    });
+
+    let gapError: unknown;
+    try {
+      await session.pull((state) => gapAuthority.getIncrementalSyncResult(state.cursor));
+    } catch (caught) {
+      gapError = caught;
+    }
+
+    expect(gapError).toBeInstanceOf(GraphValidationError);
+    const validationError = gapError as GraphValidationError<void>;
+    expect(validationError.result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "runtime",
+          code: "sync.incremental.recovery",
+          predicateKey: "$sync:incremental",
+          nodeId: "$sync:incremental",
+        }),
+      ]),
+    );
+    expect(session.getState()).toMatchObject({
+      status: "error",
+      cursor: second.cursor,
+      freshness: "stale",
+    });
+    expect(clientGraph.company.get(acmeId).name).toBe("Acme Incremental Two");
+
+    const recovered = await session.pull(() =>
+      createTotalSyncPayload(server.store, {
+        cursor: gapAuthority.getBaseCursor(),
+      }),
+    );
+
+    expect(recovered.mode).toBe("total");
+    expect(session.getState()).toMatchObject({
+      status: "ready",
+      cursor: gapAuthority.getBaseCursor(),
+      freshness: "current",
+      completeness: "complete",
+    });
+    expect(clientGraph.company.get(acmeId).name).toBe("Acme Incremental Two");
+  });
+
   it("lets lower-level total sync sessions preserve bootstrapped schema for data-only payloads", () => {
     const server = createServerGraph();
     const acmeId = server.graph.company.create({
@@ -1622,6 +1974,8 @@ describe("total sync", () => {
     });
     const payload = session.apply(dataOnlyPayload);
 
+    expect(payload.mode).toBe("total");
+    if (payload.mode !== "total") throw new Error("Expected total sync payload.");
     expect(dataOnlyPayload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(false);
     expect(payload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(true);
     expect(clientGraph.company.get(acmeId).name).toBe("Acme Corp");
