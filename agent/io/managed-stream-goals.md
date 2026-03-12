@@ -68,8 +68,9 @@ Parent phases:
 
 Rules:
 
-- managed parents keep backlog routing in every phase so explicit backlog reruns
-  and `@io backlog` commands still land on the backlog agent
+- managed parents keep backlog routing in every non-terminal phase so explicit
+  backlog reruns and top-level `@io` commands still land on the backlog agent
+  while the parent is in `Todo`, `In Review`, or `In Progress`
 - automatic backlog scheduling stops once the parent leaves `Todo`
 - child readiness is determined by the parent phase plus child-local
   `blockedBy` ordering and the one-active-child-per-stream rule

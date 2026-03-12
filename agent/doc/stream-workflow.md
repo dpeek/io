@@ -129,6 +129,9 @@ child-only branch.
 - managed parents still route to the backlog profile for explicit runs
 - automatic backlog scheduling for a managed parent stops once the parent
   leaves `Todo`
+- managed parent comment polling also includes `In Review` so top-level
+  `@io backlog`, `@io focus`, `@io status`, and `@io help` stay available
+  during the review hold
 - child auto-scheduling requires:
   - a parent in `In Progress`
   - no unresolved `blockedBy` issues

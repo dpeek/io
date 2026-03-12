@@ -13,6 +13,8 @@
   streams.
 - Treat parent `In Review` as the safe bootstrap and post-backlog hold state
   for new streams until a human explicitly moves the stream to `In Progress`.
+- Keep explicit managed-parent reruns available while the parent is in
+  `In Review` without reopening automatic backlog scheduling.
 - Seed new implementation children in `Todo` and rely on the parent-phase gate
   to keep them parked until the stream is released.
 - Keep parent and child Linear transitions separate: backlog success returns

@@ -205,6 +205,24 @@ function normalizeStateName(state: string) {
   return state.trim().toLowerCase();
 }
 
+function uniqueStateNames(states: string[]) {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const state of states) {
+    const trimmed = state.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const normalized = normalizeStateName(trimmed);
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    unique.push(trimmed);
+  }
+  return unique;
+}
+
 function normalizeTitle(title: string) {
   return title.trim().toLowerCase();
 }
@@ -274,25 +292,29 @@ export class LinearTrackerAdapter {
   }
 
   async fetchManagedCommentTriggers(): Promise<ManagedCommentTrigger[]> {
-    return await this.#paginateIssues(MANAGED_COMMENT_QUERY, (node) => {
-      const issue = normalizeLinearIssue(node);
-      if (issue.hasParent || !issue.labels.includes("io")) {
-        return [];
-      }
-      return (node.comments?.nodes ?? [])
-        .filter((comment): comment is CommentNode => Boolean(comment))
-        .filter((comment) => !comment.parent?.id)
-        .map((comment) =>
-          parseManagedComment({
-            body: comment.body ?? "",
-            commentId: comment.id,
-            createdAt: comment.createdAt,
-            issue,
-            updatedAt: comment.updatedAt,
-          }),
-        )
-        .filter((comment): comment is ManagedCommentTrigger => Boolean(comment));
-    }).then((comments) =>
+    return await this.#paginateIssues(
+      MANAGED_COMMENT_QUERY,
+      (node) => {
+        const issue = normalizeLinearIssue(node);
+        if (issue.hasParent || !issue.labels.includes("io")) {
+          return [];
+        }
+        return (node.comments?.nodes ?? [])
+          .filter((comment): comment is CommentNode => Boolean(comment))
+          .filter((comment) => !comment.parent?.id)
+          .map((comment) =>
+            parseManagedComment({
+              body: comment.body ?? "",
+              commentId: comment.id,
+              createdAt: comment.createdAt,
+              issue,
+              updatedAt: comment.updatedAt,
+            }),
+          )
+          .filter((comment): comment is ManagedCommentTrigger => Boolean(comment));
+      },
+      uniqueStateNames([...this.#config.activeStates, "In Review"]),
+    ).then((comments) =>
       comments.sort((left, right) => {
         if (left.issue.identifier !== right.issue.identifier) {
           return left.issue.identifier.localeCompare(right.issue.identifier);
@@ -828,6 +850,7 @@ export class LinearTrackerAdapter {
   async #paginateIssues<T>(
     query: string,
     mapNode: (node: CandidateIssueNode) => T | T[],
+    states = this.#config.activeStates,
   ): Promise<T[]> {
     const results: T[] = [];
     let after: string | undefined;
@@ -836,7 +859,7 @@ export class LinearTrackerAdapter {
         after,
         first: 50,
         projectSlug: this.#getProjectSlug(),
-        states: this.#config.activeStates,
+        states,
       });
       const page = response.issues;
       for (const node of page?.nodes ?? []) {

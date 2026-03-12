@@ -102,7 +102,8 @@ Rules:
 - parent stream phase, not a child-only planning tier, keeps seeded `Todo`
   children non-runnable until the parent moves to `In Progress`
 - automatic backlog scheduling stops once the parent leaves `Todo`, but
-  explicit backlog reruns may still target the parent through direct routing or
+  explicit backlog reruns may still target the parent while it is in
+  `In Review` or `In Progress` through direct routing or top-level
   `@io backlog`
 - reruns should treat untouched `Todo` children as the speculative tail unless
   they have already moved into active review or done states

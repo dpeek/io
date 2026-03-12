@@ -262,11 +262,13 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
   }
 });
 
-test("LinearTrackerAdapter fetches top-level managed comment triggers on managed parents", async () => {
+test("LinearTrackerAdapter fetches top-level managed comment triggers on managed parents in review hold", async () => {
   const originalFetch = globalThis.fetch;
+  let requestBody: { variables?: { states?: string[] } } | undefined;
   globalThis.fetch = mock(
-    async () =>
-      new Response(
+    async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body ?? "{}")) as typeof requestBody;
+      return new Response(
         JSON.stringify({
           data: {
             issues: {
@@ -299,7 +301,7 @@ test("LinearTrackerAdapter fetches top-level managed comment triggers on managed
                   labels: { nodes: [{ name: "io" }, { name: "agent" }] },
                   priority: 2,
                   project: { slugId: "io" },
-                  state: { name: "Todo" },
+                  state: { name: "In Review" },
                   team: { id: "team-1" },
                   title: "Managed stream",
                   updatedAt: "2024-01-01T00:00:00.000Z",
@@ -313,12 +315,13 @@ test("LinearTrackerAdapter fetches top-level managed comment triggers on managed
           },
         }),
         { status: 200 },
-      ),
+      );
+    },
   ) as unknown as typeof fetch;
 
   try {
     const tracker = new LinearTrackerAdapter({
-      activeStates: ["Todo"],
+      activeStates: ["Todo", "In Progress"],
       apiKey: "token",
       endpoint: "https://linear.invalid/graphql",
       kind: "linear",
@@ -327,6 +330,7 @@ test("LinearTrackerAdapter fetches top-level managed comment triggers on managed
     });
 
     const comments = await tracker.fetchManagedCommentTriggers?.();
+    expect(requestBody?.variables?.states).toEqual(["Todo", "In Progress", "In Review"]);
     expect(comments).toHaveLength(1);
     expect(comments?.[0]).toMatchObject({
       command: "backlog",
@@ -1699,13 +1703,13 @@ test("AgentService moves backlog parent issues to In Review after success", asyn
     });
 
     await service.start();
-    expect(transitions).toEqual(["parent-1:In Review"]);
+    expect(transitions).toEqual(["parent-1:In Progress", "parent-1:In Review"]);
   } finally {
     await rm(root, { force: true, recursive: true });
   }
 });
 
-test("AgentService leaves backlog parent issues out of execution states after failure", async () => {
+test("AgentService keeps backlog parent issues in In Progress when the run fails", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
   const workspacePath = resolve(root, "workspace", "workers", "OPE-67", "repo");
   const events: string[] = [];
@@ -1797,7 +1801,7 @@ test("AgentService leaves backlog parent issues out of execution states after fa
     });
 
     await service.start();
-    expect(transitions).toEqual([]);
+    expect(transitions).toEqual(["parent-1:In Progress"]);
     expect(events).toEqual(["blocked"]);
   } finally {
     await rm(root, { force: true, recursive: true });
