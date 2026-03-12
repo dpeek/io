@@ -32,7 +32,7 @@ export type ExampleSyncedClient = SyncedTypeClient<typeof app>
 
 export function createExampleRuntime() {
   const authority = createExampleAuthorityGraph()
-  const writes = createAuthoritativeGraphWriteSession(authority.store, app, {
+  let writes = createAuthoritativeGraphWriteSession(authority.store, app, {
     cursorPrefix: "example:",
   })
   const clients = new Set<ExampleSyncedClient>()
@@ -42,15 +42,25 @@ export function createExampleRuntime() {
   function createSyncPayload(): TotalSyncPayload {
     syncPayloadCount += 1
     return createTotalSyncPayload(authority.store, {
-      cursor: writes.getCursor() ?? "example:initial",
+      cursor: writes.getCursor() ?? writes.getBaseCursor(),
     })
+  }
+
+  function resetAuthorityStream(cursorPrefix = "reset:"): string {
+    writes = createAuthoritativeGraphWriteSession(authority.store, app, {
+      cursorPrefix,
+    })
+    return writes.getBaseCursor()
   }
 
   function createClient(): ExampleSyncedClient {
     let client: ExampleSyncedClient
     const queuedTxIds: string[] = []
     client = createSyncedTypeClient(app, {
-      pull: () => createSyncPayload(),
+      pull: (state) =>
+        state.cursor
+          ? writes.getIncrementalSyncResult(state.cursor)
+          : createSyncPayload(),
       createTxId() {
         return queuedTxIds.shift() ?? "example:local"
       },
@@ -108,7 +118,13 @@ export function createExampleRuntime() {
     authority: {
       ...authority,
       createSyncPayload,
-      writes,
+      resetAuthorityStream,
+      getBaseCursor() {
+        return writes.getBaseCursor()
+      },
+      get writes() {
+        return writes
+      },
       getSyncPayloadCount() {
         return syncPayloadCount
       },

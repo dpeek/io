@@ -730,6 +730,115 @@ describe("total sync", () => {
     });
   });
 
+  it("bootstraps the example runtime on the authority base cursor and records incremental pull activity", async () => {
+    const runtime = createExampleRuntime();
+    const baseCursor = runtime.authority.getBaseCursor();
+
+    expect(runtime.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: baseCursor,
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(runtime.sync.getState().recentActivities).toEqual([
+      expect.objectContaining({
+        kind: "total",
+        cursor: baseCursor,
+        freshness: "current",
+      }),
+    ]);
+
+    const result = runtime.authority.writes.apply(
+      createCompanyNameWriteTransaction(
+        runtime.authority.store,
+        runtime.ids.acme,
+        "Acme Pull Labs",
+        "tx:pull:1",
+      ),
+    );
+
+    const applied = await runtime.sync.sync();
+
+    expect(applied.mode).toBe("incremental");
+    expect("fallback" in applied).toBe(false);
+    if (applied.mode !== "incremental" || "fallback" in applied) {
+      throw new Error("Expected an incremental sync result.");
+    }
+    expect(applied.after).toBe(baseCursor);
+    expect(applied.cursor).toBe(result.cursor);
+    expect(applied.transactions).toEqual([result]);
+    expect(runtime.graph.company.get(runtime.ids.acme).name).toBe("Acme Pull Labs");
+    expect(runtime.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: result.cursor,
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(runtime.sync.getState().recentActivities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "incremental",
+          after: baseCursor,
+          cursor: result.cursor,
+          transactionCount: 1,
+          txIds: [result.txId],
+          freshness: "current",
+        }),
+      ]),
+    );
+  });
+
+  it("records reset fallbacks until the caller recovers with a total snapshot", async () => {
+    const runtime = createExampleRuntime();
+    const acknowledged = await runtime.commitLocalMutation(runtime, "tx:runtime:reset", (graph) => {
+      graph.company.update(runtime.ids.acme, {
+        name: "Acme Reset Labs",
+      });
+    });
+
+    const resetCursor = runtime.authority.resetAuthorityStream("reset:");
+
+    let error: unknown;
+    try {
+      await runtime.sync.sync();
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(GraphValidationError);
+    expect(runtime.sync.getState()).toMatchObject({
+      status: "error",
+      cursor: acknowledged.cursor,
+      completeness: "complete",
+      freshness: "stale",
+    });
+    expect(runtime.sync.getState().recentActivities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "fallback",
+          after: acknowledged.cursor,
+          cursor: resetCursor,
+          reason: "reset",
+          freshness: "current",
+        }),
+      ]),
+    );
+
+    const recovered = runtime.sync.apply(runtime.authority.createSyncPayload());
+
+    expect(recovered).toMatchObject({
+      mode: "total",
+      cursor: resetCursor,
+      freshness: "current",
+    });
+    expect(runtime.sync.getState()).toMatchObject({
+      status: "ready",
+      cursor: resetCursor,
+      completeness: "complete",
+      freshness: "current",
+    });
+  });
+
   it("keeps predicate-slot notifications precise when incremental reconciliation preserves the logical value", async () => {
     const server = createServerGraph();
     const acmeId = server.graph.company.create({

@@ -184,12 +184,30 @@ The generic synced-client contract now exposes:
 - `GraphSyncWriteError` when a push fails; it carries the failed transaction in
   `error.transaction` and preserves the remaining queue for retry
 - `sync.getState().pendingCount` so callers can surface pending-write state
+- `sync.getState().recentActivities` so callers can inspect the latest
+  authoritative delivery boundary without diffing raw graph snapshots:
+  - `{ kind: "total", cursor, freshness, at }` when a snapshot bootstrap or
+    recovery payload is installed
+  - `{ kind: "incremental", after, cursor, txIds, transactionCount, freshness, at }`
+    when retained authoritative tx history is applied after the current cursor
+  - `{ kind: "write", txId, cursor, replayed, freshness, at }` when an
+    acknowledged authoritative write result is reconciled directly
+  - `{ kind: "fallback", after, cursor, reason, freshness, at }` when an
+    incremental pull cannot continue and the caller must recover by total
+    snapshot
+- the explorer proof reads `sync.getState()` plus
+  `sync.getPendingTransactions()` to surface cursor position, pending writes,
+  applied authoritative delivery, and snapshot fallback requests in one narrow
+  operator-facing panel
 
 The app proof runtime demonstrates the contract with one shared authority and
 multiple synced clients:
 
 - each client still uses the normal typed graph handles for local reads and
   writes
+- bootstrap total snapshots now use the authority session's `getBaseCursor()`
+  so later incremental pulls can resume from one parseable retained-history
+  boundary instead of an opaque bootstrap sentinel
 - the synced client turns a committed local mutation into a deterministic
   queued write tx
 - the authority remains the only place that decides whether the write is
@@ -199,6 +217,9 @@ multiple synced clients:
 - `sync.sync()` can now also request and apply retained authoritative tx
   batches after the client’s current cursor, without changing the typed local
   mutation API
+- if the authority resets retained history, the proof runtime exposes that by
+  returning an explicit incremental fallback and leaves total recovery as an
+  intentional caller step
 
 ## Failure Handling Today
 
@@ -240,7 +261,8 @@ For lower-level integration, `createTotalSyncSession(store)` still exposes:
   existing local store without replacing the whole snapshot
 - `pull(source)` to fetch `source(currentState)` and apply the returned payload
   with sync-state transitions
-- `getState()` to read current sync metadata
+- `getState()` to read current sync metadata, including recent total,
+  incremental, write, and fallback activity
 - `subscribe(listener)` to observe sync-state changes
 
 ## Query And Subscription Semantics

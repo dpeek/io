@@ -250,4 +250,66 @@ describe("explorer surface", () => {
       renderer?.unmount();
     });
   });
+
+  it("surfaces stream cursor, pending writes, authoritative deliveries, and reset fallbacks", async () => {
+    const runtime = createExampleRuntime();
+
+    let renderer: ReturnType<typeof create> | undefined;
+    await act(async () => {
+      renderer = create(<Explorer runtime={runtime} />);
+    });
+
+    expect(collectText(findByProp(renderer!, "data-explorer-stream-cursor", ""))).toContain(
+      runtime.authority.getBaseCursor(),
+    );
+    findByProp(renderer!, "data-explorer-stream-pending-count", "0");
+
+    await act(async () => {
+      runtime.graph.company.update(runtime.ids.acme, {
+        name: "Acme Pending Labs",
+      });
+    });
+
+    const pendingWrite = findByProp(
+      renderer!,
+      "data-explorer-stream-pending-tx",
+      "example:local",
+    );
+    expect(collectText(pendingWrite)).toContain("assert");
+    expect(collectText(pendingWrite)).toContain("retract");
+    findByProp(renderer!, "data-explorer-stream-pending-count", "1");
+
+    await act(async () => {
+      await runtime.sync.flush();
+    });
+
+    const writeActivity = findByProp(renderer!, "data-explorer-stream-activity", "write");
+    expect(collectText(writeActivity)).toContain("Authoritative write applied");
+    expect(collectText(writeActivity)).toContain("example:1");
+    expect(collectText(writeActivity)).toContain("example:local");
+    findByProp(renderer!, "data-explorer-stream-pending-count", "0");
+
+    await act(async () => {
+      runtime.authority.resetAuthorityStream("reset:");
+      try {
+        await runtime.sync.sync();
+      } catch {
+        // The explorer should surface the recovery request without requiring the test to recover.
+      }
+    });
+
+    const fallbackActivity = findByProp(renderer!, "data-explorer-stream-activity", "fallback");
+    expect(collectText(fallbackActivity)).toContain("Snapshot recovery required");
+    expect(collectText(fallbackActivity)).toContain("after example:1 -> reset:0");
+    expect(collectText(fallbackActivity)).toContain("reset");
+    expect(
+      collectText(findByProp(renderer!, "data-explorer-stream-error", "error")),
+    ).toContain(
+      'Incremental sync requires total snapshot recovery because the authority reported "reset".',
+    );
+
+    act(() => {
+      renderer?.unmount();
+    });
+  });
 });

@@ -162,7 +162,7 @@ Design goal: standardize the smallest set of durable primitives and keep higher-
 - **Owns data**: per-client sync cursors, active subscriptions, replication scopes.
 - **Configuration**: transport (HTTP pull + WebSocket/SSE live), batching thresholds, auth session binding.
 - **APIs**: `sync.pull(scope, sinceCursor)`, `sync.push(localTxs)`, `sync.subscribe(spec)`, `sync.ack(cursor)`.
-- **Current landed path**: v1 uses a total snapshot envelope with explicit `mode`, `scope`, `cursor`, `completeness`, and `freshness`, then materializes that into the same local store used by typed reads and predicate-slot subscriptions. See `graph/doc/sync.md`.
+- **Current landed path**: v1 bootstraps with a total snapshot envelope (`mode`, `scope`, `cursor`, `completeness`, `freshness`), then continues with retained authoritative transaction batches after the current cursor when history is available. Unknown cursors, history gaps, and stream resets are explicit fallback signals that require total snapshot recovery. See `graph/doc/sync.md`.
 - **Correctness model**:
   - Result metadata includes `completeness` (`complete | incomplete`) and `freshness` (`current | stale`).
   - Missing-edge uncertainty is explicit, never silently treated as false.
@@ -251,7 +251,7 @@ Design goal: standardize the smallest set of durable primitives and keep higher-
 - **Configuration**: redaction defaults, retention, debug verbosity.
 - **APIs/tools**: Graph Explorer, diff view, tx timeline, subscription inspector, schema migration CLI.
 - **Graph Explorer path**:
-  - v1 inspect graph/schema/query results.
+  - v1 inspect graph/schema/query results plus sync stream state: current cursor, pending writes, recent authoritative tx delivery, and snapshot fallback/reset signals.
   - v1.5 diff and time travel replay.
   - v2 policy/secret access simulation.
 

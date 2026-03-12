@@ -13,6 +13,38 @@ import { createStore, type Store, type StoreSnapshot } from "./store"
 export type SyncCompleteness = "complete" | "incomplete"
 export type SyncFreshness = "current" | "stale"
 export type SyncStatus = "idle" | "syncing" | "pushing" | "ready" | "error"
+export type SyncActivity =
+  | {
+      readonly kind: "total"
+      readonly cursor: string
+      readonly freshness: SyncFreshness
+      readonly at: Date
+    }
+  | {
+      readonly kind: "incremental"
+      readonly after: string
+      readonly cursor: string
+      readonly freshness: SyncFreshness
+      readonly transactionCount: number
+      readonly txIds: readonly string[]
+      readonly at: Date
+    }
+  | {
+      readonly kind: "fallback"
+      readonly after: string
+      readonly cursor: string
+      readonly freshness: SyncFreshness
+      readonly reason: IncrementalSyncFallbackReason
+      readonly at: Date
+    }
+  | {
+      readonly kind: "write"
+      readonly txId: string
+      readonly cursor: string
+      readonly freshness: SyncFreshness
+      readonly replayed: boolean
+      readonly at: Date
+    }
 
 export type SyncScope = {
   readonly kind: "graph"
@@ -1676,6 +1708,7 @@ export type SyncState = {
   readonly completeness: SyncCompleteness
   readonly freshness: SyncFreshness
   readonly pendingCount: number
+  readonly recentActivities: readonly SyncActivity[]
   readonly cursor?: string
   readonly lastSyncedAt?: Date
   readonly error?: unknown
@@ -2136,8 +2169,65 @@ function cloneState(state: SyncState): SyncState {
     ...state,
     scope: graphSyncScope,
     pendingCount: state.pendingCount,
+    recentActivities: state.recentActivities.map((activity) => cloneSyncActivity(activity)),
     lastSyncedAt: state.lastSyncedAt ? new Date(state.lastSyncedAt.getTime()) : undefined,
   }
+}
+
+const maxSyncActivities = 8
+
+function cloneSyncActivity(activity: SyncActivity): SyncActivity {
+  if (activity.kind === "incremental") {
+    return {
+      ...activity,
+      txIds: [...activity.txIds],
+      at: new Date(activity.at.getTime()),
+    }
+  }
+
+  return {
+    ...activity,
+    at: new Date(activity.at.getTime()),
+  }
+}
+
+function sameSyncActivity(left: SyncActivity, right: SyncActivity): boolean {
+  if (left.kind !== right.kind) return false
+  if (left.cursor !== right.cursor) return false
+  if (left.freshness !== right.freshness) return false
+  if (left.at.getTime() !== right.at.getTime()) return false
+
+  if (left.kind === "total" && right.kind === "total") return true
+  if (left.kind === "write" && right.kind === "write") {
+    return left.txId === right.txId && left.replayed === right.replayed
+  }
+  if (left.kind === "fallback" && right.kind === "fallback") {
+    return left.after === right.after && left.reason === right.reason
+  }
+  if (left.kind === "incremental" && right.kind === "incremental") {
+    if (
+      left.after !== right.after ||
+      left.transactionCount !== right.transactionCount ||
+      left.txIds.length !== right.txIds.length
+    ) {
+      return false
+    }
+
+    for (let index = 0; index < left.txIds.length; index += 1) {
+      if (left.txIds[index] !== right.txIds[index]) return false
+    }
+    return true
+  }
+
+  return false
+}
+
+function appendSyncActivity(
+  activities: readonly SyncActivity[],
+  activity: SyncActivity,
+): SyncActivity[] {
+  const next = [...activities, cloneSyncActivity(activity)]
+  return next.slice(-maxSyncActivities)
 }
 
 export function createTotalSyncSession(
@@ -2155,11 +2245,22 @@ export function createTotalSyncSession(
     completeness: "incomplete",
     freshness: "stale",
     pendingCount: 0,
+    recentActivities: [],
   }
   const listeners = new Set<SyncStateListener>()
 
+  function recordActivity(activity: SyncActivity): void {
+    state = {
+      ...state,
+      recentActivities: appendSyncActivity(state.recentActivities, activity),
+    }
+  }
+
   function publish(next: SyncState): void {
-    state = next
+    state = {
+      ...next,
+      recentActivities: state.recentActivities,
+    }
     const snapshot = cloneState(state)
     for (const listener of new Set(listeners)) listener(snapshot)
   }
@@ -2171,6 +2272,13 @@ export function createTotalSyncSession(
     const materialized = prepared.value
     options.validate?.(materialized)
     store.replace(materialized.snapshot)
+    const syncedAt = new Date()
+    recordActivity({
+      kind: "total",
+      cursor: materialized.cursor,
+      freshness: materialized.freshness,
+      at: syncedAt,
+    })
     publish({
       mode: materialized.mode,
       scope: materialized.scope,
@@ -2178,13 +2286,28 @@ export function createTotalSyncSession(
       completeness: materialized.completeness,
       freshness: materialized.freshness,
       pendingCount: 0,
+      recentActivities: state.recentActivities,
       cursor: materialized.cursor,
-      lastSyncedAt: new Date(),
+      lastSyncedAt: syncedAt,
     })
     return materialized
   }
 
   function applyIncrementalResult(result: IncrementalSyncResult): IncrementalSyncResult {
+    if ("fallback" in result) {
+      const validation = validateIncrementalSyncResult(result)
+      if (validation.ok && "fallback" in validation.value) {
+        recordActivity({
+          kind: "fallback",
+          after: validation.value.after,
+          cursor: validation.value.cursor,
+          freshness: validation.value.freshness,
+          reason: validation.value.fallback,
+          at: new Date(),
+        })
+      }
+    }
+
     const prepared = prepareIncrementalSyncResultForApply(store, result, state.cursor, {
       validateWriteResult: options.validateWriteResult,
     })
@@ -2201,13 +2324,24 @@ export function createTotalSyncSession(
       store.replace(prepared.snapshot)
     }
 
+    const syncedAt = new Date()
+    recordActivity({
+      kind: "incremental",
+      after: prepared.value.after,
+      cursor: prepared.value.cursor,
+      freshness: prepared.value.freshness,
+      transactionCount: prepared.value.transactions.length,
+      txIds: prepared.value.transactions.map((transaction) => transaction.txId),
+      at: syncedAt,
+    })
     publish({
       ...state,
       status: "ready",
       completeness: prepared.value.completeness,
       freshness: prepared.value.freshness,
+      recentActivities: state.recentActivities,
       cursor: prepared.value.cursor,
-      lastSyncedAt: new Date(),
+      lastSyncedAt: syncedAt,
       error: undefined,
     })
     return prepared.value
@@ -2232,12 +2366,22 @@ export function createTotalSyncSession(
     }
     options.validateWriteResult?.(materialized)
     applyGraphWriteTransaction(store, materialized.transaction)
+    const syncedAt = new Date()
+    recordActivity({
+      kind: "write",
+      txId: materialized.txId,
+      cursor: materialized.cursor,
+      freshness: "current",
+      replayed: materialized.replayed,
+      at: syncedAt,
+    })
     publish({
       ...state,
       status: "ready",
       freshness: "current",
+      recentActivities: state.recentActivities,
       cursor: materialized.cursor,
-      lastSyncedAt: new Date(),
+      lastSyncedAt: syncedAt,
       error: undefined,
     })
     return cloneAuthoritativeGraphWriteResult(materialized)
@@ -2365,6 +2509,14 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
 
   function matchesLastPublishedState(state: SyncState): boolean {
     if (!lastPublishedState) return false
+    if (lastPublishedState.recentActivities.length !== state.recentActivities.length) return false
+
+    for (let index = 0; index < state.recentActivities.length; index += 1) {
+      const left = lastPublishedState.recentActivities[index]
+      const right = state.recentActivities[index]
+      if (!left || !right || !sameSyncActivity(left, right)) return false
+    }
+
     return (
       lastPublishedState.mode === state.mode &&
       lastPublishedState.scope.kind === state.scope.kind &&

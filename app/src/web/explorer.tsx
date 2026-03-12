@@ -36,6 +36,7 @@ const explorerNamespace = { ...core, ...app };
 
 type ExplorerNamespace = typeof explorerNamespace;
 type ExplorerClient = NamespaceClient<ExplorerNamespace>;
+type ExplorerSync = AppRuntime["sync"];
 type ExplorerRuntime = Pick<AppRuntime, "store" | "sync">;
 type ExplorerSurfaceRuntime = {
   graph: NamespaceClient<ExplorerNamespace>;
@@ -54,6 +55,10 @@ type MutableOptionalPredicateRef = AnyPredicateRef & {
 type MutationCallbacks = {
   onMutationError?: (error: unknown) => void;
   onMutationSuccess?: () => void;
+};
+type ExplorerSyncSnapshot = {
+  pendingTransactions: ReturnType<ExplorerSync["getPendingTransactions"]>;
+  state: ReturnType<ExplorerSync["getState"]>;
 };
 
 type DefinitionFieldEntry = {
@@ -466,6 +471,99 @@ function checkToneClass(state: "aligned" | "drifted" | "missing"): string {
   if (state === "aligned") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
   if (state === "drifted") return "border-amber-500/30 bg-amber-500/10 text-amber-200";
   return "border-rose-500/30 bg-rose-500/10 text-rose-200";
+}
+
+function useExplorerSyncSnapshot(sync: ExplorerSync): ExplorerSyncSnapshot {
+  const [snapshot, setSnapshot] = useState<ExplorerSyncSnapshot>(() => ({
+    pendingTransactions: sync.getPendingTransactions(),
+    state: sync.getState(),
+  }));
+
+  useEffect(() => {
+    function refresh(): void {
+      setSnapshot({
+        pendingTransactions: sync.getPendingTransactions(),
+        state: sync.getState(),
+      });
+    }
+
+    refresh();
+    return sync.subscribe(refresh);
+  }, [sync]);
+
+  return snapshot;
+}
+
+function syncStatusClass(status: ReturnType<ExplorerSync["getState"]>["status"]): string {
+  if (status === "ready") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+  if (status === "error") return "border-rose-500/30 bg-rose-500/10 text-rose-100";
+  if (status === "pushing") return "border-cyan-500/30 bg-cyan-500/10 text-cyan-200";
+  if (status === "syncing") return "border-sky-500/30 bg-sky-500/10 text-sky-200";
+  return "border-slate-700 bg-slate-900 text-slate-300";
+}
+
+function streamActivityClass(kind: ReturnType<ExplorerSync["getState"]>["recentActivities"][number]["kind"]): string {
+  if (kind === "fallback") return "border-rose-500/30 bg-rose-500/10 text-rose-100";
+  if (kind === "incremental") return "border-cyan-500/30 bg-cyan-500/10 text-cyan-200";
+  if (kind === "write") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+  return "border-slate-700 bg-slate-900 text-slate-300";
+}
+
+function formatPendingTransactionSummary(
+  transaction: ExplorerSyncSnapshot["pendingTransactions"][number],
+): string {
+  let assertCount = 0;
+  let retractCount = 0;
+
+  for (const operation of transaction.ops) {
+    if (operation.op === "assert") {
+      assertCount += 1;
+      continue;
+    }
+    retractCount += 1;
+  }
+
+  const parts: string[] = [];
+  if (assertCount > 0) parts.push(`${assertCount} assert`);
+  if (retractCount > 0) parts.push(`${retractCount} retract`);
+  return parts.join(", ") || "0 ops";
+}
+
+function formatStreamActivityTitle(
+  activity: ExplorerSyncSnapshot["state"]["recentActivities"][number],
+): string {
+  if (activity.kind === "total") return "Total snapshot applied";
+  if (activity.kind === "incremental") {
+    return activity.transactionCount > 0
+      ? `Incremental batch applied (${activity.transactionCount})`
+      : "Incremental poll confirmed head cursor";
+  }
+  if (activity.kind === "write") return `Authoritative write applied (${activity.txId})`;
+  return `Snapshot recovery required (${activity.reason})`;
+}
+
+function formatStreamActivityDetail(
+  activity: ExplorerSyncSnapshot["state"]["recentActivities"][number],
+): string {
+  if (activity.kind === "total") {
+    return `cursor ${activity.cursor}`;
+  }
+  if (activity.kind === "incremental") {
+    return `after ${activity.after} -> ${activity.cursor}`;
+  }
+  if (activity.kind === "write") {
+    return activity.replayed ? `replayed at ${activity.cursor}` : `cursor ${activity.cursor}`;
+  }
+  return `after ${activity.after} -> ${activity.cursor}`;
+}
+
+function describeSyncError(error: unknown): string | null {
+  if (error instanceof GraphValidationError) {
+    return error.result.issues[0]?.message ?? error.message;
+  }
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string" && error.length > 0) return error;
+  return null;
 }
 
 function Section({
@@ -1272,6 +1370,164 @@ function PredicateInspector({
   );
 }
 
+function StreamInspector({ sync }: { sync: ExplorerSync }) {
+  const { pendingTransactions, state } = useExplorerSyncSnapshot(sync);
+  const recentActivities = [...state.recentActivities].reverse();
+  const errorMessage = describeSyncError(state.error);
+
+  return (
+    <Section
+      title="Stream"
+      right={
+        <Badge
+          className={syncStatusClass(state.status)}
+          data={{ "data-explorer-stream-status": state.status }}
+        >
+          {state.status}
+        </Badge>
+      }
+    >
+      <div className="space-y-4" data-explorer-stream="">
+        <div className="flex flex-wrap gap-1.5">
+          <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+            {state.cursor ?? "no cursor"}
+          </Badge>
+          <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+            {state.freshness}
+          </Badge>
+          <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+            {state.completeness}
+          </Badge>
+          <Badge
+            className={
+              pendingTransactions.length > 0
+                ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+            }
+            data={{ "data-explorer-stream-pending-count": String(pendingTransactions.length) }}
+          >
+            {pendingTransactions.length} pending
+          </Badge>
+        </div>
+
+        {errorMessage ? (
+          <div
+            className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100"
+            data-explorer-stream-error={state.status}
+          >
+            {errorMessage}
+          </div>
+        ) : null}
+
+        <div className="grid gap-2 text-sm text-slate-400">
+          <div className="flex items-center justify-between gap-3">
+            <span>Cursor</span>
+            <code className="text-xs text-slate-200" data-explorer-stream-cursor="">
+              {state.cursor ?? "unset"}
+            </code>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span>Last sync</span>
+            <span data-explorer-stream-last-sync="">
+              {state.lastSyncedAt ? "captured" : "not yet"}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+            Pending Writes
+          </div>
+          {pendingTransactions.length > 0 ? (
+            <div className="space-y-2">
+              {pendingTransactions.map((transaction) => (
+                <div
+                  className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3"
+                  data-explorer-stream-pending-tx={transaction.id}
+                  key={transaction.id}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <code className="text-xs text-slate-200">{transaction.id}</code>
+                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+                      {formatPendingTransactionSummary(transaction)}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState>Local optimistic writes are fully reconciled.</EmptyState>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+            Recent Activity
+          </div>
+          {recentActivities.length > 0 ? (
+            <div className="space-y-2">
+              {recentActivities.map((activity, index) => (
+                <div
+                  className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3"
+                  data-explorer-stream-activity={activity.kind}
+                  key={`${activity.kind}:${activity.cursor}:${activity.at.getTime()}:${index}`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-slate-100">
+                        {formatStreamActivityTitle(activity)}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {formatStreamActivityDetail(activity)}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      <Badge className={streamActivityClass(activity.kind)}>{activity.kind}</Badge>
+                      <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+                        {activity.freshness}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {activity.kind === "incremental"
+                      ? activity.txIds.map((txId) => (
+                          <Badge
+                            className="border-cyan-500/20 bg-cyan-500/5 text-cyan-100 normal-case tracking-normal"
+                            data={{ "data-explorer-stream-activity-tx": txId }}
+                            key={txId}
+                          >
+                            {txId}
+                          </Badge>
+                        ))
+                      : null}
+                    {activity.kind === "write" ? (
+                      <Badge
+                        className="border-emerald-500/20 bg-emerald-500/5 text-emerald-100 normal-case tracking-normal"
+                      >
+                        {activity.txId}
+                      </Badge>
+                    ) : null}
+                    {activity.kind === "fallback" ? (
+                      <Badge
+                        className="border-rose-500/20 bg-rose-500/5 text-rose-100 normal-case tracking-normal"
+                      >
+                        {activity.reason}
+                      </Badge>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState>No authoritative delivery has been observed yet.</EmptyState>
+          )}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
 export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
   const graphRuntime = runtime ?? useAppRuntime();
 
@@ -1388,6 +1644,8 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
             </div>
           </div>
         </Section>
+
+        <StreamInspector sync={graphRuntime.sync} />
 
         {section === "entities" ? (
           <Section
