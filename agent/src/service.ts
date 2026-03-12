@@ -499,6 +499,13 @@ export class AgentService {
   }
 
   #shouldAutoScheduleIssue(workflow: Workflow, issue: AgentIssue) {
+    const isManagedParent =
+      !issue.hasParent &&
+      hasIssueLabel(issue, "io") &&
+      Boolean(resolveIssueModule(workflow.modules, issue));
+    if (isManagedParent) {
+      return normalizeState(issue.state) === "todo";
+    }
     if (!issue.hasChildren || issue.hasParent) {
       return true;
     }

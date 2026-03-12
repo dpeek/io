@@ -386,6 +386,88 @@ test("WorkspaceManager uses the parent stream branch for child issues", async ()
   }
 });
 
+test("WorkspaceManager keeps child finalization separate from stream completion state", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
+  const runtimeRoot = resolve(root, "runtime");
+  const streamStatePath = resolve(runtimeRoot, "stream", "ope-12.json");
+  try {
+    const { repoRoot } = await createSourceRepo(root);
+    const manager = new WorkspaceManager({
+      hooks,
+      repoRoot,
+      rootDir: runtimeRoot,
+      workerId: "worker-1",
+    });
+    const childIssue = issue("OPE-13", "Implement child", {
+      hasParent: true,
+      id: "child-1",
+      parentIssueId: "parent-1",
+      parentIssueIdentifier: "OPE-12",
+    });
+    const workspace = await manager.prepare(childIssue);
+
+    const runningStreamState = JSON.parse(
+      await readFile(streamStatePath, "utf8"),
+    ) as {
+      activeIssueId?: string;
+      activeIssueIdentifier?: string;
+      branchName: string;
+      latestLandedCommitSha?: string;
+      parentIssueIdentifier: string;
+      status: string;
+      worktreeRoot: string;
+    };
+    expect(runningStreamState).toMatchObject({
+      activeIssueId: "child-1",
+      activeIssueIdentifier: "OPE-13",
+      branchName: "io/ope-12",
+      parentIssueIdentifier: "OPE-12",
+      status: "active",
+      worktreeRoot: resolve(runtimeRoot, "tree"),
+    });
+
+    await writeFile(join(workspace.path, "child.txt"), "child change\n");
+    const completion = await manager.complete(workspace, childIssue);
+
+    const completedStreamState = JSON.parse(
+      await readFile(streamStatePath, "utf8"),
+    ) as {
+      activeIssueIdentifier?: string;
+      latestLandedCommitSha?: string;
+      status: string;
+    };
+    expect(completedStreamState).toMatchObject({
+      activeIssueIdentifier: "OPE-13",
+      latestLandedCommitSha: completion.commitSha,
+      status: "active",
+    });
+
+    await manager.reconcileTerminalIssues(
+      {
+        fetchIssueStatesByIds: async () => new Map([[childIssue.id, "Done"]]),
+      },
+      ["Done"],
+    );
+
+    const finalizedStreamState = JSON.parse(
+      await readFile(streamStatePath, "utf8"),
+    ) as {
+      activeIssueId?: string;
+      activeIssueIdentifier?: string;
+      latestLandedCommitSha?: string;
+      status: string;
+    };
+    expect(finalizedStreamState).toMatchObject({
+      latestLandedCommitSha: completion.commitSha,
+      status: "active",
+    });
+    expect(finalizedStreamState.activeIssueId).toBeUndefined();
+    expect(finalizedStreamState.activeIssueIdentifier).toBeUndefined();
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("WorkspaceManager keeps interrupted issues resumable on their own stream", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
   const runtimeRoot = resolve(root, "runtime");

@@ -9,12 +9,14 @@
 
 ## Current Focus
 
-- Carry parent stream state into child scheduling so only parents in
-  `In Progress` can release child execution.
+- Keep parent `Todo` as the only automatic backlog-entry phase for managed
+  streams.
 - Treat parent `In Review` as the safe bootstrap and post-backlog hold state
   for new streams until a human explicitly moves the stream to `In Progress`.
-- Seed new implementation children in `Backlog` so the current runtime cannot
-  auto-run them before the parent-phase gate exists.
+- Seed new implementation children in `Todo` and rely on the parent-phase gate
+  to keep them parked until the stream is released.
+- Keep parent and child Linear transitions separate: backlog success returns
+  the parent to `In Review`, while child execution still lands on `Done`.
 - Keep repo docs terse and current while the parent Linear issue holds the
   evolving brief, child backlog, and operator notes.
 
@@ -25,8 +27,8 @@
   managed-marker ownership boundaries.
 - Keep child issues scoped to implementation-step work; planning and review
   remain parent-owned.
-- Do not create or auto-run child issues in active execution states before the
-  parent-phase gate exists.
+- Do not auto-run managed backlog after a parent leaves `Todo`.
+- Do not auto-run child issues unless their parent stream is `In Progress`.
 - Keep one active child per stream and continue to respect `blockedBy` ordering.
 
 ## Proof Surfaces
@@ -34,11 +36,14 @@
 - `../io.ts`
 - `./overview.md`
 - `../agent/io/module-stream-workflow-plan.md`
+- `../agent/doc/stream-workflow.md`
 - `../agent/src/types.ts`
 - `../agent/src/issue-routing.ts`
 - `../agent/src/service.ts`
 - `../agent/src/tracker/linear.ts`
 - `../agent/src/service.test.ts`
+- `../agent/src/workspace.ts`
+- `../agent/src/workspace.test.ts`
 
 ## Deferred
 

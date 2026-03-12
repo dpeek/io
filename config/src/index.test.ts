@@ -61,6 +61,8 @@ test("repo managed stream backlog doc captures expansion, maintenance, and opera
   expect(content).toContain("io-managed:backlog-proposal:start");
   expect(content).toContain("## Stable Child Payload");
   expect(content).toContain("blockedBy");
+  expect(content).toContain("current-approach bootstrap seeds new child issues in `Todo`");
+  expect(content).toContain("keeps seeded `Todo`");
   expect(content).toContain("top the stream back up to about five planned tasks");
   expect(content).toContain(
     "Do not destructively rewrite children that are already active or completed.",
@@ -69,7 +71,7 @@ test("repo managed stream backlog doc captures expansion, maintenance, and opera
   expect(content).toContain("## Operator-Visible Output");
 });
 
-test("repo managed stream contract docs lock the label, comment, and workflow shapes", () => {
+test("repo managed stream contract docs lock the label, comment, and current-approach workflow shapes", () => {
   const goals = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-goals.md"), "utf8");
   const comments = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-comments.md"), "utf8");
   const workflowPlan = readFileSync(
@@ -93,10 +95,14 @@ test("repo managed stream contract docs lock the label, comment, and workflow sh
   expect(comments).toContain("dryRun: true");
 
   expect(workflowPlan).toContain("## Stable Contract Sources");
-  expect(workflowPlan).toContain("## Implementation Order");
+  expect(workflowPlan).toContain("## Current Runtime Baseline");
+  expect(workflowPlan).toContain("## Current Approach Linear Contract");
+  expect(workflowPlan).toContain("## Proof Surface");
   expect(workflowPlan).toContain("./managed-stream-backlog.md");
   expect(workflowPlan).toContain("./managed-stream-comments.md");
   expect(workflowPlan).toContain("../doc/stream-workflow.md");
+  expect(workflowPlan).toContain("only auto-runs children whose parent is `In Progress`");
+  expect(workflowPlan).toContain("successful parent backlog runs move the parent to `In Review`");
 });
 
 test("repo managed stream contract docs capture label, ownership, and comment rules", () => {
@@ -120,6 +126,20 @@ test("repo managed stream contract docs capture label, ownership, and comment ru
   const planPath = resolve(repoRoot, "./agent/io/module-stream-workflow-plan.md");
   const plan = readFileSync(planPath, "utf8");
   expect(plan).toContain("## Stable Contract Sources");
-  expect(plan).toContain("## Implementation Order");
+  expect(plan).toContain("## Done Means");
+  expect(plan).toContain("new streams bootstrap with parent `In Review` and children in `Todo`");
   expect(plan).toContain("## Out Of Scope For This Slice");
+});
+
+test("repo current focus doc captures the phase gate and separated transitions", () => {
+  const focus = readFileSync(resolve(repoRoot, "./io/goals.md"), "utf8");
+
+  expect(focus).toContain("# Current Approach Stream");
+  expect(focus).toContain("Keep parent `Todo` as the only automatic backlog-entry phase");
+  expect(focus).toContain("Treat parent `In Review` as the safe bootstrap");
+  expect(focus).toContain("Seed new implementation children in `Todo`");
+  expect(focus).toContain("Keep parent and child Linear transitions separate");
+  expect(focus).toContain("child execution still lands on `Done`");
+  expect(focus).toContain("Do not auto-run child issues unless their parent stream is `In Progress`");
+  expect(focus).toContain("Keep one active child per stream");
 });

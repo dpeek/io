@@ -86,7 +86,7 @@ labels:
   - agent
   - <primary module label>
 priority: <inherit parent priority unless there is a clear reason not to>
-state: "Backlog"
+state: "Todo"
 blockedBy:
   - <previous child issue id or identifier when ordering is required>
 ```
@@ -98,24 +98,47 @@ acceptance criteria.
 Rules:
 
 - child issues are implementation-step only for this first pass
-- canonical bootstrap seeds new child issues in `Backlog`
-- the current runtime still writes speculative `Todo` children today; treat
-  that as a compatibility gap to close, not as a competing contract
-- while that compatibility gap exists, treat legacy speculative `Todo`
-  children as the same backlog pool during reruns
+- current-approach bootstrap seeds new child issues in `Todo`
+- parent stream phase, not a child-only planning tier, keeps seeded `Todo`
+  children non-runnable until the parent moves to `In Progress`
+- automatic backlog scheduling stops once the parent leaves `Todo`, but
+  explicit backlog reruns may still target the parent through direct routing or
+  `@io backlog`
+- reruns should treat untouched `Todo` children as the speculative tail unless
+  they have already moved into active review or done states
 
 ## Safe Bootstrap
 
 Seed new streams conservatively under the current runtime:
 
 1. set the parent issue to `In Review`
-2. create the initial implementation child backlog in `Backlog`
+2. create the initial implementation child backlog in `Todo`
 3. keep the parent in `In Review` while humans edit and approve the brief
 4. move the parent to `In Progress` only when execution may begin
 
 This keeps the current 2-level parent/child model intact while preventing new
-child issues from becoming runnable before the parent stream is explicitly
-released.
+`Todo` child issues from becoming runnable before the parent stream is
+explicitly released.
+
+Transition split for the current approach:
+
+- backlog success moves the parent from `Todo` to `In Review`
+- a human later moves the parent from `In Review` to `In Progress` to release
+  execution
+- child execution success moves only the child to `Done`
+
+## Transition Rules
+
+Keep parent backlog transitions and child execution transitions separate:
+
+- successful parent backlog runs start from parent `Todo` and return the parent
+  to `In Review`
+- successful child execution runs move the child to `Done`
+- moving the parent to `In Progress` is the human release step for execution;
+  it does not imply a child state change
+- terminal worktree cleanup happens after the Linear state transition, once the
+  runtime verifies the child landed on the stream branch or the parent landed
+  on `main`
 
 ## Expansion Pass
 
@@ -141,7 +164,7 @@ On later backlog runs for the same parent:
 3. avoid duplicates by matching on outcome, module scope, and nearby repository
    surfaces before creating anything new
 4. keep the next tasks stable unless the parent brief materially changed
-5. refresh only the speculative tail of untouched `Backlog` children
+5. refresh only the speculative tail of untouched `Todo` children
 6. top the stream back up to about five planned tasks when the tail gets short
 7. relink `blockedBy` edges if backlog edits changed ordering
 
