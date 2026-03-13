@@ -14,6 +14,7 @@ import {
   urlTypeModule,
 } from "@io/graph";
 
+import { envVarNameBlankMessage, envVarNameInvalidMessage, envVarNamePattern } from "../env-vars.js";
 import { statusTypeModule } from "../type/status/index.js";
 import ids from "./app.json";
 
@@ -174,14 +175,13 @@ export const envVar = defineType({
         if (typeof value !== "string" || value.trim().length === 0) {
           return {
             code: "string.blank",
-            message: "Environment variable names must not be blank.",
+            message: envVarNameBlankMessage,
           };
         }
-        if (!/^[A-Z][A-Z0-9_]*$/.test(value)) {
+        if (!envVarNamePattern.test(value)) {
           return {
             code: "envVar.name.invalid",
-            message:
-              "Environment variable names must start with a letter and use only uppercase letters, numbers, and underscores.",
+            message: envVarNameInvalidMessage,
           };
         }
         return undefined;

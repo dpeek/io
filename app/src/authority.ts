@@ -21,22 +21,19 @@ import {
   validateAuthoritativeTotalSyncPayload,
 } from "@io/graph";
 
+import {
+  buildSecretReferenceName,
+  envVarNameInvalidMessage,
+  envVarNamePattern,
+  envVarNameRequiredMessage,
+  newEnvVarSecretRequiredMessage,
+  type SaveEnvVarInput,
+  type SaveEnvVarResult,
+} from "./env-vars.js";
 import { app } from "./graph/app.js";
 import { seedExampleGraph } from "./graph/example-data.js";
 
-export type SaveEnvVarInput = {
-  readonly id?: string;
-  readonly name: string;
-  readonly description?: string;
-  readonly secretValue?: string;
-};
-
-export type SaveEnvVarResult = {
-  readonly envVarId: string;
-  readonly created: boolean;
-  readonly rotated: boolean;
-  readonly secretVersion?: number;
-};
+export type { SaveEnvVarInput, SaveEnvVarResult } from "./env-vars.js";
 
 export type AppAuthority = PersistedAuthoritativeGraph<typeof app> & {
   readonly snapshotPath: string;
@@ -55,7 +52,6 @@ const defaultAuthoritySnapshotPath = fileURLToPath(
   new URL("../tmp/app-graph.snapshot.json", import.meta.url),
 );
 let authorityCursorEpoch = 0;
-const envVarNamePattern = /^[A-Z][A-Z0-9_]*$/;
 
 function resolveAuthoritySnapshotPath(configuredSnapshotPath?: string): string {
   const rawPath = configuredSnapshotPath?.trim() ?? Bun.env.IO_APP_SNAPSHOT_PATH?.trim();
@@ -180,10 +176,6 @@ function serializeSecretValues(secretValues: ReadonlyMap<string, string>): Recor
   );
 }
 
-function buildSecretReferenceName(envVarName: string): string {
-  return `${envVarName} secret`;
-}
-
 class AppAuthorityMutationError extends Error {
   readonly status: number;
 
@@ -288,13 +280,10 @@ export async function createAppAuthority(
     const secretValue = trimOptionalString(input.secretValue);
 
     if (!name) {
-      throw new AppAuthorityMutationError(400, "Environment variable name is required.");
+      throw new AppAuthorityMutationError(400, envVarNameRequiredMessage);
     }
     if (!envVarNamePattern.test(name)) {
-      throw new AppAuthorityMutationError(
-        400,
-        "Environment variable names must start with a letter and use only uppercase letters, numbers, and underscores.",
-      );
+      throw new AppAuthorityMutationError(400, envVarNameInvalidMessage);
     }
 
     const existing = input.id ? graph.envVar.get(input.id) : undefined;
@@ -302,10 +291,7 @@ export async function createAppAuthority(
       throw new AppAuthorityMutationError(404, `Environment variable "${input.id}" was not found.`);
     }
     if (!input.id && !secretValue) {
-      throw new AppAuthorityMutationError(
-        400,
-        "New environment variables require a secret value.",
-      );
+      throw new AppAuthorityMutationError(400, newEnvVarSecretRequiredMessage);
     }
 
     const duplicate = graph.envVar

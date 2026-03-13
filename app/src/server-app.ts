@@ -1,6 +1,7 @@
 import page from "./web/index.html";
 
-import type { AppAuthority, SaveEnvVarInput } from "./authority.js";
+import type { AppAuthority } from "./authority.js";
+import type { SaveEnvVarInput } from "./env-vars.js";
 
 export function handleSyncRequest(request: Request, authority: AppAuthority): Response {
   if (request.method !== "GET") {

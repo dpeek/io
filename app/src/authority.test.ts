@@ -349,6 +349,82 @@ describe("app authority", () => {
     expect(persistedAfterRotate.secretValues?.[restartedEnvVar.secret]).toBe("sk-live-second");
   });
 
+  it("updates env-var metadata without rotating when no new secret is provided", async () => {
+    const snapshotPath = await createTempSnapshotPath();
+    const authority = await createAppAuthority({ snapshotPath });
+
+    const created = await authority.saveEnvVar({
+      name: "OPENAI_API_KEY",
+      description: "Primary model credential",
+      secretValue: "sk-live-first",
+    });
+    const createdEnvVar = authority.graph.envVar.get(created.envVarId);
+    if (!createdEnvVar?.secret) throw new Error("Expected created env var to reference a secret.");
+
+    const secretId = createdEnvVar.secret;
+    const rotatedAtBefore = authority.graph.secretRef.get(secretId)?.lastRotatedAt?.toISOString();
+    const updated = await authority.saveEnvVar({
+      id: created.envVarId,
+      name: "OPENAI_API_KEY",
+      description: "Updated model credential",
+    });
+    const persistedAfterUpdate = await readPersistedAuthorityState(snapshotPath);
+    const updatedEnvVar = authority.graph.envVar.get(created.envVarId);
+    if (!updatedEnvVar?.secret) throw new Error("Expected updated env var to retain a secret.");
+
+    expect(updated).toEqual({
+      created: false,
+      envVarId: created.envVarId,
+      rotated: false,
+      secretVersion: 1,
+    });
+    expect(updatedEnvVar.description).toBe("Updated model credential");
+    expect(updatedEnvVar.secret).toBe(secretId);
+    expect(authority.graph.secretRef.get(secretId)?.version).toBe(1);
+    expect(authority.graph.secretRef.get(secretId)?.lastRotatedAt?.toISOString()).toBe(
+      rotatedAtBefore,
+    );
+    expect(persistedAfterUpdate.secretValues?.[secretId]).toBe("sk-live-first");
+  });
+
+  it("does not rotate when the submitted secret matches the current authority-only plaintext", async () => {
+    const snapshotPath = await createTempSnapshotPath();
+    const authority = await createAppAuthority({ snapshotPath });
+
+    const created = await authority.saveEnvVar({
+      name: "SLACK_BOT_TOKEN",
+      description: "Workspace notifications",
+      secretValue: "xapp-secret",
+    });
+    const createdEnvVar = authority.graph.envVar.get(created.envVarId);
+    if (!createdEnvVar?.secret) throw new Error("Expected created env var to reference a secret.");
+
+    const secretId = createdEnvVar.secret;
+    const rotatedAtBefore = authority.graph.secretRef.get(secretId)?.lastRotatedAt?.toISOString();
+    const updated = await authority.saveEnvVar({
+      id: created.envVarId,
+      name: "SLACK_BOT_TOKEN",
+      description: "Updated notifications integration",
+      secretValue: "xapp-secret",
+    });
+    const persistedAfterUpdate = await readPersistedAuthorityState(snapshotPath);
+
+    expect(updated).toEqual({
+      created: false,
+      envVarId: created.envVarId,
+      rotated: false,
+      secretVersion: 1,
+    });
+    expect(authority.graph.envVar.get(created.envVarId).description).toBe(
+      "Updated notifications integration",
+    );
+    expect(authority.graph.secretRef.get(secretId)?.version).toBe(1);
+    expect(authority.graph.secretRef.get(secretId)?.lastRotatedAt?.toISOString()).toBe(
+      rotatedAtBefore,
+    );
+    expect(persistedAfterUpdate.secretValues?.[secretId]).toBe("xapp-secret");
+  });
+
   it("accepts env-var mutations through the server route and syncs the opaque graph state", async () => {
     const snapshotPath = await createTempSnapshotPath();
     const authority = await createAppAuthority({ snapshotPath });

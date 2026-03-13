@@ -12,6 +12,7 @@ here.
 ## Docs
 
 - `./package-surface.md`
+- `./env-vars.md`
 - `../../graph/io/overview.md`
 - `../../graph/io/architecture.md`
 - `../../graph/io/runtime.md`

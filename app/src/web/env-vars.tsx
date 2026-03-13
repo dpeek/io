@@ -1,21 +1,13 @@
 import { useState } from "react";
 
+import {
+  envVarNameRequiredMessage,
+  newEnvVarSecretRequiredMessage,
+  type SaveEnvVarInput,
+  type SaveEnvVarResult,
+} from "../env-vars.js";
 import { type AppRuntime, useAppRuntime } from "./runtime.js";
 import { hrefForAppRoute } from "./routes.js";
-
-type EnvVarMutationInput = {
-  readonly id?: string;
-  readonly name: string;
-  readonly description?: string;
-  readonly secretValue?: string;
-};
-
-type EnvVarMutationResult = {
-  readonly envVarId: string;
-  readonly created: boolean;
-  readonly rotated: boolean;
-  readonly secretVersion?: number;
-};
 
 type EnvVarRouteRuntime = Pick<AppRuntime, "graph"> & {
   readonly sync: {
@@ -78,7 +70,7 @@ function formatTimestamp(value: Date | undefined): string {
   });
 }
 
-async function postEnvVarMutation(input: EnvVarMutationInput): Promise<EnvVarMutationResult> {
+async function postEnvVarMutation(input: SaveEnvVarInput): Promise<SaveEnvVarResult> {
   const response = await fetch("/api/env-vars", {
     method: "POST",
     headers: {
@@ -90,7 +82,7 @@ async function postEnvVarMutation(input: EnvVarMutationInput): Promise<EnvVarMut
 
   const payload = (await response.json().catch(() => undefined)) as
     | { readonly error?: string }
-    | EnvVarMutationResult
+    | SaveEnvVarResult
     | undefined;
 
   if (!response.ok) {
@@ -101,7 +93,7 @@ async function postEnvVarMutation(input: EnvVarMutationInput): Promise<EnvVarMut
     );
   }
 
-  return payload as EnvVarMutationResult;
+  return payload as SaveEnvVarResult;
 }
 
 export function EnvVarSettingsSurface({
@@ -109,7 +101,7 @@ export function EnvVarSettingsSurface({
   submitEnvVar = postEnvVarMutation,
 }: {
   readonly runtime?: EnvVarRouteRuntime;
-  readonly submitEnvVar?: (input: EnvVarMutationInput) => Promise<EnvVarMutationResult>;
+  readonly submitEnvVar?: (input: SaveEnvVarInput) => Promise<SaveEnvVarResult>;
 }) {
   const resolvedRuntime = runtime ?? useAppRuntime();
   const [mode, setMode] = useState<
@@ -136,12 +128,12 @@ export function EnvVarSettingsSurface({
     const secretValue = trimOptionalString(draft.secretValue);
 
     if (!name) {
-      setError("Environment variable name is required.");
+      setError(envVarNameRequiredMessage);
       setStatus("");
       return;
     }
     if (mode.kind === "new" && !secretValue) {
-      setError("New environment variables require a secret value.");
+      setError(newEnvVarSecretRequiredMessage);
       setStatus("");
       return;
     }
