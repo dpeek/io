@@ -13,6 +13,7 @@ import {
 } from "./store.js";
 
 const APP_ROOT_ID = "tui-root";
+const DEFAULT_LIVE_RECENT_TERMINAL_WORKER_LIMIT = 2;
 const REASONING_SPINNER_INTERVAL_MS = 120;
 
 export type AgentTuiTerminal = NodeJS.WriteStream;
@@ -137,7 +138,9 @@ export function createAgentTui(options: AgentTuiOptions = {}): AgentTui {
     options.store ??
     createAgentTuiStore({
       maxEventHistory: options.maxEventHistory,
-      retainTerminalSessions: options.retainTerminalSessions ?? false,
+      maxRetainedTerminalWorkers:
+        options.maxRetainedTerminalWorkers ?? DEFAULT_LIVE_RECENT_TERMINAL_WORKER_LIMIT,
+      retainTerminalSessions: options.retainTerminalSessions ?? true,
     });
   let active = false;
   let renderScheduled = false;

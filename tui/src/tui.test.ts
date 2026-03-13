@@ -187,6 +187,112 @@ test("AgentTuiStore prunes completed non-supervisor sessions when retention is d
   expect(supervisorContent).toContain("Session started | /Users/dpeek/code/io");
 });
 
+test("AgentTuiStore keeps active workers ahead of a short retained completed and failed tail", () => {
+  const store = createAgentTuiStore({ maxRetainedTerminalWorkers: 2 });
+  const supervisor = createSupervisorSession();
+  const completedWorker = createWorkerSession();
+  const failedWorker = createWorkerSession({
+    branchName: "ope-69",
+    id: "worker:OPE-69:1",
+    issue: {
+      id: "issue-69",
+      identifier: "OPE-69",
+      title: "Handle failure path",
+    },
+    title: "Handle failure path",
+    workerId: "OPE-69",
+    workspacePath: "/Users/dpeek/code/io/.io/tree/ope-69",
+  });
+  const activeWorker = createWorkerSession({
+    branchName: "ope-70",
+    id: "worker:OPE-70:1",
+    issue: {
+      id: "issue-70",
+      identifier: "OPE-70",
+      title: "Keep active work visible",
+    },
+    title: "Keep active work visible",
+    workerId: "OPE-70",
+    workspacePath: "/Users/dpeek/code/io/.io/tree/ope-70",
+  });
+  const recentCompletedWorker = createWorkerSession({
+    branchName: "ope-71",
+    id: "worker:OPE-71:1",
+    issue: {
+      id: "issue-71",
+      identifier: "OPE-71",
+      title: "Inspect recent completion",
+    },
+    title: "Inspect recent completion",
+    workerId: "OPE-71",
+    workspacePath: "/Users/dpeek/code/io/.io/tree/ope-71",
+  });
+
+  store.observe({
+    phase: "started",
+    sequence: 1,
+    session: supervisor,
+    timestamp: "2026-03-10T02:03:00.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "started",
+    sequence: 2,
+    session: completedWorker,
+    timestamp: "2026-03-10T02:03:01.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "completed",
+    sequence: 3,
+    session: completedWorker,
+    timestamp: "2026-03-10T02:03:02.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "started",
+    sequence: 4,
+    session: failedWorker,
+    timestamp: "2026-03-10T02:03:03.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "failed",
+    sequence: 5,
+    session: failedWorker,
+    timestamp: "2026-03-10T02:03:04.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "started",
+    sequence: 6,
+    session: activeWorker,
+    timestamp: "2026-03-10T02:03:05.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "started",
+    sequence: 7,
+    session: recentCompletedWorker,
+    timestamp: "2026-03-10T02:03:06.000Z",
+    type: "session",
+  });
+  store.observe({
+    phase: "completed",
+    sequence: 8,
+    session: recentCompletedWorker,
+    timestamp: "2026-03-10T02:03:07.000Z",
+    type: "session",
+  });
+
+  expect(store.getSnapshot().columns.map((column) => column.session.id)).toEqual([
+    "supervisor",
+    "worker:OPE-70:1",
+    "worker:OPE-71:1",
+    "worker:OPE-69:1",
+  ]);
+});
+
 test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and finalization context inspectable", () => {
   const store = createAgentTuiStore();
   const supervisor = createSupervisorSession({ workspacePath: "/repo" });
@@ -291,8 +397,8 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
 
   expect(snapshot.columns.map((column) => column.session.id)).toEqual([
     "supervisor",
-    "worker:OPE-174:1",
     "worker:OPE-188:1",
+    "worker:OPE-174:1",
   ]);
   expect(streamColumn?.status).toMatchObject({
     code: "issue-committed",
@@ -1239,7 +1345,7 @@ test("createAgentTui supports keyboard column navigation and content scrolling",
   }
 });
 
-test("createAgentTui drops completed worker columns in live mode", async () => {
+test("createAgentTui keeps a short recent completed and failed worker tail in live mode", async () => {
   const { renderOnce, renderer } = await createTestRenderer({
     height: 14,
     width: 96,
@@ -1249,7 +1355,43 @@ test("createAgentTui drops completed worker columns in live mode", async () => {
     requireTty: false,
   });
   const supervisor = createSupervisorSession();
-  const worker = createWorkerSession();
+  const completedWorker = createWorkerSession();
+  const failedWorker = createWorkerSession({
+    branchName: "ope-69",
+    id: "worker:OPE-69:1",
+    issue: {
+      id: "issue-69",
+      identifier: "OPE-69",
+      title: "Handle failure path",
+    },
+    title: "Handle failure path",
+    workerId: "OPE-69",
+    workspacePath: "/Users/dpeek/code/io/.io/tree/ope-69",
+  });
+  const activeWorker = createWorkerSession({
+    branchName: "ope-70",
+    id: "worker:OPE-70:1",
+    issue: {
+      id: "issue-70",
+      identifier: "OPE-70",
+      title: "Keep active work visible",
+    },
+    title: "Keep active work visible",
+    workerId: "OPE-70",
+    workspacePath: "/Users/dpeek/code/io/.io/tree/ope-70",
+  });
+  const recentCompletedWorker = createWorkerSession({
+    branchName: "ope-71",
+    id: "worker:OPE-71:1",
+    issue: {
+      id: "issue-71",
+      identifier: "OPE-71",
+      title: "Inspect recent completion",
+    },
+    title: "Inspect recent completion",
+    workerId: "OPE-71",
+    workspacePath: "/Users/dpeek/code/io/.io/tree/ope-71",
+  });
 
   try {
     await tui.start();
@@ -1263,8 +1405,50 @@ test("createAgentTui drops completed worker columns in live mode", async () => {
     tui.observe({
       phase: "started",
       sequence: 2,
-      session: worker,
+      session: completedWorker,
       timestamp: "2026-03-10T02:12:01.000Z",
+      type: "session",
+    });
+    tui.observe({
+      phase: "completed",
+      sequence: 3,
+      session: completedWorker,
+      timestamp: "2026-03-10T02:12:02.000Z",
+      type: "session",
+    });
+    tui.observe({
+      phase: "started",
+      sequence: 4,
+      session: failedWorker,
+      timestamp: "2026-03-10T02:12:03.000Z",
+      type: "session",
+    });
+    tui.observe({
+      phase: "failed",
+      sequence: 5,
+      session: failedWorker,
+      timestamp: "2026-03-10T02:12:04.000Z",
+      type: "session",
+    });
+    tui.observe({
+      phase: "started",
+      sequence: 6,
+      session: activeWorker,
+      timestamp: "2026-03-10T02:12:05.000Z",
+      type: "session",
+    });
+    tui.observe({
+      phase: "started",
+      sequence: 7,
+      session: recentCompletedWorker,
+      timestamp: "2026-03-10T02:12:06.000Z",
+      type: "session",
+    });
+    tui.observe({
+      phase: "completed",
+      sequence: 8,
+      session: recentCompletedWorker,
+      timestamp: "2026-03-10T02:12:07.000Z",
       type: "session",
     });
 
@@ -1272,20 +1456,10 @@ test("createAgentTui drops completed worker columns in live mode", async () => {
     await renderOnce();
     expect(tui.getSnapshot().columns.map((column) => column.session.id)).toEqual([
       "supervisor",
-      "worker:OPE-68:1",
+      "worker:OPE-70:1",
+      "worker:OPE-71:1",
+      "worker:OPE-69:1",
     ]);
-
-    tui.observe({
-      phase: "completed",
-      sequence: 3,
-      session: worker,
-      timestamp: "2026-03-10T02:12:02.000Z",
-      type: "session",
-    });
-
-    await Promise.resolve();
-    await renderOnce();
-    expect(tui.getSnapshot().columns.map((column) => column.session.id)).toEqual(["supervisor"]);
   } finally {
     await tui.stop();
     renderer.destroy();

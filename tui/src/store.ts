@@ -35,6 +35,7 @@ type AgentTuiInternalColumnState = {
   phase: AgentSessionPhase | "pending";
   session: AgentSessionRef;
   status?: AgentTuiStatusSummary;
+  terminalSequence?: number;
   blocks: AgentTuiBlock[];
 };
 
@@ -91,7 +92,19 @@ export interface AgentTuiStore {
 
 export interface AgentTuiStoreOptions {
   maxEventHistory?: number;
+  maxRetainedTerminalWorkers?: number;
   retainTerminalSessions?: boolean;
+}
+
+function isTerminalPhase(phase: AgentSessionPhase | "pending") {
+  return phase === "completed" || phase === "failed" || phase === "stopped";
+}
+
+function isRetainedTerminalWorker(state: AgentTuiInternalColumnState) {
+  return (
+    state.session.kind === "worker" &&
+    (state.phase === "completed" || state.phase === "failed")
+  );
 }
 
 function mergeSessionRef(current: AgentSessionRef, next: AgentSessionRef): AgentSessionRef {
@@ -146,7 +159,20 @@ function compareColumnOrder(left: AgentTuiInternalColumnState, right: AgentTuiIn
   if (left.session.kind !== "supervisor" && right.session.kind === "supervisor") {
     return 1;
   }
-  if (left.firstSequence !== right.firstSequence) {
+
+  const leftIsTerminal = isTerminalPhase(left.phase);
+  const rightIsTerminal = isTerminalPhase(right.phase);
+  if (leftIsTerminal !== rightIsTerminal) {
+    return leftIsTerminal ? 1 : -1;
+  }
+
+  if (leftIsTerminal && rightIsTerminal) {
+    const leftTerminalSequence = left.terminalSequence ?? left.lastSequence;
+    const rightTerminalSequence = right.terminalSequence ?? right.lastSequence;
+    if (leftTerminalSequence !== rightTerminalSequence) {
+      return rightTerminalSequence - leftTerminalSequence;
+    }
+  } else if (left.firstSequence !== right.firstSequence) {
     return left.firstSequence - right.firstSequence;
   }
   return left.session.id.localeCompare(right.session.id);
@@ -218,6 +244,7 @@ function buildColumnSnapshots(
 export function createAgentTuiStore(options: AgentTuiStoreOptions = {}): AgentTuiStore {
   const listeners = new Set<() => void>();
   const maxEventHistory = options.maxEventHistory ?? DEFAULT_MAX_EVENT_HISTORY;
+  const maxRetainedTerminalWorkers = options.maxRetainedTerminalWorkers;
   const retainTerminalSessions = options.retainTerminalSessions ?? true;
   const sessions = new Map<string, AgentTuiInternalColumnState>();
   let updatedAt: string | undefined;
@@ -244,6 +271,36 @@ export function createAgentTuiStore(options: AgentTuiStoreOptions = {}): AgentTu
     return created;
   };
 
+  const pruneRetainedTerminalWorkers = () => {
+    if (
+      !retainTerminalSessions ||
+      !Number.isFinite(maxRetainedTerminalWorkers) ||
+      (maxRetainedTerminalWorkers ?? 0) < 0
+    ) {
+      return;
+    }
+
+    const terminalWorkers = Array.from(sessions.values())
+      .filter(isRetainedTerminalWorker)
+      .sort((left, right) => {
+        const leftTerminalSequence = left.terminalSequence ?? left.lastSequence;
+        const rightTerminalSequence = right.terminalSequence ?? right.lastSequence;
+        if (leftTerminalSequence !== rightTerminalSequence) {
+          return leftTerminalSequence - rightTerminalSequence;
+        }
+        return left.session.id.localeCompare(right.session.id);
+      });
+
+    const overflow = terminalWorkers.length - (maxRetainedTerminalWorkers ?? 0);
+    if (overflow <= 0) {
+      return;
+    }
+
+    for (const worker of terminalWorkers.slice(0, overflow)) {
+      deleteSessionTree(worker.session.id);
+    }
+  };
+
   const notify = () => {
     for (const listener of listeners) {
       listener();
@@ -264,14 +321,17 @@ export function createAgentTuiStore(options: AgentTuiStoreOptions = {}): AgentTu
       updatedAt = event.timestamp;
       if (event.type === "session") {
         state.phase = event.phase;
+        state.terminalSequence = isTerminalPhase(event.phase) ? event.sequence : undefined;
         appendBlocksForEvent(state, event);
         pushEventHistory(state, event, maxEventHistory);
         if (
           !retainTerminalSessions &&
           event.session.kind !== "supervisor" &&
-          (event.phase === "completed" || event.phase === "failed" || event.phase === "stopped")
+          isTerminalPhase(event.phase)
         ) {
           deleteSessionTree(event.session.id);
+        } else {
+          pruneRetainedTerminalWorkers();
         }
         notify();
         return;
