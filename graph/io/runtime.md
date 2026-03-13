@@ -49,9 +49,19 @@ The current implementation keeps ids stable per key and treats rename as an expl
 - bootstrap writes type, predicate, field-tree, enum-member, and core metadata facts into the store
 - schema itself is represented as graph data, not only TypeScript structure
 
+### Authoritative persistence
+
+`../src/graph/authority.ts` owns the persisted authoritative runtime surface:
+
+- `PersistedAuthoritativeGraphStorage` defines the load/save contract for durable state
+- `createJsonPersistedAuthoritativeGraphStorage(path, namespace)` provides the shipped JSON-backed adapter
+- `createPersistedAuthoritativeGraph(store, namespace, { storage, seed?, createCursorPrefix? })` composes seeding, reload, save, and authoritative write replay
+- persisted state stores a validated `snapshot` plus retained `writeHistory`
+- legacy snapshot-only files are rewritten into the current versioned state shape
+- failed durable saves roll back the accepted in-memory write so the authority does not diverge from disk
+
 ### Runtime helpers
 
-- `../src/graph/authority.ts` contains persisted authoritative graph orchestration plus the JSON storage adapter
 - `../src/graph/serialize.ts` contains internal helpers for turning store state into plain objects and schema views
 - `../src/type/input.ts` contains input-kind guards used by scalar codecs
 
@@ -60,7 +70,9 @@ The current implementation keeps ids stable per key and treats rename as an expl
 - Storage stays opaque and string-based; scalar decode/encode lives above it.
 - Field trees preserve authoring shape, but runtime linking uses resolved ids.
 - Reference fields should be authored through `defineReferenceField(...)` or helpers layered on top of it.
-- The store does not currently advertise secondary indexes, but the package now ships a JSON persistence adapter for authoritative runtimes.
+- The store does not currently advertise secondary indexes.
+- The package owns the persisted-authority contract and JSON adapter, but consumers still choose storage paths, bootstrap order, seed data, and process lifecycle.
+- Transport is still outside the runtime core; persisted authority helpers only produce and consume graph sync/session primitives.
 
 ## Roadmap
 

@@ -16,6 +16,7 @@ This document is the high-level entry point for agents reasoning about the engin
 - Shared validation results across local mutation and authoritative apply
 - Total sync plus authoritative write and incremental replay surfaces
 - JSON persistence for authoritative snapshots plus retained write history
+- A persisted authority wrapper that validates reloads, preserves cursor continuity, and rolls back failed saves
 
 ### Main source boundaries
 
@@ -24,7 +25,7 @@ This document is the high-level entry point for agents reasoning about the engin
 - `../src/graph/identity.ts`: stable key-to-id resolution and id-map helpers
 - `../src/graph/bootstrap.ts`: schema bootstrap into store facts
 - `../src/graph/client.ts`: typed CRUD, refs, query, and validation lifecycle
-- `../src/graph/authority.ts`: persisted authority orchestration and JSON load/save
+- `../src/graph/authority.ts`: persisted authority orchestration, storage contracts, and JSON load/save
 - `../src/graph/sync.ts`: authoritative validation, sync sessions, write replay, and state
 - `../src/graph/type-module.ts`: typed scalar/enum module contracts
 
@@ -37,6 +38,7 @@ This document is the high-level entry point for agents reasoning about the engin
 - The first query surface is typed and local-store-backed.
 - Incremental sync is already represented as ordered authoritative transactions after a cursor.
 - JSON persistence can recover snapshot state and retained write history across restart.
+- The graph package owns the persisted-authority contract, including versioned state shape, legacy rewrite, and save rollback semantics.
 
 ## What Is Not Yet Current
 
@@ -44,16 +46,24 @@ This document is the high-level entry point for agents reasoning about the engin
 - Query-scoped partial sync and query-aware completeness
 - A separate query planner or index subsystem beyond the current store traversal paths
 - ACL, secret storage, or server action/runtime layers
+- A built-in HTTP or live transport layer inside `graph`
 - A full web or TUI renderer stack inside `graph`
 - Time-travel, audit, or richer observability tooling in the package itself
+
+## Ownership Boundary
+
+- `graph` owns the authoritative persistence primitives: the storage contract, JSON adapter, versioned persisted state, retained write history, cursor recovery, and rollback-on-save-failure behavior.
+- Consumer packages own composition around those primitives: bootstrap ordering, seed policy, file-path/config resolution, and process lifecycle.
+- Transport remains consumer-owned. `graph` defines the sync payloads and replay rules, while packages like `app` choose how to expose them over HTTP or other transports.
 
 ## Architectural Direction
 
 The likely direction is still the same as the legacy docs, but it should now be read as roadmap rather than current behavior:
 
-- richer persistence backends beyond the current JSON snapshot-plus-history shape
+- additional persistence backends beyond the current JSON snapshot-plus-history shape
 - richer query and indexing contracts on top of the current typed client
 - policy, secrets, and authoritative action layers above the core engine
+- live transport layers over the existing total/incremental sync contracts
 - schema-driven UI built on typed refs and module metadata
 - stronger explorer/devtool visibility into sync and validation boundaries
 

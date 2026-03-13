@@ -2,15 +2,15 @@
 
 ## Purpose
 
-`graph` owns the reusable graph engine: schema authoring, stable ids, bootstrap, the append-only store, typed refs, validation, sync, and type-module contracts.
+`graph` owns the reusable graph engine: schema authoring, stable ids, bootstrap, the append-only store, typed refs, validation, sync, persisted authoritative runtimes, and type-module contracts.
 
 ## Entry Points
 
-- `./architecture.md`: durable engine model, current primitives, and longer-range platform shape
+- `./architecture.md`: durable engine model, current persistence ownership, and longer-range platform shape
 - `./authority.md`: authority boundaries, predicate visibility, typed business methods, and secrets
-- `./runtime.md`: schema authoring, id maps, core schema, bootstrap, and store behavior
+- `./runtime.md`: schema authoring, id maps, core schema, bootstrap, store behavior, and persisted authority helpers
 - `./validation.md`: local and authoritative validation lifecycle plus result surfaces
-- `./sync.md`: total snapshot bootstrap, incremental write reconciliation, and sync state
+- `./sync.md`: total snapshot bootstrap, retained history recovery, incremental write reconciliation, and sync state
 - `./type-modules.md`: scalar/enum modules, field metadata/filter contracts, and reference-field helpers
 - `./refs-and-ui.md`: typed refs, predicate-slot subscriptions, and the current UI-adjacent surface
 
@@ -22,7 +22,7 @@
 
 ## Current vs Roadmap
 
-Current code already ships typed entity/predicate refs, predicate-slot subscriptions, type-module metadata/filter contracts, and incremental authoritative sync primitives. The remaining roadmap is mostly around persistence, richer query semantics, policy/secrets, and fully realized web/TUI tooling.
+Current code already ships JSON-backed authoritative persistence, typed entity/predicate refs, predicate-slot subscriptions, type-module metadata/filter contracts, and incremental authoritative sync primitives. The remaining roadmap is mostly around additional persistence backends, richer query semantics, policy/secrets, transport, and fully realized web/TUI tooling.
 
 ## Future Work Suggestions
 

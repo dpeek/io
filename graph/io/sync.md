@@ -46,7 +46,7 @@ Incremental payloads carry:
 - `getHistory()`
 
 The current authority session already treats transaction ids as idempotency keys and emits monotonic cursors.
-The persisted authority helper layers durable snapshot load/save, retained history recovery, legacy snapshot rewrite, and rollback-on-save-failure on top of that session model.
+The persisted authority helper layers durable snapshot load/save, retained history recovery, legacy snapshot rewrite, and rollback-on-save-failure on top of that session model without changing the sync payload shapes clients consume.
 
 ### Client/session side
 
@@ -65,6 +65,12 @@ The persisted authority helper layers durable snapshot load/save, retained histo
 - `sync.flush()` pushes queued writes
 - `sync.sync()` pulls authoritative state
 - `sync.getPendingTransactions()` and `sync.getState()` expose queue and delivery state
+
+## Ownership Boundary
+
+- `graph` owns the total/incremental payload contracts, cursor progression rules, fallback semantics, and the persisted-authority history that feeds those contracts after restart.
+- Consumer packages own transport and endpoint policy: when to call `createSyncPayload()` or `getIncrementalSyncResult(...)`, how to expose them over HTTP or another transport, and what auth wraps those endpoints.
+- The app proof is one such consumer: it composes `@io/graph` persistence in `app/src/authority.ts` and exposes a thin `GET /api/sync` wrapper in `app/src/server-app.ts`.
 
 ## Current Behavior
 
