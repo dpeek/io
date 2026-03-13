@@ -98,7 +98,7 @@ Supervisor contract:
 - the feature is `In Progress`
 - the task is `Todo`
 - successful task execution moves the task to `Done` and lands the task commit onto the feature branch
-- current runtime note: any released leaf issue is still technically runnable, so the preferred workflow should create explicit task children under each feature
+- non-task leaves are not auto-runnable; each feature should own explicit task children
 
 Feature completion target contract:
 

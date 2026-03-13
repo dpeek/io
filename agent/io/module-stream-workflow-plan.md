@@ -35,8 +35,9 @@ Resolved workflow state already includes:
 Retained compatibility note:
 
 - legacy top-level issues with `io` plus exactly one configured module label are
-  still recognized by retained docs and compatibility paths, but routing itself
-  now depends on explicit rules rather than an implicit backlog fallback
+  still recognized for retained comment workflows, but the supervisor does not
+  auto-run them and general routing now depends on explicit rules rather than an
+  implicit backlog fallback
 
 Issue-body hints parsed by `../src/context.ts` can still override the base selection with:
 

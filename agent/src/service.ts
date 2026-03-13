@@ -4,7 +4,7 @@ import { relative, resolve } from "node:path";
 import { createLogger, type Logger } from "@io/lib";
 
 import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
-import { resolveIssueModule, resolveIssueRouting } from "./issue-routing.js";
+import { resolveIssueRouting } from "./issue-routing.js";
 import { CodexAppServerRunner } from "./runner/codex.js";
 import {
   createAgentSessionEventBus,
@@ -109,13 +109,13 @@ function isInProgressState(state?: string) {
 }
 
 function isExecutionReleased(issue: AgentIssue) {
-  if (!issue.hasParent) {
-    return true;
-  }
-  if (!isInProgressState(issue.parentIssueState)) {
+  if (!isTaskIssue(issue)) {
     return false;
   }
-  if (issue.streamIssueState && !isInProgressState(issue.streamIssueState)) {
+  if (!issue.parentIssueState || !isInProgressState(issue.parentIssueState)) {
+    return false;
+  }
+  if (!issue.streamIssueState || !isInProgressState(issue.streamIssueState)) {
     return false;
   }
   return true;
@@ -138,6 +138,15 @@ function hasSeparateFeature(
       issue.streamIssueIdentifier &&
       issue.parentIssueIdentifier !== issue.streamIssueIdentifier,
   );
+}
+
+function isTaskIssue(
+  issue: Pick<
+    AgentIssue,
+    "hasChildren" | "hasParent" | "parentIssueIdentifier" | "streamIssueIdentifier"
+  >,
+) {
+  return issue.hasParent && !issue.hasChildren && hasSeparateFeature(issue);
 }
 
 function formatWorkflowScope(
@@ -189,12 +198,20 @@ function formatCount(count: number, label: string) {
 
 function formatExecutionReleaseIssueLine(issue: AgentIssue) {
   const waitingOn: string[] = [];
-  if (issue.parentIssueIdentifier && issue.parentIssueState && !isInProgressState(issue.parentIssueState)) {
+  if (issue.parentIssueIdentifier && !isInProgressState(issue.parentIssueState)) {
     const parentLabel = hasSeparateFeature(issue) ? "feature" : "stream";
-    waitingOn.push(`${parentLabel} ${issue.parentIssueIdentifier} is ${issue.parentIssueState}`);
+    waitingOn.push(
+      issue.parentIssueState
+        ? `${parentLabel} ${issue.parentIssueIdentifier} is ${issue.parentIssueState}`
+        : `${parentLabel} ${issue.parentIssueIdentifier} state is unknown`,
+    );
   }
-  if (issue.streamIssueIdentifier && issue.streamIssueState && !isInProgressState(issue.streamIssueState)) {
-    waitingOn.push(`stream ${issue.streamIssueIdentifier} is ${issue.streamIssueState}`);
+  if (issue.streamIssueIdentifier && !isInProgressState(issue.streamIssueState)) {
+    waitingOn.push(
+      issue.streamIssueState
+        ? `stream ${issue.streamIssueIdentifier} is ${issue.streamIssueState}`
+        : `stream ${issue.streamIssueIdentifier} state is unknown`,
+    );
   }
   if (!waitingOn.length) {
     return formatWorkflowScope(issue);
@@ -310,7 +327,6 @@ export class AgentService {
       const maxConcurrentAgents = Math.max(1, activeWorkflow.agent.maxConcurrentAgents);
       const availableSlots = Math.max(0, maxConcurrentAgents - this.#activeRuns.size);
       const launchableIssues = this.#selectLaunchableIssues(
-        activeWorkflow,
         issues,
         occupiedStreams,
       );
@@ -378,30 +394,13 @@ export class AgentService {
     return run;
   }
 
-  #shouldAutoScheduleIssue(workflow: Workflow, issue: AgentIssue) {
-    const isManagedParent =
-      !issue.hasParent &&
-      issue.labels.some((label) => normalizeState(label) === "io") &&
-      Boolean(resolveIssueModule(workflow.modules, issue));
-    if (isManagedParent) {
-      return normalizeState(issue.state) === "todo";
-    }
-    if (issue.hasParent) {
-      return !issue.hasChildren && isExecutionReleased(issue);
-    }
-    if (!issue.hasChildren) {
-      return true;
-    }
-    return resolveIssueRouting(workflow.issues, issue, workflow.modules).agent === "backlog";
+  #shouldAutoScheduleIssue(issue: AgentIssue) {
+    return isTaskIssue(issue) && isExecutionReleased(issue);
   }
 
-  #selectLaunchableIssues(
-    workflow: Workflow,
-    issues: AgentIssue[],
-    occupiedStreams: Map<string, string>,
-  ) {
+  #selectLaunchableIssues(issues: AgentIssue[], occupiedStreams: Map<string, string>) {
     return pickCandidateIssues(
-      issues.filter((issue) => this.#shouldAutoScheduleIssue(workflow, issue)),
+      issues.filter((issue) => this.#shouldAutoScheduleIssue(issue)),
       issues.length,
       occupiedStreams,
     )
@@ -444,7 +443,7 @@ export class AgentService {
     const launchableIssueIdentifiers = new Set(
       options.launchableIssues.map((issue) => issue.identifier),
     );
-    const executionCandidates = options.issues.filter((issue) => issue.hasParent || !issue.hasChildren);
+    const executionCandidates = options.issues.filter((issue) => isTaskIssue(issue));
     const blockedByDependency: string[] = [];
     const waitingForRelease: string[] = [];
     const occupied: string[] = [];
@@ -771,11 +770,7 @@ export class AgentService {
       issueIdentifier: issue.identifier,
       workspace: workspace.path,
     });
-    if (issue.hasParent) {
-      await tracker.setIssueState(issue.id, "Done");
-      return result;
-    }
-    await tracker.setIssueState(issue.id, "In Review");
+    await tracker.setIssueState(issue.id, "Done");
     return result;
   }
 

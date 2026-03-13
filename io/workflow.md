@@ -52,14 +52,11 @@ The agent/runtime owns:
 - Planning states such as `Backlog` or `Todo` remain user-owned. Nothing is
   execution-released until the relevant parent issue is `In Progress`.
 - A task under a feature only becomes runnable when both the feature and the
-  stream are `In Progress`.
-- The supervisor only picks released leaf issues. In the preferred workflow,
-  that means tasks.
+  stream are explicitly `In Progress`.
+- The supervisor only picks released task issues. Top-level stream issues,
+  feature issues, and other non-task leaves are not auto-run.
 - A successful task run lands its commit and moves the task to `Done`
   automatically.
-- Successful top-level backlog-style runs still move the top-level issue to `In
-  Review`; that is retained compatibility behavior, not the preferred execution
-  path for this workflow.
 
 ## Branch And Finalization Contract
 
@@ -77,11 +74,9 @@ The agent/runtime owns:
 
 ## Current Gaps And Compatibility Notes
 
-- The scheduler still treats any released leaf issue as runnable. A feature with
-  no task children can still run directly, even though the preferred path is
-  `Stream -> Feature -> Task`.
 - Top-level issues with `io` plus exactly one configured module label still fall
-  back to backlog routing for retained compatibility.
+  back to backlog routing for retained comment workflows, but the supervisor
+  does not auto-run them.
 - Task landing onto the feature branch is implemented today, but automated
   feature-branch squashing, rebasing, and merge into the stream branch is still
   being tightened.
