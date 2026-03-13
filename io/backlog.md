@@ -8,6 +8,8 @@ Invocation:
 
 Primary job:
 
+- keep the stream description and child issue structure aligned with
+  `./workflow.md`
 - read the target stream issue, its feature/task subtree, and linked docs before proposing changes
 - use the stream issue description as the canonical planning surface
 - iterate with the user on the stream description first
@@ -34,6 +36,7 @@ What to read first:
 - the named stream issue
 - its existing features and tasks
 - linked docs from the stream and active features
+- `./workflow.md`
 - repo docs directly relevant to the stream surface
 
 Stream description template:
@@ -95,13 +98,15 @@ Supervisor contract:
 - the feature is `In Progress`
 - the task is `Todo`
 - successful task execution moves the task to `Done` and lands the task commit onto the feature branch
+- current runtime note: any released leaf issue is still technically runnable, so the preferred workflow should create explicit task children under each feature
 
-Feature completion contract:
+Feature completion target contract:
 
 - when a feature moves to `Done`, the engine should squash the feature branch into one commit
 - commit subject: `OPE-XXX Feature title`
 - commit body: concise list of completed tasks
 - then rebase the feature branch onto the stream branch, merge it into the stream branch, and clean leftover branch state
+- current implementation gap: task commits already land on the feature branch, but automated feature-to-stream finalization is still being tightened
 
 Output style:
 

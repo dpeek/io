@@ -3,6 +3,9 @@
 ## Purpose
 
 This document is the entry point for agents working on workflow loading, issue routing, context assembly, or module-scoped doc selection.
+For the user-facing `Stream -> Feature -> Task` contract, start with
+`../../io/workflow.md`; this page only covers the current loading, routing, and
+prompt-assembly implementation.
 
 ## Current Workflow Surface
 

@@ -6,6 +6,7 @@
 
 ## Entry Points
 
+- `../../io/workflow.md`: primary user-facing contract for the preferred `Stream -> Feature -> Task` workflow
 - `../../io/backlog.md`: interactive stream backlog prompt and issue-structure contract
 - `./module-stream-workflow-plan.md`: workflow loading, context assembly, routing, and module scoping
 - `../src/service.ts`: supervisor scheduling and issue run orchestration
@@ -22,7 +23,13 @@
 
 ## Current vs Roadmap
 
-Current code centers on a three-level issue model: streams are maintained interactively, features own integration-sized branches under a stream, and the supervisor only runs leaf tasks. Task commits land on the feature branch; a completed feature is squashed and merged back into its stream branch during reconciliation.
+The preferred workflow is three levels: streams are maintained interactively,
+features own integration-sized branches under a stream, and the supervisor
+auto-runs released leaf tasks. Current code already gates task execution on the
+right parent states and lands successful task commits on the feature branch.
+Feature-to-stream finalization is still being tightened, so `../../io/workflow.md`
+is the user-facing contract for that boundary rather than a description of a
+fully completed runtime path.
 
 ## Future Work Suggestions
 

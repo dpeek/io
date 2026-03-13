@@ -20,10 +20,13 @@ test("@io/config exposes the repo context bundle and routing defaults", () => {
     "project.goals": "./io/goals.md",
     "project.module-stream-workflow-plan": "./agent/io/module-stream-workflow-plan.md",
     "project.overview": "./io/overview.md",
+    "project.workflow": "./io/workflow.md",
   });
   expect(config.context?.profiles?.backlog?.include).toContain("project.backlog");
   expect(config.context?.profiles?.backlog?.include).toContain("project.goals");
   expect(config.context?.profiles?.backlog?.include).toContain("project.overview");
+  expect(config.context?.profiles?.backlog?.include).toContain("project.workflow");
+  expect(config.context?.profiles?.execute?.include).toContain("project.workflow");
   expect(config.modules?.agent).toEqual({
     allowedSharedPaths: ["./io"],
     docs: ["./agent/io/overview.md", "./agent/io/module-stream-workflow-plan.md"],
@@ -55,16 +58,27 @@ test("repo workflow docs point backlog work at the three-level stream model", ()
   const backlog = readFileSync(resolve(repoRoot, "./io/backlog.md"), "utf8");
   const goals = readFileSync(resolve(repoRoot, "./io/goals.md"), "utf8");
   const overview = readFileSync(resolve(repoRoot, "./io/overview.md"), "utf8");
+  const workflow = readFileSync(resolve(repoRoot, "./io/workflow.md"), "utf8");
+  const agentOverview = readFileSync(resolve(repoRoot, "./agent/io/overview.md"), "utf8");
   const workflowPlan = readFileSync(
     resolve(repoRoot, "./agent/io/module-stream-workflow-plan.md"),
     "utf8",
   );
+
+  expect(workflow).toContain("# Stream Feature Task Workflow");
+  expect(workflow).toContain("`Stream -> Feature -> Task`");
+  expect(workflow).toContain("Humans own:");
+  expect(workflow).toContain("The agent/runtime owns:");
+  expect(workflow).toContain("Current Gaps And Compatibility Notes");
+  expect(workflow).toContain("released leaf issue as runnable");
+  expect(workflow).toContain("feature-branch squashing, rebasing, and merge into the stream branch");
 
   expect(backlog).toContain("You are the IO backlog editor for the three-level Linear workflow.");
   expect(backlog).toContain("Stream");
   expect(backlog).toContain("Feature");
   expect(backlog).toContain("Task");
   expect(backlog).toContain("do not use comment-driven workflows");
+  expect(backlog).toContain("./workflow.md");
   expect(backlog).toContain("## Roadmap");
 
   expect(goals).toContain("# Stream Workflow Goals");
@@ -72,13 +86,18 @@ test("repo workflow docs point backlog work at the three-level stream model", ()
   expect(goals).not.toContain("Current Approach Stream");
   expect(goals).not.toContain("2-level parent/child hierarchy");
 
-  expect(overview).toContain("the stream/feature/task backlog workflow");
+  expect(overview).toContain("the stream/feature/task workflow contract");
+  expect(overview).toContain("./workflow.md");
   expect(overview).toContain("./backlog.md");
   expect(overview).not.toContain("managed-stream-contract");
+
+  expect(agentOverview).toContain("../../io/workflow.md");
+  expect(agentOverview).toContain("Feature-to-stream finalization is still being tightened");
 
   expect(workflowPlan).toContain("## Current Workflow Surface");
   expect(workflowPlan).toContain("## Current Doc Reference Rules");
   expect(workflowPlan).toContain("## Current Prompt Model");
+  expect(workflowPlan).toContain("../../io/workflow.md");
   expect(workflowPlan).not.toContain("managed-parent detection");
   expect(workflowPlan).not.toContain("OPE-121 Proof Status");
 });

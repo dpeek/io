@@ -14,8 +14,9 @@
   serialized within each feature.
 - Only auto-run tasks when the stream and feature are `In Progress` and the
   task is `Todo`.
-- Land successful task commits on the feature branch and finalize features by
-  squashing, rebasing onto the stream branch, and merging back into the stream.
+- Land successful task commits on the feature branch, and keep
+  feature-to-stream squashing, rebasing, and merge as the target contract while
+  the runtime finalization path is still being tightened.
 - Keep repo docs terse and current while the stream issue holds the evolving
   roadmap, constraints, and references.
 

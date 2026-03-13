@@ -20,6 +20,7 @@ export default defineIoConfig({
       "project.goals": "./io/goals.md",
       "project.module-stream-workflow-plan": "./agent/io/module-stream-workflow-plan.md",
       "project.overview": "./io/overview.md",
+      "project.workflow": "./io/workflow.md",
     },
     profiles: {
       backlog: {
@@ -29,6 +30,7 @@ export default defineIoConfig({
           "builtin:io.linear.status-updates",
           "builtin:io.core.git-safety",
           "project.overview",
+          "project.workflow",
           "project.backlog",
           "project.goals",
         ],
@@ -41,6 +43,7 @@ export default defineIoConfig({
           "builtin:io.core.validation",
           "builtin:io.core.git-safety",
           "project.overview",
+          "project.workflow",
         ],
       },
     },
