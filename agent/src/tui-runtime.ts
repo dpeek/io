@@ -16,7 +16,19 @@ import type {
 import type { IssueRuntimeState } from "./workspace.js";
 
 export type AgentTuiRetainedMode = "attach" | "replay";
-export type AgentTuiRetainedSource = "empty" | "events" | "stdout";
+export type AgentTuiRetainedSource = "empty" | "events" | "runtime" | "stdout";
+
+type RetainedOutputSummary = {
+  blockedReason?: string;
+  commitBranchName?: string;
+  commitSha?: string;
+  interruptedReason?: string;
+};
+
+type RetainedRuntimeContext = {
+  leading: AgentSessionEvent[];
+  trailing: AgentSessionEvent[];
+};
 
 function mergeIssueRef(
   current: AgentSessionIssueRef | undefined,
@@ -75,6 +87,8 @@ function toRuntimePhase(issueState: IssueRuntimeState): AgentSessionPhase {
     case "completed":
     case "finalized":
       return "completed";
+    case "interrupted":
+      return "stopped";
     case "running":
     default:
       return "started";
@@ -89,6 +103,8 @@ function describeSource(source: AgentTuiRetainedSource) {
   switch (source) {
     case "events":
       return "events.log";
+    case "runtime":
+      return "runtime files";
     case "stdout":
       return "codex.stdout.jsonl";
     default:
@@ -137,6 +153,17 @@ function describeRetainedRuntimeState(issue: IssueRuntimeState) {
   }
 }
 
+function escapeRegExp(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function truncateSha(sha: string) {
+  return sha.slice(0, 7);
+}
+
+function isTerminalIssueStatus(status: IssueRuntimeState["status"]) {
+  return status !== "running";
+}
 class AppendOnlyLineReader {
   readonly path: string;
   #offset = 0;
@@ -177,6 +204,8 @@ export class AgentTuiRetainedReader {
   readonly supervisorSession: AgentSessionRef;
 
   #eventLogReader: AppendOnlyLineReader;
+  #outputSummary: RetainedOutputSummary | undefined;
+  #outputSummaryLoaded = false;
   #preludeSequence = -10_000;
   #source: AgentTuiRetainedSource = "empty";
   #stdoutLogReader: AppendOnlyLineReader;
@@ -208,12 +237,16 @@ export class AgentTuiRetainedReader {
 
   async readInitialEvents(mode: AgentTuiRetainedMode) {
     const retainedEvents = await this.#readRetainedEvents();
-    const events = this.#buildPrelude(mode);
-    if (this.#source !== "events") {
-      events.push(this.#buildWorkerLifecycleEvent());
+    const runtimeContext = await this.#buildRuntimeContextEvents(retainedEvents);
+    const runtimeEventCount = runtimeContext.leading.length + runtimeContext.trailing.length;
+    if (!retainedEvents.length && runtimeEventCount) {
+      this.#source = "runtime";
     }
+    const events = this.#buildPrelude(mode);
+    events.push(...runtimeContext.leading);
     events.push(...retainedEvents);
-    if (!retainedEvents.length) {
+    events.push(...runtimeContext.trailing);
+    if (!retainedEvents.length && !isTerminalIssueStatus(this.issueState.status)) {
       events.push(
         this.#buildStatusEvent(this.#workerSession, "idle", "Waiting for retained session events"),
       );
@@ -279,10 +312,12 @@ export class AgentTuiRetainedReader {
     session: AgentSessionRef,
     code: AgentStatusCode,
     text: string,
+    data?: Record<string, unknown>,
   ): AgentStatusEvent {
     const sequence = this.#nextPreludeSequence();
     return {
       code,
+      data,
       format: "line",
       sequence,
       session,
@@ -296,10 +331,12 @@ export class AgentTuiRetainedReader {
     session: AgentSessionRef,
     code: AgentStatusCode,
     text: string,
+    data?: Record<string, unknown>,
   ): AgentStatusEvent {
     const sequence = this.#nextSyntheticSequence();
     return {
       code,
+      data,
       format: "line",
       sequence,
       session,
@@ -309,13 +346,227 @@ export class AgentTuiRetainedReader {
     };
   }
 
-  #buildWorkerLifecycleEvent() {
-    return this.#buildLifecycleEvent(this.#workerSession, toRuntimePhase(this.issueState), {
-      branchName: this.issueState.branchName,
-      workspacePath: this.issueState.worktreePath,
-    });
+  #buildRuntimeLifecycleEvent(
+    session: AgentSessionRef,
+    phase: AgentSessionPhase,
+    data?: Record<string, unknown>,
+  ): AgentSessionLifecycleEvent {
+    const sequence = this.#nextSyntheticSequence();
+    return {
+      data,
+      phase,
+      sequence,
+      session,
+      timestamp: toSyntheticTimestamp(this.#syntheticTimeBase, sequence),
+      type: "session",
+    };
   }
 
+  #buildWorkerPhaseEvent(
+    phase: AgentSessionPhase,
+    data?: Record<string, unknown>,
+    sequenceKind: "prelude" | "runtime" = "prelude",
+  ) {
+    const eventData = {
+      branchName: this.issueState.branchName,
+      workspacePath: this.issueState.worktreePath,
+      ...data,
+    };
+    return sequenceKind === "runtime"
+      ? this.#buildRuntimeLifecycleEvent(this.#workerSession, phase, eventData)
+      : this.#buildLifecycleEvent(this.#workerSession, phase, eventData);
+  }
+
+  #buildWorkflowDetailEvent(text: string, sequenceKind: "prelude" | "runtime" = "prelude") {
+    return sequenceKind === "runtime"
+      ? this.#buildRuntimeStatusEvent(this.supervisorSession, "ready", text)
+      : this.#buildStatusEvent(this.supervisorSession, "ready", text);
+  }
+
+  async #buildRuntimeContextEvents(retainedEvents: AgentSessionEvent[]) {
+    const leading: AgentSessionEvent[] = [];
+    const trailing: AgentSessionEvent[] = [];
+    const phases = new Set<AgentSessionPhase>();
+    let hasBlockedStatus = false;
+    let hasCommittedStatus = false;
+
+    for (const event of retainedEvents) {
+      if (event.session.id !== this.#workerSession.id) {
+        continue;
+      }
+      if (event.type === "session") {
+        phases.add(event.phase);
+        continue;
+      }
+      if (event.type !== "status") {
+        continue;
+      }
+      if (event.code === "issue-blocked") {
+        hasBlockedStatus = true;
+      }
+      if (event.code === "issue-committed") {
+        hasCommittedStatus = true;
+      }
+    }
+
+    const outputSummary = await this.#readOutputSummary();
+    const commitSha = this.#resolveCommitSha(outputSummary);
+    const terminalPhase = toRuntimePhase(this.issueState);
+
+    if (!phases.has("scheduled")) {
+      leading.push(this.#buildWorkerPhaseEvent("scheduled"));
+    }
+
+    if (terminalPhase === "started") {
+      if (!phases.has("started")) {
+        leading.push(this.#buildWorkerPhaseEvent("started"));
+      }
+    }
+
+    if (terminalPhase === "completed") {
+      if (!hasCommittedStatus && commitSha) {
+        trailing.push(
+          this.#buildRuntimeStatusEvent(
+            this.#workerSession,
+            "issue-committed",
+            `${this.issueState.issueIdentifier}: committed ${commitSha} on ${this.issueState.branchName}`,
+            {
+              branchName: this.issueState.branchName,
+              commitSha,
+            },
+          ),
+        );
+      }
+      if (!phases.has("completed")) {
+        const data = commitSha ? { commitSha } : undefined;
+        trailing.push(this.#buildWorkerPhaseEvent("completed", data, "runtime"));
+      }
+    }
+
+    if (terminalPhase === "failed") {
+      if (!hasBlockedStatus) {
+        trailing.push(
+          this.#buildStatusEvent(
+            this.#workerSession,
+            "issue-blocked",
+            `${this.issueState.issueIdentifier}: blocked`,
+          ),
+        );
+      }
+      if (!phases.has("failed")) {
+        const reason = this.#resolveFailureReason(outputSummary);
+        trailing.push(
+          this.#buildWorkerPhaseEvent("failed", reason ? { reason } : undefined, "runtime"),
+        );
+      }
+    }
+
+    if (terminalPhase === "stopped" && !phases.has("stopped")) {
+      const reason = outputSummary?.interruptedReason;
+      trailing.push(
+        this.#buildWorkerPhaseEvent("stopped", reason ? { reason } : undefined, "runtime"),
+      );
+    }
+
+    if (
+      this.issueState.streamIssueIdentifier &&
+      this.issueState.streamIssueIdentifier !== this.issueState.issueIdentifier
+    ) {
+      trailing.push(
+        this.#buildWorkflowDetailEvent(
+          `stream: ${this.issueState.streamIssueIdentifier}`,
+          "runtime",
+        ),
+      );
+    }
+
+    if (commitSha && (this.issueState.landedAt || terminalPhase === "completed")) {
+      trailing.push(
+        this.#buildWorkflowDetailEvent(
+          `landed: ${truncateSha(commitSha)} on ${this.issueState.branchName}`,
+          "runtime",
+        ),
+      );
+    }
+
+    if (this.issueState.finalizedLinearState) {
+      trailing.push(
+        this.#buildWorkflowDetailEvent(
+          `finalized: ${this.issueState.finalizedLinearState}`,
+          "runtime",
+        ),
+      );
+    } else if (this.issueState.finalizedAt) {
+      trailing.push(this.#buildWorkflowDetailEvent("finalized", "runtime"));
+    }
+
+    return {
+      leading,
+      trailing,
+    } satisfies RetainedRuntimeContext;
+  }
+
+  async #readOutputSummary() {
+    if (this.#outputSummaryLoaded) {
+      return this.#outputSummary;
+    }
+    this.#outputSummaryLoaded = true;
+
+    try {
+      const text = await readFile(this.issueState.outputPath, "utf8");
+      const summary: RetainedOutputSummary = {};
+      const identifier = escapeRegExp(this.issueState.issueIdentifier);
+      const blockedPattern = new RegExp(`^${identifier}: blocked(?:: (.+))?$`);
+      const committedPattern = new RegExp(`^${identifier}: committed ([0-9a-f]{7,40}) on (.+)$`);
+      const interruptedPattern = new RegExp(`^${identifier}: interrupted(?:: (.+))?$`);
+
+      for (const line of text.split(/\r?\n/).reverse()) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          continue;
+        }
+        if (!summary.commitSha) {
+          const match = trimmed.match(committedPattern);
+          if (match) {
+            summary.commitSha = match[1];
+            summary.commitBranchName = match[2];
+            continue;
+          }
+        }
+        if (!summary.blockedReason) {
+          const match = trimmed.match(blockedPattern);
+          if (match) {
+            summary.blockedReason = match[1]?.trim() || undefined;
+            continue;
+          }
+        }
+        if (!summary.interruptedReason) {
+          const match = trimmed.match(interruptedPattern);
+          if (match) {
+            summary.interruptedReason = match[1]?.trim() || undefined;
+          }
+        }
+      }
+
+      this.#outputSummary = summary;
+    } catch {
+      this.#outputSummary = undefined;
+    }
+
+    return this.#outputSummary;
+  }
+
+  #resolveCommitSha(outputSummary: RetainedOutputSummary | undefined) {
+    return (
+      this.issueState.landedCommitSha ??
+      this.issueState.commitSha ??
+      outputSummary?.commitSha
+    );
+  }
+
+  #resolveFailureReason(outputSummary: RetainedOutputSummary | undefined) {
+    return outputSummary?.blockedReason;
+  }
   #coerceWorkerSession(next: AgentSessionRef) {
     const merged = mergeSessionRef(this.#workerSession, next);
     if (next.kind === "worker" && next.id) {
