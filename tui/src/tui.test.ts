@@ -306,6 +306,18 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
     },
     title: "Ship workflow-aware TUI behavior",
     workerId: "OPE-174",
+    workflow: {
+      feature: {
+        id: "issue-174",
+        identifier: "OPE-174",
+        title: "Ship workflow-aware TUI behavior",
+      },
+      stream: {
+        id: "issue-121",
+        identifier: "OPE-121",
+        title: "Run the workflow-aware agent rollout",
+      },
+    },
     workspacePath: "/repo/.io/tree/ope-174",
   });
   const blockedTask = createWorkerSession({
@@ -318,6 +330,23 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
     },
     title: "Prove workflow-aware TUI behavior with regression coverage",
     workerId: "OPE-188",
+    workflow: {
+      feature: {
+        id: "issue-174",
+        identifier: "OPE-174",
+        title: "Ship workflow-aware TUI behavior",
+      },
+      stream: {
+        id: "issue-121",
+        identifier: "OPE-121",
+        title: "Run the workflow-aware agent rollout",
+      },
+      task: {
+        id: "issue-188",
+        identifier: "OPE-188",
+        title: "Prove workflow-aware TUI behavior with regression coverage",
+      },
+    },
     workspacePath: "/repo/.io/tree/ope-188",
   });
   const commitSha = "abc1234def567890abc1234def567890abc1234";
@@ -330,8 +359,17 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
     type: "session",
   });
   store.observe({
-    phase: "scheduled",
+    code: "workflow-diagnostic",
+    format: "line",
     sequence: 2,
+    session: supervisor,
+    text: "Workflow: 1 blocked, 1 waiting on finalization",
+    timestamp: "2026-03-10T02:04:00.500Z",
+    type: "status",
+  });
+  store.observe({
+    phase: "scheduled",
+    sequence: 3,
     session: streamWorker,
     timestamp: "2026-03-10T02:04:01.000Z",
     type: "session",
@@ -343,7 +381,7 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
       commitSha,
     },
     format: "line",
-    sequence: 3,
+    sequence: 4,
     session: streamWorker,
     text: `OPE-174: committed ${commitSha} on ${streamWorker.branchName}`,
     timestamp: "2026-03-10T02:04:02.000Z",
@@ -354,14 +392,14 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
       commitSha,
     },
     phase: "completed",
-    sequence: 4,
+    sequence: 5,
     session: streamWorker,
     timestamp: "2026-03-10T02:04:03.000Z",
     type: "session",
   });
   store.observe({
     phase: "scheduled",
-    sequence: 5,
+    sequence: 6,
     session: blockedTask,
     timestamp: "2026-03-10T02:04:04.000Z",
     type: "session",
@@ -369,7 +407,7 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
   store.observe({
     code: "issue-blocked",
     format: "line",
-    sequence: 6,
+    sequence: 7,
     session: blockedTask,
     text: "OPE-188: blocked",
     timestamp: "2026-03-10T02:04:05.000Z",
@@ -380,7 +418,7 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
       reason: "Blocked on OPE-187 finalization",
     },
     phase: "failed",
-    sequence: 7,
+    sequence: 8,
     session: blockedTask,
     timestamp: "2026-03-10T02:04:06.000Z",
     type: "session",
@@ -408,11 +446,30 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
     code: "issue-blocked",
     text: "OPE-188: blocked",
   });
-  expect(model.columns.find((column) => column.id === streamWorker.id)?.title).toBe("OPE-174");
-  expect(model.columns.find((column) => column.id === blockedTask.id)?.title).toBe("OPE-188");
+  expect(model.summaryLines).toEqual([
+    "Workflow: 1 blocked, 1 waiting on finalization",
+    "Selected: task OPE-188 | blocked | stream OPE-121 | feature OPE-174 | io/ope-174",
+  ]);
+  expect(model.columns.find((column) => column.id === streamWorker.id)?.title).toBe(
+    "Feature OPE-174 [waiting on finalization]",
+  );
+  expect(model.columns.find((column) => column.id === blockedTask.id)?.title).toBe(
+    "Task OPE-188 [blocked]",
+  );
+  expect(streamContent).toContain("state: waiting on finalization");
+  expect(streamContent).toContain("branch: io/ope-174");
+  expect(streamContent).toContain("stream: OPE-121 Run the workflow-aware agent rollout");
+  expect(streamContent).toContain("feature: OPE-174 Ship workflow-aware TUI behavior");
   expect(streamContent).toContain("Session scheduled | io/ope-174 | /repo/.io/tree/ope-174");
   expect(streamContent).toContain(`OPE-174: committed ${commitSha} on io/ope-174`);
   expect(streamContent).toContain("Session completed | commit abc1234 | io/ope-174 | /repo/.io/tree/ope-174");
+  expect(blockedContent).toContain("state: blocked");
+  expect(blockedContent).toContain("branch: io/ope-174");
+  expect(blockedContent).toContain("stream: OPE-121 Run the workflow-aware agent rollout");
+  expect(blockedContent).toContain("feature: OPE-174 Ship workflow-aware TUI behavior");
+  expect(blockedContent).toContain(
+    "task: OPE-188 Prove workflow-aware TUI behavior with regression coverage",
+  );
   expect(blockedContent).toContain("Session scheduled | io/ope-174 | /repo/.io/tree/ope-188");
   expect(blockedContent).toContain("OPE-188: blocked");
   expect(blockedContent).toContain(
@@ -741,7 +798,7 @@ test("buildAgentTuiRootComponentModel formats tool calls and reasoning as struct
   expect(frameTwo).toContain("Reasoning [running /]");
   expect(frameOne).toContain("summary:");
   expect(frameOne).toContain("  Checking transcript formatting");
-  expect(selectedTitle).toBe("OPE-68 [thinking]");
+  expect(selectedTitle).toBe("Worker OPE-68 [running] [thinking]");
 });
 
 test("buildAgentTuiRootComponentModel highlights completed Linear writes", () => {
@@ -1240,7 +1297,7 @@ test("buildAgentTuiRootComponentModel keeps live transcript slices readable in r
   expect(replayContent).toContain("  permission denied");
   expect(replayContent).toContain("stderr: retained stderr line");
   expect(replayContent).not.toContain("Tool: linear.save_issue");
-  expect(replayTitle).toBe("OPE-68");
+  expect(replayTitle).toBe("Worker OPE-68 [running]");
 });
 
 test("createAgentTui supports keyboard column navigation and content scrolling", async () => {

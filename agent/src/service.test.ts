@@ -2068,6 +2068,25 @@ test("AgentService publishes supervisor and worker session events", async () => 
     );
     expect(scheduledWorker).toBeDefined();
     expect(scheduledWorker?.session.parentSessionId).toBe("supervisor");
+    expect(scheduledWorker?.session.workflow).toEqual({
+      feature: {
+        id: "feature-1",
+        identifier: "OPE-167",
+        state: "In Progress",
+        title: "Example feature",
+      },
+      stream: {
+        id: "stream-1",
+        identifier: "OPE-121",
+        state: "In Progress",
+      },
+      task: {
+        id: "1",
+        identifier: "OPE-54",
+        state: "Todo",
+        title: "Execute agent",
+      },
+    });
 
     expect(
       events.some(

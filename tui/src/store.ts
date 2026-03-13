@@ -4,6 +4,8 @@ import type {
   AgentSessionIssueRef,
   AgentSessionPhase,
   AgentSessionRef,
+  AgentSessionWorkflowIssueRef,
+  AgentSessionWorkflowRef,
 } from "./session-events.js";
 import {
   appendBlocksForEvent,
@@ -115,10 +117,37 @@ function mergeSessionRef(current: AgentSessionRef, next: AgentSessionRef): Agent
       ...next.issue,
     } as AgentSessionIssueRef;
   }
+  let workflow: AgentSessionWorkflowRef | undefined;
+  if (current.workflow || next.workflow) {
+    workflow = {
+      feature: {
+        ...(current.workflow?.feature as AgentSessionWorkflowIssueRef | undefined),
+        ...(next.workflow?.feature as AgentSessionWorkflowIssueRef | undefined),
+      },
+      stream: {
+        ...(current.workflow?.stream as AgentSessionWorkflowIssueRef | undefined),
+        ...(next.workflow?.stream as AgentSessionWorkflowIssueRef | undefined),
+      },
+      task: {
+        ...(current.workflow?.task as AgentSessionWorkflowIssueRef | undefined),
+        ...(next.workflow?.task as AgentSessionWorkflowIssueRef | undefined),
+      },
+    };
+    if (!workflow.feature?.identifier) {
+      delete workflow.feature;
+    }
+    if (!workflow.stream?.identifier) {
+      delete workflow.stream;
+    }
+    if (!workflow.task?.identifier) {
+      delete workflow.task;
+    }
+  }
   return {
     ...current,
     ...next,
     issue,
+    workflow,
   };
 }
 

@@ -10,6 +10,8 @@ import type {
   AgentSessionLifecycleEvent,
   AgentSessionPhase,
   AgentSessionRef,
+  AgentSessionWorkflowIssueRef,
+  AgentSessionWorkflowRef,
   AgentStatusCode,
   AgentStatusEvent,
 } from "./session-events.js";
@@ -45,11 +47,39 @@ function mergeIssueRef(
   } as AgentSessionIssueRef;
 }
 
+function mergeWorkflowIssueRef(
+  current: AgentSessionWorkflowIssueRef | undefined,
+  next: AgentSessionWorkflowIssueRef | undefined,
+) {
+  if (!current && !next) {
+    return undefined;
+  }
+  return {
+    ...current,
+    ...next,
+  } as AgentSessionWorkflowIssueRef;
+}
+
+function mergeWorkflowRef(
+  current: AgentSessionWorkflowRef | undefined,
+  next: AgentSessionWorkflowRef | undefined,
+): AgentSessionWorkflowRef | undefined {
+  if (!current && !next) {
+    return undefined;
+  }
+  return {
+    feature: mergeWorkflowIssueRef(current?.feature, next?.feature),
+    stream: mergeWorkflowIssueRef(current?.stream, next?.stream),
+    task: mergeWorkflowIssueRef(current?.task, next?.task),
+  };
+}
+
 function mergeSessionRef(current: AgentSessionRef, next: AgentSessionRef): AgentSessionRef {
   return {
     ...current,
     ...next,
     issue: mergeIssueRef(current.issue, next.issue),
+    workflow: mergeWorkflowRef(current.workflow, next.workflow),
   };
 }
 
@@ -65,19 +95,46 @@ function createSupervisorSession(repoRoot: string): AgentSessionRef {
 }
 
 function createFallbackWorkerSession(issueState: IssueRuntimeState): AgentSessionRef {
+  const current = {
+    id: issueState.issueId,
+    identifier: issueState.issueIdentifier,
+    title: issueState.issueTitle,
+  };
+  const streamIdentifier =
+    issueState.streamIssueIdentifier ?? issueState.parentIssueIdentifier ?? issueState.issueIdentifier;
+  const stream = {
+    id: issueState.streamIssueId ?? issueState.parentIssueId ?? issueState.issueId,
+    identifier: streamIdentifier,
+    title: streamIdentifier === issueState.issueIdentifier ? issueState.issueTitle : undefined,
+  };
+  const workflow =
+    issueState.parentIssueIdentifier && issueState.parentIssueIdentifier !== streamIdentifier
+      ? {
+          feature: {
+            id: issueState.parentIssueId,
+            identifier: issueState.parentIssueIdentifier,
+          },
+          stream,
+          task: current,
+        }
+      : issueState.parentIssueIdentifier && issueState.parentIssueIdentifier !== issueState.issueIdentifier
+        ? {
+            feature: current,
+            stream,
+          }
+        : {
+            stream: current,
+          };
   return {
     branchName: issueState.branchName,
     id: `worker:${issueState.workerId}:retained`,
-    issue: {
-      id: issueState.issueId,
-      identifier: issueState.issueIdentifier,
-      title: issueState.issueTitle,
-    },
+    issue: current,
     kind: "worker",
     parentSessionId: "supervisor",
     rootSessionId: "supervisor",
     title: issueState.issueTitle,
     workerId: issueState.workerId,
+    workflow,
     workspacePath: issueState.worktreePath,
   };
 }

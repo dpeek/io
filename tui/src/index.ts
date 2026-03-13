@@ -25,6 +25,8 @@ export type {
   AgentSessionLifecycleEventInit,
   AgentSessionPhase,
   AgentSessionRef,
+  AgentSessionWorkflowIssueRef,
+  AgentSessionWorkflowRef,
   AgentStatusCode,
   AgentStatusFormat,
   AgentStatusEvent,

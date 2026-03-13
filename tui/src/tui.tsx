@@ -2,7 +2,11 @@ import { createCliRenderer, type CliRenderer } from "@opentui/core";
 import { createRoot, flushSync, useTerminalDimensions, type Root } from "@opentui/react";
 import { useMemo } from "react";
 
-import { buildAgentTuiRenderedPanels, getAgentTuiSelectedContentMetrics } from "./layout.js";
+import {
+  buildAgentTuiRenderedPanels,
+  buildAgentTuiRootComponentModel,
+  getAgentTuiSelectedContentMetrics,
+} from "./layout.js";
 import type { AgentSessionEventObserver } from "./session-events.js";
 import { hasStreamingReasoningBlocks } from "./transcript.js";
 import {
@@ -96,31 +100,51 @@ function AgentTuiApp({
       }),
     [animationFrame, frameSize, resolvedSelectedColumnId, selectedScrollY, snapshot],
   );
+  const layout = useMemo(
+    () =>
+      buildAgentTuiRootComponentModel(snapshot, {
+        animationFrame,
+        selectedColumnId: resolvedSelectedColumnId,
+        selectedScrollY,
+      }),
+    [animationFrame, resolvedSelectedColumnId, selectedScrollY, snapshot],
+  );
 
   return (
     <box
-      flexDirection="row"
-      gap={1}
+      flexDirection="column"
       height="100%"
       id={APP_ROOT_ID}
-      paddingLeft={1}
-      paddingRight={1}
       width="100%"
     >
-      {panels.map((panel) => (
-        <box
-          border
-          borderColor={panel.isSelected ? "white" : "gray"}
-          flexDirection="column"
-          height="100%"
-          key={panel.id}
-          title={panel.title}
-          width={panel.width}
-          padding={1}
-        >
-          <text content={panel.body} wrapMode="none" />
+      {layout.summaryLines.length ? (
+        <box flexDirection="column" paddingLeft={1} paddingRight={1}>
+          <text content={layout.summaryLines.join("\n")} />
         </box>
-      ))}
+      ) : null}
+      <box
+        flexDirection="row"
+        flexGrow={1}
+        gap={1}
+        paddingLeft={1}
+        paddingRight={1}
+        width="100%"
+      >
+        {panels.map((panel) => (
+          <box
+            border
+            borderColor={panel.isSelected ? "white" : "gray"}
+            flexDirection="column"
+            height="100%"
+            key={panel.id}
+            title={panel.title}
+            width={panel.width}
+            padding={1}
+          >
+            <text content={panel.body} wrapMode="none" />
+          </box>
+        ))}
+      </box>
     </box>
   );
 }

@@ -191,6 +191,18 @@ test("AgentTuiStore keeps supervisor first and records status plus raw output", 
 test("renderAgentTuiFrame lays out supervisor and worker columns", () => {
   const sessions = [
     createSnapshotColumn({
+      blocks: [
+        {
+          code: "workflow-diagnostic",
+          count: 1,
+          format: "line",
+          kind: "status",
+          sequenceEnd: 3,
+          sequenceStart: 3,
+          text: "Workflow: idle",
+          timestamp: "2026-03-10T02:00:02.000Z",
+        },
+      ],
       body:
         "Session started | /Users/dpeek/code/io\n" +
         "IO is supervising /Users/dpeek/code/io\n" +
@@ -218,11 +230,13 @@ test("renderAgentTuiFrame lays out supervisor and worker columns", () => {
       sessions,
     },
     { columns: 80, rows: 12 },
+    { selectedColumnId: sessions[1]?.session.id },
   );
 
-  const [firstLine] = frame.split("\n");
-  expect(firstLine).toContain("/Users/dpeek/code/io");
-  expect(firstLine).toContain("OPE-67");
+  const [firstLine, secondLine] = frame.split("\n");
+  expect(firstLine).toContain("Workflow: idle");
+  expect(secondLine).toContain("Selected: worker OPE-67");
+  expect(secondLine).toContain("ope-67");
   expect(frame).toContain("Workflow: idle");
   expect(frame).toContain('jsonl: {"method":"thread/started"}');
 });

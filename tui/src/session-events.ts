@@ -14,6 +14,19 @@ export interface AgentSessionIssueRef {
   title: string;
 }
 
+export interface AgentSessionWorkflowIssueRef {
+  id?: string;
+  identifier: string;
+  state?: string;
+  title?: string;
+}
+
+export interface AgentSessionWorkflowRef {
+  feature?: AgentSessionWorkflowIssueRef;
+  stream?: AgentSessionWorkflowIssueRef;
+  task?: AgentSessionWorkflowIssueRef;
+}
+
 export interface AgentSessionRef {
   branchName?: string;
   id: string;
@@ -25,6 +38,7 @@ export interface AgentSessionRef {
   title: string;
   turnId?: string;
   workerId: string;
+  workflow?: AgentSessionWorkflowRef;
   workspacePath?: string;
 }
 
