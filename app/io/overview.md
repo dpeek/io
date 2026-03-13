@@ -6,10 +6,11 @@
 
 ## Docs
 
+- `./package-surface.md`
+- `../../graph/io/overview.md`
 - `../../graph/io/architecture.md`
 - `../../graph/io/runtime.md`
 - `../../graph/io/sync.md`
-- `../../graph/io/overview.md`
 - `../../graph/io/type-modules.md`
 - `../../graph/io/refs-and-ui.md`
 
