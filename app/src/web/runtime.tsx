@@ -1,10 +1,5 @@
+import { createSyncedTypeClient, type SyncedTypeClient, type TotalSyncPayload } from "@io/graph";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-
-import {
-  createSyncedTypeClient,
-  type SyncedTypeClient,
-  type TotalSyncPayload,
-} from "#graph";
 
 import { app } from "../graph/app.js";
 
@@ -86,7 +81,7 @@ function LoadingState() {
       data-app-bootstrap="loading"
     >
       <div className="w-full max-w-md rounded-[1.75rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-slate-950/30">
-        <p className="text-xs uppercase tracking-[0.28em] text-cyan-300">Graph sync</p>
+        <p className="text-xs tracking-[0.28em] text-cyan-300 uppercase">Graph sync</p>
         <h1 className="mt-3 text-2xl font-semibold">Loading authoritative graph</h1>
         <p className="mt-2 text-sm text-slate-300">
           Waiting for the first total snapshot from <code>{syncUrl}</code>.
@@ -96,20 +91,14 @@ function LoadingState() {
   );
 }
 
-function ErrorState({
-  error,
-  onRetry,
-}: {
-  error: unknown;
-  onRetry(): void;
-}) {
+function ErrorState({ error, onRetry }: { error: unknown; onRetry(): void }) {
   return (
     <main
       className="flex min-h-screen items-center justify-center bg-rose-950 px-6 text-rose-50"
       data-app-bootstrap="error"
     >
       <div className="w-full max-w-md rounded-[1.75rem] border border-rose-200/20 bg-black/20 p-6 shadow-2xl shadow-rose-950/30">
-        <p className="text-xs uppercase tracking-[0.28em] text-rose-200">Sync failed</p>
+        <p className="text-xs tracking-[0.28em] text-rose-200 uppercase">Sync failed</p>
         <h1 className="mt-3 text-2xl font-semibold">Unable to load the graph</h1>
         <p className="mt-2 text-sm text-rose-100/85">{formatBootstrapError(error)}</p>
         <p className="mt-2 text-xs text-rose-100/65">

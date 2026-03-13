@@ -1,4 +1,5 @@
-import type { EnumModuleValue } from "../../graph/type-module.js";
+import type { EnumModuleValue, TypeModuleMeta } from "@io/graph";
+
 import { statusType } from "./type.js";
 
 type StatusValue = EnumModuleValue<typeof statusType>;
@@ -23,7 +24,7 @@ export const statusMeta = {
     kind: "select",
     allowed: ["select", "segmented-control"] as const,
   },
-} satisfies import("../../graph/type-module.js").TypeModuleMeta<
+} satisfies TypeModuleMeta<
   StatusValue,
   readonly ["text", "badge"],
   readonly ["select", "segmented-control"]

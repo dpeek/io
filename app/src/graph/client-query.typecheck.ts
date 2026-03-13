@@ -1,8 +1,6 @@
+import { bootstrap, createStore, createTypeClient, core } from "@io/graph";
+
 import { app } from "./app";
-import { bootstrap } from "./bootstrap";
-import { createTypeClient } from "./client";
-import { core } from "./core";
-import { createStore } from "./store";
 
 const store = createStore();
 bootstrap(store, core);
@@ -126,14 +124,16 @@ void graph.company.query({
   },
 });
 
-void graph.company.query({
-  select: {
-    name: true,
-  },
-}).then((companies) => {
-  const name: string = companies[0]!.name;
-  void name;
+void graph.company
+  .query({
+    select: {
+      name: true,
+    },
+  })
+  .then((companies) => {
+    const name: string = companies[0]!.name;
+    void name;
 
-  // @ts-expect-error list queries still omit unselected fields
-  void companies[0]!.id;
-});
+    // @ts-expect-error list queries still omit unselected fields
+    void companies[0]!.id;
+  });

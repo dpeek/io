@@ -1,4 +1,5 @@
-import type { NamespaceClient } from "./client.js";
+import type { NamespaceClient } from "@io/graph";
+
 import { app } from "./app.js";
 
 export type ExampleGraphIds = {

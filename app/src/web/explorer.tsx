@@ -1,17 +1,6 @@
 import {
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
-
-import {
-  app,
-  core,
   createTypeClient,
+  core,
   edgeId,
   formatValidationPath,
   GraphValidationError,
@@ -25,8 +14,18 @@ import {
   type PredicateRef,
   type Store,
   typeId,
-} from "#graph";
+} from "@io/graph";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
+import { app } from "../graph/app.js";
 import { PredicateFieldEditor, formatPredicateValue, usePredicateField } from "./bindings.js";
 import { performValidatedMutation } from "./mutation-validation.js";
 import { defaultWebFieldResolver } from "./resolver.js";
@@ -177,7 +176,10 @@ function getFieldLabel(predicate: AnyPredicateRef): string {
   return segments.at(-1) ?? field.key;
 }
 
-function getFieldRangeLabel(predicate: AnyPredicateRef, typeKeyById: ReadonlyMap<string, string>): string {
+function getFieldRangeLabel(
+  predicate: AnyPredicateRef,
+  typeKeyById: ReadonlyMap<string, string>,
+): string {
   const rangeKey = predicate.rangeType?.values.key;
   return rangeKey ?? typeKeyById.get(predicate.field.range) ?? predicate.field.range;
 }
@@ -187,7 +189,9 @@ function matchesQuery(query: string, ...parts: Array<string | undefined>): boole
   return parts.some((part) => part?.toLowerCase().includes(query));
 }
 
-function isDefinitionField(value: unknown): value is { cardinality: Cardinality; key: string; range: string } {
+function isDefinitionField(
+  value: unknown,
+): value is { cardinality: Cardinality; key: string; range: string } {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<{ cardinality: Cardinality; key: string; range: string }>;
   return (
@@ -251,7 +255,8 @@ function buildTypeCatalog(store: Store): TypeCatalogEntry[] {
       typeDef,
     }))
     .sort((left, right) => {
-      const byNamespace = Number(left.key.startsWith("core:")) - Number(right.key.startsWith("core:"));
+      const byNamespace =
+        Number(left.key.startsWith("core:")) - Number(right.key.startsWith("core:"));
       if (byNamespace !== 0) return byNamespace;
       const byKind = kindOrder[left.kind] - kindOrder[right.kind];
       if (byKind !== 0) return byKind;
@@ -271,9 +276,7 @@ function buildEntityCatalog(client: ExplorerClient, store: Store): EntityCatalog
       throw new Error(`Missing explorer handle for entity type "${alias}"`);
     }
 
-    const ids = store
-      .facts(undefined, typePredicateId, typeId(typeDef))
-      .map((edge) => edge.s);
+    const ids = store.facts(undefined, typePredicateId, typeId(typeDef)).map((edge) => edge.s);
 
     return {
       count: ids.length,
@@ -293,7 +296,9 @@ function buildPredicateCatalog(
   client: ExplorerClient,
   typeEntries: readonly TypeCatalogEntry[],
 ): PredicateCatalogEntry[] {
-  const predicateHandle = (client as unknown as Record<string, { ref?: (id: string) => AnyEntityRef }>).predicate?.ref;
+  const predicateHandle = (
+    client as unknown as Record<string, { ref?: (id: string) => AnyEntityRef }>
+  ).predicate?.ref;
   if (!predicateHandle) {
     throw new Error(`Missing explorer handle for "predicate"`);
   }
@@ -403,7 +408,11 @@ function asPredicateMetadataFields(fields: unknown): {
   };
 }
 
-function useStoreSlotValue(store: Store, subjectId: string, predicateId: string): string | undefined {
+function useStoreSlotValue(
+  store: Store,
+  subjectId: string,
+  predicateId: string,
+): string | undefined {
   const hasSnapshotRef = useRef(false);
   const snapshotRef = useRef<string | undefined>(undefined);
 
@@ -502,7 +511,9 @@ function syncStatusClass(status: ReturnType<ExplorerSync["getState"]>["status"])
   return "border-slate-700 bg-slate-900 text-slate-300";
 }
 
-function streamActivityClass(kind: ReturnType<ExplorerSync["getState"]>["recentActivities"][number]["kind"]): string {
+function streamActivityClass(
+  kind: ReturnType<ExplorerSync["getState"]>["recentActivities"][number]["kind"],
+): string {
   if (kind === "fallback") return "border-rose-500/30 bg-rose-500/10 text-rose-100";
   if (kind === "incremental") return "border-cyan-500/30 bg-cyan-500/10 text-cyan-200";
   if (kind === "write") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
@@ -598,7 +609,7 @@ function Badge({
   return (
     <span
       {...data}
-      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.16em] ${className}`.trim()}
+      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium tracking-[0.16em] uppercase ${className}`.trim()}
     >
       {children}
     </span>
@@ -634,7 +645,11 @@ function ListButton({
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="rounded-2xl border border-dashed border-slate-800 p-4 text-sm text-slate-400">{children}</p>;
+  return (
+    <p className="rounded-2xl border border-dashed border-slate-800 p-4 text-sm text-slate-400">
+      {children}
+    </p>
+  );
 }
 
 function PredicateValuePreview({
@@ -661,10 +676,10 @@ function PredicateValuePreview({
       <div className="flex flex-wrap gap-1.5">
         {ids.map((id) => {
           const entity = predicate.resolveEntity(id);
-          const label = entity ? getEntityLabel(entity) : typeKeyById.get(id) ?? id;
+          const label = entity ? getEntityLabel(entity) : (typeKeyById.get(id) ?? id);
           return (
             <Badge
-              className="border-slate-700 bg-slate-950 text-slate-200 normal-case tracking-normal"
+              className="border-slate-700 bg-slate-950 tracking-normal text-slate-200 normal-case"
               key={id}
             >
               {label}
@@ -735,12 +750,18 @@ function PredicateRow({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <div className="text-sm font-medium text-slate-100">{title ?? getFieldLabel(predicate)}</div>
+          <div className="text-sm font-medium text-slate-100">
+            {title ?? getFieldLabel(predicate)}
+          </div>
           <div className="font-mono text-[11px] text-slate-500">{pathLabel}</div>
         </div>
         <div className="flex flex-wrap justify-end gap-1.5">
-          <Badge className="border-slate-700 bg-slate-900 text-slate-300">{formatCardinality(predicate.field.cardinality)}</Badge>
-          <Badge className="border-slate-700 bg-slate-900 text-slate-300">{getFieldRangeLabel(predicate, typeKeyById)}</Badge>
+          <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+            {formatCardinality(predicate.field.cardinality)}
+          </Badge>
+          <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+            {getFieldRangeLabel(predicate, typeKeyById)}
+          </Badge>
           <Badge
             className={statusBadgeClass(status.tone)}
             data={{ "data-explorer-field-status": status.tone }}
@@ -763,8 +784,8 @@ function PredicateRow({
         {customEditor?.({
           onMutationError: handleMutationError,
           onMutationSuccess: handleMutationSuccess,
-        }) ?? (
-          isEditable ? (
+        }) ??
+          (isEditable ? (
             <PredicateFieldEditor
               onMutationError={handleMutationError}
               onMutationSuccess={handleMutationSuccess}
@@ -772,8 +793,7 @@ function PredicateRow({
             />
           ) : (
             <PredicateValuePreview predicate={predicate} typeKeyById={typeKeyById} />
-          )
-        )}
+          ))}
       </div>
 
       {validationMessages.length > 0 ? (
@@ -781,7 +801,7 @@ function PredicateRow({
           className="mt-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100"
           data-explorer-field-validation={pathLabel}
         >
-          <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-rose-200">
+          <div className="mb-2 text-xs font-medium tracking-[0.16em] text-rose-200 uppercase">
             Validation
           </div>
           <div className="space-y-2">
@@ -904,7 +924,9 @@ function EntityListItem({
       props={{ "data-explorer-item-entity": entity.id }}
     >
       <div className="space-y-1">
-        <div className="text-sm font-medium">{typeof name === "string" && name.length > 0 ? name : entity.id}</div>
+        <div className="text-sm font-medium">
+          {typeof name === "string" && name.length > 0 ? name : entity.id}
+        </div>
         {typeof label === "string" && label.length > 0 ? (
           <div className="text-xs text-slate-400">{label}</div>
         ) : null}
@@ -970,9 +992,13 @@ function PredicateListItem({
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium">{typeof key === "string" ? key : entry.key}</span>
-          <Badge className="border-slate-700 bg-slate-900 text-slate-300">{entry.owners.length} uses</Badge>
+          <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+            {entry.owners.length} uses
+          </Badge>
         </div>
-        {typeof name === "string" && name !== key ? <div className="text-xs text-slate-400">{name}</div> : null}
+        {typeof name === "string" && name !== key ? (
+          <div className="text-xs text-slate-400">{name}</div>
+        ) : null}
         <div className="font-mono text-[11px] text-slate-500">{entry.id}</div>
       </div>
     </ListButton>
@@ -1046,7 +1072,10 @@ function EntityInspector({
 }) {
   const fields = asNamedFields(entity.fields);
   const name = usePredicateField(fields.name).value;
-  const rows = useMemo(() => flattenPredicateRefs(entity.fields as Record<string, unknown>), [entity]);
+  const rows = useMemo(
+    () => flattenPredicateRefs(entity.fields as Record<string, unknown>),
+    [entity],
+  );
 
   return (
     <div className="space-y-4" data-explorer-panel="entities">
@@ -1057,12 +1086,15 @@ function EntityInspector({
               {typeof name === "string" && name.length > 0 ? name : entity.id}
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-400">
-              Live entity edits mutate predicate refs directly. The badges beside each field show compiled structural expectations while the inputs reflect the current graph value.
+              Live entity edits mutate predicate refs directly. The badges beside each field show
+              compiled structural expectations while the inputs reflect the current graph value.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge className="border-slate-700 bg-slate-950 text-slate-300">{typeEntry.key}</Badge>
-            <Badge className="border-slate-700 bg-slate-950 text-slate-300">{rows.length} slots</Badge>
+            <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+              {rows.length} slots
+            </Badge>
             <Badge className="border-slate-700 bg-slate-950 text-slate-300">{entity.id}</Badge>
           </div>
         </div>
@@ -1119,14 +1151,18 @@ function TypeInspector({
           <div>
             <h3 className="text-xl font-semibold text-white">{graphNameText}</h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-400">
-              Type metadata is editable here as graph data. The compiled field tree still comes from the checked-in namespace definition, so this panel makes metadata drift explicit instead of pretending live recompilation exists.
+              Type metadata is editable here as graph data. The compiled field tree still comes from
+              the checked-in namespace definition, so this panel makes metadata drift explicit
+              instead of pretending live recompilation exists.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge className="border-slate-700 bg-slate-950 text-slate-300">{entry.kind}</Badge>
             <Badge className="border-slate-700 bg-slate-950 text-slate-300">{entry.key}</Badge>
             {entry.kind === "entity" ? (
-              <Badge className="border-slate-700 bg-slate-950 text-slate-300">{entry.dataCount} nodes</Badge>
+              <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+                {entry.dataCount} nodes
+              </Badge>
             ) : null}
           </div>
         </div>
@@ -1134,8 +1170,16 @@ function TypeInspector({
 
       <Section title="Graph Metadata">
         <div className="grid gap-3">
-          <PredicateRow pathLabel="metadata.name" predicate={fields.name} typeKeyById={typeKeyById} />
-          <PredicateRow pathLabel="metadata.label" predicate={fields.label} typeKeyById={typeKeyById} />
+          <PredicateRow
+            pathLabel="metadata.name"
+            predicate={fields.name}
+            typeKeyById={typeKeyById}
+          />
+          <PredicateRow
+            pathLabel="metadata.label"
+            predicate={fields.label}
+            typeKeyById={typeKeyById}
+          />
           <PredicateRow
             pathLabel="metadata.description"
             predicate={fields.description}
@@ -1164,12 +1208,22 @@ function TypeInspector({
       </Section>
 
       <Section
-        title={entry.kind === "entity" ? "Compiled Field Tree" : entry.kind === "enum" ? "Enum Options" : "Scalar Definition"}
+        title={
+          entry.kind === "entity"
+            ? "Compiled Field Tree"
+            : entry.kind === "enum"
+              ? "Enum Options"
+              : "Scalar Definition"
+        }
         right={
           entry.kind === "entity" ? (
-            <Badge className="border-slate-700 bg-slate-950 text-slate-300">{entry.fieldDefs.length} fields</Badge>
+            <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+              {entry.fieldDefs.length} fields
+            </Badge>
           ) : entry.kind === "enum" ? (
-            <Badge className="border-slate-700 bg-slate-950 text-slate-300">{entry.optionDefs.length} options</Badge>
+            <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+              {entry.optionDefs.length} options
+            </Badge>
           ) : null
         }
       >
@@ -1187,10 +1241,14 @@ function TypeInspector({
                     <div className="font-mono text-[11px] text-slate-500">{fieldDef.key}</div>
                   </div>
                   <div className="flex flex-wrap justify-end gap-1.5">
-                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">{formatCardinality(fieldDef.cardinality)}</Badge>
-                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">{typeKeyById.get(fieldDef.rangeId) ?? fieldDef.rangeId}</Badge>
+                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+                      {formatCardinality(fieldDef.cardinality)}
+                    </Badge>
+                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+                      {typeKeyById.get(fieldDef.rangeId) ?? fieldDef.rangeId}
+                    </Badge>
                     <button
-                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.16em] text-cyan-200"
+                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium tracking-[0.16em] text-cyan-200 uppercase"
                       data-explorer-open-predicate={fieldDef.predicateId}
                       onClick={() => onOpenPredicate(fieldDef.predicateId)}
                       type="button"
@@ -1205,21 +1263,31 @@ function TypeInspector({
         ) : entry.kind === "enum" ? (
           <div className="grid gap-3">
             {entry.optionDefs.map((option) => (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3" key={option.id}>
+              <div
+                className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3"
+                key={option.id}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="space-y-1">
-                    <div className="text-sm font-medium text-slate-100">{option.name ?? option.key}</div>
+                    <div className="text-sm font-medium text-slate-100">
+                      {option.name ?? option.key}
+                    </div>
                     <div className="font-mono text-[11px] text-slate-500">{option.key}</div>
                   </div>
-                  <Badge className="border-slate-700 bg-slate-900 text-slate-300">{option.id}</Badge>
+                  <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+                    {option.id}
+                  </Badge>
                 </div>
-                {option.description ? <p className="mt-2 text-sm text-slate-400">{option.description}</p> : null}
+                {option.description ? (
+                  <p className="mt-2 text-sm text-slate-400">{option.description}</p>
+                ) : null}
               </div>
             ))}
           </div>
         ) : (
           <EmptyState>
-            Scalar types are codec-backed today. This panel still lets you inspect and edit the human metadata node without pretending the runtime can live-edit codecs.
+            Scalar types are codec-backed today. This panel still lets you inspect and edit the
+            human metadata node without pretending the runtime can live-edit codecs.
           </EmptyState>
         )}
       </Section>
@@ -1249,7 +1317,11 @@ function PredicateInspector({
   const cardinality = usePredicateField(fields.cardinality).value;
 
   const keyState =
-    key === entry.key ? "aligned" : typeof key === "string" && key.length > 0 ? "drifted" : "missing";
+    key === entry.key
+      ? "aligned"
+      : typeof key === "string" && key.length > 0
+        ? "drifted"
+        : "missing";
   const rangeState =
     range === entry.compiledRangeId
       ? "aligned"
@@ -1273,12 +1345,18 @@ function PredicateInspector({
               {typeof key === "string" && key.length > 0 ? key : entry.key}
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-400">
-              Predicate nodes are editable metadata. The compiled schema still drives live app field behavior, so changing this panel is intentionally visible as drift until full schema recompilation lands.
+              Predicate nodes are editable metadata. The compiled schema still drives live app field
+              behavior, so changing this panel is intentionally visible as drift until full schema
+              recompilation lands.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge className="border-slate-700 bg-slate-950 text-slate-300">{usageCount} asserted edges</Badge>
-            <Badge className="border-slate-700 bg-slate-950 text-slate-300">{entry.owners.length} compiled uses</Badge>
+            <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+              {usageCount} asserted edges
+            </Badge>
+            <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+              {entry.owners.length} compiled uses
+            </Badge>
             <Badge className="border-slate-700 bg-slate-950 text-slate-300">{entry.id}</Badge>
           </div>
         </div>
@@ -1287,7 +1365,11 @@ function PredicateInspector({
       <Section title="Graph Metadata">
         <div className="grid gap-3">
           <PredicateRow pathLabel="metadata.key" predicate={fields.key} typeKeyById={typeKeyById} />
-          <PredicateRow pathLabel="metadata.name" predicate={fields.name} typeKeyById={typeKeyById} />
+          <PredicateRow
+            pathLabel="metadata.name"
+            predicate={fields.name}
+            typeKeyById={typeKeyById}
+          />
           <PredicateRow
             pathLabel="metadata.description"
             predicate={fields.description}
@@ -1327,14 +1409,16 @@ function PredicateInspector({
           <DefinitionCheck
             check="predicate-range"
             compiled={typeKeyById.get(entry.compiledRangeId) ?? entry.compiledRangeId}
-            current={typeof range === "string" ? typeKeyById.get(range) ?? range : "missing"}
+            current={typeof range === "string" ? (typeKeyById.get(range) ?? range) : "missing"}
             label="Range"
             state={rangeState}
           />
           <DefinitionCheck
             check="predicate-cardinality"
             compiled={entry.compiledCardinality}
-            current={formatGraphCardinality(typeof cardinality === "string" ? cardinality : undefined)}
+            current={formatGraphCardinality(
+              typeof cardinality === "string" ? cardinality : undefined,
+            )}
             label="Cardinality"
             state={cardinalityState}
           />
@@ -1344,16 +1428,21 @@ function PredicateInspector({
       <Section title="Compiled Uses">
         <div className="grid gap-3">
           {entry.owners.map((owner) => (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3" key={`${owner.typeId}:${owner.pathLabel}`}>
+            <div
+              className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3"
+              key={`${owner.typeId}:${owner.pathLabel}`}
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1">
                   <div className="text-sm font-medium text-slate-100">{owner.pathLabel}</div>
                   <div className="text-xs text-slate-400">{owner.typeName}</div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  <Badge className="border-slate-700 bg-slate-900 text-slate-300">{owner.typeKey}</Badge>
+                  <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+                    {owner.typeKey}
+                  </Badge>
                   <button
-                    className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.16em] text-cyan-200"
+                    className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium tracking-[0.16em] text-cyan-200 uppercase"
                     data-explorer-open-type={owner.typeId}
                     onClick={() => onOpenType(owner.typeId)}
                     type="button"
@@ -1392,9 +1481,7 @@ function StreamInspector({ sync }: { sync: ExplorerSync }) {
           <Badge className="border-slate-700 bg-slate-950 text-slate-300">
             {state.cursor ?? "no cursor"}
           </Badge>
-          <Badge className="border-slate-700 bg-slate-950 text-slate-300">
-            {state.freshness}
-          </Badge>
+          <Badge className="border-slate-700 bg-slate-950 text-slate-300">{state.freshness}</Badge>
           <Badge className="border-slate-700 bg-slate-950 text-slate-300">
             {state.completeness}
           </Badge>
@@ -1435,7 +1522,7 @@ function StreamInspector({ sync }: { sync: ExplorerSync }) {
         </div>
 
         <div className="space-y-2">
-          <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+          <div className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">
             Pending Writes
           </div>
           {pendingTransactions.length > 0 ? (
@@ -1461,7 +1548,7 @@ function StreamInspector({ sync }: { sync: ExplorerSync }) {
         </div>
 
         <div className="space-y-2">
-          <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+          <div className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">
             Recent Activity
           </div>
           {recentActivities.length > 0 ? (
@@ -1493,7 +1580,7 @@ function StreamInspector({ sync }: { sync: ExplorerSync }) {
                     {activity.kind === "incremental"
                       ? activity.txIds.map((txId) => (
                           <Badge
-                            className="border-cyan-500/20 bg-cyan-500/5 text-cyan-100 normal-case tracking-normal"
+                            className="border-cyan-500/20 bg-cyan-500/5 tracking-normal text-cyan-100 normal-case"
                             data={{ "data-explorer-stream-activity-tx": txId }}
                             key={txId}
                           >
@@ -1502,16 +1589,12 @@ function StreamInspector({ sync }: { sync: ExplorerSync }) {
                         ))
                       : null}
                     {activity.kind === "write" ? (
-                      <Badge
-                        className="border-emerald-500/20 bg-emerald-500/5 text-emerald-100 normal-case tracking-normal"
-                      >
+                      <Badge className="border-emerald-500/20 bg-emerald-500/5 tracking-normal text-emerald-100 normal-case">
                         {activity.txId}
                       </Badge>
                     ) : null}
                     {activity.kind === "fallback" ? (
-                      <Badge
-                        className="border-rose-500/20 bg-rose-500/5 text-rose-100 normal-case tracking-normal"
-                      >
+                      <Badge className="border-rose-500/20 bg-rose-500/5 tracking-normal text-rose-100 normal-case">
                         {activity.reason}
                       </Badge>
                     ) : null}
@@ -1539,21 +1622,38 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
   const client = clientRef.current;
 
   const typeEntries = useMemo(() => buildTypeCatalog(graphRuntime.store), [graphRuntime.store]);
-  const entityEntries = useMemo(() => buildEntityCatalog(client, graphRuntime.store), [client, graphRuntime.store]);
-  const predicateEntries = useMemo(() => buildPredicateCatalog(client, typeEntries), [client, typeEntries]);
-  const typeEntryById = useMemo(() => new Map(typeEntries.map((entry) => [entry.id, entry])), [typeEntries]);
-  const typeKeyById = useMemo(() => new Map(typeEntries.map((entry) => [entry.id, entry.key])), [typeEntries]);
+  const entityEntries = useMemo(
+    () => buildEntityCatalog(client, graphRuntime.store),
+    [client, graphRuntime.store],
+  );
+  const predicateEntries = useMemo(
+    () => buildPredicateCatalog(client, typeEntries),
+    [client, typeEntries],
+  );
+  const typeEntryById = useMemo(
+    () => new Map(typeEntries.map((entry) => [entry.id, entry])),
+    [typeEntries],
+  );
+  const typeKeyById = useMemo(
+    () => new Map(typeEntries.map((entry) => [entry.id, entry.key])),
+    [typeEntries],
+  );
   const predicateEntryById = useMemo(
     () => new Map(predicateEntries.map((entry) => [entry.id, entry])),
     [predicateEntries],
   );
-  const entityEntryById = useMemo(() => new Map(entityEntries.map((entry) => [entry.id, entry])), [entityEntries]);
+  const entityEntryById = useMemo(
+    () => new Map(entityEntries.map((entry) => [entry.id, entry])),
+    [entityEntries],
+  );
 
   const [section, setSection] = useState<ExplorerSection>("entities");
   const [selectedEntityTypeId, setSelectedEntityTypeId] = useState(() => typeId(app.company));
   const [selectedEntityId, setSelectedEntityId] = useState(() => entityEntries[0]?.ids[0] ?? "");
   const [selectedTypeId, setSelectedTypeId] = useState(() => typeId(app.company));
-  const [selectedPredicateId, setSelectedPredicateId] = useState(() => edgeId(app.company.fields.name));
+  const [selectedPredicateId, setSelectedPredicateId] = useState(() =>
+    edgeId(app.company.fields.name),
+  );
   const [entityQuery, setEntityQuery] = useState("");
   const [typeQuery, setTypeQuery] = useState("");
   const [predicateQuery, setPredicateQuery] = useState("");
@@ -1566,11 +1666,16 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
 
   const visibleEntityIds = useMemo(() => {
     if (!selectedEntityType) return [];
-    return selectedEntityType.ids.filter((id) => matchesQuery(deferredEntityQuery, id, getNodeName(graphRuntime.store, id)));
+    return selectedEntityType.ids.filter((id) =>
+      matchesQuery(deferredEntityQuery, id, getNodeName(graphRuntime.store, id)),
+    );
   }, [deferredEntityQuery, graphRuntime.store, selectedEntityType]);
 
   const visibleTypes = useMemo(
-    () => typeEntries.filter((entry) => matchesQuery(deferredTypeQuery, entry.key, entry.name, entry.kind)),
+    () =>
+      typeEntries.filter((entry) =>
+        matchesQuery(deferredTypeQuery, entry.key, entry.name, entry.kind),
+      ),
     [deferredTypeQuery, typeEntries],
   );
 
@@ -1612,9 +1717,11 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
     setSelectedEntityTypeId(selectedEntityType.id);
   }, [selectedEntityType, selectedEntityTypeId]);
 
-  const selectedEntity = selectedEntityType && selectedEntityId ? selectedEntityType.getRef(selectedEntityId) : null;
+  const selectedEntity =
+    selectedEntityType && selectedEntityId ? selectedEntityType.getRef(selectedEntityId) : null;
   const selectedTypeEntry = typeEntryById.get(selectedTypeId) ?? visibleTypes[0] ?? null;
-  const selectedPredicateEntry = predicateEntryById.get(selectedPredicateId) ?? visiblePredicates[0] ?? null;
+  const selectedPredicateEntry =
+    predicateEntryById.get(selectedPredicateId) ?? visiblePredicates[0] ?? null;
 
   function openType(typeIdValue: string): void {
     setSection("types");
@@ -1634,13 +1741,32 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
             <div>
               <h1 className="text-lg font-semibold text-white">Graph Devtool</h1>
               <p className="mt-1 text-sm text-slate-400">
-                One surface for live entity data, compiled schema shape, and editable schema metadata.
+                One surface for live entity data, compiled schema shape, and editable schema
+                metadata.
               </p>
             </div>
             <div className="space-y-2">
-              <SectionNav count={entityEntries.length} label="Entities" mode="entities" onSelect={setSection} selected={section} />
-              <SectionNav count={typeEntries.length} label="Types" mode="types" onSelect={setSection} selected={section} />
-              <SectionNav count={predicateEntries.length} label="Predicates" mode="predicates" onSelect={setSection} selected={section} />
+              <SectionNav
+                count={entityEntries.length}
+                label="Entities"
+                mode="entities"
+                onSelect={setSection}
+                selected={section}
+              />
+              <SectionNav
+                count={typeEntries.length}
+                label="Types"
+                mode="types"
+                onSelect={setSection}
+                selected={section}
+              />
+              <SectionNav
+                count={predicateEntries.length}
+                label="Predicates"
+                mode="predicates"
+                onSelect={setSection}
+                selected={section}
+              />
             </div>
           </div>
         </Section>
@@ -1650,7 +1776,11 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
         {section === "entities" ? (
           <Section
             title="Entity Types"
-            right={<Badge className="border-slate-700 bg-slate-950 text-slate-300">{entityEntries.length}</Badge>}
+            right={
+              <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+                {entityEntries.length}
+              </Badge>
+            }
           >
             <div className="space-y-2">
               {entityEntries.map((entry) => (
@@ -1668,7 +1798,9 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
                       <div className="text-sm font-medium">{entry.name}</div>
                       <div className="font-mono text-[11px] text-slate-500">{entry.key}</div>
                     </div>
-                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">{entry.count}</Badge>
+                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+                      {entry.count}
+                    </Badge>
                   </div>
                 </ListButton>
               ))}
@@ -1678,11 +1810,17 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
           <Section title="Mode Context">
             <div className="space-y-3 text-sm text-slate-400">
               <p>
-                The explorer keeps compiled definitions and graph metadata side by side. When you edit schema nodes here, the drift checks stay visible until runtime schema recompilation exists.
+                The explorer keeps compiled definitions and graph metadata side by side. When you
+                edit schema nodes here, the drift checks stay visible until runtime schema
+                recompilation exists.
               </p>
               <div className="flex flex-wrap gap-2">
-                <Badge className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">aligned</Badge>
-                <Badge className="border-amber-500/30 bg-amber-500/10 text-amber-200">drifted</Badge>
+                <Badge className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
+                  aligned
+                </Badge>
+                <Badge className="border-amber-500/30 bg-amber-500/10 text-amber-200">
+                  drifted
+                </Badge>
                 <Badge className="border-rose-500/30 bg-rose-500/10 text-rose-200">missing</Badge>
               </div>
             </div>
@@ -1694,7 +1832,11 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
         {section === "entities" ? (
           <Section
             title={selectedEntityType ? `${selectedEntityType.name} Nodes` : "Nodes"}
-            right={<Badge className="border-slate-700 bg-slate-950 text-slate-300">{visibleEntityIds.length}</Badge>}
+            right={
+              <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+                {visibleEntityIds.length}
+              </Badge>
+            }
           >
             <input
               className="mb-3 w-full rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none"
@@ -1720,7 +1862,11 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
         ) : section === "types" ? (
           <Section
             title="Types"
-            right={<Badge className="border-slate-700 bg-slate-950 text-slate-300">{visibleTypes.length}</Badge>}
+            right={
+              <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+                {visibleTypes.length}
+              </Badge>
+            }
           >
             <input
               className="mb-3 w-full rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none"
@@ -1747,7 +1893,11 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
         ) : (
           <Section
             title="Predicates"
-            right={<Badge className="border-slate-700 bg-slate-950 text-slate-300">{visiblePredicates.length}</Badge>}
+            right={
+              <Badge className="border-slate-700 bg-slate-950 text-slate-300">
+                {visiblePredicates.length}
+              </Badge>
+            }
           >
             <input
               className="mb-3 w-full rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none"
@@ -1775,7 +1925,11 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
 
       <div className="space-y-4 overflow-y-auto pr-1">
         {section === "entities" && selectedEntity && selectedEntityType ? (
-          <EntityInspector entity={selectedEntity} typeEntry={selectedEntityType} typeKeyById={typeKeyById} />
+          <EntityInspector
+            entity={selectedEntity}
+            typeEntry={selectedEntityType}
+            typeKeyById={typeKeyById}
+          />
         ) : null}
 
         {section === "types" && selectedTypeEntry ? (
@@ -1802,11 +1956,7 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
     </main>
   );
 }
-export function ExplorerSurface({
-  graph,
-  store,
-  sync,
-}: ExplorerSurfaceRuntime) {
+export function ExplorerSurface({ graph, store, sync }: ExplorerSurfaceRuntime) {
   void graph;
   return <Explorer runtime={{ store, sync }} />;
 }

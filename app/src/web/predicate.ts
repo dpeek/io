@@ -1,15 +1,22 @@
-import { useMemo, useRef, useSyncExternalStore } from "react";
-
-import type { EntityRef, PredicateRangeTypeOf, PredicateRef, PredicateValueOf } from "../graph/client.js";
-import type { EditorInputMode } from "../graph/type-module.js";
 import {
   entityReferenceChecklistEditorKind,
   entityReferenceListDisplayKind,
+  isEntityType,
+  isEnumType,
+  type AnyTypeOutput,
+  type EdgeOutput,
+  type EditorInputMode,
+  type EntityRef,
   type ExistingEntityReferencePolicy,
-} from "../graph/web-policy.js";
-import { isEntityType, isEnumType, type AnyTypeOutput, type EdgeOutput } from "../graph/schema.js";
+  type PredicateRangeTypeOf,
+  type PredicateRef,
+  type PredicateValueOf,
+} from "@io/graph";
+import { useMemo, useRef, useSyncExternalStore } from "react";
 
-export type PredicateFieldMeta<T extends EdgeOutput> = T extends { meta: infer Meta } ? Meta : never;
+export type PredicateFieldMeta<T extends EdgeOutput> = T extends { meta: infer Meta }
+  ? Meta
+  : never;
 export type PredicateCollectionKind = "ordered" | "unordered";
 
 export type PredicateFieldBinding<
@@ -77,21 +84,25 @@ export function getPredicateFieldMeta<T extends EdgeOutput>(
 export function getPredicateEntityReferencePolicy<T extends EdgeOutput>(
   field: T,
 ): ExistingEntityReferencePolicy | undefined {
-  const meta = getPredicateFieldMeta(field) as { reference?: ExistingEntityReferencePolicy } | undefined;
+  const meta = getPredicateFieldMeta(field) as
+    | { reference?: ExistingEntityReferencePolicy }
+    | undefined;
   return meta?.reference;
 }
 
 export function getPredicateDisplayKind<T extends EdgeOutput>(field: T): string | undefined {
   const meta = getPredicateFieldMeta(field) as { display?: { kind?: string } } | undefined;
-  return meta?.display?.kind ?? (
-    getPredicateEntityReferencePolicy(field) ? entityReferenceListDisplayKind : undefined
+  return (
+    meta?.display?.kind ??
+    (getPredicateEntityReferencePolicy(field) ? entityReferenceListDisplayKind : undefined)
   );
 }
 
 export function getPredicateEditorKind<T extends EdgeOutput>(field: T): string | undefined {
   const meta = getPredicateFieldMeta(field) as { editor?: { kind?: string } } | undefined;
-  return meta?.editor?.kind ?? (
-    getPredicateEntityReferencePolicy(field) ? entityReferenceChecklistEditorKind : undefined
+  return (
+    meta?.editor?.kind ??
+    (getPredicateEntityReferencePolicy(field) ? entityReferenceChecklistEditorKind : undefined)
   );
 }
 
@@ -108,13 +119,13 @@ export function getPredicateEditorInputType<T extends EdgeOutput>(field: T): str
 export function getPredicateEditorInputMode<T extends EdgeOutput>(
   field: T,
 ): EditorInputMode | undefined {
-  const meta = getPredicateFieldMeta(field) as { editor?: { inputMode?: EditorInputMode } } | undefined;
+  const meta = getPredicateFieldMeta(field) as
+    | { editor?: { inputMode?: EditorInputMode } }
+    | undefined;
   return meta?.editor?.inputMode;
 }
 
-export function getPredicateEditorAutocomplete<T extends EdgeOutput>(
-  field: T,
-): string | undefined {
+export function getPredicateEditorAutocomplete<T extends EdgeOutput>(field: T): string | undefined {
   const meta = getPredicateFieldMeta(field) as { editor?: { autocomplete?: string } } | undefined;
   return meta?.editor?.autocomplete;
 }
@@ -122,22 +133,26 @@ export function getPredicateEditorAutocomplete<T extends EdgeOutput>(
 export function getPredicateEditorParser<T extends EdgeOutput>(
   field: T,
 ): ((raw: string) => unknown) | undefined {
-  const meta = getPredicateFieldMeta(field) as {
-    editor?: {
-      parse?: (raw: string) => unknown;
-    };
-  } | undefined;
+  const meta = getPredicateFieldMeta(field) as
+    | {
+        editor?: {
+          parse?: (raw: string) => unknown;
+        };
+      }
+    | undefined;
   return meta?.editor?.parse;
 }
 
 function getPredicateEditorFormatter<T extends EdgeOutput>(
   field: T,
 ): ((value: unknown) => string) | undefined {
-  const meta = getPredicateFieldMeta(field) as {
-    editor?: {
-      format?: (value: unknown) => string;
-    };
-  } | undefined;
+  const meta = getPredicateFieldMeta(field) as
+    | {
+        editor?: {
+          format?: (value: unknown) => string;
+        };
+      }
+    | undefined;
   return meta?.editor?.format;
 }
 
@@ -152,14 +167,18 @@ export function getPredicateCollectionKind<T extends EdgeOutput>(
   field: T,
 ): PredicateCollectionKind | undefined {
   if (field.cardinality !== "many") return undefined;
-  const meta = getPredicateFieldMeta(field) as { collection?: { kind?: PredicateCollectionKind } } | undefined;
+  const meta = getPredicateFieldMeta(field) as
+    | { collection?: { kind?: PredicateCollectionKind } }
+    | undefined;
   return meta?.collection?.kind ?? "ordered";
 }
 
 function getPredicateDisplayFormatter<T extends EdgeOutput>(
   field: T,
 ): ((value: unknown) => string) | undefined {
-  const meta = getPredicateFieldMeta(field) as { display?: { format?: (value: unknown) => string } } | undefined;
+  const meta = getPredicateFieldMeta(field) as
+    | { display?: { format?: (value: unknown) => string } }
+    | undefined;
   return meta?.display?.format;
 }
 
@@ -199,11 +218,7 @@ export function formatPredicateValue<
   if (value === undefined) return "";
   const formatter = getPredicateDisplayFormatter(predicate.field);
 
-  if (
-    typeof value === "string" &&
-    predicate.rangeType &&
-    isEnumType(predicate.rangeType)
-  ) {
+  if (typeof value === "string" && predicate.rangeType && isEnumType(predicate.rangeType)) {
     const option = getPredicateEnumOptions(predicate).find((candidate) => candidate.id === value);
     if (option) return option.label;
   }
@@ -247,10 +262,9 @@ export function getPredicateEntityReferenceSelection<
   });
 }
 
-export function usePredicateValue<
-  T extends EdgeOutput,
-  Defs extends Record<string, AnyTypeOutput>,
->(predicate: PredicateRef<T, Defs>): PredicateValueOf<T, Defs> {
+export function usePredicateValue<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
+  predicate: PredicateRef<T, Defs>,
+): PredicateValueOf<T, Defs> {
   const hasSnapshotRef = useRef(false);
   const snapshotRef = useRef<PredicateValueOf<T, Defs> | undefined>(undefined);
 
@@ -267,10 +281,9 @@ export function usePredicateValue<
   return useSyncExternalStore(predicate.subscribe, readSnapshot, readSnapshot);
 }
 
-export function usePredicateField<
-  T extends EdgeOutput,
-  Defs extends Record<string, AnyTypeOutput>,
->(predicate: PredicateRef<T, Defs>): PredicateFieldBinding<T, Defs> {
+export function usePredicateField<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
+  predicate: PredicateRef<T, Defs>,
+): PredicateFieldBinding<T, Defs> {
   const value = usePredicateValue(predicate);
   const meta = getPredicateFieldMeta(predicate.field);
   const displayKind = getPredicateDisplayKind(predicate.field);

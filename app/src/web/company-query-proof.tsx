@@ -1,12 +1,7 @@
+import { core, type EntityRef, type PredicateRef } from "@io/graph";
 import { useState } from "react";
 
-import {
-  app,
-  core,
-  type EntityRef,
-  type PredicateRef,
-} from "#graph";
-
+import { app } from "../graph/app.js";
 import {
   FilterOperandEditor,
   compileWebFilterQuery,
@@ -189,7 +184,7 @@ function QueryFilterRow({
         </code>
       </div>
       <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
-        <label className="grid gap-1 text-xs uppercase tracking-[0.2em] text-stone-500">
+        <label className="grid gap-1 text-xs tracking-[0.2em] text-stone-500 uppercase">
           Operator
           <select
             className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm tracking-normal text-stone-950"
@@ -206,7 +201,7 @@ function QueryFilterRow({
             ))}
           </select>
         </label>
-        <label className="grid gap-1 text-xs uppercase tracking-[0.2em] text-stone-500">
+        <label className="grid gap-1 text-xs tracking-[0.2em] text-stone-500 uppercase">
           Operand
           <div className="rounded-xl border border-stone-300 bg-white px-3 py-2">
             <FilterOperandEditor
@@ -231,7 +226,9 @@ export function CompanyQueryProofSurface({
   querySource: CompanyRef;
 }) {
   const rows = getCompanyQueryRows(querySource);
-  const [rowState, setRowState] = useState<Record<string, QueryRowState>>(() => createInitialRowState(rows));
+  const [rowState, setRowState] = useState<Record<string, QueryRowState>>(() =>
+    createInitialRowState(rows),
+  );
   const activeClauses = getActiveClauses(rows, rowState);
   const runtime = compileWebFilterQuery<CompanyRef>({
     entityTypeKey: app.company.values.key,
@@ -249,23 +246,35 @@ export function CompanyQueryProofSurface({
       <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1.25fr)_340px]">
         <section className="overflow-hidden rounded-[2rem] border border-white/80 bg-white/85 shadow-2xl shadow-stone-900/10 backdrop-blur">
           <div className="border-b border-stone-200/80 px-6 py-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-emerald-700">Schema-driven Milestone 5 proof</p>
+            <p className="text-xs tracking-[0.24em] text-emerald-700 uppercase">
+              Schema-driven Milestone 5 proof
+            </p>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Company query builder</h1>
                 <p className="mt-1 max-w-2xl text-sm text-stone-600">
-                  Filter rows resolve directly from <code>company.fields.*</code> predicate refs, reuse the generic
-                  filter resolver, and lower into one small runtime query plan for the demo list below.
+                  Filter rows resolve directly from <code>company.fields.*</code> predicate refs,
+                  reuse the generic filter resolver, and lower into one small runtime query plan for
+                  the demo list below.
                 </p>
               </div>
               <div className="flex gap-2 text-xs text-stone-500">
-                <a className="rounded-full border border-current/20 px-3 py-1" href="?surface=query">
+                <a
+                  className="rounded-full border border-current/20 px-3 py-1"
+                  href="?surface=query"
+                >
                   Query
                 </a>
-                <a className="rounded-full border border-current/20 px-3 py-1" href="?surface=company">
+                <a
+                  className="rounded-full border border-current/20 px-3 py-1"
+                  href="?surface=company"
+                >
                   Company proof
                 </a>
-                <a className="rounded-full border border-current/20 px-3 py-1" href="?surface=explorer">
+                <a
+                  className="rounded-full border border-current/20 px-3 py-1"
+                  href="?surface=explorer"
+                >
                   Explorer
                 </a>
               </div>
@@ -310,11 +319,12 @@ export function CompanyQueryProofSurface({
                 <div>
                   <h2 className="text-lg font-semibold tracking-tight">Matching companies</h2>
                   <p className="text-sm text-stone-600">
-                    Active clauses: <span data-company-query-clause-count="">{runtime.query.clauses.length}</span>
+                    Active clauses:{" "}
+                    <span data-company-query-clause-count="">{runtime.query.clauses.length}</span>
                   </p>
                 </div>
                 <div
-                  className="rounded-full bg-stone-900 px-3 py-1 text-xs uppercase tracking-[0.2em] text-stone-50"
+                  className="rounded-full bg-stone-900 px-3 py-1 text-xs tracking-[0.2em] text-stone-50 uppercase"
                   data-company-query-match-count=""
                 >
                   {matches.length} matches
@@ -369,10 +379,10 @@ export function CompanyQueryProofSurface({
         </section>
         <aside className="space-y-4 rounded-[2rem] border border-stone-900/10 bg-stone-950 px-5 py-4 text-stone-100 shadow-xl shadow-stone-900/15">
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.24em] text-amber-300">Lowered query</p>
+            <p className="text-xs tracking-[0.24em] text-amber-300 uppercase">Lowered query</p>
             <p className="text-sm text-stone-300">
-              The demo compiles active filter rows into one <code>AND</code> plan keyed by predicate id and operator
-              contract.
+              The demo compiles active filter rows into one <code>AND</code> plan keyed by predicate
+              id and operator contract.
             </p>
           </div>
           <pre
@@ -414,7 +424,7 @@ export function CompanyQueryProofPage() {
         data-company-query="missing-demo-data"
       >
         <div className="w-full max-w-md rounded-[1.75rem] border border-white/10 bg-white/5 p-6">
-          <p className="text-xs uppercase tracking-[0.24em] text-amber-300">Query proof</p>
+          <p className="text-xs tracking-[0.24em] text-amber-300 uppercase">Query proof</p>
           <h1 className="mt-3 text-2xl font-semibold">Missing company records</h1>
           <p className="mt-2 text-sm text-stone-300">
             The synced graph does not have company entities to drive this query proof.

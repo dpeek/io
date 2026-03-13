@@ -3,20 +3,22 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { app } from "./graph/app.js";
-import { bootstrap } from "./graph/bootstrap.js";
-import { createTypeClient } from "./graph/client.js";
-import { core } from "./graph/core.js";
-import { edgeId } from "./graph/schema.js";
 import {
+  bootstrap,
+  createStore,
+  createTypeClient,
+  edgeId,
+  core,
   type AuthoritativeGraphWriteHistory,
   type AuthoritativeGraphWriteResult,
   type GraphWriteTransaction,
-  validateAuthoritativeTotalSyncPayload,
+  type StoreSnapshot,
   type TotalSyncPayload,
-} from "./graph/sync.js";
-import { createStore, type StoreSnapshot } from "./graph/store.js";
+  validateAuthoritativeTotalSyncPayload,
+} from "@io/graph";
+
 import { createAppAuthority } from "./authority.js";
+import { app } from "./graph/app.js";
 import { handleSyncRequest } from "./server-app.js";
 
 const tempDirs: string[] = [];
@@ -239,7 +241,12 @@ describe("app authority", () => {
       txId: "tx:1",
       cursor: "authority:broken:2",
       replayed: false,
-      transaction: createCompanyNameWriteTransaction(store, companyId, "Broken History Co 2", "tx:1"),
+      transaction: createCompanyNameWriteTransaction(
+        store,
+        companyId,
+        "Broken History Co 2",
+        "tx:1",
+      ),
     };
 
     await writeFile(

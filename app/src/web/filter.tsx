@@ -1,8 +1,14 @@
+import {
+  isEnumType,
+  type AnyTypeOutput,
+  type EdgeOutput,
+  type PredicateRef,
+  type ResolvedAnyTypeOutput,
+  type TypeFilterOperator,
+  typeId,
+} from "@io/graph";
 import type { ComponentType, ReactNode } from "react";
 
-import type { PredicateRef } from "../graph/client.js";
-import { isEnumType, type AnyTypeOutput, type EdgeOutput, type ResolvedAnyTypeOutput, typeId } from "../graph/schema.js";
-import type { TypeFilterOperator } from "../graph/type-module.js";
 import { genericWebFilterOperandEditorCapabilities } from "./generic-filter-editors.js";
 
 type FieldFilterContract = {
@@ -12,49 +18,44 @@ type FieldFilterContract = {
 
 type EnumTypeLike = Extract<AnyTypeOutput | ResolvedAnyTypeOutput, { kind: "enum" }>;
 
-export type FieldFilterOf<T extends EdgeOutput> = T extends { filter: infer Filter extends FieldFilterContract }
+export type FieldFilterOf<T extends EdgeOutput> = T extends {
+  filter: infer Filter extends FieldFilterContract;
+}
   ? Filter
   : never;
-export type FieldFilterOperatorKey<T extends EdgeOutput> = FieldFilterOf<T> extends FieldFilterContract
-  ? Extract<keyof FieldFilterOf<T>["operators"], string>
-  : never;
-type FieldFilterOperatorOf<
-  T extends EdgeOutput,
-  Key extends FieldFilterOperatorKey<T>,
-> = FieldFilterOf<T> extends FieldFilterContract ? FieldFilterOf<T>["operators"][Key] : never;
-type AuthoredFieldFilterValueOf<
-  T extends EdgeOutput,
-  Key extends FieldFilterOperatorKey<T>,
-> = FieldFilterOperatorOf<T, Key> extends TypeFilterOperator<infer Value, any, any> ? Value : never;
-type AuthoredFieldFilterOperandOf<
-  T extends EdgeOutput,
-  Key extends FieldFilterOperatorKey<T>,
-> = FieldFilterOperatorOf<T, Key> extends TypeFilterOperator<any, infer Operand, any> ? Operand : never;
-type FieldFilterOperandShapeOf<
-  T extends EdgeOutput,
-  Key extends FieldFilterOperatorKey<T>,
-> = FieldFilterOperatorOf<T, Key> extends TypeFilterOperator<any, any, infer OperandShape>
-  ? OperandShape
-  : never;
+export type FieldFilterOperatorKey<T extends EdgeOutput> =
+  FieldFilterOf<T> extends FieldFilterContract
+    ? Extract<keyof FieldFilterOf<T>["operators"], string>
+    : never;
+type FieldFilterOperatorOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+  FieldFilterOf<T> extends FieldFilterContract ? FieldFilterOf<T>["operators"][Key] : never;
+type AuthoredFieldFilterValueOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+  FieldFilterOperatorOf<T, Key> extends TypeFilterOperator<infer Value, any, any> ? Value : never;
+type AuthoredFieldFilterOperandOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+  FieldFilterOperatorOf<T, Key> extends TypeFilterOperator<any, infer Operand, any>
+    ? Operand
+    : never;
+type FieldFilterOperandShapeOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+  FieldFilterOperatorOf<T, Key> extends TypeFilterOperator<any, any, infer OperandShape>
+    ? OperandShape
+    : never;
 
-export type WebFilterOperandOf<
-  T extends EdgeOutput,
-  Key extends FieldFilterOperatorKey<T>,
-> = FieldFilterOperandShapeOf<T, Key> extends { kind: "enum"; selection: "many" }
-  ? string[]
-  : FieldFilterOperandShapeOf<T, Key> extends { kind: "enum" }
+export type WebFilterOperandOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+  FieldFilterOperandShapeOf<T, Key> extends { kind: "enum"; selection: "many" }
+    ? string[]
+    : FieldFilterOperandShapeOf<T, Key> extends { kind: "enum" }
+      ? string
+      : AuthoredFieldFilterOperandOf<T, Key>;
+
+export type WebFilterValueOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+  FieldFilterOperandShapeOf<T, Key> extends { kind: "enum" }
     ? string
-    : AuthoredFieldFilterOperandOf<T, Key>;
+    : AuthoredFieldFilterValueOf<T, Key>;
 
-export type WebFilterValueOf<
+type FilterablePredicateRef<
   T extends EdgeOutput,
-  Key extends FieldFilterOperatorKey<T>,
-> = FieldFilterOperandShapeOf<T, Key> extends { kind: "enum" } ? string : AuthoredFieldFilterValueOf<T, Key>;
-
-type FilterablePredicateRef<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>> = Pick<
-  PredicateRef<T, Defs>,
-  "field" | "predicateId"
->;
+  Defs extends Record<string, AnyTypeOutput>,
+> = Pick<PredicateRef<T, Defs>, "field" | "predicateId">;
 
 export type WebFilterEnumOption = {
   value: string;
@@ -124,24 +125,22 @@ export type WebFilterOperatorResolution<
   test: (value: WebFilterValueOf<T, Key>, operand: WebFilterOperandOf<T, Key>) => boolean;
 };
 
-export type WebRuntimeFilterOperand<
-  T extends EdgeOutput,
-  Key extends FieldFilterOperatorKey<T>,
-> = FieldFilterOperandShapeOf<T, Key> extends { kind: "enum"; selection: infer Selection extends "one" | "many" }
-  ? {
-      kind: "enum";
-      selection: Selection;
-      value: string;
-    }
-  : {
-      kind: FieldFilterOperandShapeOf<T, Key>["kind"];
-      value: string;
-    };
+export type WebRuntimeFilterOperand<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+  FieldFilterOperandShapeOf<T, Key> extends {
+    kind: "enum";
+    selection: infer Selection extends "one" | "many";
+  }
+    ? {
+        kind: "enum";
+        selection: Selection;
+        value: string;
+      }
+    : {
+        kind: FieldFilterOperandShapeOf<T, Key>["kind"];
+        value: string;
+      };
 
-export type WebRuntimeFilterClause<
-  T extends EdgeOutput,
-  Key extends FieldFilterOperatorKey<T>,
-> = {
+export type WebRuntimeFilterClause<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> = {
   predicateId: string;
   predicateKey: T["key"];
   rangeKey: T["range"];
@@ -217,7 +216,9 @@ type EnumIdentityMap = {
   toResolved(value: string): string;
 };
 
-function hasFieldFilter<T extends EdgeOutput>(field: T): field is T & { filter: FieldFilterContract } {
+function hasFieldFilter<T extends EdgeOutput>(
+  field: T,
+): field is T & { filter: FieldFilterContract } {
   const candidate = field as T & { filter?: FieldFilterContract };
   return (
     typeof candidate.filter?.defaultOperator === "string" &&
@@ -226,7 +227,9 @@ function hasFieldFilter<T extends EdgeOutput>(field: T): field is T & { filter: 
   );
 }
 
-function toCapabilityMap<T extends { kind: string }>(capabilities: readonly T[]): ReadonlyMap<string, T> {
+function toCapabilityMap<T extends { kind: string }>(
+  capabilities: readonly T[],
+): ReadonlyMap<string, T> {
   return new Map(capabilities.map((capability) => [capability.kind, capability]));
 }
 
@@ -240,13 +243,15 @@ function resolveFieldRangeType<Defs extends Record<string, AnyTypeOutput>>(
 }
 
 function getFieldDisplayFormatter(field: EdgeOutput): ((value: unknown) => string) | undefined {
-  const meta = (field as EdgeOutput & {
-    meta?: {
-      display?: {
-        format?: (value: unknown) => string;
+  const meta = (
+    field as EdgeOutput & {
+      meta?: {
+        display?: {
+          format?: (value: unknown) => string;
+        };
       };
-    };
-  }).meta;
+    }
+  ).meta;
   return meta?.display?.format;
 }
 
@@ -256,7 +261,10 @@ function formatEnumOptionLabel(field: EdgeOutput, option: { key: string; name?: 
   return option.name ?? option.key;
 }
 
-function resolveEnumOptions(field: EdgeOutput, rangeType: EnumTypeLike | undefined): readonly WebFilterEnumOption[] {
+function resolveEnumOptions(
+  field: EdgeOutput,
+  rangeType: EnumTypeLike | undefined,
+): readonly WebFilterEnumOption[] {
   if (!rangeType) return [];
   return Object.values(rangeType.options).map((option) => ({
     value: option.id ?? option.key,
@@ -394,24 +402,34 @@ function resolveOperator<
     }
 
     const runtimeValue = typeof operand === "string" ? operand : "";
-    baseOperator.format(resolveCanonicalValue(runtimeValue) as AuthoredFieldFilterOperandOf<T, Key>);
+    baseOperator.format(
+      resolveCanonicalValue(runtimeValue) as AuthoredFieldFilterOperandOf<T, Key>,
+    );
     return runtimeValue;
   }
 
-  function testEnumOperand(value: WebFilterValueOf<T, Key>, operand: WebFilterOperandOf<T, Key>): boolean {
+  function testEnumOperand(
+    value: WebFilterValueOf<T, Key>,
+    operand: WebFilterOperandOf<T, Key>,
+  ): boolean {
     const canonicalValue = resolveCanonicalValue(typeof value === "string" ? value : "");
 
     if (enumOperand.selection === "many") {
       const runtimeValues = Array.isArray(operand) ? operand : [];
       return baseOperator.test(
         canonicalValue as AuthoredFieldFilterValueOf<T, Key>,
-        runtimeValues.map((item) => resolveCanonicalValue(item)) as AuthoredFieldFilterOperandOf<T, Key>,
+        runtimeValues.map((item) => resolveCanonicalValue(item)) as AuthoredFieldFilterOperandOf<
+          T,
+          Key
+        >,
       );
     }
 
     return baseOperator.test(
       canonicalValue as AuthoredFieldFilterValueOf<T, Key>,
-      resolveCanonicalValue(typeof operand === "string" ? operand : "") as AuthoredFieldFilterOperandOf<T, Key>,
+      resolveCanonicalValue(
+        typeof operand === "string" ? operand : "",
+      ) as AuthoredFieldFilterOperandOf<T, Key>,
     );
   }
 
@@ -429,10 +447,7 @@ function resolveOperator<
   };
 }
 
-function resolveFilterField<
-  T extends EdgeOutput,
-  Defs extends Record<string, AnyTypeOutput>,
->(
+function resolveFilterField<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
   field: T,
   rangeType: Defs[keyof Defs] | undefined,
   operandEditorByKind: ReadonlyMap<string, AnyOperandEditorCapability>,
@@ -576,11 +591,7 @@ function UnsupportedFilterOperand({
   kind,
   reason,
 }: UnsupportedFilterOperandFallbackProps): ReactNode {
-  return (
-    <span data-web-filter-status="unsupported">
-      {kind ? `${reason}:${kind}` : reason}
-    </span>
-  );
+  return <span data-web-filter-status="unsupported">{kind ? `${reason}:${kind}` : reason}</span>;
 }
 
 export function FilterOperandEditor<

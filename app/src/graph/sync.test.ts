@@ -1,33 +1,34 @@
 import { describe, expect, it } from "bun:test";
-import { app } from "./app";
-import { bootstrap } from "./bootstrap";
-import {
-  GraphValidationError,
-  createTypeClient,
-  formatValidationPath,
-} from "./client";
-import { core } from "./core";
-import { createExampleRuntime } from "./runtime";
-import { edgeId, typeId } from "./schema";
-import { createStore } from "./store";
+
 import {
   GraphSyncWriteError,
-  type GraphWriteTransaction,
-  createAuthoritativeGraphWriteSession,
+  GraphValidationError,
+  bootstrap,
   createAuthoritativeGraphWriteResultValidator,
+  createAuthoritativeGraphWriteSession,
   createAuthoritativeTotalSyncValidator,
   createGraphWriteOperationsFromSnapshots,
   createGraphWriteTransactionFromSnapshots,
+  createStore,
   createSyncedTypeClient,
   createTotalSyncController,
   createTotalSyncPayload,
   createTotalSyncSession,
+  createTypeClient,
+  core,
+  edgeId,
+  formatValidationPath,
+  type GraphWriteTransaction,
+  typeId,
   validateAuthoritativeGraphWriteResult,
   validateAuthoritativeGraphWriteTransaction,
   validateAuthoritativeTotalSyncPayload,
   validateIncrementalSyncPayload,
   validateIncrementalSyncResult,
-} from "./sync";
+} from "@io/graph";
+
+import { app } from "./app";
+import { createExampleRuntime } from "./runtime";
 
 function createServerGraph() {
   const store = createStore();
@@ -76,12 +77,10 @@ function createCompanyNameWriteTransaction(
     edgeId?: string;
   } = {},
 ): GraphWriteTransaction {
-  const retractOps = store
-    .facts(companyId, edgeId(app.company.fields.name))
-    .map((edge) => ({
-      op: "retract" as const,
-      edgeId: edge.id,
-    }));
+  const retractOps = store.facts(companyId, edgeId(app.company.fields.name)).map((edge) => ({
+    op: "retract" as const,
+    edgeId: edge.id,
+  }));
   const assertOp = {
     op: "assert" as const,
     edge: {
@@ -278,7 +277,8 @@ describe("total sync", () => {
       cursorPrefix: "server:",
     });
     const client = createSyncedTypeClient(app, {
-      pull: () => createTotalSyncPayload(server.store, { cursor: authority.getCursor() ?? "server:0" }),
+      pull: () =>
+        createTotalSyncPayload(server.store, { cursor: authority.getCursor() ?? "server:0" }),
       push: (transaction) => authority.apply(transaction),
     });
 
@@ -336,7 +336,8 @@ describe("total sync", () => {
     });
     let shouldFail = true;
     const client = createSyncedTypeClient(app, {
-      pull: () => createTotalSyncPayload(server.store, { cursor: authority.getCursor() ?? "server:0" }),
+      pull: () =>
+        createTotalSyncPayload(server.store, { cursor: authority.getCursor() ?? "server:0" }),
       push(transaction) {
         if (shouldFail) {
           shouldFail = false;
@@ -548,7 +549,9 @@ describe("total sync", () => {
     expect(payload.mode).toBe("total");
     if (payload.mode !== "total") throw new Error("Expected total sync bootstrap payload.");
     expect(payload.cursor).toBe("server:data-only:1");
-    expect(dataOnlyPayload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(false);
+    expect(dataOnlyPayload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(
+      false,
+    );
     expect(payload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(true);
     expect(client.graph.company.list().map((company) => company.id)).toEqual([acmeId]);
     expect(client.graph.company.get(acmeId)).toMatchObject({
@@ -566,7 +569,8 @@ describe("total sync", () => {
       phase: "local",
       event: "update",
     });
-    if (!validation.ok) throw new Error("Expected local validation to stay usable after data-only sync");
+    if (!validation.ok)
+      throw new Error("Expected local validation to stay usable after data-only sync");
 
     client.graph.company.update(acmeId, {
       name: "Acme Graph Labs",
@@ -594,7 +598,9 @@ describe("total sync", () => {
     expect(payload.mode).toBe("total");
     if (payload.mode !== "total") throw new Error("Expected total sync apply payload.");
     expect(payload.cursor).toBe("server:data-only:apply");
-    expect(dataOnlyPayload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(false);
+    expect(dataOnlyPayload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(
+      false,
+    );
     expect(payload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(true);
     expect(payload.snapshot.edges).toEqual(expect.arrayContaining(dataOnlyPayload.snapshot.edges));
     expect(client.graph.company.list().map((company) => company.id)).toEqual([acmeId]);
@@ -619,7 +625,8 @@ describe("total sync", () => {
       phase: "local",
       event: "update",
     });
-    if (!validation.ok) throw new Error("Expected local validation to stay usable after sync.apply");
+    if (!validation.ok)
+      throw new Error("Expected local validation to stay usable after sync.apply");
   });
 
   it("applies authoritative write results incrementally while preserving sync state and schema baseline", async () => {
@@ -687,7 +694,8 @@ describe("total sync", () => {
       phase: "local",
       event: "update",
     });
-    if (!validation.ok) throw new Error("Expected schema baseline to remain valid after write replay");
+    if (!validation.ok)
+      throw new Error("Expected schema baseline to remain valid after write replay");
 
     unsubscribeName();
     unsubscribeWebsite();
@@ -724,7 +732,9 @@ describe("total sync", () => {
       cursor: "example:2",
       replayed: false,
     });
-    expect(runtime.authority.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs Two");
+    expect(runtime.authority.graph.company.get(runtime.ids.acme).name).toBe(
+      "Acme Runtime Labs Two",
+    );
     expect(runtime.graph.company.get(runtime.ids.acme).name).toBe("Acme Runtime Labs Two");
     expect(peer.graph.company.get(runtime.ids.acme).name).toBe("Acme Corp");
 
@@ -2121,7 +2131,9 @@ describe("total sync", () => {
 
     expect(payload.mode).toBe("total");
     if (payload.mode !== "total") throw new Error("Expected total sync payload.");
-    expect(dataOnlyPayload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(false);
+    expect(dataOnlyPayload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(
+      false,
+    );
     expect(payload.snapshot.edges.some((edge) => edge.s === typeId(app.company))).toBe(true);
     expect(clientGraph.company.get(acmeId).name).toBe("Acme Corp");
     expect(
@@ -2506,7 +2518,12 @@ describe("authoritative graph writes", () => {
       status: app.status.values.active.id,
       website: new URL("https://acme.com"),
     });
-    const transaction = createCompanyNameWriteTransaction(server.store, companyId, "Acme Graph Labs", "");
+    const transaction = createCompanyNameWriteTransaction(
+      server.store,
+      companyId,
+      "Acme Graph Labs",
+      "",
+    );
 
     const txValidation = validateAuthoritativeGraphWriteTransaction(transaction, server.store, app);
 
@@ -2542,7 +2559,8 @@ describe("authoritative graph writes", () => {
       phase: "authoritative",
       event: "reconcile",
     });
-    if (resultValidation.ok) throw new Error("Expected empty write-result identities to fail validation");
+    if (resultValidation.ok)
+      throw new Error("Expected empty write-result identities to fail validation");
     expect(resultValidation.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2895,7 +2913,12 @@ describe("authoritative graph writes", () => {
     const authority = createAuthoritativeGraphWriteSession(server.store, app, {
       cursorPrefix: "server:",
     });
-    const transaction = createCompanyNameWriteTransaction(server.store, companyId, "   ", "tx:invalid");
+    const transaction = createCompanyNameWriteTransaction(
+      server.store,
+      companyId,
+      "   ",
+      "tx:invalid",
+    );
 
     const validation = validateAuthoritativeGraphWriteTransaction(transaction, server.store, app);
 
@@ -2956,14 +2979,26 @@ describe("authoritative graph writes", () => {
       cursorPrefix: "server:",
     });
     const assertedEdgeId = server.store.newNode();
-    const first = createCompanyNameWriteTransaction(server.store, companyId, "Acme Replay", "tx:1", {
-      edgeId: assertedEdgeId,
-      assertFirst: true,
-    });
-    const replay = createCompanyNameWriteTransaction(server.store, companyId, "Acme Replay", "tx:1", {
-      edgeId: assertedEdgeId,
-      assertFirst: false,
-    });
+    const first = createCompanyNameWriteTransaction(
+      server.store,
+      companyId,
+      "Acme Replay",
+      "tx:1",
+      {
+        edgeId: assertedEdgeId,
+        assertFirst: true,
+      },
+    );
+    const replay = createCompanyNameWriteTransaction(
+      server.store,
+      companyId,
+      "Acme Replay",
+      "tx:1",
+      {
+        edgeId: assertedEdgeId,
+        assertFirst: false,
+      },
+    );
 
     const firstResult = authority.apply(first);
     const replayResult = authority.apply(replay);
@@ -2997,7 +3032,9 @@ describe("authoritative graph writes", () => {
 
     let error: unknown;
     try {
-      authority.apply(createCompanyNameWriteTransaction(server.store, companyId, "Acme Two", "tx:1"));
+      authority.apply(
+        createCompanyNameWriteTransaction(server.store, companyId, "Acme Two", "tx:1"),
+      );
     } catch (caught) {
       error = caught;
     }

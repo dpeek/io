@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { country } from "../type/country/index.js";
+
+import { core, country, rangeOf, typeId } from "@io/graph";
+
 import { app, company, status } from "./app";
-import { core } from "./core";
-import { rangeOf, typeId } from "./schema";
 
 describe("rangeOf typing and namespace resolution", () => {
   it("keeps key-literal typing while normalizing resolved refs to ids", () => {

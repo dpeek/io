@@ -1,17 +1,18 @@
 import { describe, expect, it } from "bun:test";
+
+import {
+  GraphValidationError,
+  bootstrap,
+  createStore,
+  createTypeClient,
+  core,
+  fieldGroupPath,
+  type FieldGroupRef,
+} from "@io/graph";
 import { Fragment, Profiler } from "react";
 import { act, create } from "react-test-renderer";
 
 import { app } from "../graph/app.js";
-import { bootstrap } from "../graph/bootstrap.js";
-import {
-  GraphValidationError,
-  createTypeClient,
-  fieldGroupPath,
-  type FieldGroupRef,
-} from "../graph/client.js";
-import { core } from "../graph/core.js";
-import { createStore } from "../graph/store.js";
 import {
   PredicateFieldEditor,
   PredicateFieldView,
@@ -24,8 +25,9 @@ import type {
   PredicateFieldViewCapability,
 } from "./resolver.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 function setupGraph() {
   const store = createStore();
@@ -87,7 +89,10 @@ describe("web predicate bindings", () => {
         {
           kind: "text",
           Component: TextView,
-        } satisfies PredicateFieldViewCapability<typeof app.company.fields.name, typeof app & typeof core>,
+        } satisfies PredicateFieldViewCapability<
+          typeof app.company.fields.name,
+          typeof app & typeof core
+        >,
       ],
     });
 
@@ -123,7 +128,10 @@ describe("web predicate bindings", () => {
         {
           kind: "text",
           Component: TextEditor,
-        } satisfies PredicateFieldEditorCapability<typeof app.company.fields.name, typeof app & typeof core>,
+        } satisfies PredicateFieldEditorCapability<
+          typeof app.company.fields.name,
+          typeof app & typeof core
+        >,
       ],
     });
 
@@ -274,7 +282,10 @@ describe("web predicate bindings", () => {
         {
           kind: "text",
           Component: NameView,
-        } satisfies PredicateFieldViewCapability<typeof app.company.fields.name, typeof app & typeof core>,
+        } satisfies PredicateFieldViewCapability<
+          typeof app.company.fields.name,
+          typeof app & typeof core
+        >,
         {
           kind: "external-link",
           Component: WebsiteView,
@@ -406,7 +417,9 @@ describe("web predicate bindings", () => {
     const spans = renderer?.root.findAllByType("span") ?? [];
     const links = renderer?.root.findAllByType("a") ?? [];
 
-    expect(spans.map((node) => [node.props["data-web-field-kind"], node.children.join("")])).toEqual([
+    expect(
+      spans.map((node) => [node.props["data-web-field-kind"], node.children.join("")]),
+    ).toEqual([
       ["text", "Acme"],
       ["number", ""],
       ["badge", "Active"],
@@ -556,11 +569,15 @@ describe("web predicate bindings", () => {
     });
 
     expect(blockRef.fields.collapsed.get()).toBe(false);
-    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props.checked).toBe(false);
-    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props["aria-label"]).toBe(
-      "False",
+    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props.checked).toBe(
+      false,
     );
-    expect(renderer?.root.findByProps({ "data-web-field-kind": "checkbox" }).props.checked).toBe(false);
+    expect(
+      renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props["aria-label"],
+    ).toBe("False");
+    expect(renderer?.root.findByProps({ "data-web-field-kind": "checkbox" }).props.checked).toBe(
+      false,
+    );
 
     act(() => {
       renderer?.unmount();
@@ -653,23 +670,19 @@ describe("web predicate bindings", () => {
 
     expect(
       renderer?.root
-        .findAll(
-          (node) =>
-            !!node.props && typeof node.props["data-web-reference-id"] === "string",
-        )
+        .findAll((node) => !!node.props && typeof node.props["data-web-reference-id"] === "string")
         .map((node) => node.props["data-web-reference-id"] as string),
     ).toEqual([companyId]);
-    expect(
-      renderer?.root.findAllByType("code").map((node) => node.children.join("")),
-    ).toContain(companyId);
+    expect(renderer?.root.findAllByType("code").map((node) => node.children.join(""))).toContain(
+      companyId,
+    );
     expect(
       renderer?.root.findAllByType("span").some((node) => node.children.join("") === "Acme"),
     ).toBe(true);
 
     const secondCompanyToggle = renderer?.root.find(
       (node) =>
-        node.type === "label" &&
-        node.props["data-web-reference-option-id"] === secondCompanyId,
+        node.type === "label" && node.props["data-web-reference-option-id"] === secondCompanyId,
     );
 
     act(() => {
@@ -687,9 +700,7 @@ describe("web predicate bindings", () => {
     ).toEqual([companyId, secondCompanyId]);
 
     const removeCurrentEmployer = renderer?.root.find(
-      (node) =>
-        node.type === "li" &&
-        node.props["data-web-reference-selected-id"] === companyId,
+      (node) => node.type === "li" && node.props["data-web-reference-selected-id"] === companyId,
     );
 
     act(() => {
@@ -749,10 +760,12 @@ describe("web predicate bindings", () => {
     expect(renders.text).toBe(1);
     expect(renders.collapsedView).toBeGreaterThan(1);
     expect(renders.collapsedEditor).toBeGreaterThan(1);
-    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props.checked).toBe(false);
-    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props["aria-label"]).toBe(
-      "False",
+    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props.checked).toBe(
+      false,
     );
+    expect(
+      renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props["aria-label"],
+    ).toBe("False");
 
     act(() => {
       renderer?.unmount();

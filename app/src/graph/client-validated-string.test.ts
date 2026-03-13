@@ -1,9 +1,8 @@
 import { describe, expect, it } from "bun:test";
+
+import { bootstrap, createStore, createTypeClient, core } from "@io/graph";
+
 import { app } from "./app";
-import { bootstrap } from "./bootstrap";
-import { createTypeClient } from "./client";
-import { core } from "./core";
-import { createStore } from "./store";
 
 function setupGraph() {
   const store = createStore();

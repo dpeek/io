@@ -1,16 +1,14 @@
 import { describe, expect, it } from "bun:test";
+
+import { bootstrap, createStore, createTypeClient, core } from "@io/graph";
 import { act, create, type ReactTestInstance } from "react-test-renderer";
 
 import { app } from "../graph/app.js";
-import { bootstrap } from "../graph/bootstrap.js";
-import { createTypeClient } from "../graph/client.js";
-import { core } from "../graph/core.js";
-import { createStore } from "../graph/store.js";
-
 import { CompanyProofSurface } from "./company-proof.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 function setupGraph() {
   const store = createStore();
@@ -57,7 +55,9 @@ function findByProofProp(
 }
 
 function readProofCounts(renderer: ReturnType<typeof create>) {
-  const counts = renderer.root.findAll((node) => typeof node.props["data-proof-count"] === "string");
+  const counts = renderer.root.findAll(
+    (node) => typeof node.props["data-proof-count"] === "string",
+  );
   return Object.fromEntries(
     counts.map((node) => [
       node.props["data-proof-count"] as string,
@@ -136,7 +136,9 @@ describe("company proof surface", () => {
       (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
     );
     const worksAtToggle = worksAtRow
-      .find((node) => node.type === "label" && node.props["data-web-reference-option-id"] === estiiId)
+      .find(
+        (node) => node.type === "label" && node.props["data-web-reference-option-id"] === estiiId,
+      )
       .findByType("input");
     const removeCurrentEmployer = worksAtRow.find(
       (node) =>
@@ -232,7 +234,9 @@ describe("company proof surface", () => {
     );
     const worksAtRow = findByProofProp(renderer!, "data-proof-field", "worksAt");
     const worksAtToggle = worksAtRow
-      .find((node) => node.type === "label" && node.props["data-web-reference-option-id"] === estiiId)
+      .find(
+        (node) => node.type === "label" && node.props["data-web-reference-option-id"] === estiiId,
+      )
       .findByType("input");
 
     await act(async () => {
@@ -278,7 +282,9 @@ describe("company proof surface", () => {
     expect(relationshipCounts.website).toBe(localityCounts.website);
     expect(relationshipCounts.foundedYear).toBe(localityCounts.foundedYear);
     expect(relationshipCounts.tags).toBe(localityCounts.tags);
-    expect(relationshipCounts["address.address_line1"]).toBe(localityCounts["address.address_line1"]);
+    expect(relationshipCounts["address.address_line1"]).toBe(
+      localityCounts["address.address_line1"],
+    );
     expect(relationshipCounts["address.locality"]).toBe(localityCounts["address.locality"]);
     expect(relationshipCounts["address.postal_code"]).toBe(localityCounts["address.postal_code"]);
     expect(relationshipCounts.worksAt ?? 0).toBeGreaterThan(localityCounts.worksAt ?? 0);

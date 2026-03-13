@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
+
+import { core, defineType } from "@io/graph";
 import { act, create } from "react-test-renderer";
 
 import { app } from "../graph/app.js";
-import { core } from "../graph/core.js";
-import { defineType } from "../graph/schema.js";
 import { statusTypeModule } from "../type/status/index.js";
 import { FilterOperandEditor, defaultWebFilterResolver, lowerWebFilterClause } from "./bindings.js";
 

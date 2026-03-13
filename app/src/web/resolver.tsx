@@ -1,7 +1,6 @@
+import type { AnyTypeOutput, EdgeOutput, PredicateRef } from "@io/graph";
 import type { ComponentType, ReactNode } from "react";
 
-import type { PredicateRef } from "../graph/client.js";
-import type { AnyTypeOutput, EdgeOutput } from "../graph/schema.js";
 import {
   genericWebFieldEditorCapabilities,
   genericWebFieldViewCapabilities,
@@ -100,7 +99,9 @@ export type PredicateFieldEditorProps<
   fallback?: ComponentType<UnsupportedFieldFallbackProps>;
 };
 
-function toCapabilityMap<T extends { kind: string }>(capabilities: readonly T[]): ReadonlyMap<string, T> {
+function toCapabilityMap<T extends { kind: string }>(
+  capabilities: readonly T[],
+): ReadonlyMap<string, T> {
   return new Map(capabilities.map((capability) => [capability.kind, capability]));
 }
 
@@ -144,15 +145,8 @@ export const defaultWebFieldResolver = createWebFieldResolver({
   editor: genericWebFieldEditorCapabilities,
 });
 
-function UnsupportedField({
-  kind,
-  reason,
-}: UnsupportedFieldFallbackProps): ReactNode {
-  return (
-    <span data-web-field-status="unsupported">
-      {kind ? `${reason}:${kind}` : reason}
-    </span>
-  );
+function UnsupportedField({ kind, reason }: UnsupportedFieldFallbackProps): ReactNode {
+  return <span data-web-field-status="unsupported">{kind ? `${reason}:${kind}` : reason}</span>;
 }
 
 export function PredicateFieldView<

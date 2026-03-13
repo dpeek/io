@@ -2,15 +2,15 @@ import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  bootstrap,
   createJsonPersistedAuthoritativeGraph,
+  createStore,
+  core,
   type PersistedAuthoritativeGraph,
 } from "@io/graph";
 
 import { app } from "./graph/app.js";
-import { bootstrap } from "./graph/bootstrap.js";
-import { core } from "./graph/core.js";
 import { seedExampleGraph } from "./graph/example-data.js";
-import { createStore } from "./graph/store.js";
 
 export type AppAuthority = PersistedAuthoritativeGraph<typeof app> & {
   readonly snapshotPath: string;
@@ -31,7 +31,6 @@ function createAuthorityCursorPrefix(): string {
   authorityCursorEpoch = Math.max(authorityCursorEpoch + 1, Date.now());
   return `authority:${authorityCursorEpoch}:`;
 }
-
 export async function createAppAuthority(
   options: {
     snapshotPath?: string;

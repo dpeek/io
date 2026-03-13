@@ -1,4 +1,5 @@
-import { defineEnumModule } from "../../graph/type-module.js";
+import { defineEnumModule } from "@io/graph";
+
 import { statusFilter } from "../status/filter.js";
 import { statusMeta } from "../status/meta.js";
 import { statusType } from "../status/type.js";

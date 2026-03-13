@@ -1,12 +1,20 @@
 import { describe, expect, it } from "bun:test";
-import { stringTypeModule } from "../type/string/index.js";
+
+import {
+  GraphValidationError,
+  bootstrap,
+  createStore,
+  createTypeClient,
+  core,
+  defineNamespace,
+  defineReferenceField,
+  defineType,
+  edgeId,
+  formatValidationPath,
+  stringTypeModule,
+} from "@io/graph";
+
 import { app } from "./app";
-import { bootstrap } from "./bootstrap";
-import { GraphValidationError, createTypeClient, formatValidationPath } from "./client";
-import { core } from "./core";
-import { defineNamespace, defineType, edgeId } from "./schema";
-import { createStore } from "./store";
-import { defineReferenceField } from "./type-module.js";
 
 function createGraph() {
   const store = createStore();

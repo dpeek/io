@@ -1,11 +1,19 @@
 import { describe, expect, it } from "bun:test";
+
+import {
+  GraphValidationError,
+  bootstrap,
+  createStore,
+  createTypeClient,
+  core,
+  defineDefaultEnumTypeModule,
+  defineEnum,
+  defineNamespace,
+  defineType,
+  formatValidationPath,
+} from "@io/graph";
+
 import { app } from "./app";
-import { bootstrap } from "./bootstrap";
-import { GraphValidationError, createTypeClient, formatValidationPath } from "./client";
-import { core } from "./core";
-import { defineEnum, defineNamespace, defineType } from "./schema";
-import { createStore } from "./store";
-import { defineDefaultEnumTypeModule } from "../type/enum-module";
 
 describe("enum range client behavior", () => {
   it("accepts valid enum value ids", () => {

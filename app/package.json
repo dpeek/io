@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#graph": "./src/index.ts",
     "#web/*": "./src/web/*"
   },
   "exports": {

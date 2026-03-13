@@ -1,16 +1,14 @@
 import { describe, expect, it } from "bun:test";
+
+import { bootstrap, createStore, createTypeClient, core } from "@io/graph";
 import { act, create, type ReactTestInstance } from "react-test-renderer";
 
 import { app } from "../graph/app.js";
-import { bootstrap } from "../graph/bootstrap.js";
-import { createTypeClient } from "../graph/client.js";
-import { core } from "../graph/core.js";
-import { createStore } from "../graph/store.js";
-
 import { CompanyQueryProofSurface } from "./company-query-proof.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 function setupGraph() {
   const store = createStore();
@@ -41,7 +39,11 @@ function setupGraph() {
   return {
     acme: graph.company.ref(acmeId),
     atlas: graph.company.ref(atlasId),
-    companies: [graph.company.ref(acmeId), graph.company.ref(estiiId), graph.company.ref(atlasId)] as const,
+    companies: [
+      graph.company.ref(acmeId),
+      graph.company.ref(estiiId),
+      graph.company.ref(atlasId),
+    ] as const,
   };
 }
 

@@ -1,4 +1,4 @@
-import { defineEnum } from "../../graph/schema.js";
+import { defineEnum } from "@io/graph";
 
 export const statusType = defineEnum({
   values: { key: "app:status", name: "Status" },

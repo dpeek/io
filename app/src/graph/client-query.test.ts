@@ -1,11 +1,16 @@
 import { describe, expect, it } from "bun:test";
 
+import {
+  bootstrap,
+  createStore,
+  createTypeClient,
+  core,
+  edgeId,
+  type EdgeOutput,
+  typeId,
+} from "@io/graph";
+
 import { app } from "./app";
-import { bootstrap } from "./bootstrap";
-import { createTypeClient } from "./client";
-import { core } from "./core";
-import { edgeId, type EdgeOutput, typeId } from "./schema";
-import { createStore } from "./store";
 
 function setupGraph() {
   const store = createStore();
@@ -206,7 +211,11 @@ describe("typed query client", () => {
     const danglingPersonId = store.newNode();
     store.assert(danglingPersonId, edgeId(core.node.fields.type as EdgeOutput), typeId(app.person));
     store.assert(danglingPersonId, edgeId(app.person.fields.name), "Dangling");
-    store.assert(danglingPersonId, edgeId(app.person.fields.worksAt as EdgeOutput), missingCompanyId);
+    store.assert(
+      danglingPersonId,
+      edgeId(app.person.fields.worksAt as EdgeOutput),
+      missingCompanyId,
+    );
 
     await expect(
       graph.person.query({

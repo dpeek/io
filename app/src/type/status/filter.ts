@@ -1,5 +1,5 @@
-import type { TypeModuleFilter } from "../../graph/type-module.js";
-import type { EnumModuleValue } from "../../graph/type-module.js";
+import type { EnumModuleValue, TypeModuleFilter } from "@io/graph";
+
 import { statusType } from "./type.js";
 
 type StatusValue = EnumModuleValue<typeof statusType>;

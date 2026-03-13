@@ -1,9 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { address } from "../type/address/index.js";
-import { booleanTypeModule } from "../type/boolean/index.js";
-import { stringTypeModule } from "../type/string/index.js";
+
+import { address, booleanTypeModule, core, stringTypeModule } from "@io/graph";
+
 import { app } from "./app";
-import { core } from "./core";
 
 describe("type-module authoring contract", () => {
   it("composes scalar defaults with field-level overrides", () => {

@@ -1,6 +1,6 @@
+import { core, defineType } from "@io/graph";
+
 import { app } from "../graph/app.js";
-import { core } from "../graph/core.js";
-import { defineType } from "../graph/schema.js";
 import { statusTypeModule } from "../type/status/index.js";
 import { defaultWebFilterResolver, type FilterOperandEditorProps } from "./bindings.js";
 

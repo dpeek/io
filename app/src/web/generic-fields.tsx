@@ -1,8 +1,11 @@
+import {
+  GraphValidationError,
+  isEnumType,
+  type GraphMutationValidationResult,
+  type PredicateRef,
+} from "@io/graph";
 import { useEffect, useRef, useState } from "react";
 
-import { GraphValidationError, type GraphMutationValidationResult } from "../graph/client.js";
-import type { PredicateRef } from "../graph/client.js";
-import { isEnumType } from "../graph/schema.js";
 import {
   performValidatedMutation,
   type MutationCallbacks,
@@ -57,9 +60,9 @@ function removePredicateItem(predicate: AnyPredicate, value: unknown): boolean {
 
 function validatePredicateValue(predicate: AnyPredicate, value: unknown): MutationValidation {
   if (typeof (predicate as { validateSet?: unknown }).validateSet !== "function") return false;
-  return (predicate as { validateSet(nextValue: unknown): GraphMutationValidationResult }).validateSet(
-    value,
-  );
+  return (
+    predicate as { validateSet(nextValue: unknown): GraphMutationValidationResult }
+  ).validateSet(value);
 }
 
 function validatePredicateClear(predicate: AnyPredicate): MutationValidation {
@@ -69,16 +72,19 @@ function validatePredicateClear(predicate: AnyPredicate): MutationValidation {
 
 function validatePredicateAdd(predicate: AnyPredicate, value: unknown): MutationValidation {
   if (typeof (predicate as { validateAdd?: unknown }).validateAdd !== "function") return false;
-  return (predicate as { validateAdd(nextValue: unknown): GraphMutationValidationResult }).validateAdd(
-    value,
-  );
+  return (
+    predicate as { validateAdd(nextValue: unknown): GraphMutationValidationResult }
+  ).validateAdd(value);
 }
 
 function validatePredicateRemove(predicate: AnyPredicate, value: unknown): MutationValidation {
-  if (typeof (predicate as { validateRemove?: unknown }).validateRemove !== "function") return false;
-  return (predicate as {
-    validateRemove(nextValue: unknown): GraphMutationValidationResult;
-  }).validateRemove(value);
+  if (typeof (predicate as { validateRemove?: unknown }).validateRemove !== "function")
+    return false;
+  return (
+    predicate as {
+      validateRemove(nextValue: unknown): GraphMutationValidationResult;
+    }
+  ).validateRemove(value);
 }
 
 function clearOrRejectRequiredValue(

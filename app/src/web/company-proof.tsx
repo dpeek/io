@@ -1,13 +1,7 @@
+import { core, fieldGroupPath, type EntityRef, type PredicateRef } from "@io/graph";
 import { Profiler, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 
-import {
-  app,
-  core,
-  fieldGroupPath,
-  type EntityRef,
-  type PredicateRef,
-} from "#graph";
-
+import { app } from "../graph/app.js";
 import { PredicateFieldEditor } from "./bindings.js";
 import {
   getPredicateEntityReferencePolicy,
@@ -89,9 +83,7 @@ function createRenderProbeStore(trackIds: readonly string[]): RenderProbeStore {
       lastCheck = {
         fieldId,
         changedIds,
-        holds:
-          changedIds.length > 0 &&
-          changedIds.every((id) => id === `field:${fieldId}`),
+        holds: changedIds.length > 0 && changedIds.every((id) => id === `field:${fieldId}`),
       };
       pendingCheck = undefined;
       publish();
@@ -149,12 +141,12 @@ function getFieldRangeLabel(predicate: PredicateRef<any, any>): string {
   return rangeValues?.name ?? rangeValues?.key ?? field.range;
 }
 
-function getFieldHelper(
-  predicate: PredicateRef<any, any>,
-  prefix?: string,
-): string {
+function getFieldHelper(predicate: PredicateRef<any, any>, prefix?: string): string {
   const range = getFieldRangeLabel(predicate);
-  const base = predicate.field.cardinality === "many" ? `many ${range}` : `${getFieldRequirement(predicate).toLowerCase()} ${range}`;
+  const base =
+    predicate.field.cardinality === "many"
+      ? `many ${range}`
+      : `${getFieldRequirement(predicate).toLowerCase()} ${range}`;
   return prefix ? `${prefix} • ${base}` : base;
 }
 
@@ -249,13 +241,7 @@ function useRenderProbeSnapshot(store: RenderProbeStore): RenderProbeSnapshot {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
-function ProofFieldRow({
-  field,
-  store,
-}: {
-  field: ProofFieldSpec;
-  store: RenderProbeStore;
-}) {
+function ProofFieldRow({ field, store }: { field: ProofFieldSpec; store: RenderProbeStore }) {
   const probeId = `field:${field.id}`;
   return (
     <section
@@ -271,8 +257,10 @@ function ProofFieldRow({
       }}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{field.label}</span>
-        <span className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+          {field.label}
+        </span>
+        <span className="text-xs tracking-[0.18em] text-slate-500 uppercase dark:text-slate-400">
           {field.requirement}
         </span>
       </div>
@@ -349,21 +337,20 @@ function CompanyProofInstrumentation({
   const tagsValue = usePredicateField(company.fields.tags).value;
   const worksAtValue = usePredicateField(person.fields.worksAt).value;
   const relationshipPolicy = getPredicateEntityReferencePolicy(person.fields.worksAt.field);
-  const selectedCompanies = getPredicateEntityReferenceSelection(person.fields.worksAt, worksAtValue);
+  const selectedCompanies = getPredicateEntityReferenceSelection(
+    person.fields.worksAt,
+    worksAtValue,
+  );
   const tagCount = Array.isArray(tagsValue) ? tagsValue.length : 0;
 
   return (
     <aside className="space-y-4 rounded-[1.75rem] border border-slate-300/80 bg-slate-950 px-5 py-4 text-slate-100 shadow-xl shadow-slate-900/15">
       <div className="space-y-1">
-        <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">Rerender proof</p>
+        <p className="text-xs tracking-[0.24em] text-cyan-300 uppercase">Rerender proof</p>
         <p
           className="text-sm text-slate-300"
           data-proof-last-check={
-            snapshot.lastCheck
-              ? snapshot.lastCheck.holds
-                ? "holds"
-                : "failed"
-              : "pending"
+            snapshot.lastCheck ? (snapshot.lastCheck.holds ? "holds" : "failed") : "pending"
           }
         >
           {snapshot.lastCheck
@@ -386,7 +373,7 @@ function CompanyProofInstrumentation({
         ))}
       </div>
       <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
-        <p className="uppercase tracking-[0.2em] text-slate-400">Last changed probes</p>
+        <p className="tracking-[0.2em] text-slate-400 uppercase">Last changed probes</p>
         <p data-proof-changed={changedLabels?.join(",") ?? "pending"}>
           {changedLabels?.length ? changedLabels.join(", ") : "pending"}
         </p>
@@ -414,7 +401,7 @@ function CompanyProofInstrumentation({
         </div>
       </div>
       <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
-        <p className="uppercase tracking-[0.2em] text-slate-400">Linked companies</p>
+        <p className="tracking-[0.2em] text-slate-400 uppercase">Linked companies</p>
         <ul className="mt-2 grid gap-2" data-proof-linked-companies="">
           {selectedCompanies.length ? (
             selectedCompanies.map(({ entity, id }) => (
@@ -455,20 +442,25 @@ export function CompanyProofSurface({
       <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1.35fr)_320px]">
         <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/85 shadow-2xl shadow-slate-900/10 backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
           <div className="border-b border-slate-200/80 px-6 py-5 dark:border-slate-800">
-            <p className="text-xs uppercase tracking-[0.24em] text-cyan-700 dark:text-cyan-300">
+            <p className="text-xs tracking-[0.24em] text-cyan-700 uppercase dark:text-cyan-300">
               Schema-driven Milestone 4 proof
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Address, tags, and relationships</h1>
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  Address, tags, and relationships
+                </h1>
                 <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
                   One focused surface combines direct company fields, nested <code>address</code>{" "}
-                  leaves, unordered <code>tags</code>, and reference-aware <code>person.worksAt</code>{" "}
-                  editing through typed predicate refs.
+                  leaves, unordered <code>tags</code>, and reference-aware{" "}
+                  <code>person.worksAt</code> editing through typed predicate refs.
                 </p>
               </div>
               <div className="flex gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <a className="rounded-full border border-current/20 px-3 py-1" href="?surface=query">
+                <a
+                  className="rounded-full border border-current/20 px-3 py-1"
+                  href="?surface=query"
+                >
                   Query proof
                 </a>
                 <a
@@ -477,10 +469,16 @@ export function CompanyProofSurface({
                 >
                   Relationship focus
                 </a>
-                <a className="rounded-full border border-current/20 px-3 py-1" href="?surface=explorer">
+                <a
+                  className="rounded-full border border-current/20 px-3 py-1"
+                  href="?surface=explorer"
+                >
                   Explorer
                 </a>
-                <a className="rounded-full border border-current/20 px-3 py-1" href="?surface=outliner">
+                <a
+                  className="rounded-full border border-current/20 px-3 py-1"
+                  href="?surface=outliner"
+                >
                   Outliner
                 </a>
               </div>
@@ -488,7 +486,12 @@ export function CompanyProofSurface({
           </div>
           <CompanyProofFields sections={sections} store={store} />
         </section>
-        <CompanyProofInstrumentation company={company} fields={fields} person={person} store={store} />
+        <CompanyProofInstrumentation
+          company={company}
+          fields={fields}
+          person={person}
+          store={store}
+        />
       </div>
     </main>
   );
@@ -510,7 +513,7 @@ export function CompanyProofPage() {
         data-company-proof="missing-demo-data"
       >
         <div className="w-full max-w-md rounded-[1.75rem] border border-white/10 bg-white/5 p-6">
-          <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">Company proof</p>
+          <p className="text-xs tracking-[0.24em] text-cyan-300 uppercase">Company proof</p>
           <h1 className="mt-3 text-2xl font-semibold">Missing demo entities</h1>
           <p className="mt-2 text-sm text-slate-300">
             The synced graph does not include the company/person records this proof expects.

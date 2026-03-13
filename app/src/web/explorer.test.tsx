@@ -1,16 +1,15 @@
 import { describe, expect, it } from "bun:test";
+
+import { createTypeClient, core, edgeId, typeId } from "@io/graph";
 import { act, create, type ReactTestInstance } from "react-test-renderer";
 
 import { app } from "../graph/app.js";
-import { createTypeClient } from "../graph/client.js";
-import { core } from "../graph/core.js";
 import { createExampleRuntime } from "../graph/runtime.js";
-import { edgeId, typeId } from "../graph/schema.js";
-
 import { Explorer, ExplorerSurface } from "./explorer.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 function collectText(node: ReactTestInstance): string {
   return node.children
@@ -138,7 +137,8 @@ describe("explorer surface", () => {
 
     const rangeRow = findByProp(renderer!, "data-explorer-field-path", "metadata.range");
     const rangeSelect = rangeRow.find(
-      (node) => node.type === "select" && node.props["data-explorer-range-editor"] === websitePredicateId,
+      (node) =>
+        node.type === "select" && node.props["data-explorer-range-editor"] === websitePredicateId,
     );
 
     await act(async () => {
@@ -184,9 +184,7 @@ describe("explorer surface", () => {
 
     expect(
       collectText(findByProp(renderer!, "data-explorer-item-entity", runtime.ids.acme)),
-    ).toContain(
-      "Acme Graph Labs",
-    );
+    ).toContain("Acme Graph Labs");
 
     const typesButton = findByProp(renderer!, "data-explorer-nav", "types");
     await act(async () => {
@@ -208,9 +206,7 @@ describe("explorer surface", () => {
       typeNameInput.props.onChange({ target: { value: "Company Model" } });
     });
 
-    expect(
-      collectText(findByProp(renderer!, "data-explorer-item-type", companyTypeId)),
-    ).toContain(
+    expect(collectText(findByProp(renderer!, "data-explorer-item-type", companyTypeId))).toContain(
       "Company Model",
     );
 
@@ -270,11 +266,7 @@ describe("explorer surface", () => {
       });
     });
 
-    const pendingWrite = findByProp(
-      renderer!,
-      "data-explorer-stream-pending-tx",
-      "example:local",
-    );
+    const pendingWrite = findByProp(renderer!, "data-explorer-stream-pending-tx", "example:local");
     expect(collectText(pendingWrite)).toContain("assert");
     expect(collectText(pendingWrite)).toContain("retract");
     findByProp(renderer!, "data-explorer-stream-pending-count", "1");
@@ -302,9 +294,7 @@ describe("explorer surface", () => {
     expect(collectText(fallbackActivity)).toContain("Snapshot recovery required");
     expect(collectText(fallbackActivity)).toContain("after example:1 -> reset:0");
     expect(collectText(fallbackActivity)).toContain("reset");
-    expect(
-      collectText(findByProp(renderer!, "data-explorer-stream-error", "error")),
-    ).toContain(
+    expect(collectText(findByProp(renderer!, "data-explorer-stream-error", "error"))).toContain(
       'Incremental sync requires total snapshot recovery because the authority reported "reset".',
     );
 

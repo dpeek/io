@@ -1,21 +1,24 @@
 import { describe, expect, it } from "bun:test";
-import { app } from "./app";
-import { bootstrap } from "./bootstrap";
+
 import {
+  bootstrap,
+  createStore,
   createTypeClient,
+  core,
+  edgeId,
   fieldGroupFieldTree,
   fieldGroupId,
   fieldGroupKey,
   fieldGroupPath,
   fieldGroupSubjectId,
+  fieldTreeId,
   isFieldGroupRef,
   type EntityRef,
   type FieldGroupRef,
   type PredicateRef,
-} from "./client";
-import { core } from "./core";
-import { edgeId, fieldTreeId } from "./schema";
-import { createStore } from "./store";
+} from "@io/graph";
+
+import { app } from "./app";
 
 function setupGraph() {
   const store = createStore();
@@ -123,7 +126,10 @@ describe("typed refs", () => {
     expect(employers).toEqual([companyId]);
     expect(companyRef).toBe(graph.company.ref(companyId));
     expect(companyRef?.fields.name.get()).toBe("Acme");
-    expect(worksAtRef.listEntities().map((entity) => entity.id)).toEqual([companyId, secondCompanyId]);
+    expect(worksAtRef.listEntities().map((entity) => entity.id)).toEqual([
+      companyId,
+      secondCompanyId,
+    ]);
   });
 
   it("supports cardinality-aware predicate mutation helpers", () => {

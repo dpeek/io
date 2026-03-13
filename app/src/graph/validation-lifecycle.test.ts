@@ -1,17 +1,22 @@
 import { describe, expect, it } from "bun:test";
 
-import { stringTypeModule } from "../type/string/index.js";
-import { app } from "./app";
-import { bootstrap } from "./bootstrap";
-import { GraphValidationError, createTypeClient } from "./client";
-import { core } from "./core";
-import { defineNamespace, defineScalar, defineType, edgeId } from "./schema";
-import { createStore } from "./store";
 import {
+  GraphValidationError,
+  bootstrap,
   createAuthoritativeGraphWriteSession,
+  createStore,
   createSyncedTypeClient,
   createTotalSyncPayload,
-} from "./sync";
+  createTypeClient,
+  core,
+  defineNamespace,
+  defineScalar,
+  defineType,
+  edgeId,
+  stringTypeModule,
+} from "@io/graph";
+
+import { app } from "./app";
 
 type ValidatorCall = {
   changedPredicateKeys: readonly string[];
@@ -412,9 +417,13 @@ describe("validation lifecycle contract", () => {
       score: 11,
       status: app.status.values.active.id,
     });
-    const authority = createAuthoritativeGraphWriteSession(authorityGraph.store, fixture.namespace, {
-      cursorPrefix: "server:",
-    });
+    const authority = createAuthoritativeGraphWriteSession(
+      authorityGraph.store,
+      fixture.namespace,
+      {
+        cursorPrefix: "server:",
+      },
+    );
     fixture.fieldCalls.length = 0;
     fixture.scalarCalls.length = 0;
 
