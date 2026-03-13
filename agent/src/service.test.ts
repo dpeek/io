@@ -137,7 +137,16 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
       ],
     },
     labels: { nodes: [{ name: "Bug" }, { name: " P1 " }, null] },
-    parent: { id: "parent-1", identifier: "OS-1", state: { name: "In Progress" } },
+    parent: {
+      id: "parent-1",
+      identifier: "OS-1",
+      parent: {
+        id: "stream-1",
+        identifier: "OS-0",
+        state: { name: "In Progress" },
+      },
+      state: { name: "In Progress" },
+    },
     priority: 2,
     project: { slugId: "OpenSurf" },
     state: { name: "Todo" },
@@ -153,10 +162,13 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   expect(issue.parentIssueId).toBe("parent-1");
   expect(issue.parentIssueIdentifier).toBe("OS-1");
   expect(issue.parentIssueState).toBe("In Progress");
+  expect(issue.streamIssueId).toBe("stream-1");
+  expect(issue.streamIssueIdentifier).toBe("OS-0");
+  expect(issue.streamIssueState).toBe("In Progress");
   expect(issue.teamId).toBeUndefined();
 });
 
-test("normalizeLinearIssue leaves parent stream fields empty for standalone issues", () => {
+test("normalizeLinearIssue leaves parent and stream fields empty for standalone issues", () => {
   const issue = normalizeLinearIssue({
     children: {
       nodes: [],
@@ -186,6 +198,9 @@ test("normalizeLinearIssue leaves parent stream fields empty for standalone issu
   expect(issue.parentIssueId).toBeUndefined();
   expect(issue.parentIssueIdentifier).toBeUndefined();
   expect(issue.parentIssueState).toBeUndefined();
+  expect(issue.streamIssueId).toBeUndefined();
+  expect(issue.streamIssueIdentifier).toBeUndefined();
+  expect(issue.streamIssueState).toBeUndefined();
   expect(issue.teamId).toBe("team-1");
 });
 
@@ -211,6 +226,11 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
                 parent: {
                   id: "parent-1",
                   identifier: "OPE-147",
+                  parent: {
+                    id: "stream-1",
+                    identifier: "OPE-121",
+                    state: { name: "In Progress" },
+                  },
                   state: { name: "In Review" },
                 },
                 priority: 0,
@@ -270,6 +290,9 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
       parentIssueId: "parent-1",
       parentIssueIdentifier: "OPE-147",
       parentIssueState: "In Review",
+      streamIssueId: "stream-1",
+      streamIssueIdentifier: "OPE-121",
+      streamIssueState: "In Progress",
     });
     expect(issues[1]).toMatchObject({
       hasChildren: true,
@@ -279,6 +302,9 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
     expect(issues[1]?.parentIssueId).toBeUndefined();
     expect(issues[1]?.parentIssueIdentifier).toBeUndefined();
     expect(issues[1]?.parentIssueState).toBeUndefined();
+    expect(issues[1]?.streamIssueId).toBeUndefined();
+    expect(issues[1]?.streamIssueIdentifier).toBeUndefined();
+    expect(issues[1]?.streamIssueState).toBeUndefined();
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -918,6 +944,382 @@ test("AgentService marks task issues Done after landing on the feature branch", 
   }
 });
 
+test("AgentService proves the current approach stream flow end to end", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const transitions: string[] = [];
+  const runs: string[] = [];
+  const parentIssueId = "parent-1";
+  const childIssueId = "child-1";
+  const parentIssue = createIssue({
+    hasChildren: true,
+    id: parentIssueId,
+    identifier: "OPE-147",
+    labels: ["io", "agent"],
+    priority: 0,
+    state: "Todo",
+    title: "Current Approach Stream",
+  });
+  const childIssue = createIssue({
+    hasParent: true,
+    id: childIssueId,
+    identifier: "OPE-152",
+    parentIssueId,
+    parentIssueIdentifier: "OPE-147",
+    parentIssueState: "Todo",
+    priority: 0,
+    state: "Todo",
+    title: "Update docs and prove the current approach end to end",
+  });
+  const streamState = {
+    childSeeded: false,
+    childState: childIssue.state,
+    parentState: parentIssue.state,
+  };
+
+  await writeIoTsConfig(root, {
+    agent: { maxConcurrentAgents: 1 },
+    modules: {
+      agent: {
+        allowedSharedPaths: ["./io"],
+        docs: ["./agent/io/overview.md"],
+        path: "./agent",
+      },
+    },
+    tracker: {
+      apiKey: "$LINEAR_API_KEY",
+      kind: "linear",
+      projectSlug: "$LINEAR_PROJECT_SLUG",
+    },
+    workspace: {
+      root: resolve(root, "workspace"),
+    },
+  });
+  await mkdir(resolve(root, "agent", "io"), { recursive: true });
+  await writeFile(resolve(root, "agent", "io", "overview.md"), "# Agent\n");
+  await writeFile(resolve(root, "io.md"), "Issue {{ issue.identifier }}\n");
+  process.env.LINEAR_API_KEY = "linear-token";
+  process.env.LINEAR_PROJECT_SLUG = "project-slug";
+
+  try {
+    const service = new AgentService({
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => {
+          runs.push(issue.identifier);
+          return {
+            issue,
+            prompt,
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => {
+          const issues: AgentIssue[] = [];
+          if (streamState.parentState === "Todo") {
+            issues.push({
+              ...parentIssue,
+              state: streamState.parentState,
+            });
+          }
+          if (streamState.childSeeded && streamState.childState === "Todo") {
+            issues.push({
+              ...childIssue,
+              parentIssueState: streamState.parentState,
+              state: streamState.childState,
+            });
+          }
+          return issues;
+        },
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+          if (issueId === parentIssueId) {
+            streamState.parentState = stateName;
+            if (stateName === "In Review") {
+              streamState.childSeeded = true;
+            }
+          }
+          if (issueId === childIssueId) {
+            streamState.childState = stateName;
+          }
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          markBlocked: async () => undefined,
+          markInterrupted: async () => undefined,
+          prepare: async () => ({
+            branchName: "io/ope-147",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            streamIssueId: parentIssueId,
+            streamIssueIdentifier: "OPE-147",
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.runOnce(undefined, true);
+    expect(runs).toEqual(["OPE-147"]);
+    expect(transitions).toEqual([`${parentIssueId}:In Progress`, `${parentIssueId}:In Review`]);
+    expect(streamState.parentState).toBe("In Review");
+    expect(streamState.childState).toBe("Todo");
+    expect(streamState.childSeeded).toBe(true);
+
+    await service.runOnce(undefined, true);
+    expect(runs).toEqual(["OPE-147"]);
+    expect(transitions).toEqual([`${parentIssueId}:In Progress`, `${parentIssueId}:In Review`]);
+    expect(streamState.parentState).toBe("In Review");
+    expect(streamState.childState).toBe("Todo");
+
+    streamState.parentState = "In Progress";
+
+    await service.runOnce(undefined, true);
+    expect(runs).toEqual(["OPE-147", "OPE-152"]);
+    expect(transitions).toEqual([
+      `${parentIssueId}:In Progress`,
+      `${parentIssueId}:In Review`,
+      `${childIssueId}:In Progress`,
+      `${childIssueId}:Done`,
+    ]);
+    expect(streamState.parentState).toBe("In Progress");
+    expect(streamState.childState).toBe("Done");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+test("AgentService proves the OPE-121 workflow by running only the leaf task", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  const workspacePath = resolve(root, "workspace", "workers", "OPE-172", "repo");
+  const prepared: string[] = [];
+  const runs: string[] = [];
+  const transitions: string[] = [];
+
+  await writeServiceTestRepo(root);
+
+  try {
+    const streamIssue = createIssue({
+      hasChildren: true,
+      id: "stream-1",
+      identifier: "OPE-121",
+      labels: ["io", "agent"],
+      priority: 0,
+      state: "In Progress",
+      title: "Agent Stream",
+    });
+    const featureIssue = createIssue({
+      hasChildren: true,
+      hasParent: true,
+      id: "feature-1",
+      identifier: "OPE-167",
+      parentIssueId: "stream-1",
+      parentIssueIdentifier: "OPE-121",
+      parentIssueState: "In Progress",
+      priority: 0,
+      state: "In Progress",
+      streamIssueId: "stream-1",
+      streamIssueIdentifier: "OPE-121",
+      streamIssueState: "In Progress",
+      title: "Lock the three-level workflow contract and supporting docs",
+    });
+    const taskIssue = createIssue({
+      hasParent: true,
+      id: "task-1",
+      identifier: "OPE-172",
+      parentIssueId: "feature-1",
+      parentIssueIdentifier: "OPE-167",
+      parentIssueState: "In Progress",
+      priority: 0,
+      state: "Todo",
+      streamIssueId: "stream-1",
+      streamIssueIdentifier: "OPE-121",
+      streamIssueState: "In Progress",
+      title: "Prove the workflow end to end on OPE-121",
+    });
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => {
+          runs.push(issue.identifier);
+          return {
+            issue,
+            prompt,
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => [streamIssue, featureIssue, taskIssue],
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: workspacePath,
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          markBlocked: async () => undefined,
+          markInterrupted: async () => undefined,
+          prepare: async (issue: AgentIssue) => {
+            prepared.push(issue.identifier);
+            return {
+              branchName: "io/ope-167",
+              controlPath: root,
+              createdNow: true,
+              originPath: root,
+              path: workspacePath,
+              sourceRepoPath: root,
+              streamIssueId: "feature-1",
+              streamIssueIdentifier: "OPE-167",
+              workerId: "OPE-172",
+            };
+          },
+          reconcileTerminalIssues: async () => undefined,
+          runAfterRunHook: async () => undefined,
+          runBeforeRunHook: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(prepared).toEqual(["OPE-172"]);
+    expect(runs).toEqual(["OPE-172"]);
+    expect(transitions).toEqual(["task-1:In Progress", "task-1:Done"]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("AgentService does not run OPE-172 until the OPE-121 stream is In Progress", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
+  let runnerCalls = 0;
+  const transitions: string[] = [];
+
+  await writeServiceTestRepo(root);
+
+  try {
+    const taskIssue = createIssue({
+      hasParent: true,
+      id: "task-1",
+      identifier: "OPE-172",
+      parentIssueId: "feature-1",
+      parentIssueIdentifier: "OPE-167",
+      parentIssueState: "In Progress",
+      priority: 0,
+      state: "Todo",
+      streamIssueId: "stream-1",
+      streamIssueIdentifier: "OPE-121",
+      streamIssueState: "Todo",
+      title: "Prove the workflow end to end on OPE-121",
+    });
+    const service = new AgentService({
+      once: true,
+      repoRoot: root,
+      runnerFactory: () => ({
+        run: async ({ issue, prompt, workspace }) => {
+          runnerCalls += 1;
+          return {
+            issue,
+            prompt,
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
+      }),
+      trackerFactory: () => ({
+        fetchCandidateIssues: async () => [taskIssue],
+        fetchIssueStatesByIds: async () => new Map(),
+        setIssueState: async (issueId, stateName) => {
+          transitions.push(`${issueId}:${stateName}`);
+        },
+      }),
+      workspaceManagerFactory: (_workflow, issueIdentifier) =>
+        ({
+          cleanup: async () => undefined,
+          complete: async () => ({ commitSha: "a".repeat(40) }),
+          createIdleWorkspace: () => ({
+            branchName: "main",
+            controlPath: root,
+            createdNow: true,
+            originPath: root,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+            sourceRepoPath: root,
+            workerId: issueIdentifier ?? "supervisor",
+          }),
+          ensureCheckout: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers", issueIdentifier ?? "supervisor", "repo"),
+          }),
+          ensureSessionStartState: async () => ({
+            createdNow: true,
+            path: resolve(root, "workspace", "workers"),
+          }),
+          listOccupiedStreams: async () => new Map(),
+          reconcileTerminalIssues: async () => undefined,
+        }) as unknown as never,
+    });
+
+    await service.start();
+    expect(runnerCalls).toBe(0);
+    expect(transitions).toEqual([]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
 test("AgentService preserves timed out runs as interrupted", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
   const workspacePath = resolve(root, "workspace", "workers", "OPE-66", "repo");

@@ -4,7 +4,7 @@ import { relative, resolve } from "node:path";
 import { createLogger, type Logger } from "@io/lib";
 
 import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
-import { resolveIssueRouting } from "./issue-routing.js";
+import { resolveIssueModule, resolveIssueRouting } from "./issue-routing.js";
 import { CodexAppServerRunner } from "./runner/codex.js";
 import {
   createAgentSessionEventBus,
@@ -100,20 +100,25 @@ function getStreamKey(issue: AgentIssue) {
   return toWorkspaceKey(issue.parentIssueIdentifier ?? issue.identifier);
 }
 
-function isAutoRunnableTask(issue: AgentIssue) {
-  return (
-    issue.hasParent &&
-    !issue.hasChildren &&
-    Boolean(issue.parentIssueIdentifier) &&
-    Boolean(issue.grandparentIssueIdentifier) &&
-    normalizeState(issue.state) === "todo" &&
-    normalizeState(issue.parentIssueState) === "in progress" &&
-    normalizeState(issue.grandparentIssueState) === "in progress"
-  );
-}
-
 function normalizeState(state?: string) {
   return state?.trim().toLowerCase() ?? "";
+}
+
+function isInProgressState(state?: string) {
+  return normalizeState(state) === "in progress";
+}
+
+function isExecutionReleased(issue: AgentIssue) {
+  if (!issue.hasParent) {
+    return true;
+  }
+  if (!isInProgressState(issue.parentIssueState)) {
+    return false;
+  }
+  if (issue.streamIssueState && !isInProgressState(issue.streamIssueState)) {
+    return false;
+  }
+  return true;
 }
 
 function isResumableRunError(error: unknown) {
@@ -296,7 +301,20 @@ export class AgentService {
   }
 
   #shouldAutoScheduleIssue(workflow: Workflow, issue: AgentIssue) {
-    return isAutoRunnableTask(issue);
+    const isManagedParent =
+      !issue.hasParent &&
+      issue.labels.some((label) => normalizeState(label) === "io") &&
+      Boolean(resolveIssueModule(workflow.modules, issue));
+    if (isManagedParent) {
+      return normalizeState(issue.state) === "todo";
+    }
+    if (issue.hasParent) {
+      return !issue.hasChildren && isExecutionReleased(issue);
+    }
+    if (!issue.hasChildren) {
+      return true;
+    }
+    return resolveIssueRouting(workflow.issues, issue, workflow.modules).agent === "backlog";
   }
 
   async #runIssue(

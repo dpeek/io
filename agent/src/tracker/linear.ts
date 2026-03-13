@@ -160,6 +160,7 @@ function isDoneState(state?: string | null) {
 
 export function normalizeLinearIssue(node: CandidateIssueNode): AgentIssue {
   const parentIssueId = node.parent?.id?.trim();
+  const streamIssueId = node.parent?.parent?.id?.trim() || parentIssueId;
   return {
     blockedBy: (node.inverseRelations?.nodes ?? [])
       .filter((relation): relation is IssueRelationNode => Boolean(relation))
@@ -197,6 +198,13 @@ export function normalizeLinearIssue(node: CandidateIssueNode): AgentIssue {
       typeof node.priority === "number" && Number.isInteger(node.priority) ? node.priority : null,
     projectSlug: node.project?.slugId?.trim() || undefined,
     state: node.state?.name?.trim() || "Unknown",
+    streamIssueId: streamIssueId || undefined,
+    streamIssueIdentifier: streamIssueId
+      ? node.parent?.parent?.identifier?.trim() || node.parent?.identifier?.trim() || undefined
+      : undefined,
+    streamIssueState: streamIssueId
+      ? node.parent?.parent?.state?.name?.trim() || node.parent?.state?.name?.trim() || undefined
+      : undefined,
     teamId: node.team?.id?.trim() || undefined,
     title: node.title.trim(),
     updatedAt: node.updatedAt,

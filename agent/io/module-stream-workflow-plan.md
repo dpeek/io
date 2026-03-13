@@ -74,6 +74,22 @@ This is already real runtime behavior, not a draft plan.
 - prompt rendering is string-template-based rather than schema-driven
 - profile names and doc ids are configuration contracts, not discovered automatically
 
+## OPE-121 Proof Status
+
+`OPE-121` is the active proof stream for the enforced `Stream -> Feature -> Task` model.
+
+Current proof points:
+
+- `OPE-121` is the top-level stream, `OPE-167` is the active feature, and leaf tasks such as `OPE-172` are the only execute candidates
+- task execution now requires both the immediate feature state and the top-level stream state to be `In Progress`
+- task work still lands on the immediate parent branch, so `OPE-172` lands on the `OPE-167` branch surface rather than directly on `OPE-121`
+
+Remaining mismatches and follow-on work:
+
+- `OPE-121` still retains older direct children from the managed-stream proof, so the Linear hierarchy is not yet a clean three-level example
+- task landing is still finalized by supervisor-side branch ref updates rather than execution-agent-owned rebase and merge; track that in `OPE-173`
+- feature-to-stream squash finalization and branch cleanup remain follow-on work in `OPE-170`
+
 ## Roadmap
 
 - clarify which workflow fields are intended as stable public config versus repo proof surface

@@ -23,6 +23,9 @@ export interface AgentIssue {
   priority: number | null;
   projectSlug?: string;
   state: string;
+  streamIssueId?: string;
+  streamIssueIdentifier?: string;
+  streamIssueState?: string;
   teamId?: string;
   title: string;
   updatedAt: string;
