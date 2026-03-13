@@ -51,6 +51,7 @@ The current implementation keeps ids stable per key and treats rename as an expl
 
 ### Runtime helpers
 
+- `../src/graph/authority.ts` contains persisted authoritative graph orchestration plus the JSON storage adapter
 - `../src/graph/serialize.ts` contains internal helpers for turning store state into plain objects and schema views
 - `../src/type/input.ts` contains input-kind guards used by scalar codecs
 
@@ -59,11 +60,11 @@ The current implementation keeps ids stable per key and treats rename as an expl
 - Storage stays opaque and string-based; scalar decode/encode lives above it.
 - Field trees preserve authoring shape, but runtime linking uses resolved ids.
 - Reference fields should be authored through `defineReferenceField(...)` or helpers layered on top of it.
-- The store does not currently advertise secondary indexes or persistence adapters.
+- The store does not currently advertise secondary indexes, but the package now ships a JSON persistence adapter for authoritative runtimes.
 
 ## Roadmap
 
-- add durable persistence for snapshots plus retained write history
+- add persistence backends beyond the current JSON snapshot-plus-history adapter
 - decide whether internal serialization helpers should become supported exports
 - improve indexing and query planning if current store scans become a bottleneck
 - add stronger schema-evolution guidance beyond the current id-map workflow

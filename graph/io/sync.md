@@ -36,6 +36,8 @@ Incremental payloads carry:
 ### Authoritative side
 
 - `createAuthoritativeGraphWriteSession(store, namespace)`
+- `createPersistedAuthoritativeGraph(store, namespace, { storage, ... })`
+- `createJsonPersistedAuthoritativeGraphStorage(path, namespace)`
 - `apply(transaction)`
 - `getBaseCursor()`
 - `getCursor()`
@@ -44,6 +46,7 @@ Incremental payloads carry:
 - `getHistory()`
 
 The current authority session already treats transaction ids as idempotency keys and emits monotonic cursors.
+The persisted authority helper layers durable snapshot load/save, retained history recovery, legacy snapshot rewrite, and rollback-on-save-failure on top of that session model.
 
 ### Client/session side
 
@@ -72,6 +75,8 @@ The current authority session already treats transaction ids as idempotency keys
 - successful total replace clears pending local transactions
 - successful write reconciliation or incremental apply keeps local optimistic replay coherent
 - fallback reasons already distinguish `unknown-cursor`, `gap`, and `reset`
+- persisted authoritative runtimes can resume cursor progression from retained write history after restart
+- unusable retained history is rewritten as a reset baseline instead of partially replayed
 
 ## Current Failure Model
 
@@ -79,10 +84,11 @@ The current authority session already treats transaction ids as idempotency keys
 - invalid authoritative payloads or write results leave local state unchanged
 - failed `flush()` calls preserve queued writes and surface `GraphSyncWriteError`
 - incremental fallback results do not silently repair state; callers must recover via total sync
+- failed persisted-authority saves roll back the in-memory authoritative write session instead of leaving a half-committed durable state
 
 ## Roadmap
 
-- durable persistence for authoritative snapshot plus retained history
+- persistence backends beyond the current JSON snapshot-plus-history implementation
 - live transport layered on top of the current pull/result shapes
 - query-scoped partial sync and query-aware completeness
 - richer conflict handling than retry-or-recover-by-total-snapshot
@@ -92,5 +98,5 @@ The current authority session already treats transaction ids as idempotency keys
 1. Add one concrete sequence diagram for local mutation -> queue -> authority apply -> peer incremental pull.
 2. Document the intended public stability of cursor formats and fallback reasons.
 3. Add a short section on how `preserveSnapshot` should be captured and why it matters.
-4. Add explicit persistence requirements for rehydrating authority history after restart.
+4. Document the contract expected from non-JSON persistence adapters once another backend exists.
 5. Capture which conflict classes should remain “recover by snapshot” versus graduate to first-class protocols.

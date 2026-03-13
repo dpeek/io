@@ -15,6 +15,7 @@ This document is the high-level entry point for agents reasoning about the engin
 - Predicate-slot subscriptions keyed by `(subjectId, predicateId)`
 - Shared validation results across local mutation and authoritative apply
 - Total sync plus authoritative write and incremental replay surfaces
+- JSON persistence for authoritative snapshots plus retained write history
 
 ### Main source boundaries
 
@@ -23,6 +24,7 @@ This document is the high-level entry point for agents reasoning about the engin
 - `../src/graph/identity.ts`: stable key-to-id resolution and id-map helpers
 - `../src/graph/bootstrap.ts`: schema bootstrap into store facts
 - `../src/graph/client.ts`: typed CRUD, refs, query, and validation lifecycle
+- `../src/graph/authority.ts`: persisted authority orchestration and JSON load/save
 - `../src/graph/sync.ts`: authoritative validation, sync sessions, write replay, and state
 - `../src/graph/type-module.ts`: typed scalar/enum module contracts
 
@@ -34,10 +36,11 @@ This document is the high-level entry point for agents reasoning about the engin
 - Authoritative snapshots and authoritative write results are validated before apply.
 - The first query surface is typed and local-store-backed.
 - Incremental sync is already represented as ordered authoritative transactions after a cursor.
+- JSON persistence can recover snapshot state and retained write history across restart.
 
 ## What Is Not Yet Current
 
-- Durable persistence backends in this package
+- Additional persistence backends beyond the current JSON file adapter
 - Query-scoped partial sync and query-aware completeness
 - A separate query planner or index subsystem beyond the current store traversal paths
 - ACL, secret storage, or server action/runtime layers
@@ -48,7 +51,7 @@ This document is the high-level entry point for agents reasoning about the engin
 
 The likely direction is still the same as the legacy docs, but it should now be read as roadmap rather than current behavior:
 
-- persistence as snapshot plus retained transaction history
+- richer persistence backends beyond the current JSON snapshot-plus-history shape
 - richer query and indexing contracts on top of the current typed client
 - policy, secrets, and authoritative action layers above the core engine
 - schema-driven UI built on typed refs and module metadata
@@ -67,6 +70,6 @@ The likely direction is still the same as the legacy docs, but it should now be 
 
 1. Add one architecture diagram that maps current exported APIs to these source boundaries.
 2. Document which roadmap items require new packages versus expansion of `graph`.
-3. Add a short note about expected persistence shape once the first durable backend lands.
+3. Document when the JSON persistence surface is sufficient versus when a new backend is warranted.
 4. Capture intended observability hooks before sync and validation traces spread ad hoc.
 5. Revisit this document whenever a roadmap item becomes a real exported engine contract.

@@ -1,3 +1,4 @@
+export * from "./authority";
 export * from "./bootstrap";
 export * from "./client";
 export * from "./core";
