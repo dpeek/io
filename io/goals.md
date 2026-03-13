@@ -2,36 +2,32 @@
 
 ## Objective
 
-- Make Linear the canonical source for evolving stream context, backlog order,
-  and human review edits.
-- Separate backlog grooming from child execution by parent stream phase without
-  forcing the 3-level model yet.
+- Make Linear the canonical source for stream context, feature planning, and
+  task execution state.
+- Use the three-level stream/feature/task model without comment-driven
+  backlog automation.
 
 ## Current Focus
 
-- Keep parent `Todo` as the only automatic backlog-entry phase for managed
-  streams.
-- Treat parent `In Review` as the safe bootstrap and post-backlog hold state
-  for new streams until a human explicitly moves the stream to `In Progress`.
-- Keep explicit managed-parent reruns available while the parent is in
-  `In Review` without reopening automatic backlog scheduling.
-- Seed new implementation children in `Todo` and rely on the parent-phase gate
-  to keep them parked until the stream is released.
-- Keep parent and child Linear transitions separate: backlog success returns
-  the parent to `In Review`, while child execution still lands on `Done`.
-- Keep repo docs terse and current while the parent Linear issue holds the
-  evolving brief, child backlog, and operator notes.
+- Keep stream backlog editing interactive through `./io/backlog.md` and Codex.
+- Allow parallel feature work inside a stream, while keeping task execution
+  serialized within each feature.
+- Only auto-run tasks when the stream and feature are `In Progress` and the
+  task is `Todo`.
+- Land successful task commits on the feature branch and finalize features by
+  squashing, rebasing onto the stream branch, and merging back into the stream.
+- Keep repo docs terse and current while the stream issue holds the evolving
+  roadmap, constraints, and references.
 
 ## Constraints
 
-- Preserve the existing 2-level parent/child hierarchy for this first pass.
-- Keep the parent issue as the canonical stream context source and respect
-  managed-marker ownership boundaries.
-- Keep child issues scoped to implementation-step work; planning and review
-  remain parent-owned.
-- Do not auto-run managed backlog after a parent leaves `Todo`.
-- Do not auto-run child issues unless their parent stream is `In Progress`.
-- Keep one active child per stream and continue to respect `blockedBy` ordering.
+- Do not use comment-driven backlog workflows.
+- Do not auto-mutate stream descriptions or child issues outside the interactive
+  backlog session.
+- Keep streams as long-lived branch roots, features as integration-sized branch
+  owners, and tasks as single execution sessions.
+- Do not auto-run tasks unless their feature and stream are both `In Progress`.
+- Keep merge-conflict and sequencing decisions user-owned at the feature level.
 
 ## Proof Surfaces
 
@@ -49,7 +45,7 @@
 
 ## Deferred
 
-- A full 3-level stream/planning/implementation hierarchy.
-- Stream merge or PR automation beyond parent-phase gating.
+- Richer operator summaries around stream and feature finalization.
+- Additional sequencing automation beyond the current feature/task state gates.
 - Broader doc-layout cleanup outside the current routing, tracker, and
   scheduling slice.

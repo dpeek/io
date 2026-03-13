@@ -53,7 +53,7 @@ test("isCompletedRetainedSessionEvent ignores non-terminal and non-lifecycle eve
     format: "line",
     sequence: 2,
     session,
-    text: "Session started",
+    text: "IO is supervising",
     timestamp: "2026-03-10T02:00:01.000Z",
     type: "status",
   };

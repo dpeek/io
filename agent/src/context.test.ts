@@ -245,7 +245,7 @@ test("resolveIssueContext supports doc-id overrides and profile entrypoint opt-o
   }
 });
 
-test("repo backlog context includes managed stream maintenance guidance", async () => {
+test("repo backlog context includes the stream-feature-task workflow guidance", async () => {
   const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "io";
@@ -259,7 +259,7 @@ test("repo backlog context includes managed stream maintenance guidance", async 
   const issue: AgentIssue = {
     blockedBy: [],
     createdAt: "2024-01-01T00:00:00.000Z",
-    description: "Refine the managed agent stream backlog",
+    description: "Refine the agent stream backlog",
     hasChildren: true,
     hasParent: false,
     id: "1",
@@ -268,7 +268,7 @@ test("repo backlog context includes managed stream maintenance guidance", async 
     priority: 2,
     projectSlug: "io",
     state: "Todo",
-    title: "Managed stream backlog",
+    title: "Agent stream backlog",
     updatedAt: "2024-01-01T00:00:00.000Z",
   };
 
@@ -301,20 +301,18 @@ test("repo backlog context includes managed stream maintenance guidance", async 
     agent: "backlog",
     profile: "backlog",
   });
-  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-contract");
-  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-backlog");
-  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.managed-stream-comments");
-  expect(rendered).toContain("exactly one label that matches a configured module id");
-  expect(rendered).toContain("## Current Child Payload");
-  expect(rendered).toContain("@io backlog");
-  expect(rendered).toContain("topped back up to a short tail rather than replanned from scratch");
-  expect(rendered).toContain(
-    "backlog refresh should avoid destructive rewrites of already active or completed children",
-  );
-  expect(rendered).toContain("## Current Reply Shape");
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.backlog");
+  expect(rendered).toContain("You are the IO backlog editor for the three-level Linear workflow.");
+  expect(rendered).toContain("1. `Stream`");
+  expect(rendered).toContain("2. `Feature`");
+  expect(rendered).toContain("3. `Task`");
+  expect(rendered).toContain("do not use comment-driven workflows");
+  expect(rendered).toContain("the stream is `In Progress`");
+  expect(rendered).toContain("the feature is `In Progress`");
+  expect(rendered).toContain("the task is `Todo`");
 });
 
-test("repo config allows shared repo docs in managed issue descriptions without warning", async () => {
+test("repo config allows shared repo docs in backlog issue descriptions without warning", async () => {
   const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "io";

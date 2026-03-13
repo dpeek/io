@@ -16,10 +16,7 @@ export default defineIoConfig({
   context: {
     entrypoint: "./io/overview.md",
     docs: {
-      "project.managed-stream-comments": "./agent/io/managed-stream-comments.md",
-      "project.managed-stream-backlog": "./agent/io/managed-stream-backlog.md",
-      "project.managed-stream-contract": "./agent/io/managed-stream-contract.md",
-      "project.module-stream-workflow-plan": "./agent/io/module-stream-workflow-plan.md",
+      "project.backlog": "./io/backlog.md",
       "project.overview": "./io/overview.md",
     },
     profiles: {
@@ -29,10 +26,8 @@ export default defineIoConfig({
           "builtin:io.context.discovery",
           "builtin:io.linear.status-updates",
           "builtin:io.core.git-safety",
+          "project.backlog",
           "project.overview",
-          "project.managed-stream-contract",
-          "project.managed-stream-backlog",
-          "project.managed-stream-comments",
         ],
       },
       execute: {

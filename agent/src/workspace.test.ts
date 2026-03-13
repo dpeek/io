@@ -102,6 +102,25 @@ function issue(
   };
 }
 
+function taskIssue(
+  identifier: string,
+  title = "Example task",
+  overrides: Partial<AgentIssue> = {},
+) {
+  return issue(identifier, title, {
+    grandparentIssueId: "stream-1",
+    grandparentIssueIdentifier: "OPE-12",
+    grandparentIssueState: "In Progress",
+    grandparentIssueTitle: "Example stream",
+    hasParent: true,
+    parentIssueId: "feature-1",
+    parentIssueIdentifier: "OPE-34",
+    parentIssueState: "In Progress",
+    parentIssueTitle: "Example feature",
+    ...overrides,
+  });
+}
+
 test("WorkspaceManager prepares a detached issue worktree with flat runtime state", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
   const runtimeRoot = resolve(root, "runtime");
@@ -463,6 +482,60 @@ test("WorkspaceManager keeps child finalization separate from stream completion 
     });
     expect(finalizedStreamState.activeIssueId).toBeUndefined();
     expect(finalizedStreamState.activeIssueIdentifier).toBeUndefined();
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("WorkspaceManager squashes a completed feature branch back into the stream branch", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "agent-workspace-"));
+  const runtimeRoot = resolve(root, "runtime");
+  const featureStatePath = resolve(runtimeRoot, "stream", "ope-34.json");
+  try {
+    const { repoRoot } = await createSourceRepo(root);
+    const manager = new WorkspaceManager({
+      hooks,
+      repoRoot,
+      rootDir: runtimeRoot,
+      workerId: "worker-1",
+    });
+    const task = taskIssue("OPE-13", "Implement task");
+    const workspace = await manager.prepare(task);
+
+    expect(workspace.branchName).toBe("io/ope-34");
+    expect(workspace.baseBranchName).toBe("io/ope-12");
+
+    await writeFile(join(workspace.path, "feature.txt"), "feature change\n");
+    await manager.complete(workspace, task);
+
+    await manager.reconcileTerminalIssues(
+      {
+        fetchIssueStatesByIds: async () =>
+          new Map([
+            [task.id, "Done"],
+            ["feature-1", "Done"],
+          ]),
+      },
+      ["Done"],
+    );
+
+    expect(await run(["git", "show", "io/ope-12:feature.txt"], repoRoot)).toBe("feature change");
+    expect(await run(["git", "branch", "--list", "io/ope-34"], repoRoot)).toBe("");
+
+    const featureState = JSON.parse(await readFile(featureStatePath, "utf8")) as {
+      baseBranchName?: string;
+      latestLandedCommitSha?: string;
+      status: string;
+    };
+    expect(featureState).toMatchObject({
+      baseBranchName: "io/ope-12",
+      status: "completed",
+    });
+
+    const commitMessage = await run(["git", "log", "-1", "--pretty=%B", "io/ope-12"], repoRoot);
+    expect(commitMessage).toContain("OPE-34 Example feature");
+    expect(commitMessage).toContain("Tasks completed:");
+    expect(commitMessage).toContain("OPE-13 Implement task");
   } finally {
     await rm(root, { force: true, recursive: true });
   }

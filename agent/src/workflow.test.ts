@@ -326,7 +326,7 @@ test("loadWorkflowFile parses issue routing defaults and normalized rules from i
   }
 });
 
-test("loadWorkflowFile normalizes modules and routes managed parents from labels", async () => {
+test("loadWorkflowFile normalizes modules without implicit backlog routing", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "workflow-"));
 
   await mkdir(resolve(root, "agent", "doc"), { recursive: true });
@@ -385,8 +385,8 @@ test("loadWorkflowFile normalizes modules and routes managed parents from labels
         result.value.modules,
       ),
     ).toEqual({
-      agent: "backlog",
-      profile: "backlog",
+      agent: "execute",
+      profile: "execute",
     });
   } finally {
     await rm(root, { force: true, recursive: true });

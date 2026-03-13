@@ -3,14 +3,14 @@
 ## Purpose
 
 `io` is the repo-level package. It owns the shared project map: agent runtime,
-context and config resolution, package-stream planning, and the graph-first
-application direction the rest of the workspace is proving.
+context and config resolution, the stream/feature/task backlog workflow, and
+the graph-first application direction the rest of the workspace is proving.
 
 ## Docs
 
 - `../io.md`
+- `./backlog.md`
 - `../agent/io/overview.md`
-- `../agent/io/managed-stream-contract.md`
 - `../graph/io/overview.md`
 - `../tui/io/overview.md`
 
@@ -18,6 +18,7 @@ application direction the rest of the workspace is proving.
 
 - `../io.ts`: repo config, context registry, profiles, modules, routing
 - `../io.md`: repo-local execution guidance included in prompt context
+- `./backlog.md`: interactive stream backlog prompt and issue-structure contract
 - `./overview.md`: repo map and context entrypoint
 - `../agent/`: scheduler, context assembly, tracker integration, TUI runtime
 - `../config/`, `../lib/`: shared config loading and typed config surface

@@ -10,11 +10,6 @@ function normalizeRoutingValue(value: string) {
   return value.trim().toLowerCase();
 }
 
-export function hasIssueLabel(issue: Pick<AgentIssue, "labels">, label: string) {
-  const normalizedLabel = normalizeRoutingValue(label);
-  return issue.labels.some((value) => normalizeRoutingValue(value) === normalizedLabel);
-}
-
 export function resolveIssueModule(
   modules: Record<string, WorkflowModule>,
   issue: Pick<AgentIssue, "labels">,
@@ -25,12 +20,6 @@ export function resolveIssueModule(
     return undefined;
   }
   return matchedModules[0];
-}
-
-function isManagedParentIssue(issue: AgentIssue, modules: Record<string, WorkflowModule>) {
-  return !issue.hasParent && hasIssueLabel(issue, "io")
-    ? Boolean(resolveIssueModule(modules, issue))
-    : false;
 }
 
 export function matchesIssueRoutingRule(issue: AgentIssue, rule: IssueRoutingRule) {
@@ -73,12 +62,6 @@ export function resolveIssueRouting(
         profile: rule.profile,
       };
     }
-  }
-  if (isManagedParentIssue(issue, modules)) {
-    return {
-      agent: "backlog",
-      profile: "backlog",
-    };
   }
   return {
     agent: config.defaultAgent,

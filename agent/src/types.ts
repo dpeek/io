@@ -7,6 +7,10 @@ export interface AgentIssue {
   blockedBy: string[];
   createdAt: string;
   description: string;
+  grandparentIssueId?: string;
+  grandparentIssueIdentifier?: string;
+  grandparentIssueState?: string;
+  grandparentIssueTitle?: string;
   hasChildren: boolean;
   hasParent: boolean;
   id: string;
@@ -15,89 +19,13 @@ export interface AgentIssue {
   parentIssueId?: string;
   parentIssueIdentifier?: string;
   parentIssueState?: string;
+  parentIssueTitle?: string;
   priority: number | null;
   projectSlug?: string;
   state: string;
   teamId?: string;
   title: string;
   updatedAt: string;
-}
-
-export type ManagedCommentCommandName = "backlog" | "help" | "status";
-export type ManagedCommentResult = "blocked" | "noop" | "partial" | "updated";
-
-export interface ManagedCommentPayload {
-  docs: string[];
-  dryRun: boolean;
-  note?: string;
-}
-
-export interface ManagedCommentCommand {
-  body: string;
-  bodyHash: string;
-  commentId: string;
-  command: ManagedCommentCommandName;
-  createdAt: string;
-  issue: AgentIssue;
-  payload: ManagedCommentPayload;
-  updatedAt: string;
-}
-
-export interface ManagedCommentParseError {
-  body: string;
-  bodyHash: string;
-  commentId: string;
-  createdAt: string;
-  error: string;
-  issue: AgentIssue;
-  updatedAt: string;
-}
-
-export type ManagedCommentTrigger = ManagedCommentCommand | ManagedCommentParseError;
-
-export interface ManagedCommentChildMutation {
-  blockedBy: string[];
-  description: string;
-  docs: string[];
-  labels: string[];
-  priority: number | null;
-  reference: string;
-  state?: string;
-  title: string;
-}
-
-export interface ManagedCommentReply {
-  command: string;
-  issueIdentifier: string;
-  lines: string[];
-  result: ManagedCommentResult;
-}
-
-export interface ManagedCommentMutation {
-  comment: ManagedCommentTrigger;
-  children: ManagedCommentChildMutation[];
-  parentDescription?: string;
-  reply: ManagedCommentReply;
-}
-
-export interface ManagedCommentMutationResult {
-  createdChildIssueIdentifiers: string[];
-  dependencyCount: number;
-  replyCommentId?: string;
-  result: ManagedCommentResult;
-  updatedChildIssueIdentifiers: string[];
-  updatedParentDescription: boolean;
-  warnings: string[];
-}
-
-export interface HandledManagedComment {
-  bodyHash: string;
-  commentId: string;
-  handledAt: string;
-}
-
-export interface ManagedCommentState {
-  comments: HandledManagedComment[];
 }
 
 export interface TrackerConfig {
@@ -245,6 +173,9 @@ export interface ValidationError {
 export type ValidationResult<T> = { ok: true; value: T } | { errors: ValidationError[]; ok: false };
 
 export interface PreparedWorkspace {
+  baseBranchName?: string;
+  baseIssueId?: string;
+  baseIssueIdentifier?: string;
   branchName: string;
   controlPath: string;
   createdNow: boolean;
@@ -263,11 +194,15 @@ export interface PreparedWorkspace {
 export interface StreamRuntimeState {
   activeIssueId?: string;
   activeIssueIdentifier?: string;
+  baseBranchName?: string;
+  baseIssueId?: string;
+  baseIssueIdentifier?: string;
   branchName: string;
   createdAt: string;
   latestLandedCommitSha?: string;
   parentIssueId: string;
   parentIssueIdentifier: string;
+  parentIssueTitle?: string;
   status: "active" | "completed";
   updatedAt: string;
   worktreeRoot: string;
@@ -297,9 +232,4 @@ export interface IssueTracker {
   fetchCandidateIssues: () => Promise<AgentIssue[]>;
   fetchIssueStatesByIds: (issueIds: string[]) => Promise<Map<string, string>>;
   setIssueState: (issueId: string, stateName: string) => Promise<void>;
-  fetchManagedCommentTriggers?: () => Promise<ManagedCommentTrigger[]>;
-  applyManagedCommentMutation?: (
-    mutation: ManagedCommentMutation,
-  ) => Promise<ManagedCommentMutationResult>;
-  updateIssueDescription?: (issueId: string, description: string) => Promise<void>;
 }

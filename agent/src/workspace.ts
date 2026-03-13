@@ -44,6 +44,9 @@ type WorkerState = {
 };
 
 export interface IssueRuntimeState {
+  baseBranchName?: string;
+  baseIssueId?: string;
+  baseIssueIdentifier?: string;
   branchName: string;
   commitSha?: string;
   controlPath: string;
@@ -114,11 +117,27 @@ function normalizeStateName(state: string) {
 }
 
 function resolveStreamIssue(
-  issue: Pick<AgentIssue, "id" | "identifier" | "parentIssueId" | "parentIssueIdentifier">,
+  issue: Pick<
+    AgentIssue,
+    "id" | "identifier" | "parentIssueId" | "parentIssueIdentifier" | "parentIssueTitle" | "title"
+  >,
 ) {
   return {
     id: issue.parentIssueId ?? issue.id,
     identifier: issue.parentIssueIdentifier ?? issue.identifier,
+    title: issue.parentIssueTitle ?? issue.title,
+  };
+}
+
+function resolveBaseIssue(
+  issue: Pick<AgentIssue, "grandparentIssueId" | "grandparentIssueIdentifier">,
+) {
+  if (!issue.grandparentIssueId || !issue.grandparentIssueIdentifier) {
+    return undefined;
+  }
+  return {
+    id: issue.grandparentIssueId,
+    identifier: issue.grandparentIssueIdentifier,
   };
 }
 
@@ -191,7 +210,9 @@ export class CheckoutManager {
   async prepare(issue: AgentIssue): Promise<PreparedWorkspace> {
     const control = await this.ensureCheckout();
     const streamIssue = resolveStreamIssue(issue);
+    const baseIssue = resolveBaseIssue(issue);
     const branchName = this.getBranchName(issue);
+    const baseBranchName = baseIssue ? toStreamBranchName(baseIssue.identifier) : undefined;
     const path = this.getWorktreePath(issue.identifier);
     const issueRuntimePath = this.getIssueRuntimePath(issue.identifier);
     const outputPath = resolveIssueOutputPath(this.#rootDir, issue.identifier);
@@ -227,9 +248,15 @@ export class CheckoutManager {
       }
     }
 
-    await this.#ensureStreamBranch(control, branchName);
+    if (baseBranchName) {
+      await this.#ensureBranch(control, baseBranchName);
+    }
+    await this.#ensureBranch(control, branchName, baseBranchName);
     const createdNow = await this.#ensureWorktree(control, branchName, path);
     const preparedWorkspace = this.#buildPreparedWorkspace({
+      baseBranchName,
+      baseIssueId: baseIssue?.id,
+      baseIssueIdentifier: baseIssue?.identifier,
       branchName,
       controlPath: control.path,
       createdNow,
@@ -244,9 +271,13 @@ export class CheckoutManager {
     await this.#writeIssueState(preparedWorkspace, issue, "running");
     await this.#upsertStreamState(
       {
+        baseBranchName,
+        baseIssueId: baseIssue?.id,
+        baseIssueIdentifier: baseIssue?.identifier,
         branchName,
         parentIssueId: streamIssue.id,
         parentIssueIdentifier: streamIssue.identifier,
+        parentIssueTitle: streamIssue.title,
       },
       {
         activeIssue: { id: issue.id, identifier: issue.identifier },
@@ -318,10 +349,14 @@ export class CheckoutManager {
     });
     await this.#upsertStreamState(
       {
+        baseBranchName: workspace.baseBranchName,
+        baseIssueId: workspace.baseIssueId,
+        baseIssueIdentifier: workspace.baseIssueIdentifier,
         branchName: workspace.branchName,
         parentIssueId: workspace.streamIssueId ?? issue.parentIssueId ?? issue.id,
         parentIssueIdentifier:
           workspace.streamIssueIdentifier ?? issue.parentIssueIdentifier ?? issue.identifier,
+        parentIssueTitle: issue.parentIssueTitle ?? issue.title,
       },
       {
         activeIssue: issue.hasParent ? { id: issue.id, identifier: issue.identifier } : null,
@@ -337,10 +372,14 @@ export class CheckoutManager {
     await this.#writeIssueState(workspace, issue, "blocked");
     await this.#upsertStreamState(
       {
+        baseBranchName: workspace.baseBranchName,
+        baseIssueId: workspace.baseIssueId,
+        baseIssueIdentifier: workspace.baseIssueIdentifier,
         branchName: workspace.branchName,
         parentIssueId: workspace.streamIssueId ?? issue.parentIssueId ?? issue.id,
         parentIssueIdentifier:
           workspace.streamIssueIdentifier ?? issue.parentIssueIdentifier ?? issue.identifier,
+        parentIssueTitle: issue.parentIssueTitle ?? issue.title,
       },
       {
         activeIssue: { id: issue.id, identifier: issue.identifier },
@@ -354,10 +393,14 @@ export class CheckoutManager {
     await this.#writeIssueState(workspace, issue, "interrupted");
     await this.#upsertStreamState(
       {
+        baseBranchName: workspace.baseBranchName,
+        baseIssueId: workspace.baseIssueId,
+        baseIssueIdentifier: workspace.baseIssueIdentifier,
         branchName: workspace.branchName,
         parentIssueId: workspace.streamIssueId ?? issue.parentIssueId ?? issue.id,
         parentIssueIdentifier:
           workspace.streamIssueIdentifier ?? issue.parentIssueIdentifier ?? issue.identifier,
+        parentIssueTitle: issue.parentIssueTitle ?? issue.title,
       },
       {
         activeIssue: { id: issue.id, identifier: issue.identifier },
@@ -439,6 +482,8 @@ export class CheckoutManager {
         });
       }
     }
+
+    await this.#reconcileCompletedFeatureBranches(tracker, terminalStateSet);
   }
 
   getBranchName(issue: AgentIssue) {
@@ -498,6 +543,9 @@ export class CheckoutManager {
   #buildPreparedWorkspace(
     options: Pick<
       PreparedWorkspace,
+      | "baseBranchName"
+      | "baseIssueId"
+      | "baseIssueIdentifier"
       | "branchName"
       | "controlPath"
       | "createdNow"
@@ -511,6 +559,9 @@ export class CheckoutManager {
     >,
   ): PreparedWorkspace {
     return {
+      baseBranchName: options.baseBranchName,
+      baseIssueId: options.baseIssueId,
+      baseIssueIdentifier: options.baseIssueIdentifier,
       branchName: options.branchName,
       controlPath: options.controlPath,
       createdNow: options.createdNow,
@@ -556,7 +607,7 @@ export class CheckoutManager {
     return await this.#revParseHead(workspace.path);
   }
 
-  async #ensureStreamBranch(control: ControlRepo, branchName: string) {
+  async #ensureBranch(control: ControlRepo, branchName: string, baseBranchName?: string) {
     if (await this.#localBranchExists(control.path, branchName)) {
       return;
     }
@@ -565,7 +616,7 @@ export class CheckoutManager {
       await this.#runOrThrow(["git", "branch", branchName, `origin/${branchName}`], control.path);
       return;
     }
-    const baseRef = await this.#resolveBaseRef(control);
+    const baseRef = baseBranchName ?? (await this.#resolveBaseRef(control));
     await this.#runOrThrow(["git", "branch", branchName, baseRef], control.path);
   }
 
@@ -686,6 +737,39 @@ export class CheckoutManager {
       },
     );
     await this.#clearActiveWorker(issue);
+  }
+
+  async #reconcileCompletedFeatureBranches(
+    tracker: IssueStateTracker,
+    terminalStateSet: Set<string>,
+  ) {
+    const featureStates = (await this.#listStreamStates()).filter((state) =>
+      Boolean(state.baseBranchName) && state.status !== "completed"
+    );
+    if (!featureStates.length) {
+      return;
+    }
+
+    const featureStateById = await tracker.fetchIssueStatesByIds(
+      featureStates.map((state) => state.parentIssueId),
+    );
+    for (const featureState of featureStates) {
+      const stateName = featureStateById.get(featureState.parentIssueId);
+      if (!stateName || !terminalStateSet.has(normalizeStateName(stateName))) {
+        continue;
+      }
+      if (normalizeStateName(stateName) !== "done") {
+        continue;
+      }
+      try {
+        await this.#finalizeCompletedFeatureBranch(featureState);
+      } catch (error) {
+        this.#log.error("feature_branch_finalize.failed", {
+          error: error instanceof Error ? error : new Error(String(error)),
+          issueIdentifier: featureState.parentIssueIdentifier,
+        });
+      }
+    }
   }
 
   async #removeIssueWorktree(issue: IssueRuntimeState) {
@@ -956,6 +1040,144 @@ export class CheckoutManager {
     await this.#mergeIntoControlRepo(issue, streamRef);
   }
 
+  async #finalizeCompletedFeatureBranch(stream: StreamRuntimeState) {
+    if (!stream.baseBranchName) {
+      return;
+    }
+
+    const control = await this.ensureCheckout();
+    const featureHead = await this.#tryRevParse(control.path, stream.branchName);
+    if (!featureHead) {
+      await this.#upsertStreamState(
+        {
+          ...stream,
+        },
+        {
+          activeIssue: null,
+          status: "completed",
+        },
+      );
+      return;
+    }
+
+    const baseHead = await this.#revParse(control.path, stream.baseBranchName);
+    if (await this.#isAncestor(control.path, featureHead, stream.baseBranchName)) {
+      this.#reportStreamProgress(stream, `${stream.branchName} already merged into ${stream.baseBranchName}`);
+      await this.#upsertStreamState(
+        {
+          ...stream,
+        },
+        {
+          activeIssue: null,
+          latestLandedCommitSha: baseHead,
+          status: "completed",
+        },
+      );
+      await this.#deleteLocalBranch(control.path, stream.branchName);
+      return;
+    }
+
+    const taskStates = await this.#listFeatureTaskStates(stream.parentIssueIdentifier);
+    const commitSha = await this.#squashFeatureBranchIntoBase(control.path, stream, taskStates);
+    await this.#upsertStreamState(
+      {
+        ...stream,
+      },
+      {
+        activeIssue: null,
+        latestLandedCommitSha: commitSha,
+        status: "completed",
+      },
+    );
+    if (await this.#deleteLocalBranch(control.path, stream.branchName)) {
+      this.#reportStreamProgress(stream, `deleted local branch ${stream.branchName}`);
+    }
+  }
+
+  async #listFeatureTaskStates(featureIssueIdentifier: string) {
+    return (await this.#listIssueStates())
+      .filter((issue) => issue.streamIssueIdentifier === featureIssueIdentifier)
+      .filter((issue) => ["completed", "finalized"].includes(issue.status))
+      .sort((left, right) => left.issueIdentifier.localeCompare(right.issueIdentifier));
+  }
+
+  async #squashFeatureBranchIntoBase(
+    controlPath: string,
+    stream: StreamRuntimeState,
+    taskStates: IssueRuntimeState[],
+  ) {
+    const finalizeRoot = resolve(this.getWorkerRoot(), "feature-finalize");
+    const finalizePath = resolve(finalizeRoot, toWorkspaceKey(stream.parentIssueIdentifier));
+    const finalizeBranch = `io-finalize-${toWorkspaceKey(stream.parentIssueIdentifier)}`;
+    const commitBody = this.#renderFeatureCommitBody(taskStates);
+
+    await mkdir(finalizeRoot, { recursive: true });
+    await rm(finalizePath, { force: true, recursive: true });
+    await this.#runOrThrow(["git", "worktree", "prune"], controlPath);
+    await this.#runOrThrow(
+      ["git", "worktree", "add", "--detach", finalizePath, stream.baseBranchName!],
+      controlPath,
+    );
+
+    try {
+      this.#reportStreamProgress(
+        stream,
+        `squashing ${stream.branchName} onto ${stream.baseBranchName}`,
+      );
+      await this.#runOrThrow(["git", "switch", "-c", finalizeBranch], finalizePath);
+      await this.#runOrThrow(["git", "merge", "--squash", stream.branchName], finalizePath);
+
+      const commitArgs = ["git"];
+      if (!(await this.#gitConfigValue(finalizePath, "user.name"))) {
+        commitArgs.push("-c", "user.name=IO Agent");
+      }
+      if (!(await this.#gitConfigValue(finalizePath, "user.email"))) {
+        commitArgs.push("-c", "user.email=io-agent@localhost");
+      }
+      commitArgs.push(
+        "commit",
+        "-m",
+        `${stream.parentIssueIdentifier} ${stream.parentIssueTitle ?? stream.parentIssueIdentifier}`,
+      );
+      if (commitBody) {
+        commitArgs.push("-m", commitBody);
+      }
+      await this.#runOrThrow(commitArgs, finalizePath);
+
+      const squashedSha = await this.#revParseHead(finalizePath);
+      const baseHead = await this.#revParse(controlPath, stream.baseBranchName!);
+      await this.#runOrThrow(
+        ["git", "update-ref", `refs/heads/${stream.baseBranchName}`, squashedSha, baseHead],
+        controlPath,
+      );
+      this.#reportStreamProgress(
+        stream,
+        `merged ${stream.branchName} into ${stream.baseBranchName} as ${squashedSha}`,
+      );
+      return squashedSha;
+    } finally {
+      if (existsSync(finalizePath)) {
+        await this.#runCommand(
+          ["git", "worktree", "remove", "--force", finalizePath],
+          controlPath,
+          this.#hooks.timeoutMs,
+        );
+      }
+      await this.#runCommand(
+        ["git", "branch", "-D", finalizeBranch],
+        controlPath,
+        this.#hooks.timeoutMs,
+      );
+    }
+  }
+
+  #renderFeatureCommitBody(taskStates: IssueRuntimeState[]) {
+    const lines = taskStates.length
+      ? taskStates.map((task) => `- ${task.issueIdentifier} ${task.issueTitle}`)
+      : ["- No completed task runs were recorded in .io runtime state."];
+    return ["Tasks completed:", ...lines].join("\n");
+  }
+
   async #resolveStreamMergeRef(issue: IssueRuntimeState) {
     const repoPath = this.#resolveRepoPath(issue);
     if (repoPath) {
@@ -1121,6 +1343,18 @@ export class CheckoutManager {
     process.stdout.write(`${issue.issueIdentifier}: ${message}\n`);
   }
 
+  #reportStreamProgress(
+    stream: Pick<StreamRuntimeState, "branchName" | "parentIssueIdentifier">,
+    message: string,
+  ) {
+    this.#log.info("stream.finalize.progress", {
+      branchName: stream.branchName,
+      issueIdentifier: stream.parentIssueIdentifier,
+      message,
+    });
+    process.stdout.write(`${stream.parentIssueIdentifier}: ${message}\n`);
+  }
+
   #usesControlClone() {
     return !this.#repoRoot || this.getOriginPath() !== this.#repoRoot;
   }
@@ -1137,6 +1371,9 @@ export class CheckoutManager {
       workspace.runtimePath ??
       this.getIssueRuntimePath(issue.identifier);
     const state: IssueRuntimeState = {
+      baseBranchName: workspace.baseBranchName,
+      baseIssueId: workspace.baseIssueId,
+      baseIssueIdentifier: workspace.baseIssueIdentifier,
       branchName: workspace.branchName,
       commitSha: options.commitSha,
       controlPath: workspace.controlPath,
@@ -1195,9 +1432,13 @@ export class CheckoutManager {
 
   async #upsertStreamState(
     stream: {
+      baseBranchName?: string;
+      baseIssueId?: string;
+      baseIssueIdentifier?: string;
       branchName: string;
       parentIssueId: string;
       parentIssueIdentifier: string;
+      parentIssueTitle?: string;
     },
     updates: {
       activeIssue?: { id: string; identifier: string } | null;
@@ -1213,11 +1454,15 @@ export class CheckoutManager {
         updates.activeIssue === undefined
           ? current?.activeIssueIdentifier
           : updates.activeIssue?.identifier,
+      baseBranchName: stream.baseBranchName ?? current?.baseBranchName,
+      baseIssueId: stream.baseIssueId ?? current?.baseIssueId,
+      baseIssueIdentifier: stream.baseIssueIdentifier ?? current?.baseIssueIdentifier,
       branchName: stream.branchName,
       createdAt: current?.createdAt ?? new Date().toISOString(),
       latestLandedCommitSha: updates.latestLandedCommitSha ?? current?.latestLandedCommitSha,
       parentIssueId: stream.parentIssueId,
       parentIssueIdentifier: stream.parentIssueIdentifier,
+      parentIssueTitle: stream.parentIssueTitle ?? current?.parentIssueTitle,
       status: updates.status ?? current?.status ?? "active",
       updatedAt: new Date().toISOString(),
       worktreeRoot: resolve(this.#rootDir, "tree"),

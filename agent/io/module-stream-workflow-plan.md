@@ -28,7 +28,6 @@ Resolved workflow state already includes:
 
 - first matching explicit routing rule
 - fallback repo defaults
-- managed-parent detection for top-level issues labeled `io` plus exactly one configured module label
 
 Issue-body hints parsed by `../src/context.ts` can still override the base selection with:
 

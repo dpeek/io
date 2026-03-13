@@ -3,18 +3,8 @@ import { relative, resolve } from "node:path";
 
 import { createLogger, type Logger } from "@io/lib";
 
-import {
-  buildManagedParentProposal,
-} from "./backlog-proposal.js";
-import {
-  hasHandledManagedComment,
-  readManagedCommentState,
-  recordHandledManagedComment,
-} from "./comment-state.js";
 import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
-import { hasIssueLabel, resolveIssueModule, resolveIssueRouting } from "./issue-routing.js";
-import { buildManagedBacklogChildren } from "./managed-stream.js";
-import { isManagedCommentCommand } from "./managed-comments.js";
+import { resolveIssueRouting } from "./issue-routing.js";
 import { CodexAppServerRunner } from "./runner/codex.js";
 import {
   createAgentSessionEventBus,
@@ -28,8 +18,6 @@ import type {
   AgentIssue,
   IssueRunResult,
   IssueTracker,
-  ManagedCommentMutation,
-  ManagedCommentTrigger,
   PreparedWorkspace,
   Workflow,
 } from "./types.js";
@@ -65,7 +53,6 @@ export function pickCandidateIssues(
   const selected: AgentIssue[] = [];
   const reservedStreams = new Set<string>();
   for (const issue of [...issues]
-    .filter((issue) => !issue.hasParent || normalizeState(issue.parentIssueState) === "in progress")
     .filter((issue) => issue.blockedBy.length === 0)
     .sort((left, right) => {
       const leftPreferred =
@@ -113,6 +100,16 @@ function getStreamKey(issue: AgentIssue) {
   return toWorkspaceKey(issue.parentIssueIdentifier ?? issue.identifier);
 }
 
+function isAutoRunnableTask(issue: AgentIssue) {
+  return issue.hasParent &&
+    !issue.hasChildren &&
+    Boolean(issue.parentIssueIdentifier) &&
+    Boolean(issue.grandparentIssueIdentifier) &&
+    normalizeState(issue.state) === "todo" &&
+    normalizeState(issue.parentIssueState) === "in progress" &&
+    normalizeState(issue.grandparentIssueState) === "in progress";
+}
+
 function normalizeState(state?: string) {
   return state?.trim().toLowerCase() ?? "";
 }
@@ -122,20 +119,6 @@ function isResumableRunError(error: unknown) {
     return false;
   }
   return ["response_timeout", "stall_timeout", "turn_timeout"].includes(error.message);
-}
-
-function uniqueOrdered(values: string[]) {
-  const seen = new Set<string>();
-  const unique: string[] = [];
-  for (const value of values) {
-    const normalized = value.trim();
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    unique.push(normalized);
-  }
-  return unique;
 }
 
 export class AgentService {
@@ -227,7 +210,6 @@ export class AgentService {
       await this.#ensureWorkerReady(activeWorkflow);
       const workspaceManager = this.#createWorkspaceManager(activeWorkflow);
       const tracker = this.#createTracker(activeWorkflow);
-      await this.#processManagedCommentTriggers(activeWorkflow, tracker);
       await workspaceManager.reconcileTerminalIssues(
         tracker,
         activeWorkflow.tracker.terminalStates,
@@ -284,121 +266,6 @@ export class AgentService {
     return result.value;
   }
 
-  async #processManagedCommentTriggers(workflow: Workflow, tracker: IssueTracker) {
-    if (!tracker.fetchManagedCommentTriggers || !tracker.applyManagedCommentMutation) {
-      return;
-    }
-
-    const triggers = await tracker.fetchManagedCommentTriggers();
-    for (const trigger of triggers) {
-      const state = await readManagedCommentState(
-        workflow.workspace.root,
-        trigger.issue.identifier,
-      );
-      if (hasHandledManagedComment(state, trigger)) {
-        continue;
-      }
-
-      let reply: ManagedCommentMutation["reply"] = {
-        command: "invalid",
-        issueIdentifier: trigger.issue.identifier,
-        lines: [] as string[],
-        result: "blocked",
-      };
-      let parentDescription: string | undefined;
-      let children: ManagedCommentMutation["children"] = [];
-
-      if (!isManagedCommentCommand(trigger)) {
-        reply = {
-          command: "invalid",
-          issueIdentifier: trigger.issue.identifier,
-          lines: [trigger.error],
-          result: "blocked",
-        };
-      } else {
-        const module = resolveIssueModule(workflow.modules, trigger.issue);
-        const isManagedParent =
-          !trigger.issue.hasParent && hasIssueLabel(trigger.issue, "io") && Boolean(module);
-        const issueIdentifier = module
-          ? `${trigger.issue.identifier} / ${module.id}`
-          : trigger.issue.identifier;
-
-        if (!isManagedParent) {
-          reply = {
-            command: trigger.command,
-            issueIdentifier,
-            lines: ["The parent is not currently eligible for managed `@io` commands."],
-            result: "blocked",
-          };
-        } else if (trigger.command === "help") {
-          reply = {
-            command: trigger.command,
-            issueIdentifier,
-            lines: [
-              "Accepted commands: backlog, status, help.",
-              "Accepted keys: docs, dryRun, note.",
-              "Only top-level comments on managed parent issues are processed.",
-            ],
-            result: "noop",
-          };
-        } else if (trigger.command === "status") {
-          reply = {
-            command: trigger.command,
-            issueIdentifier,
-            lines: [
-              `Module: ${module!.id}`,
-              `Work options present: ${/(^|\n)## Work Options\b/i.test(trigger.issue.description) ? "yes" : "no"}`,
-              `Requested docs: ${trigger.payload.docs.length ? trigger.payload.docs.join(", ") : "none"}`,
-            ],
-            result: "noop",
-          };
-        } else {
-          const resolvedContext = await resolveIssueContext({
-            baseSelection: resolveIssueRouting(workflow.issues, trigger.issue, workflow.modules),
-            issue: trigger.issue,
-            repoRoot: this.#repoRoot,
-            workflow,
-          });
-          const proposal = buildManagedParentProposal({
-            issue: trigger.issue,
-            module: module!,
-            repoRoot: this.#repoRoot,
-            resolvedContext: resolvedContext.bundle,
-          });
-          parentDescription = proposal.description;
-          children = buildManagedBacklogChildren({
-            docs: uniqueOrdered(trigger.payload.docs.length ? trigger.payload.docs : module!.docs),
-            issue: trigger.issue,
-            note: trigger.payload.note,
-            parentDescription: proposal.description,
-            primaryModuleId: module!.id,
-          });
-          reply = {
-            command: trigger.command,
-            issueIdentifier,
-            lines: [],
-            result: "noop",
-          };
-        }
-      }
-
-      const result = await tracker.applyManagedCommentMutation({
-        children,
-        comment: trigger,
-        parentDescription,
-        reply,
-      });
-      if (result.warnings.length) {
-        this.#log.warn("managed_comment.warning", {
-          commentId: trigger.commentId,
-          issueIdentifier: trigger.issue.identifier,
-          warnings: result.warnings,
-        });
-      }
-      await recordHandledManagedComment(workflow.workspace.root, trigger.issue.identifier, trigger);
-    }
-  }
-
   #startIssueRun(
     workflow: Workflow,
     tracker: IssueTracker,
@@ -425,17 +292,7 @@ export class AgentService {
   }
 
   #shouldAutoScheduleIssue(workflow: Workflow, issue: AgentIssue) {
-    const isManagedParent =
-      !issue.hasParent &&
-      hasIssueLabel(issue, "io") &&
-      Boolean(resolveIssueModule(workflow.modules, issue));
-    if (isManagedParent) {
-      return normalizeState(issue.state) === "todo";
-    }
-    if (!issue.hasChildren || issue.hasParent) {
-      return true;
-    }
-    return resolveIssueRouting(workflow.issues, issue, workflow.modules).agent === "backlog";
+    return isAutoRunnableTask(issue);
   }
 
   async #runIssue(
@@ -482,40 +339,12 @@ export class AgentService {
     let beforeRunCompleted = false;
     let result: IssueRunResult;
     try {
-      let resolvedContext = await resolveIssueContext({
+      const resolvedContext = await resolveIssueContext({
         baseSelection: resolveIssueRouting(workflow.issues, issue, workflow.modules),
         issue,
         repoRoot: this.#repoRoot,
         workflow,
       });
-      const module = resolveIssueModule(workflow.modules, issue);
-      if (
-        tracker.updateIssueDescription &&
-        resolvedContext.selection.agent === "backlog" &&
-        !issue.hasParent &&
-        module &&
-        hasIssueLabel(issue, "io")
-      ) {
-        const proposal = buildManagedParentProposal({
-          issue,
-          module,
-          repoRoot: this.#repoRoot,
-          resolvedContext: resolvedContext.bundle,
-        });
-        if (proposal.changed) {
-          await tracker.updateIssueDescription(issue.id, proposal.description);
-          issue = {
-            ...issue,
-            description: proposal.description,
-          };
-          resolvedContext = await resolveIssueContext({
-            baseSelection: resolveIssueRouting(workflow.issues, issue, workflow.modules),
-            issue,
-            repoRoot: this.#repoRoot,
-            workflow,
-          });
-        }
-      }
       this.#log.info("issue.context.resolved", {
         docs: resolvedContext.bundle.docs.map((doc) => ({
           id: doc.id,
