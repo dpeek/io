@@ -17,6 +17,8 @@ export default defineIoConfig({
     entrypoint: "./io/overview.md",
     docs: {
       "project.backlog": "./io/backlog.md",
+      "project.goals": "./io/goals.md",
+      "project.module-stream-workflow-plan": "./agent/io/module-stream-workflow-plan.md",
       "project.overview": "./io/overview.md",
     },
     profiles: {
@@ -26,8 +28,9 @@ export default defineIoConfig({
           "builtin:io.context.discovery",
           "builtin:io.linear.status-updates",
           "builtin:io.core.git-safety",
-          "project.backlog",
           "project.overview",
+          "project.backlog",
+          "project.goals",
         ],
       },
       execute: {

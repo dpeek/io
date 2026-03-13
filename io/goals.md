@@ -1,4 +1,4 @@
-# Current Approach Stream
+# Stream Workflow Goals
 
 ## Objective
 

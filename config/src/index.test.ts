@@ -17,9 +17,12 @@ test("@io/config exposes the repo context bundle and routing defaults", () => {
   const docs = config.context?.docs as Record<string, string> | undefined;
   expect(docs).toEqual({
     "project.backlog": "./io/backlog.md",
+    "project.goals": "./io/goals.md",
+    "project.module-stream-workflow-plan": "./agent/io/module-stream-workflow-plan.md",
     "project.overview": "./io/overview.md",
   });
   expect(config.context?.profiles?.backlog?.include).toContain("project.backlog");
+  expect(config.context?.profiles?.backlog?.include).toContain("project.goals");
   expect(config.context?.profiles?.backlog?.include).toContain("project.overview");
   expect(config.modules?.agent).toEqual({
     allowedSharedPaths: ["./io"],
@@ -48,35 +51,60 @@ test("@io/config exposes the repo context bundle and routing defaults", () => {
   }
 });
 
-test("repo backlog doc captures the manual stream-feature-task workflow", () => {
-  const path = resolve(repoRoot, "./io/backlog.md");
-  const content = readFileSync(path, "utf8");
-
-  expect(content).toContain("You are the IO backlog editor for the three-level Linear workflow.");
-  expect(content).toContain("1. `Stream`");
-  expect(content).toContain("2. `Feature`");
-  expect(content).toContain("3. `Task`");
-  expect(content).toContain("do not use comment-driven workflows");
-  expect(content).toContain("do not ask the supervisor to run backlog work automatically");
-  expect(content).toContain("do not plan parallel tasks inside a single feature");
-  expect(content).toContain("the user confirms");
-});
-
-test("repo workflow docs describe explicit routing and omit comment-driven backlog hooks", () => {
+test("repo workflow docs point backlog work at the three-level stream model", () => {
+  const backlog = readFileSync(resolve(repoRoot, "./io/backlog.md"), "utf8");
+  const goals = readFileSync(resolve(repoRoot, "./io/goals.md"), "utf8");
+  const overview = readFileSync(resolve(repoRoot, "./io/overview.md"), "utf8");
   const workflowPlan = readFileSync(
     resolve(repoRoot, "./agent/io/module-stream-workflow-plan.md"),
     "utf8",
   );
 
+  expect(backlog).toContain("You are the IO backlog editor for the three-level Linear workflow.");
+  expect(backlog).toContain("Stream");
+  expect(backlog).toContain("Feature");
+  expect(backlog).toContain("Task");
+  expect(backlog).toContain("do not use comment-driven workflows");
+  expect(backlog).toContain("## Roadmap");
+
+  expect(goals).toContain("# Stream Workflow Goals");
+  expect(goals).toContain("three-level stream/feature/task model");
+  expect(goals).not.toContain("Current Approach Stream");
+  expect(goals).not.toContain("2-level parent/child hierarchy");
+
+  expect(overview).toContain("the stream/feature/task backlog workflow");
+  expect(overview).toContain("./backlog.md");
+  expect(overview).not.toContain("managed-stream-contract");
+
   expect(workflowPlan).toContain("## Current Workflow Surface");
-  expect(workflowPlan).toContain("`io.ts` for runtime config plus `io.md` for prompt body");
   expect(workflowPlan).toContain("## Current Doc Reference Rules");
   expect(workflowPlan).toContain("## Current Prompt Model");
-  expect(workflowPlan).toContain("first matching explicit routing rule");
-  expect(workflowPlan).toContain("fallback repo defaults");
-  expect(workflowPlan).toContain("synthesized issue description context");
-  expect(workflowPlan).not.toContain("@io");
-  expect(workflowPlan).toContain("## Current Constraints");
-  expect(workflowPlan).toContain("workflow loading is repo-local and file-based");
-  expect(workflowPlan).toContain("## Future Work Suggestions");
+  expect(workflowPlan).not.toContain("managed-parent detection");
+  expect(workflowPlan).not.toContain("OPE-121 Proof Status");
+});
+
+test("legacy managed-stream docs are clearly marked as retained implementation notes", () => {
+  const contract = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-contract.md"), "utf8");
+  const backlog = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-backlog.md"), "utf8");
+  const comments = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-comments.md"), "utf8");
+
+  expect(contract).toContain("# Legacy Managed Stream Contract");
+  expect(contract).toContain("It is not the current default workflow surface.");
+  expect(contract).toContain("- it has the `io` label");
+  expect(contract).toContain("exactly one label that matches a configured module id");
+  expect(contract).toContain("The retained automation still owns:");
+
+  expect(backlog).toContain("# Legacy Managed Stream Backlog Refresh");
+  expect(backlog).toContain("default planning workflow");
+  expect(backlog).toContain("## Historical Stream Brief Shape");
+  expect(backlog).toContain("Roadmap");
+  expect(backlog).toContain("stream description directly");
+
+  expect(comments).toContain("# Legacy Managed Stream Comments");
+  expect(comments).toContain("not the current default workflow surface");
+  expect(comments).toContain("@io backlog");
+  expect(comments).toContain("@io status");
+  expect(comments).toContain("the first non-empty line is always the command line");
+  expect(comments).toContain("<!-- io-managed:comment-result -->");
+  expect(comments).not.toContain("@io focus");
 });

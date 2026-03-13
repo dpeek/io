@@ -29,6 +29,12 @@ Resolved workflow state already includes:
 - first matching explicit routing rule
 - fallback repo defaults
 
+Retained compatibility note:
+
+- legacy top-level issues with `io` plus exactly one configured module label are
+  still recognized by retained docs and compatibility paths, but routing itself
+  now depends on explicit rules rather than an implicit backlog fallback
+
 Issue-body hints parsed by `../src/context.ts` can still override the base selection with:
 
 - `agent`
@@ -73,22 +79,6 @@ This is already real runtime behavior, not a draft plan.
 - module scoping only applies to repo-path references, not built-ins or registered ids
 - prompt rendering is string-template-based rather than schema-driven
 - profile names and doc ids are configuration contracts, not discovered automatically
-
-## OPE-121 Proof Status
-
-`OPE-121` is the active proof stream for the enforced `Stream -> Feature -> Task` model.
-
-Current proof points:
-
-- `OPE-121` is the top-level stream, `OPE-167` is the active feature, and leaf tasks such as `OPE-172` are the only execute candidates
-- task execution now requires both the immediate feature state and the top-level stream state to be `In Progress`
-- task work still lands on the immediate parent branch, so `OPE-172` lands on the `OPE-167` branch surface rather than directly on `OPE-121`
-
-Remaining mismatches and follow-on work:
-
-- `OPE-121` still retains older direct children from the managed-stream proof, so the Linear hierarchy is not yet a clean three-level example
-- task landing is still finalized by supervisor-side branch ref updates rather than execution-agent-owned rebase and merge; track that in `OPE-173`
-- feature-to-stream squash finalization and branch cleanup remain follow-on work in `OPE-170`
 
 ## Roadmap
 

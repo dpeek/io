@@ -245,7 +245,7 @@ test("resolveIssueContext supports doc-id overrides and profile entrypoint opt-o
   }
 });
 
-test("repo backlog context includes the stream-feature-task workflow guidance", async () => {
+test("repo backlog context points at the current stream workflow docs", async () => {
   const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "io";
@@ -301,18 +301,24 @@ test("repo backlog context includes the stream-feature-task workflow guidance", 
     agent: "backlog",
     profile: "backlog",
   });
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.overview");
   expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.backlog");
-  expect(rendered).toContain("You are the IO backlog editor for the three-level Linear workflow.");
-  expect(rendered).toContain("1. `Stream`");
-  expect(rendered).toContain("2. `Feature`");
-  expect(rendered).toContain("3. `Task`");
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("project.goals");
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain("./agent/io/overview.md");
+  expect(resolved.bundle.docs.map((doc) => doc.id)).toContain(
+    "./agent/io/module-stream-workflow-plan.md",
+  );
+  expect(rendered).toContain("three-level Linear workflow");
+  expect(rendered).toContain("Stream");
+  expect(rendered).toContain("Feature");
+  expect(rendered).toContain("Task");
   expect(rendered).toContain("do not use comment-driven workflows");
-  expect(rendered).toContain("the stream is `In Progress`");
-  expect(rendered).toContain("the feature is `In Progress`");
-  expect(rendered).toContain("the task is `Todo`");
+  expect(rendered).toContain("Current code centers on a three-level issue model");
+  expect(rendered).not.toContain("@io backlog");
+  expect(rendered).not.toContain("managed-stream");
 });
 
-test("repo config allows shared repo docs in backlog issue descriptions without warning", async () => {
+test("repo config allows shared repo docs in stream issue descriptions without warning", async () => {
   const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "io";
@@ -335,7 +341,7 @@ test("repo config allows shared repo docs in backlog issue descriptions without 
     priority: 3,
     projectSlug: "io",
     state: "Todo",
-    title: "Managed shared-doc refresh",
+    title: "Stream shared-doc refresh",
     updatedAt: "2024-01-01T00:00:00.000Z",
   };
 
