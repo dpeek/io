@@ -3,6 +3,11 @@ import { describe, expect, it } from "bun:test";
 import { appRoutes, hrefForAppRoute, resolveAppRoute } from "./routes.js";
 
 describe("app routes", () => {
+  it("maps the workspace pathname to the management route", () => {
+    expect(resolveAppRoute({ pathname: "/workspace" })).toBe("workspace");
+    expect(hrefForAppRoute("workspace")).toBe("/workspace");
+  });
+
   it("maps the env-var settings pathname to the operator route", () => {
     expect(resolveAppRoute({ pathname: "/settings/env-vars" })).toBe("envVars");
     expect(hrefForAppRoute("envVars")).toBe("/settings/env-vars");
