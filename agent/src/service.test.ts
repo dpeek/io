@@ -203,6 +203,93 @@ test("normalizeLinearIssue leaves parent and stream fields empty for standalone 
   expect(issue.teamId).toBe("team-1");
 });
 
+test("LinearTrackerAdapter writes managed blockedBy relations in scheduler-readable direction", async () => {
+  const createdRelations: Array<{ issueId: string; relatedIssueId: string; type: string }> = [];
+  let createdIssueIndex = 0;
+  const issueRef = {
+    children: async () => ({ nodes: [] }),
+    teamId: "team-1",
+  };
+  const tracker = new LinearTrackerAdapter(
+    {
+      activeStates: ["Todo", "In Progress"],
+      apiKey: "linear-token",
+      endpoint: "https://api.linear.app/graphql",
+      kind: "linear",
+      projectSlug: "io",
+      terminalStates: ["Done"],
+    },
+    undefined,
+    {
+      createComment: mock(async () => ({ commentId: "comment-1", success: true })),
+      createIssue: mock(async ({ title }: { title: string }) => {
+        createdIssueIndex += 1;
+        return {
+          issue: Promise.resolve({ identifier: `OPE-${createdIssueIndex}` }),
+          issueId: `issue-${createdIssueIndex}`,
+          success: true,
+        };
+      }),
+      createIssueRelation: mock(
+        async (input: { issueId: string; relatedIssueId: string; type: string }) => {
+          createdRelations.push(input);
+          return { success: true };
+        },
+      ),
+      issue: mock(async () => issueRef),
+    } as unknown as ConstructorParameters<typeof LinearTrackerAdapter>[2],
+  );
+
+  const result = await tracker.applyManagedCommentMutation({
+    children: [
+      {
+        blockedBy: [],
+        description: "First task",
+        docs: [],
+        labels: [],
+        priority: 0,
+        reference: "managed-backlog-1",
+        state: "",
+        title: "First task",
+      },
+      {
+        blockedBy: ["managed-backlog-1"],
+        description: "Second task",
+        docs: [],
+        labels: [],
+        priority: 0,
+        reference: "managed-backlog-2",
+        state: "",
+        title: "Second task",
+      },
+    ],
+    comment: {
+      commentId: "comment-0",
+      issue: createIssue({
+        description: "Parent issue",
+        id: "parent-1",
+        identifier: "OPE-100",
+        teamId: "team-1",
+      }),
+    },
+    reply: {
+      command: "@io backlog",
+      issueIdentifier: "OPE-100",
+      lines: [],
+      result: "updated",
+    },
+  });
+
+  expect(result.dependencyCount).toBe(1);
+  expect(createdRelations).toEqual([
+    {
+      issueId: "issue-1",
+      relatedIssueId: "issue-2",
+      type: "blocks",
+    },
+  ]);
+});
+
 test("LinearTrackerAdapter fetches parent stream state for child issue candidates", async () => {
   const originalFetch = globalThis.fetch;
   let requestBody: { query?: string; variables?: Record<string, unknown> } | undefined;

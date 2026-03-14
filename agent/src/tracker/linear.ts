@@ -562,8 +562,8 @@ export class LinearTrackerAdapter {
       const relationsToDelete = [...assignment.blockedByRelationIdsByIssueId.entries()]
         .filter(([relatedIssueId]) => !desiredBlockedByIdSet.has(relatedIssueId))
         .map(([, relationId]) => relationId);
-      const relatedIssueIdsToCreate = desiredBlockedByIds.filter(
-        (relatedIssueId) => !currentBlockedByIds.has(relatedIssueId),
+      const blockingIssueIdsToCreate = desiredBlockedByIds.filter(
+        (blockingIssueId) => !currentBlockedByIds.has(blockingIssueId),
       );
 
       if (!options.dryRun) {
@@ -575,10 +575,10 @@ export class LinearTrackerAdapter {
           }
           dependencyCount += 1;
         }
-        for (const relatedIssueId of relatedIssueIdsToCreate) {
+        for (const blockingIssueId of blockingIssueIdsToCreate) {
           const payload = await options.client.createIssueRelation({
-            issueId: assignment.id,
-            relatedIssueId,
+            issueId: blockingIssueId,
+            relatedIssueId: assignment.id,
             type: "blocks",
           } as Parameters<LinearClient["createIssueRelation"]>[0]);
           if (!payload.success) {
@@ -590,7 +590,7 @@ export class LinearTrackerAdapter {
           dependencyCount += 1;
         }
       } else {
-        dependencyCount += relationsToDelete.length + relatedIssueIdsToCreate.length;
+        dependencyCount += relationsToDelete.length + blockingIssueIdsToCreate.length;
       }
     }
 

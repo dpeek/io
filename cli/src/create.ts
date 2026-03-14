@@ -28,7 +28,7 @@ const template: PackageJson = {
   },
   dependencies: {},
   devDependencies: {
-    "@io/dev": "workspace:",
+    "@io/lib": "workspace:",
     "@types/bun": "^1.3.9",
     "@types/node": "^25.3.2",
     "@typescript/native-preview": "^7.0.0-dev.20260226.1",
@@ -97,7 +97,7 @@ export async function createPackage(path?: string) {
   const target = getFileWriter(path);
   await target.write("res/src/index.ts", "src/index.ts", false);
   await target.write("res/src/index.test.ts", "src/index.test.ts", false, (input) =>
-    input.replace("@io/dev", name),
+    input.replace("@io/lib", name),
   );
   await configurePackage(path);
 }
