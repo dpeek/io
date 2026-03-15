@@ -40,6 +40,31 @@ This document is the high-level entry point for agents reasoning about the engin
 - JSON persistence can recover snapshot state and retained write history across restart.
 - The graph package owns the persisted-authority contract, including versioned state shape, legacy rewrite, and save rollback semantics.
 
+## Current Schema Ownership
+
+The initial namespace and schema-module ownership rules are concrete now, even
+though the full directory migration is still ahead:
+
+- `core:` is reserved for the engine metamodel plus the shared built-in type
+  families already shipped from `../src/type/`. That means `core:node`,
+  `core:type`, `core:predicate`, `core:enum`, `core:string`, `core:number`,
+  `core:boolean`, `core:date`, `core:url`, `core:email`, `core:slug`,
+  `core:address`, `core:country`, `core:currency`, `core:language`, and
+  `core:locale` stay in `core:` for now.
+- `app:` is the only other namespace bucket justified today. It covers the
+  current experiment and domain slices that are still being proven out. That
+  includes the current company/person, outliner block, env-var/secret-ref, and
+  workspace/workflow proof types composed by `app`.
+- Do not pre-create extra namespace buckets such as `geo:`, `locale:`,
+  `finance:`, or `collab:` before reusable code actually needs them.
+- Promotion out of `app:` should happen only as a concrete refactor that
+  updates imports, tests, and docs together.
+
+The `graph` package owns canonical namespace keys and the long-term schema
+module layout for both `core:` and `app:`. Consumer packages such as `app`
+compose those modules into routes, seed data, and authority surfaces, but they
+do not own new durable namespace buckets.
+
 ## What Is Not Yet Current
 
 - Additional persistence backends beyond the current JSON file adapter

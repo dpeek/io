@@ -820,6 +820,8 @@ export function WorkspaceManagementSurface({
     },
     resolvedRuntime,
   );
+  const onMutationError = mutationCallbacks.onMutationError ?? (() => {});
+  const onMutationSuccess = mutationCallbacks.onMutationSuccess ?? (() => {});
 
   const issueIds = workspace?.issues ?? [];
   const projectIds = workspace?.projects ?? [];
@@ -1049,8 +1051,8 @@ export function WorkspaceManagementSurface({
             <IssueDetail
               issueId={selectedIssueId}
               issues={issues}
-              onMutationError={mutationCallbacks.onMutationError}
-              onMutationSuccess={mutationCallbacks.onMutationSuccess}
+              onMutationError={onMutationError}
+              onMutationSuccess={onMutationSuccess}
               onOpenIssue={openIssue}
               projectOptions={projectOptions}
               runtime={resolvedRuntime}
@@ -1061,8 +1063,8 @@ export function WorkspaceManagementSurface({
           {section === "projects" && selectedProjectId ? (
             <ProjectDetail
               issues={issues}
-              onMutationError={mutationCallbacks.onMutationError}
-              onMutationSuccess={mutationCallbacks.onMutationSuccess}
+              onMutationError={onMutationError}
+              onMutationSuccess={onMutationSuccess}
               onOpenIssue={openIssue}
               projectId={selectedProjectId}
               runtime={resolvedRuntime}
@@ -1073,8 +1075,8 @@ export function WorkspaceManagementSurface({
             <LabelDetail
               issues={issues}
               labelId={selectedLabelId}
-              onMutationError={mutationCallbacks.onMutationError}
-              onMutationSuccess={mutationCallbacks.onMutationSuccess}
+              onMutationError={onMutationError}
+              onMutationSuccess={onMutationSuccess}
               onOpenIssue={openIssue}
               runtime={resolvedRuntime}
             />

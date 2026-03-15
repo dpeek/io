@@ -2,16 +2,20 @@
 
 ## Purpose
 
-Define the app-owned graph shape for environment variables and the authority
-boundary where plaintext handling starts.
+Define the promoted env-var schema surface and the app-owned authority boundary
+where plaintext handling starts.
 
 This is the proof contract the routed operator UI builds on top of. It keeps
 the synced graph explicit about what is safe metadata versus authority-only
 secret material.
 
+The canonical reusable schema now lives in `graph/src/schema/app/env-vars/`.
+`app` owns the experiment registration, routed UI, transport, and authority
+implementation that use those type modules.
+
 ## Graph Shape
 
-The app graph models two entities:
+The canonical graph schema models two entities:
 
 - `envVar`
 - `secretRef`

@@ -19,7 +19,9 @@ Current exported building blocks:
 
 ## Current Authoring Shape
 
-Built-in scalar families in `../src/type/*` already follow a co-located pattern:
+Canonical built-in scalar families belong under `../src/schema/core/*`, with
+`../src/type/*` preserved as thin compatibility re-exports while the migration
+finishes. The co-located per-type pattern is the same in both places:
 
 - `type.ts`: codec and scalar definition
 - `meta.ts`: display/editor metadata
@@ -28,13 +30,67 @@ Built-in scalar families in `../src/type/*` already follow a co-located pattern:
 
 Examples:
 
-- `../src/type/string/`
-- `../src/type/number/`
-- `../src/type/date/`
-- `../src/type/url/`
-- `../src/type/boolean/`
+- migrated core modules:
+  - `../src/schema/core/date/`
+  - `../src/schema/core/url/`
+  - `../src/schema/core/email/`
+- remaining compatibility-backed scalar modules:
+  - `../src/type/string/`
+  - `../src/type/number/`
+  - `../src/type/boolean/`
 
 Enum families already have a default module path via `../src/type/enum-module.ts`.
+
+## Default Directory Contract
+
+One directory per type is the default authoring unit for graph-owned schema
+modules.
+
+The target canonical tree is:
+
+- `../src/schema/core/` for `core:` types
+- `../src/schema/app/<slice>/` for `app:` types
+
+That layout keeps namespace ownership explicit while preserving the existing
+co-located scalar pattern as the starting point for richer modules.
+
+## Per-Type Module Shape
+
+The current scalar layout remains the baseline shape:
+
+- `type.ts`: canonical type definition or codec
+- `meta.ts`: host-neutral metadata
+- `filter.ts`: typed filter operators when needed
+- `index.ts`: root-safe export surface for the type
+
+Richer entity-like types can add neighbors such as:
+
+- `views.ts`: host-neutral object or workflow specs
+- `commands.ts`: host-neutral command descriptors
+- `fixtures.ts`: reusable sample builders that are safe to ship from `graph`
+- `react.tsx`: host-neutral React composition
+- `react-dom.tsx`: DOM-specific rendering or editing
+- `react-opentui.tsx`: OpenTUI-specific rendering or editing
+
+Not every type directory needs every file. The rule is to keep the type as the
+main authoring boundary rather than splitting canonical ownership across
+taxonomy files or app routes.
+
+## Root-Safe Export Rule
+
+Physical colocation and package export ownership are separate concerns.
+
+- A type-local `index.ts` must stay root-safe for `@io/graph`.
+- Root-safe exports may include canonical schema, metadata, filters, pure view
+  specs, pure command descriptors, and reusable fixtures.
+- A type-local `index.ts` must not import or re-export `react.tsx`,
+  `react-dom.tsx`, `react-opentui.tsx`, browser APIs, OpenTUI code, or route
+  registration helpers.
+- Adapter entrypoints such as `@io/graph/react*` should import colocated
+  adapter files directly instead of reaching through the root export.
+
+Taxonomy modules follow the same rule: they aggregate only the root-safe parts
+of their type directories.
 
 ## Current Semantics
 

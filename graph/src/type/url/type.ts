@@ -1,8 +1,1 @@
-import { defineScalar } from "../../graph/schema.js";
-import { expectUrlInput } from "../input.js";
-
-export const urlType = defineScalar({
-  values: { key: "core:url", name: "URL" },
-  encode: (value: URL) => expectUrlInput(value).toString(),
-  decode: (raw) => new URL(raw),
-});
+export * from "../../schema/core/url/type.js";

@@ -17,7 +17,8 @@
 ## Current Package Layout
 
 - `../src/graph/`: runtime kernel, schema, ids, bootstrap, client, sync, and helper APIs
-- `../src/type/`: built-in scalar, enum, and richer domain modules
+- `../src/schema/`: canonical namespace-shaped schema tree for core modules and graph-owned app slices
+- `../src/type/`: built-in scalar and helper modules, with thin compatibility exports preserved during schema migration
 - `../src/index.ts`: public package exports
 
 ## Current vs Roadmap

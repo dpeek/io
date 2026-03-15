@@ -7,7 +7,9 @@
     "#graph": "./src/graph/index.ts"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./schema/*": "./src/schema/*/index.ts"
   },
   "scripts": {
     "clean": "rm -rf out",

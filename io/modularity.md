@@ -22,12 +22,14 @@ The repo is already pointing at the right top-level split:
 - `graph` owns the reusable engine and schema authoring surface
 - `app` owns app composition, proof routes, shell, and authority wiring
 
-The current problem is that the main authoring unit is still unclear. Today the
-canonical schema is effectively split across experiment files such as:
+The current problem is that the main authoring unit is still mixed. Promoted
+reusable schema already lives in the canonical graph tree, while some app-owned
+proof slices and experiment registration still live in app experiment files
+such as:
 
+- `../graph/src/schema/app/workspace/`
+- `../graph/src/schema/app/env-vars/`
 - `../app/src/experiments/company/graph.ts`
-- `../app/src/experiments/workspace/graph.ts`
-- `../app/src/experiments/env-vars/graph.ts`
 
 That will not scale once the schema grows into:
 
@@ -79,10 +81,10 @@ The main recommendation of this document is:
 ### What the source currently does
 
 - built-in scalar modules already use a strong co-located pattern:
-  - `../graph/src/type/date/index.ts`
-  - `../graph/src/type/date/meta.ts`
-  - `../graph/src/type/url/index.ts`
-  - `../graph/src/type/url/meta.ts`
+  - `../graph/src/schema/core/date/index.ts`
+  - `../graph/src/schema/core/date/meta.ts`
+  - `../graph/src/schema/core/url/index.ts`
+  - `../graph/src/schema/core/url/meta.ts`
 - field metadata and filter semantics already live in `graph` through
   `TypeModuleMeta`, `TypeModuleFilter`, and `defineReferenceField(...)`
   - Reference: `../graph/src/graph/type-module.ts`
@@ -95,10 +97,10 @@ The main recommendation of this document is:
 - the strongest current workflow proof is the workspace surface, but it is still
   a route-owned screen
   - `../app/src/web/workspace.tsx`
-  - `../app/src/experiments/workspace/graph.ts`
+  - `../graph/src/schema/app/workspace/`
   - `../app/src/experiments/workspace/web.ts`
 - the strongest current authority pattern is env vars:
-  - replicated graph-safe metadata in `../app/src/experiments/env-vars/graph.ts`
+  - replicated graph-safe metadata in `../graph/src/schema/app/env-vars/`
   - server-owned mutation in `../app/src/authority.ts`
   - transport in `../app/src/server-app.ts`
 
@@ -278,8 +280,8 @@ Rules:
 
 This is the direct generalization of the current scalar pattern from:
 
-- `../graph/src/type/date/`
-- `../graph/src/type/url/`
+- `../graph/src/schema/core/date/`
+- `../graph/src/schema/core/url/`
 
 The main difference is that entity-like types get richer neighbors than only
 `meta.ts` and `filter.ts`.
@@ -794,7 +796,7 @@ another subpath such as `@io/graph/server`.
 
 The env-var proof already demonstrates the right runtime line:
 
-- graph-safe metadata in `../app/src/experiments/env-vars/graph.ts`
+- graph-safe metadata in `../graph/src/schema/app/env-vars/`
 - server-only secret mutation in `../app/src/authority.ts`
 - explicit transport in `../app/src/server-app.ts`
 
@@ -909,7 +911,8 @@ graph/src/taxonomy/workspace.ts
 
 Recommended first moves:
 
-- move schema from `../app/src/experiments/workspace/graph.ts`
+- keep canonical schema in `../graph/src/schema/app/workspace/` and keep
+  `../app/src/experiments/workspace/graph.ts` as a thin registration wrapper
 - extract any reusable sample builders from
   `../app/src/experiments/workspace/seed.ts` into `fixtures.ts`
 - split `../app/src/web/workspace.tsx` into:

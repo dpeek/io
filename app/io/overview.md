@@ -24,8 +24,10 @@ here.
 ## Layout
 
 - `../src/index.ts`: app-owned package exports
-- `../src/experiments/`: experiment-local schema, seed, and route registration
-- `../src/graph/`: app namespace composition, runtime bootstrap, example data, client proofs
+- `../src/experiments/`: experiment-local graph registration, seed, and route registration,
+  with promoted reusable schema imported from `../../graph/src/schema/`
+- `../src/graph/`: app namespace composition over the canonical graph schema tree, runtime
+  bootstrap, example data, client proofs
 - `../src/authority.ts`: app proof composition around `@io/graph` persisted authority helpers, including bootstrap, seed data, and snapshot-path resolution
 - `../src/server-app.ts`, `../src/server.ts`: thin HTTP proof transport over graph-owned sync and persistence surfaces
 - `../src/web/`: shared shell/runtime, resolver, bindings, explorer, proof screens, operator settings,
