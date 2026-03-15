@@ -19,6 +19,7 @@
 - `../src/graph/`: runtime kernel, schema, ids, bootstrap, client, sync, and helper APIs
 - `../src/react/`, `../src/react-dom/`, `../src/react-opentui/`: reserved adapter entry surfaces kept separate from the root-safe package export
 - `../src/schema/`: canonical namespace-shaped schema tree for core modules and graph-owned app slices
+- `../src/taxonomy/`: root-safe slice aggregators over canonical schema modules
 - `../src/type/`: built-in scalar and helper modules, with thin compatibility exports preserved during schema migration
 - `../src/index.ts`: public package exports
 

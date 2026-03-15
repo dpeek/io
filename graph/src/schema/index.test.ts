@@ -19,13 +19,23 @@ import {
 } from "./app/env-vars/index.js";
 import { block, outlinerSchema } from "./app/outliner/index.js";
 import {
+  saveWorkspaceIssueCommand,
+  saveWorkspaceLabelCommand,
+  saveWorkspaceProjectCommand,
+  workspaceManagementWorkflow,
   workflowStatus,
   workflowStatusCategory,
   workspace,
+  workspaceCommands,
   workspaceIssue,
+  workspaceIssueObjectView,
   workspaceLabel,
+  workspaceLabelObjectView,
+  workspaceObjectViews,
   workspaceProject,
+  workspaceProjectObjectView,
   workspaceSchema,
+  workspaceWorkflows,
 } from "./app/workspace/index.js";
 import { dateTypeModule } from "./core/date/index.js";
 import { emailTypeModule } from "./core/email/index.js";
@@ -129,13 +139,25 @@ describe("schema entry surfaces", () => {
     expect(schemaExports.envVar).toBe(envVar);
     expect(schemaExports.block).toBe(block);
     expect(schemaExports.workspace).toBe(workspace);
+    expect(schemaExports.workspaceIssueObjectView).toBe(workspaceIssueObjectView);
+    expect(schemaExports.workspaceProjectObjectView).toBe(workspaceProjectObjectView);
+    expect(schemaExports.workspaceLabelObjectView).toBe(workspaceLabelObjectView);
+    expect(schemaExports.saveWorkspaceIssueCommand).toBe(saveWorkspaceIssueCommand);
+    expect(schemaExports.saveWorkspaceProjectCommand).toBe(saveWorkspaceProjectCommand);
+    expect(schemaExports.saveWorkspaceLabelCommand).toBe(saveWorkspaceLabelCommand);
+    expect(schemaExports.workspaceObjectViews).toBe(workspaceObjectViews);
+    expect(schemaExports.workspaceCommands).toBe(workspaceCommands);
+    expect(schemaExports.workspaceManagementWorkflow).toBe(workspaceManagementWorkflow);
+    expect(schemaExports.workspaceWorkflows).toBe(workspaceWorkflows);
   });
 
   it("keeps contract probes root-safe without polluting the canonical schema tree", () => {
     expect(probeContractGraph.contractItem.values.key).toBe(probeContractItem.values.key);
     expect(typeof probeContractGraph.contractItem.values.id).toBe("string");
     expect(String(probeContractItem.fields.parent.range)).toBe(resolvedTypeId(probeContractItem));
-    expect(String(probeContractItem.fields.relatedItems.range)).toBe(resolvedTypeId(probeContractItem));
+    expect(String(probeContractItem.fields.relatedItems.range)).toBe(
+      resolvedTypeId(probeContractItem),
+    );
     expect(probeContractObjectView.entity).toBe(probeContractGraph.contractItem.values.key);
     expect(probeContractWorkflow.subjects).toEqual([probeContractGraph.contractItem.values.key]);
     expect(probeContractWorkflow.commands).toEqual([probeSaveContractItemCommand.key]);

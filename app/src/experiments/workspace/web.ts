@@ -1,6 +1,6 @@
-import { WorkspaceManagementSurface } from "../../web/workspace.js";
 import { defineAppExperimentWeb } from "../contracts.js";
 import { workspaceExperimentGraph } from "./graph.js";
+import { WorkspaceManagementScreen } from "./screen.js";
 
 const { description, key, label } = workspaceExperimentGraph;
 
@@ -10,7 +10,7 @@ export const workspaceExperimentWeb = defineAppExperimentWeb({
   description,
   routes: [
     {
-      component: WorkspaceManagementSurface,
+      component: WorkspaceManagementScreen,
       description: "Issue, project, and label management over the seeded workspace planning model.",
       group: "proofs",
       key: "workspace",

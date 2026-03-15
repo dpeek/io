@@ -12,7 +12,8 @@
     "./react-dom": "./src/react-dom/index.ts",
     "./react-opentui": "./src/react-opentui/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./schema/*": "./src/schema/*/index.ts"
+    "./schema/*": "./src/schema/*/index.ts",
+    "./taxonomy/*": "./src/taxonomy/*.ts"
   },
   "scripts": {
     "clean": "rm -rf out",

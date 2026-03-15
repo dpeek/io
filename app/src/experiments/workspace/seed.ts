@@ -1,4 +1,11 @@
 import type { NamespaceClient } from "@io/graph";
+import {
+  createWorkspaceFixture,
+  createWorkspaceIssueFixture,
+  createWorkspaceLabelFixture,
+  createWorkspaceProjectFixture,
+  createWorkspaceWorkflowStatusFixture,
+} from "@io/graph/schema/app/workspace";
 
 import ids from "../../graph/app.json";
 import type { workspaceExperimentSchema } from "./graph.js";
@@ -31,7 +38,7 @@ export type WorkspaceExperimentIds = {
 };
 
 export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): WorkspaceExperimentIds {
-  const backlogStatus = graph.workflowStatus.create({
+  const backlogStatus = createWorkspaceWorkflowStatusFixture(graph, {
     name: "Backlog",
     label: "backlog",
     key: "backlog",
@@ -41,7 +48,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Ideas and queued work that are not yet released for execution.",
   });
 
-  const todoStatus = graph.workflowStatus.create({
+  const todoStatus = createWorkspaceWorkflowStatusFixture(graph, {
     name: "Todo",
     label: "todo",
     key: "todo",
@@ -51,7 +58,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Ready work that has not started yet.",
   });
 
-  const inProgressStatus = graph.workflowStatus.create({
+  const inProgressStatus = createWorkspaceWorkflowStatusFixture(graph, {
     name: "In Progress",
     label: "in-progress",
     key: "in-progress",
@@ -61,7 +68,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Execution is actively underway.",
   });
 
-  const doneStatus = graph.workflowStatus.create({
+  const doneStatus = createWorkspaceWorkflowStatusFixture(graph, {
     name: "Done",
     label: "done",
     key: "done",
@@ -71,7 +78,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Accepted and landed work.",
   });
 
-  const appLabel = graph.workspaceLabel.create({
+  const appLabel = createWorkspaceLabelFixture(graph, {
     name: "App",
     label: "app",
     key: "app",
@@ -79,7 +86,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "App-owned schema, route, and proof work.",
   });
 
-  const graphLabel = graph.workspaceLabel.create({
+  const graphLabel = createWorkspaceLabelFixture(graph, {
     name: "Graph",
     label: "graph",
     key: "graph",
@@ -87,7 +94,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Graph runtime and schema engine work.",
   });
 
-  const planningLabel = graph.workspaceLabel.create({
+  const planningLabel = createWorkspaceLabelFixture(graph, {
     name: "Planning",
     label: "planning",
     key: "planning",
@@ -95,7 +102,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Roadmap and workflow shaping work.",
   });
 
-  const infraLabel = graph.workspaceLabel.create({
+  const infraLabel = createWorkspaceLabelFixture(graph, {
     name: "Infra",
     label: "infra",
     key: "infra",
@@ -103,7 +110,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Support work for runtime and execution surfaces.",
   });
 
-  const workspaceProofProject = graph.workspaceProject.create({
+  const workspaceProofProject = createWorkspaceProjectFixture(graph, {
     name: "Workspace proof",
     label: "workspace-proof",
     key: "workspace-proof",
@@ -112,7 +119,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Schema and route work for the first app-shaped workspace management proof.",
   });
 
-  const graphRuntimeProject = graph.workspaceProject.create({
+  const graphRuntimeProject = createWorkspaceProjectFixture(graph, {
     name: "Graph runtime",
     label: "graph-runtime",
     key: "graph-runtime",
@@ -121,7 +128,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Runtime capabilities that support the app proof surfaces.",
   });
 
-  const workspaceManagement = graph.workspaceIssue.create({
+  const workspaceManagement = createWorkspaceIssueFixture(graph, {
     name: "Build the first workspace management proof",
     label: "OPE-197",
     identifier: "OPE-197",
@@ -133,7 +140,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Introduce the first routed planning surface built on the app workspace schema.",
   });
 
-  const workspaceSchema = graph.workspaceIssue.create({
+  const workspaceSchema = createWorkspaceIssueFixture(graph, {
     name: "Define the workspace schema and seed Linear-like example data",
     label: "OPE-208",
     identifier: "OPE-208",
@@ -146,7 +153,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Create the first planning schema slice and representative seed data.",
   });
 
-  const workspaceRoute = graph.workspaceIssue.create({
+  const workspaceRoute = createWorkspaceIssueFixture(graph, {
     name: "Build the first workspace management route",
     label: "OPE-209",
     identifier: "OPE-209",
@@ -160,7 +167,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Add the first operator-facing route on top of the workspace model.",
   });
 
-  const graphRefDocs = graph.workspaceIssue.create({
+  const graphRefDocs = createWorkspaceIssueFixture(graph, {
     name: "Document graph refs and UI boundaries",
     label: "OPE-184",
     identifier: "OPE-184",
@@ -171,7 +178,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Capture the current typed ref surface so app routes can build on it confidently.",
   });
 
-  const seededExperiments = graph.workspaceIssue.create({
+  const seededExperiments = createWorkspaceIssueFixture(graph, {
     name: "Split app experiments into seedable slices",
     label: "OPE-203",
     identifier: "OPE-203",
@@ -182,7 +189,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Keep app-owned proof slices independently seedable and composable.",
   });
 
-  const feedbackTriage = graph.workspaceIssue.create({
+  const feedbackTriage = createWorkspaceIssueFixture(graph, {
     name: "Triage route feedback after the first workspace proof",
     label: "OPE-212",
     identifier: "OPE-212",
@@ -193,7 +200,7 @@ export function seedWorkspaceExperiment(graph: WorkspaceExperimentClient): Works
     description: "Collect follow-on workflow gaps once the first management route lands.",
   });
 
-  const ioWorkspace = graph.workspace.create({
+  const ioWorkspace = createWorkspaceFixture(graph, {
     name: "IO Planning Workspace",
     label: "io-planning",
     key: "io-planning",

@@ -13,8 +13,8 @@ Each experiment lives under `../src/experiments/<name>/`.
   remain app-local to the experiment
 - `seed.ts`: optional example-runtime seed hook for proof data
 - `web.ts`: experiment-owned route registration for the shared shell
-- optional colocated UI/binding files when the slice is ready to move out of the
-  current flat proof files
+- optional colocated UI/binding files such as `screen.tsx` when the slice is ready
+  to move out of the current flat proof files
 
 Current examples:
 
@@ -24,6 +24,8 @@ Current examples:
 - `../src/experiments/env-vars/`: env-var and secret-ref schema plus settings
   route
 - `../src/experiments/explorer/`: route-only graph tooling slice
+- `../src/experiments/workspace/`: promoted workspace schema wiring plus the
+  experiment-local management screen
 
 ## Current Namespace Ownership
 

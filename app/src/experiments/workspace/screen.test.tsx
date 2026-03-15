@@ -2,8 +2,13 @@ import { describe, expect, it } from "bun:test";
 
 import { act, create, type ReactTestInstance } from "react-test-renderer";
 
-import { createExampleRuntime } from "../graph/runtime.js";
-import { WorkspaceManagementSurface } from "./workspace.js";
+import { createExampleRuntime } from "../../graph/runtime.js";
+import {
+  workspaceIssueObjectView,
+  workspaceLabelObjectView,
+  workspaceProjectObjectView,
+} from "./graph.js";
+import { WorkspaceManagementScreen } from "./screen.js";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -29,10 +34,13 @@ describe("workspace management surface", () => {
 
     let renderer: ReturnType<typeof create> | undefined;
     await act(async () => {
-      renderer = create(<WorkspaceManagementSurface runtime={runtime} />);
+      renderer = create(<WorkspaceManagementScreen runtime={runtime} />);
     });
 
     expect(collectText(renderer!.root)).toContain("IO Planning Workspace");
+    expect(
+      findByProp(renderer!, "data-workspace-object-view", workspaceIssueObjectView.key),
+    ).toBeDefined();
 
     const routeIssue = findByProp(
       renderer!,
@@ -94,13 +102,16 @@ describe("workspace management surface", () => {
 
     let renderer: ReturnType<typeof create> | undefined;
     await act(async () => {
-      renderer = create(<WorkspaceManagementSurface runtime={runtime} />);
+      renderer = create(<WorkspaceManagementScreen runtime={runtime} />);
     });
 
     const projectsTab = findByProp(renderer!, "data-workspace-tab", "projects");
     await act(async () => {
       projectsTab.props.onClick();
     });
+    expect(
+      findByProp(renderer!, "data-workspace-object-view", workspaceProjectObjectView.key),
+    ).toBeDefined();
 
     const graphRuntimeProject = findByProp(
       renderer!,
@@ -128,6 +139,9 @@ describe("workspace management surface", () => {
     await act(async () => {
       labelsTab.props.onClick();
     });
+    expect(
+      findByProp(renderer!, "data-workspace-object-view", workspaceLabelObjectView.key),
+    ).toBeDefined();
 
     const appLabel = findByProp(renderer!, "data-workspace-entity-item", runtime.ids.appLabel);
     await act(async () => {

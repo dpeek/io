@@ -1,68 +1,60 @@
-import {
-  GraphValidationError,
-  type GraphMutationValidationResult,
-  type PredicateRef,
-} from "@io/graph";
-import {
-  performValidatedMutation,
-  usePersistedMutationCallbacks,
-  usePredicateField,
-} from "@io/graph/react";
-import { PredicateFieldEditor } from "@io/graph/react-dom";
-import { useEffect, useState, type ReactNode } from "react";
+import type { ObjectViewFieldSpec, ObjectViewSpec, PredicateRef } from "../../../index.js";
+import { usePredicateField } from "../../../react/predicate.js";
+import { performValidatedMutation } from "../../../react/mutation-validation.js";
+import { PredicateFieldEditor } from "../../../react-dom/resolver.js";
+import type { ReactNode } from "react";
 
+import { workspaceManagementWorkflow } from "./workflows.js";
 import {
-  type AppRuntime,
-  useAppRuntime,
-} from "./runtime.js";
+  clearOptionalReference,
+  findIssueName,
+  setPredicateValue,
+  useWorkspaceManagementModel,
+  validatePredicateValue,
+  type IssueSummary,
+  type ReferenceOption,
+  type WorkspaceManagementRuntime,
+  type WorkspaceSection,
+} from "./react.js";
+import { workspaceIssueObjectView } from "./workspace-issue/index.js";
+import { workspaceLabelObjectView } from "./workspace-label/index.js";
+import { workspaceProjectObjectView } from "./workspace-project/index.js";
 
-type WorkspaceRouteRuntime = Pick<AppRuntime, "graph" | "sync">;
-type WorkspaceSection = "issues" | "projects" | "labels";
 type AnyPredicate = PredicateRef<any, any>;
-type MutationCallbacks = {
-  onMutationError?: (error: unknown) => void;
-  onMutationSuccess?: () => void;
-};
-type ReferenceOption = {
-  readonly id: string;
-  readonly label: string;
-  readonly supporting?: string;
-};
-type IssueSummary = {
-  readonly dueDate?: Date;
-  readonly id: string;
-  readonly identifier: string;
-  readonly labelCount: number;
-  readonly labels: readonly string[];
-  readonly name: string;
-  readonly projectId?: string;
-  readonly projectName?: string;
-  readonly statusId: string;
-  readonly statusName: string;
-};
-type ProjectSummary = {
-  readonly color?: string;
-  readonly id: string;
-  readonly issueCount: number;
-  readonly key: string;
-  readonly name: string;
-  readonly targetDate?: Date;
-};
-type LabelSummary = {
-  readonly color?: string;
-  readonly id: string;
-  readonly issueCount: number;
-  readonly key: string;
-  readonly name: string;
+type WorkspaceFieldDescriptions = Record<string, string>;
+
+const workspaceIssueFieldDescriptions: WorkspaceFieldDescriptions = {
+  blockedBy: "Track upstream issues that must land before this one can move.",
+  description: "Route notes and acceptance context.",
+  dueDate: "Optional due date for route-owned scheduling cues.",
+  identifier: "Linear-style issue key used in route-owned summaries.",
+  labels: "Attach planning labels from the workspace label catalog.",
+  name: "Short operator-facing title for the issue.",
+  parent: "Optional parent link for stream and feature hierarchy.",
+  priority:
+    "Optional planning priority. Lower numbers indicate more urgent work in the seed data.",
+  project: "Optional project link for grouping related issue work.",
+  status: "Required workflow status from the workspace status lane.",
 };
 
-function formatMutationError(error: unknown): string {
-  if (error instanceof GraphValidationError) {
-    return error.result.issues[0]?.message ?? error.message;
-  }
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
+const workspaceProjectFieldDescriptions: WorkspaceFieldDescriptions = {
+  color: "Visual token used by summaries and badges.",
+  description: "Narrative context for the project outcome.",
+  key: "Stable project key for route summaries.",
+  name: "Operator-facing project title.",
+  targetDate: "Expected milestone date for the project slice.",
+};
+
+const workspaceLabelFieldDescriptions: WorkspaceFieldDescriptions = {
+  color: "Visual token for label chips.",
+  description: "Optional notes for how the label is used.",
+  key: "Stable key for route filtering and summaries.",
+  name: "Label display name.",
+};
+
+const workspaceIssueRelatedDescriptions: WorkspaceFieldDescriptions = {
+  blockedBy: "Browse linked issues from the route without leaving the workspace management surface.",
+};
 
 function formatDate(value: Date | undefined): string {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) return "No date";
@@ -73,140 +65,24 @@ function formatDate(value: Date | undefined): string {
   });
 }
 
-function countIssuesByStatus(issues: readonly IssueSummary[], statusId: string): number {
-  return issues.filter((issue) => issue.statusId === statusId).length;
-}
-
-function useWorkspaceSync(runtime: WorkspaceRouteRuntime): void {
-  const [, setVersion] = useState(0);
-
-  useEffect(() => {
-    return runtime.sync.subscribe(() => {
-      setVersion((current) => current + 1);
-    });
-  }, [runtime]);
-}
-
-function validatePredicateClear(predicate: AnyPredicate): GraphMutationValidationResult | false {
-  if (typeof (predicate as { validateClear?: unknown }).validateClear !== "function") return false;
-  return (predicate as { validateClear(): GraphMutationValidationResult }).validateClear();
-}
-
-function clearPredicateValue(predicate: AnyPredicate): boolean {
-  if (typeof (predicate as { clear?: unknown }).clear !== "function") return false;
-  (predicate as { clear(): void }).clear();
-  return true;
-}
-
-function validatePredicateValue(
-  predicate: AnyPredicate,
-  value: unknown,
-): GraphMutationValidationResult | false {
-  if (typeof (predicate as { validateSet?: unknown }).validateSet !== "function") return false;
-  return (
-    predicate as { validateSet(nextValue: unknown): GraphMutationValidationResult }
-  ).validateSet(value);
-}
-
-function setPredicateValue(predicate: AnyPredicate, value: unknown): boolean {
-  if (typeof (predicate as { set?: unknown }).set !== "function") return false;
-  (predicate as { set(nextValue: unknown): void }).set(value);
-  return true;
-}
-
-function clearOptionalReference(predicate: AnyPredicate, callbacks: MutationCallbacks): boolean {
-  if (predicate.field.cardinality !== "one?") return false;
-  return performValidatedMutation(
-    callbacks,
-    () => validatePredicateClear(predicate),
-    () => clearPredicateValue(predicate),
-  );
-}
-
-function getPrimaryWorkspace(graph: WorkspaceRouteRuntime["graph"]) {
-  return graph.workspace
-    .list()
-    .slice()
-    .sort((left, right) => left.name.localeCompare(right.name))[0];
-}
-
-function createIssueSummaries(graph: WorkspaceRouteRuntime["graph"], issueIds: readonly string[]) {
-  return issueIds.map((id) => {
-    const issue = graph.workspaceIssue.get(id);
-    const status = graph.workflowStatus.get(issue.status);
-    const project = issue.project ? graph.workspaceProject.get(issue.project) : undefined;
-
-    return {
-      dueDate: issue.dueDate,
-      id,
-      identifier: issue.identifier,
-      labelCount: issue.labels.length,
-      labels: issue.labels,
-      name: issue.name,
-      projectId: issue.project,
-      projectName: project?.name,
-      statusId: issue.status,
-      statusName: status.name,
-    } satisfies IssueSummary;
-  });
-}
-
-function createProjectSummaries(
-  graph: WorkspaceRouteRuntime["graph"],
-  projectIds: readonly string[],
-  issues: readonly IssueSummary[],
-) {
-  return projectIds.map((id) => {
-    const project = graph.workspaceProject.get(id);
-    return {
-      color: project.color,
-      id,
-      issueCount: issues.filter((issue) => issue.projectId === id).length,
-      key: project.key,
-      name: project.name,
-      targetDate: project.targetDate,
-    } satisfies ProjectSummary;
-  });
-}
-
-function createLabelSummaries(
-  graph: WorkspaceRouteRuntime["graph"],
-  labelIds: readonly string[],
-  issues: readonly IssueSummary[],
-) {
-  return labelIds.map((id) => {
-    const label = graph.workspaceLabel.get(id);
-    return {
-      color: label.color,
-      id,
-      issueCount: issues.filter((issue) => issue.labels.includes(id)).length,
-      key: label.key,
-      name: label.name,
-    } satisfies LabelSummary;
-  });
-}
-
-function findIssueName(
-  issues: readonly IssueSummary[],
-  issueId: string | undefined,
-): string | undefined {
-  return issues.find((issue) => issue.id === issueId)?.name;
-}
-
 function SurfaceField({
   children,
   description,
   field,
   label,
+  span = 1,
 }: {
   readonly children: ReactNode;
   readonly description?: string;
   readonly field: string;
   readonly label: string;
+  readonly span?: 1 | 2;
 }) {
   return (
     <section
-      className="grid gap-3 rounded-[1.6rem] border border-slate-200/80 bg-slate-50/80 p-4"
+      className={`grid gap-3 rounded-[1.6rem] border border-slate-200/80 bg-slate-50/80 p-4 ${
+        span === 2 ? "xl:col-span-2" : ""
+      }`}
       data-workspace-field={field}
     >
       <div className="space-y-1">
@@ -226,17 +102,22 @@ function SurfaceField({
 function DetailSection({
   children,
   description,
+  sectionKey,
   title,
 }: {
   readonly children: ReactNode;
-  readonly description: string;
+  readonly description?: string;
+  readonly sectionKey?: string;
   readonly title: string;
 }) {
   return (
-    <section className="grid gap-4 rounded-[1.8rem] border border-slate-200/80 bg-white/90 p-5 shadow-sm shadow-slate-900/5">
+    <section
+      className="grid gap-4 rounded-[1.8rem] border border-slate-200/80 bg-white/90 p-5 shadow-sm shadow-slate-900/5"
+      data-workspace-view-section={sectionKey}
+    >
       <div className="space-y-1">
         <h2 className="text-lg font-semibold tracking-tight text-slate-950">{title}</h2>
-        <p className="max-w-3xl text-sm text-slate-600">{description}</p>
+        {description ? <p className="max-w-3xl text-sm text-slate-600">{description}</p> : null}
       </div>
       <div className="grid gap-4 xl:grid-cols-2">{children}</div>
     </section>
@@ -327,8 +208,9 @@ function ReferenceSelectField({
   options,
   predicate,
   placeholder,
+  span,
 }: {
-  readonly description: string;
+  readonly description?: string;
   readonly field: string;
   readonly label: string;
   readonly onMutationError?: (error: unknown) => void;
@@ -336,13 +218,14 @@ function ReferenceSelectField({
   readonly options: readonly ReferenceOption[];
   readonly placeholder: string;
   readonly predicate: AnyPredicate;
+  readonly span?: 1 | 2;
 }) {
   const { value } = usePredicateField(predicate);
   const selectedValue = typeof value === "string" ? value : "";
   const selectedOption = options.find((option) => option.id === selectedValue);
 
   return (
-    <SurfaceField description={description} field={field} label={label}>
+    <SurfaceField description={description} field={field} label={label} span={span}>
       <div className="grid gap-3">
         <select
           className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950"
@@ -376,6 +259,34 @@ function ReferenceSelectField({
           {selectedOption?.supporting ?? "No linked record selected."}
         </div>
       </div>
+    </SurfaceField>
+  );
+}
+
+function PredicateEditorField({
+  description,
+  field,
+  label,
+  onMutationError,
+  onMutationSuccess,
+  predicate,
+  span,
+}: {
+  readonly description?: string;
+  readonly field: string;
+  readonly label: string;
+  readonly onMutationError: (error: unknown) => void;
+  readonly onMutationSuccess: () => void;
+  readonly predicate: AnyPredicate;
+  readonly span?: 1 | 2;
+}) {
+  return (
+    <SurfaceField description={description} field={field} label={label} span={span}>
+      <PredicateFieldEditor
+        onMutationError={onMutationError}
+        onMutationSuccess={onMutationSuccess}
+        predicate={predicate}
+      />
     </SurfaceField>
   );
 }
@@ -414,6 +325,25 @@ function LinkedIssueList({
   );
 }
 
+function renderObjectViewSections({
+  renderField,
+  view,
+}: {
+  readonly renderField: (field: ObjectViewFieldSpec) => ReactNode;
+  readonly view: ObjectViewSpec;
+}) {
+  return view.sections.map((section) => (
+    <DetailSection
+      description={section.description}
+      key={section.key}
+      sectionKey={section.key}
+      title={section.title}
+    >
+      {section.fields.map((field) => renderField(field))}
+    </DetailSection>
+  ));
+}
+
 function IssueDetail({
   issueId,
   issues,
@@ -430,7 +360,7 @@ function IssueDetail({
   readonly onMutationSuccess: () => void;
   readonly onOpenIssue: (issueId: string) => void;
   readonly projectOptions: readonly ReferenceOption[];
-  readonly runtime: WorkspaceRouteRuntime;
+  readonly runtime: WorkspaceManagementRuntime;
   readonly statusOptions: readonly ReferenceOption[];
 }) {
   const issueRef = runtime.graph.workspaceIssue.ref(issueId);
@@ -444,8 +374,158 @@ function IssueDetail({
     }));
   const blockingIssues = issues.filter((candidate) => issue.blockedBy.includes(candidate.id));
 
+  function renderIssueField(field: ObjectViewFieldSpec): ReactNode {
+    const label = field.label ?? field.path;
+    const description = workspaceIssueFieldDescriptions[field.path];
+
+    switch (field.path) {
+      case "identifier":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={issueRef.fields.identifier}
+            span={field.span}
+          />
+        );
+      case "name":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={issueRef.fields.name}
+            span={field.span}
+          />
+        );
+      case "description":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={issueRef.fields.description}
+            span={field.span}
+          />
+        );
+      case "status":
+        return (
+          <ReferenceSelectField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            options={statusOptions}
+            placeholder="Select a status"
+            predicate={issueRef.fields.status}
+            span={field.span}
+          />
+        );
+      case "project":
+        return (
+          <ReferenceSelectField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            options={projectOptions}
+            placeholder="No project"
+            predicate={issueRef.fields.project}
+            span={field.span}
+          />
+        );
+      case "priority":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={issueRef.fields.priority}
+            span={field.span}
+          />
+        );
+      case "dueDate":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={issueRef.fields.dueDate}
+            span={field.span}
+          />
+        );
+      case "parent":
+        return (
+          <ReferenceSelectField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            options={parentOptions}
+            placeholder="No parent issue"
+            predicate={issueRef.fields.parent}
+            span={field.span}
+          />
+        );
+      case "labels":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={issueRef.fields.labels}
+            span={field.span}
+          />
+        );
+      case "blockedBy":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={issueRef.fields.blockedBy}
+            span={field.span}
+          />
+        );
+      default:
+        return null;
+    }
+  }
+
   return (
-    <div className="grid gap-5" data-workspace-panel="issues">
+    <div
+      className="grid gap-5"
+      data-workspace-object-view={workspaceIssueObjectView.key}
+      data-workspace-panel="issues"
+    >
       <section className="grid gap-4 rounded-[2rem] border border-slate-200/80 bg-slate-950 px-6 py-5 text-white shadow-xl shadow-slate-950/10">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -468,139 +548,23 @@ function IssueDetail({
         </div>
       </section>
 
-      <DetailSection
-        description="Core title, identifier, and narrative fields stay editable from the route without dropping into raw predicate names."
-        title="Identity"
-      >
-        <SurfaceField
-          description="Linear-style issue key used in route-owned summaries."
-          field="identifier"
-          label="Identifier"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={issueRef.fields.identifier}
-          />
-        </SurfaceField>
-        <SurfaceField
-          description="Short operator-facing title for the issue."
-          field="name"
-          label="Title"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={issueRef.fields.name}
-          />
-        </SurfaceField>
-        <SurfaceField
-          description="Route notes and acceptance context."
-          field="description"
-          label="Description"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={issueRef.fields.description}
-          />
-        </SurfaceField>
-      </DetailSection>
+      {renderObjectViewSections({
+        renderField: renderIssueField,
+        view: workspaceIssueObjectView,
+      })}
 
-      <DetailSection
-        description="Planning references use workspace-aware options so the route is browsing the seeded planning model directly."
-        title="Planning"
-      >
-        <ReferenceSelectField
-          description="Required workflow status from the workspace status lane."
-          field="status"
-          label="Status"
-          onMutationError={onMutationError}
-          onMutationSuccess={onMutationSuccess}
-          options={statusOptions}
-          placeholder="Select a status"
-          predicate={issueRef.fields.status}
-        />
-        <ReferenceSelectField
-          description="Optional project link for grouping related issue work."
-          field="project"
-          label="Project"
-          onMutationError={onMutationError}
-          onMutationSuccess={onMutationSuccess}
-          options={projectOptions}
-          placeholder="No project"
-          predicate={issueRef.fields.project}
-        />
-        <SurfaceField
-          description="Optional planning priority. Lower numbers indicate more urgent work in the seed data."
-          field="priority"
-          label="Priority"
+      {workspaceIssueObjectView.related?.map((related) => (
+        <DetailSection
+          description={workspaceIssueRelatedDescriptions[related.key]}
+          key={related.key}
+          sectionKey={related.key}
+          title={related.title}
         >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={issueRef.fields.priority}
-          />
-        </SurfaceField>
-        <SurfaceField
-          description="Optional due date for route-owned scheduling cues."
-          field="dueDate"
-          label="Due date"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={issueRef.fields.dueDate}
-          />
-        </SurfaceField>
-        <ReferenceSelectField
-          description="Optional parent link for stream and feature hierarchy."
-          field="parent"
-          label="Parent issue"
-          onMutationError={onMutationError}
-          onMutationSuccess={onMutationSuccess}
-          options={parentOptions}
-          placeholder="No parent issue"
-          predicate={issueRef.fields.parent}
-        />
-      </DetailSection>
-
-      <DetailSection
-        description="Relationship editing stays reference-aware: labels and blockers point at existing entities instead of embedding copies."
-        title="Relationships"
-      >
-        <SurfaceField
-          description="Attach planning labels from the workspace label catalog."
-          field="labels"
-          label="Labels"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={issueRef.fields.labels}
-          />
-        </SurfaceField>
-        <SurfaceField
-          description="Track upstream issues that must land before this one can move."
-          field="blockedBy"
-          label="Blocked by"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={issueRef.fields.blockedBy}
-          />
-        </SurfaceField>
-      </DetailSection>
-
-      <DetailSection
-        description="Browse linked issues from the route without leaving the workspace management surface."
-        title="Blocking context"
-      >
-        <div className="xl:col-span-2">
-          <LinkedIssueList issues={blockingIssues} onOpenIssue={onOpenIssue} />
-        </div>
-      </DetailSection>
+          <div className="xl:col-span-2">
+            <LinkedIssueList issues={blockingIssues} onOpenIssue={onOpenIssue} />
+          </div>
+        </DetailSection>
+      ))}
     </div>
   );
 }
@@ -618,14 +582,93 @@ function ProjectDetail({
   readonly onMutationSuccess: () => void;
   readonly onOpenIssue: (issueId: string) => void;
   readonly projectId: string;
-  readonly runtime: WorkspaceRouteRuntime;
+  readonly runtime: WorkspaceManagementRuntime;
 }) {
   const projectRef = runtime.graph.workspaceProject.ref(projectId);
   const project = runtime.graph.workspaceProject.get(projectId);
   const relatedIssues = issues.filter((issue) => issue.projectId === projectId);
 
+  function renderProjectField(field: ObjectViewFieldSpec): ReactNode {
+    const label = field.label ?? field.path;
+    const description = workspaceProjectFieldDescriptions[field.path];
+
+    switch (field.path) {
+      case "name":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={projectRef.fields.name}
+            span={field.span}
+          />
+        );
+      case "key":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={projectRef.fields.key}
+            span={field.span}
+          />
+        );
+      case "description":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={projectRef.fields.description}
+            span={field.span}
+          />
+        );
+      case "color":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={projectRef.fields.color}
+            span={field.span}
+          />
+        );
+      case "targetDate":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={label}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={projectRef.fields.targetDate}
+            span={field.span}
+          />
+        );
+      default:
+        return null;
+    }
+  }
+
   return (
-    <div className="grid gap-5" data-workspace-panel="projects">
+    <div
+      className="grid gap-5"
+      data-workspace-object-view={workspaceProjectObjectView.key}
+      data-workspace-panel="projects"
+    >
       <section className="grid gap-4 rounded-[2rem] border border-slate-200/80 bg-white/95 px-6 py-5 shadow-sm shadow-slate-900/5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -641,58 +684,10 @@ function ProjectDetail({
         </div>
       </section>
 
-      <DetailSection
-        description="Project fields stay narrowly scoped to the first planning slice: title, key, color, target date, and description."
-        title="Project fields"
-      >
-        <SurfaceField description="Operator-facing project title." field="name" label="Name">
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={projectRef.fields.name}
-          />
-        </SurfaceField>
-        <SurfaceField description="Stable project key for route summaries." field="key" label="Key">
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={projectRef.fields.key}
-          />
-        </SurfaceField>
-        <SurfaceField
-          description="Visual token used by summaries and badges."
-          field="color"
-          label="Color"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={projectRef.fields.color}
-          />
-        </SurfaceField>
-        <SurfaceField
-          description="Expected milestone date for the project slice."
-          field="targetDate"
-          label="Target date"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={projectRef.fields.targetDate}
-          />
-        </SurfaceField>
-        <SurfaceField
-          description="Narrative context for the project outcome."
-          field="description"
-          label="Description"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={projectRef.fields.description}
-          />
-        </SurfaceField>
-      </DetailSection>
+      {renderObjectViewSections({
+        renderField: renderProjectField,
+        view: workspaceProjectObjectView,
+      })}
 
       <DetailSection
         description="Project browse flows stay inside the route by opening linked issues directly."
@@ -719,14 +714,80 @@ function LabelDetail({
   readonly onMutationError: (error: unknown) => void;
   readonly onMutationSuccess: () => void;
   readonly onOpenIssue: (issueId: string) => void;
-  readonly runtime: WorkspaceRouteRuntime;
+  readonly runtime: WorkspaceManagementRuntime;
 }) {
   const labelRef = runtime.graph.workspaceLabel.ref(labelId);
   const label = runtime.graph.workspaceLabel.get(labelId);
   const relatedIssues = issues.filter((issue) => issue.labels.includes(labelId));
 
+  function renderLabelField(field: ObjectViewFieldSpec): ReactNode {
+    const labelText = field.label ?? field.path;
+    const description = workspaceLabelFieldDescriptions[field.path];
+
+    switch (field.path) {
+      case "name":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={labelText}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={labelRef.fields.name}
+            span={field.span}
+          />
+        );
+      case "key":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={labelText}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={labelRef.fields.key}
+            span={field.span}
+          />
+        );
+      case "description":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={labelText}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={labelRef.fields.description}
+            span={field.span}
+          />
+        );
+      case "color":
+        return (
+          <PredicateEditorField
+            description={description}
+            field={field.path}
+            key={field.path}
+            label={labelText}
+            onMutationError={onMutationError}
+            onMutationSuccess={onMutationSuccess}
+            predicate={labelRef.fields.color}
+            span={field.span}
+          />
+        );
+      default:
+        return null;
+    }
+  }
+
   return (
-    <div className="grid gap-5" data-workspace-panel="labels">
+    <div
+      className="grid gap-5"
+      data-workspace-object-view={workspaceLabelObjectView.key}
+      data-workspace-panel="labels"
+    >
       <section className="grid gap-4 rounded-[2rem] border border-slate-200/80 bg-white/95 px-6 py-5 shadow-sm shadow-slate-900/5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -743,47 +804,10 @@ function LabelDetail({
         </div>
       </section>
 
-      <DetailSection
-        description="The first label management slice covers the catalog fields operators actually browse and edit."
-        title="Label fields"
-      >
-        <SurfaceField description="Label display name." field="name" label="Name">
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={labelRef.fields.name}
-          />
-        </SurfaceField>
-        <SurfaceField
-          description="Stable key for route filtering and summaries."
-          field="key"
-          label="Key"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={labelRef.fields.key}
-          />
-        </SurfaceField>
-        <SurfaceField description="Visual token for label chips." field="color" label="Color">
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={labelRef.fields.color}
-          />
-        </SurfaceField>
-        <SurfaceField
-          description="Optional notes for how the label is used."
-          field="description"
-          label="Description"
-        >
-          <PredicateFieldEditor
-            onMutationError={onMutationError}
-            onMutationSuccess={onMutationSuccess}
-            predicate={labelRef.fields.description}
-          />
-        </SurfaceField>
-      </DetailSection>
+      {renderObjectViewSections({
+        renderField: renderLabelField,
+        view: workspaceLabelObjectView,
+      })}
 
       <DetailSection
         description="Jump back to the issues carrying this label without leaving the route."
@@ -800,88 +824,29 @@ function LabelDetail({
 export function WorkspaceManagementSurface({
   runtime,
 }: {
-  readonly runtime?: WorkspaceRouteRuntime;
+  readonly runtime: WorkspaceManagementRuntime;
 }) {
-  const resolvedRuntime = runtime ?? useAppRuntime();
-  useWorkspaceSync(resolvedRuntime);
-
-  const workspace = getPrimaryWorkspace(resolvedRuntime.graph);
-  const [section, setSection] = useState<WorkspaceSection>("issues");
-  const [selectedIssueId, setSelectedIssueId] = useState("");
-  const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [selectedLabelId, setSelectedLabelId] = useState("");
-  const [error, setError] = useState("");
-  const mutationCallbacks = usePersistedMutationCallbacks(
-    {
-      onMutationError: (nextError) => {
-        setError(formatMutationError(nextError));
-      },
-      onMutationSuccess: () => {
-        if (error) setError("");
-      },
-    },
-    resolvedRuntime,
-  );
-  const onMutationError = mutationCallbacks.onMutationError ?? (() => {});
-  const onMutationSuccess = mutationCallbacks.onMutationSuccess ?? (() => {});
-
-  const issueIds = workspace?.issues ?? [];
-  const projectIds = workspace?.projects ?? [];
-  const labelIds = workspace?.labels ?? [];
-  const statusIds = workspace?.statuses ?? [];
-
-  const issues = createIssueSummaries(resolvedRuntime.graph, issueIds);
-  const projects = createProjectSummaries(resolvedRuntime.graph, projectIds, issues);
-  const labels = createLabelSummaries(resolvedRuntime.graph, labelIds, issues);
-  const statusOptions = statusIds.map((statusId) => {
-    const status = resolvedRuntime.graph.workflowStatus.get(statusId);
-    const count = countIssuesByStatus(issues, statusId);
-    return {
-      id: statusId,
-      label: status.name,
-      supporting: `${count} issues in this lane`,
-    } satisfies ReferenceOption;
-  });
-  const projectOptions = projects.map((project) => ({
-    id: project.id,
-    label: project.name,
-    supporting: `${project.issueCount} linked issues`,
-  }));
-
-  useEffect(() => {
-    if (issues.length === 0) {
-      setSelectedIssueId("");
-      return;
-    }
-    if (!issues.some((issue) => issue.id === selectedIssueId)) {
-      setSelectedIssueId(issues[0]!.id);
-    }
-  }, [issues, selectedIssueId]);
-
-  useEffect(() => {
-    if (projects.length === 0) {
-      setSelectedProjectId("");
-      return;
-    }
-    if (!projects.some((project) => project.id === selectedProjectId)) {
-      setSelectedProjectId(projects[0]!.id);
-    }
-  }, [projects, selectedProjectId]);
-
-  useEffect(() => {
-    if (labels.length === 0) {
-      setSelectedLabelId("");
-      return;
-    }
-    if (!labels.some((label) => label.id === selectedLabelId)) {
-      setSelectedLabelId(labels[0]!.id);
-    }
-  }, [labels, selectedLabelId]);
-
-  function openIssue(issueId: string): void {
-    setSection("issues");
-    setSelectedIssueId(issueId);
-  }
+  const {
+    error,
+    issues,
+    labels,
+    onMutationError,
+    onMutationSuccess,
+    openIssue,
+    projectOptions,
+    projects,
+    section,
+    selectedIssueId,
+    selectedLabelId,
+    selectedProjectId,
+    setSection,
+    setSelectedIssueId,
+    setSelectedLabelId,
+    setSelectedProjectId,
+    statusOptions,
+    statuses,
+    workspace,
+  } = useWorkspaceManagementModel(runtime);
 
   if (!workspace) {
     return (
@@ -895,7 +860,11 @@ export function WorkspaceManagementSurface({
   }
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-6" data-workspace-root="">
+    <div
+      className="mx-auto grid max-w-7xl gap-6"
+      data-workspace-root=""
+      data-workspace-workflow={workspaceManagementWorkflow.key}
+    >
       <section className="grid gap-5 rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-2xl shadow-slate-900/10 backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -922,19 +891,16 @@ export function WorkspaceManagementSurface({
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {statusIds.map((statusId) => {
-            const status = resolvedRuntime.graph.workflowStatus.get(statusId);
-            return (
-              <div
-                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-                data-workspace-status-summary={statusId}
-                key={statusId}
-              >
-                <span className="font-medium">{status.name}</span>
-                <span className="ml-2 text-slate-500">{countIssuesByStatus(issues, statusId)}</span>
-              </div>
-            );
-          })}
+          {statuses.map((status) => (
+            <div
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+              data-workspace-status-summary={status.id}
+              key={status.id}
+            >
+              <span className="font-medium">{status.name}</span>
+              <span className="ml-2 text-slate-500">{status.issueCount}</span>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -1057,7 +1023,7 @@ export function WorkspaceManagementSurface({
               onMutationSuccess={onMutationSuccess}
               onOpenIssue={openIssue}
               projectOptions={projectOptions}
-              runtime={resolvedRuntime}
+              runtime={runtime}
               statusOptions={statusOptions}
             />
           ) : null}
@@ -1069,7 +1035,7 @@ export function WorkspaceManagementSurface({
               onMutationSuccess={onMutationSuccess}
               onOpenIssue={openIssue}
               projectId={selectedProjectId}
-              runtime={resolvedRuntime}
+              runtime={runtime}
             />
           ) : null}
 
@@ -1080,7 +1046,7 @@ export function WorkspaceManagementSurface({
               onMutationError={onMutationError}
               onMutationSuccess={onMutationSuccess}
               onOpenIssue={openIssue}
-              runtime={resolvedRuntime}
+              runtime={runtime}
             />
           ) : null}
         </section>
