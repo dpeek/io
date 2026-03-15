@@ -19,7 +19,11 @@ import {
 
 import { createAppAuthority } from "./authority.js";
 import { app } from "./graph/app.js";
-import { createAppServerRoutes, handleSyncRequest } from "./server-app.js";
+import {
+  createAppServerRoutes,
+  handleSyncRequest,
+  handleTransactionRequest,
+} from "./server-app.js";
 
 const tempDirs: string[] = [];
 
@@ -299,6 +303,67 @@ describe("app authority", () => {
     expect(payload.scope).toEqual({ kind: "graph" });
     expect(payload.cursor.startsWith("authority:")).toBe(true);
     expect(validation.ok).toBe(true);
+  });
+
+  it("serves incremental sync payloads when the client supplies a cursor", async () => {
+    const snapshotPath = await createTempSnapshotPath();
+    const authority = await createAppAuthority({ snapshotPath });
+    const initial = authority.createSyncPayload();
+    const companyId = authority.graph.company.list()[0]?.id;
+    if (!companyId) throw new Error("Expected seeded company data.");
+
+    await authority.applyTransaction(
+      createCompanyNameWriteTransaction(authority.store, companyId, "Acme Incremental", "tx:1"),
+    );
+
+    const response = handleSyncRequest(
+      new Request(`http://app.local/api/sync?after=${encodeURIComponent(initial.cursor)}`),
+      authority,
+    );
+    const payload = (await response.json()) as {
+      readonly mode: string;
+      readonly after: string;
+      readonly transactions: readonly AuthoritativeGraphWriteResult[];
+      readonly cursor: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.mode).toBe("incremental");
+    expect(payload.after).toBe(initial.cursor);
+    expect(payload.transactions).toHaveLength(1);
+    expect(payload.transactions[0]?.txId).toBe("tx:1");
+    expect(payload.cursor).not.toBe(initial.cursor);
+  });
+
+  it("accepts graph write transactions through the server route and persists the change", async () => {
+    const snapshotPath = await createTempSnapshotPath();
+    const authority = await createAppAuthority({ snapshotPath });
+    const companyId = authority.graph.company.list()[0]?.id;
+    if (!companyId) throw new Error("Expected seeded company data.");
+
+    const transaction = createCompanyNameWriteTransaction(
+      authority.store,
+      companyId,
+      "Acme Persisted",
+      "tx:route",
+    );
+    const response = await handleTransactionRequest(
+      new Request("http://app.local/api/tx", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(transaction),
+      }),
+      authority,
+    );
+    const payload = (await response.json()) as AuthoritativeGraphWriteResult;
+    const restarted = await createAppAuthority({ snapshotPath });
+
+    expect(response.status).toBe(200);
+    expect(payload.txId).toBe("tx:route");
+    expect(authority.graph.company.get(companyId).name).toBe("Acme Persisted");
+    expect(restarted.graph.company.get(companyId).name).toBe("Acme Persisted");
   });
 
   it("stores env-var plaintext only in authority state while syncing opaque metadata", async () => {

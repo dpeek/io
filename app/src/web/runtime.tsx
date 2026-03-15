@@ -1,34 +1,86 @@
-import { createSyncedTypeClient, type SyncedTypeClient, type TotalSyncPayload } from "@io/graph";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createSyncedTypeClient,
+  type AuthoritativeGraphWriteResult,
+  type GraphWriteTransaction,
+  type SyncPayload,
+  type SyncedTypeClient,
+} from "@io/graph";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { app } from "../graph/app.js";
+import type { MutationCallbacks } from "./mutation-validation.js";
 
 const syncUrl = "/api/sync";
+const transactionUrl = "/api/tx";
 
 export type AppRuntime = SyncedTypeClient<typeof app>;
+type PersistableRuntime = Pick<AppRuntime, "sync">;
 
 const runtimeCache = new Map<string, Promise<AppRuntime>>();
+const pendingMutationFlushes = new WeakMap<object, Promise<void>>();
 
 const AppRuntimeContext = createContext<AppRuntime | null>(null);
 
-async function fetchSyncPayload(): Promise<TotalSyncPayload> {
-  const response = await fetch(syncUrl, {
+function readErrorMessage(status: number, statusText: string, payload: unknown, fallback: string): string {
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "error" in payload &&
+    typeof (payload as { error?: unknown }).error === "string"
+  ) {
+    return (payload as { error: string }).error;
+  }
+  return `${fallback} with ${status} ${statusText}.`;
+}
+
+async function fetchSyncPayload(after?: string): Promise<SyncPayload> {
+  const requestUrl = after ? `${syncUrl}?after=${encodeURIComponent(after)}` : syncUrl;
+  const response = await fetch(requestUrl, {
     cache: "no-store",
     headers: {
       accept: "application/json",
     },
   });
 
+  const payload = (await response.json().catch(() => undefined)) as SyncPayload | { error?: string } | undefined;
   if (!response.ok) {
-    throw new Error(`Sync request failed with ${response.status} ${response.statusText}.`);
+    throw new Error(
+      readErrorMessage(response.status, response.statusText, payload, "Sync request failed"),
+    );
   }
 
-  return (await response.json()) as TotalSyncPayload;
+  return payload as SyncPayload;
+}
+
+async function pushTransaction(
+  transaction: GraphWriteTransaction,
+): Promise<AuthoritativeGraphWriteResult> {
+  const response = await fetch(transactionUrl, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(transaction),
+  });
+
+  const payload = (await response.json().catch(() => undefined)) as
+    | AuthoritativeGraphWriteResult
+    | { error?: string }
+    | undefined;
+  if (!response.ok) {
+    throw new Error(
+      readErrorMessage(response.status, response.statusText, payload, "Graph write failed"),
+    );
+  }
+
+  return payload as AuthoritativeGraphWriteResult;
 }
 
 export async function createAppRuntime(): Promise<AppRuntime> {
   const runtime = createSyncedTypeClient(app, {
-    pull: () => fetchSyncPayload(),
+    pull: (state) => fetchSyncPayload(state.cursor),
+    push: pushTransaction,
   });
 
   await runtime.sync.sync();
@@ -51,12 +103,54 @@ export function resetSharedAppRuntime(): void {
   runtimeCache.delete(syncUrl);
 }
 
+export function useOptionalAppRuntime(): AppRuntime | null {
+  return useContext(AppRuntimeContext);
+}
+
 export function useAppRuntime(): AppRuntime {
-  const runtime = useContext(AppRuntimeContext);
+  const runtime = useOptionalAppRuntime();
   if (!runtime) {
     throw new Error("App runtime is not available outside the synced runtime provider.");
   }
   return runtime;
+}
+
+export function persistRuntimeChanges(runtime: PersistableRuntime): Promise<void> {
+  const sync = runtime.sync;
+  const current = pendingMutationFlushes.get(sync) ?? Promise.resolve();
+  const queued = current.catch(() => undefined).then(async () => {
+    if (sync.getPendingTransactions().length === 0) return;
+    await sync.flush();
+  });
+  const tracked = queued.finally(() => {
+    if (pendingMutationFlushes.get(sync) === tracked) {
+      pendingMutationFlushes.delete(sync);
+    }
+  });
+  pendingMutationFlushes.set(sync, tracked);
+  return tracked;
+}
+
+export function usePersistedMutationCallbacks(
+  callbacks: MutationCallbacks = {},
+  runtime?: PersistableRuntime | null,
+): MutationCallbacks {
+  const contextRuntime = useOptionalAppRuntime();
+  const resolvedRuntime = runtime ?? contextRuntime;
+
+  return useMemo(
+    () => ({
+      onMutationError: callbacks.onMutationError,
+      onMutationSuccess: () => {
+        callbacks.onMutationSuccess?.();
+        if (!resolvedRuntime) return;
+        void persistRuntimeChanges(resolvedRuntime).catch((error) => {
+          callbacks.onMutationError?.(error);
+        });
+      },
+    }),
+    [callbacks.onMutationError, callbacks.onMutationSuccess, resolvedRuntime],
+  );
 }
 
 type AppBootstrapProps = {

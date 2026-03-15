@@ -30,9 +30,17 @@ import type {
   PredicateFieldProps,
   PredicateFieldViewCapability,
 } from "./resolver.js";
+import { usePersistedMutationCallbacks } from "./runtime.js";
 
 type AnyPredicate = PredicateRef<any, any>;
 type AnyFieldProps = PredicateFieldProps<any, any>;
+
+function useFieldMutationCallbacks({
+  onMutationError,
+  onMutationSuccess,
+}: Pick<AnyFieldProps, "onMutationError" | "onMutationSuccess">): MutationCallbacks {
+  return usePersistedMutationCallbacks({ onMutationError, onMutationSuccess });
+}
 
 function setPredicateValue(predicate: AnyPredicate, value: unknown): boolean {
   if (typeof (predicate as { set?: unknown }).set !== "function") return false;
@@ -246,6 +254,7 @@ function EntityReferenceListView({ predicate }: AnyFieldProps) {
 }
 
 function TextFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
+  const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { value } = usePredicateField(predicate);
   const editorKind = getPredicateEditorKind(predicate.field);
   const placeholder = getPredicateEditorPlaceholder(predicate.field);
@@ -266,10 +275,7 @@ function TextFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyF
     setDraft(nextValue);
 
     if (nextValue === "" && parser) {
-      const cleared = clearOrRejectRequiredValue(predicate, {
-        onMutationError,
-        onMutationSuccess,
-      });
+      const cleared = clearOrRejectRequiredValue(predicate, callbacks);
       setIsInvalid(!cleared);
       return;
     }
@@ -277,7 +283,7 @@ function TextFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyF
     try {
       const parsedValue = parser ? parser(nextValue) : nextValue;
       const committed = performValidatedMutation(
-        { onMutationError, onMutationSuccess },
+        callbacks,
         () => validatePredicateValue(predicate, parsedValue),
         () => setPredicateValue(predicate, parsedValue),
       );
@@ -314,6 +320,7 @@ function TextFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyF
 }
 
 function NumberFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
+  const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { value } = usePredicateField(predicate);
   const committedValue = normalizeNumberValue(value);
   const [draft, setDraft] = useState(committedValue);
@@ -334,17 +341,14 @@ function NumberFieldEditor({ onMutationError, onMutationSuccess, predicate }: An
         setDraft(nextValue);
 
         if (nextValue === "") {
-          const cleared = clearOrRejectRequiredValue(predicate, {
-            onMutationError,
-            onMutationSuccess,
-          });
+          const cleared = clearOrRejectRequiredValue(predicate, callbacks);
           setIsInvalid(!cleared);
           return;
         }
 
         const parsed = Number(nextValue);
         const committed = performValidatedMutation(
-          { onMutationError, onMutationSuccess },
+          callbacks,
           () => validatePredicateValue(predicate, parsed),
           () => setPredicateValue(predicate, parsed),
         );
@@ -357,6 +361,7 @@ function NumberFieldEditor({ onMutationError, onMutationSuccess, predicate }: An
 }
 
 function UrlFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
+  const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { value } = usePredicateField(predicate);
   const placeholder = getPredicateEditorPlaceholder(predicate.field);
   const committedValue = normalizeUrlValue(value);
@@ -377,10 +382,7 @@ function UrlFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFi
         setDraft(nextValue);
 
         if (nextValue === "") {
-          const cleared = clearOrRejectRequiredValue(predicate, {
-            onMutationError,
-            onMutationSuccess,
-          });
+          const cleared = clearOrRejectRequiredValue(predicate, callbacks);
           setIsInvalid(!cleared);
           return;
         }
@@ -388,7 +390,7 @@ function UrlFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFi
         try {
           const nextUrl = new URL(nextValue);
           const committed = performValidatedMutation(
-            { onMutationError, onMutationSuccess },
+            callbacks,
             () => validatePredicateValue(predicate, nextUrl),
             () => setPredicateValue(predicate, nextUrl),
           );
@@ -405,6 +407,7 @@ function UrlFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFi
 }
 
 function DateFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
+  const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { value } = usePredicateField(predicate);
   const placeholder = getPredicateEditorPlaceholder(predicate.field);
   const committedValue = normalizeDateValue(value);
@@ -425,10 +428,7 @@ function DateFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyF
         setDraft(nextValue);
 
         if (nextValue === "") {
-          const cleared = clearOrRejectRequiredValue(predicate, {
-            onMutationError,
-            onMutationSuccess,
-          });
+          const cleared = clearOrRejectRequiredValue(predicate, callbacks);
           setIsInvalid(!cleared);
           return;
         }
@@ -440,7 +440,7 @@ function DateFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyF
         }
 
         const committed = performValidatedMutation(
-          { onMutationError, onMutationSuccess },
+          callbacks,
           () => validatePredicateValue(predicate, parsed),
           () => setPredicateValue(predicate, parsed),
         );
@@ -454,6 +454,7 @@ function DateFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyF
 }
 
 function CheckboxFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
+  const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { value } = usePredicateField(predicate);
 
   if (Array.isArray(value)) {
@@ -466,7 +467,7 @@ function CheckboxFieldEditor({ onMutationError, onMutationSuccess, predicate }: 
       data-web-field-kind="checkbox"
       onChange={(event) => {
         performValidatedMutation(
-          { onMutationError, onMutationSuccess },
+          callbacks,
           () => validatePredicateValue(predicate, event.target.checked),
           () => setPredicateValue(predicate, event.target.checked),
         );
@@ -477,6 +478,7 @@ function CheckboxFieldEditor({ onMutationError, onMutationSuccess, predicate }: 
 }
 
 function SelectFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
+  const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { value } = usePredicateField(predicate);
   const options = getPredicateEnumOptions(predicate);
   const valueId = typeof value === "string" ? value : "";
@@ -493,14 +495,11 @@ function SelectFieldEditor({ onMutationError, onMutationSuccess, predicate }: An
       onChange={(event) => {
         const nextValue = event.target.value;
         if (nextValue === "") {
-          clearOrRejectRequiredValue(predicate, {
-            onMutationError,
-            onMutationSuccess,
-          });
+          clearOrRejectRequiredValue(predicate, callbacks);
           return;
         }
         performValidatedMutation(
-          { onMutationError, onMutationSuccess },
+          callbacks,
           () => validatePredicateValue(predicate, nextValue),
           () => setPredicateValue(predicate, nextValue),
         );
@@ -518,6 +517,7 @@ function SelectFieldEditor({ onMutationError, onMutationSuccess, predicate }: An
 }
 
 function TokenListFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
+  const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { collectionKind, value } = usePredicateField(predicate);
   const placeholder = getPredicateEditorPlaceholder(predicate.field);
   const [draft, setDraft] = useState("");
@@ -533,7 +533,7 @@ function TokenListFieldEditor({ onMutationError, onMutationSuccess, predicate }:
     const nextToken = draftRef.current.trim();
     if (!nextToken) return;
     const committed = performValidatedMutation(
-      { onMutationError, onMutationSuccess },
+      callbacks,
       () => validatePredicateAdd(predicate, nextToken),
       () => addPredicateItem(predicate, nextToken),
     );
@@ -553,7 +553,7 @@ function TokenListFieldEditor({ onMutationError, onMutationSuccess, predicate }:
             key={token}
             onClick={() => {
               performValidatedMutation(
-                { onMutationError, onMutationSuccess },
+                callbacks,
                 () => validatePredicateRemove(predicate, token),
                 () => removePredicateItem(predicate, token),
               );
@@ -600,6 +600,7 @@ function EntityReferenceChecklistEditor({
   onMutationSuccess,
   predicate,
 }: AnyFieldProps) {
+  const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { value } = usePredicateField(predicate);
   const options = getPredicateEntityReferenceOptions(predicate);
   const selected = getPredicateEntityReferenceSelection(predicate, value);
@@ -625,7 +626,7 @@ function EntityReferenceChecklistEditor({
               data-web-reference-remove-id={id}
               onClick={() => {
                 performValidatedMutation(
-                  { onMutationError, onMutationSuccess },
+                  callbacks,
                   () => validatePredicateRemove(predicate, id),
                   () => removePredicateItem(predicate, id),
                 );
@@ -648,7 +649,7 @@ function EntityReferenceChecklistEditor({
                   if (event.target.checked) {
                     if (!checked) {
                       performValidatedMutation(
-                        { onMutationError, onMutationSuccess },
+                        callbacks,
                         () => validatePredicateAdd(predicate, id),
                         () => addPredicateItem(predicate, id),
                       );
@@ -656,7 +657,7 @@ function EntityReferenceChecklistEditor({
                     return;
                   }
                   performValidatedMutation(
-                    { onMutationError, onMutationSuccess },
+                    callbacks,
                     () => validatePredicateRemove(predicate, id),
                     () => removePredicateItem(predicate, id),
                   );

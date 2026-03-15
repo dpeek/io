@@ -16,6 +16,8 @@ import {
   typeId,
 } from "@io/graph";
 import {
+  createContext,
+  useContext,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -29,7 +31,11 @@ import { app } from "../graph/app.js";
 import { PredicateFieldEditor, formatPredicateValue, usePredicateField } from "./bindings.js";
 import { performValidatedMutation } from "./mutation-validation.js";
 import { defaultWebFieldResolver } from "./resolver.js";
-import { type AppRuntime, useAppRuntime } from "./runtime.js";
+import {
+  type AppRuntime,
+  useAppRuntime,
+  usePersistedMutationCallbacks,
+} from "./runtime.js";
 
 const explorerNamespace = { ...core, ...app };
 
@@ -59,6 +65,7 @@ type ExplorerSyncSnapshot = {
   pendingTransactions: ReturnType<ExplorerSync["getPendingTransactions"]>;
   state: ReturnType<ExplorerSync["getState"]>;
 };
+const ExplorerSyncContext = createContext<ExplorerSync | null>(null);
 
 type DefinitionFieldEntry = {
   cardinality: Cardinality;
@@ -723,6 +730,7 @@ function PredicateRow({
   title?: string;
   typeKeyById: ReadonlyMap<string, string>;
 }) {
+  const sync = useContext(ExplorerSyncContext);
   const binding = usePredicateField(predicate);
   const status = describePredicateValue(predicate, binding.value);
   const editorResolution = defaultWebFieldResolver.resolveEditor(predicate);
@@ -740,6 +748,14 @@ function PredicateRow({
   function handleMutationSuccess(): void {
     setValidationMessages([]);
   }
+
+  const mutationCallbacks = usePersistedMutationCallbacks(
+    {
+      onMutationError: handleMutationError,
+      onMutationSuccess: handleMutationSuccess,
+    },
+    sync ? { sync } : null,
+  );
 
   return (
     <div
@@ -782,13 +798,13 @@ function PredicateRow({
 
       <div className="mt-3">
         {customEditor?.({
-          onMutationError: handleMutationError,
-          onMutationSuccess: handleMutationSuccess,
+          onMutationError: mutationCallbacks.onMutationError,
+          onMutationSuccess: mutationCallbacks.onMutationSuccess,
         }) ??
           (isEditable ? (
             <PredicateFieldEditor
-              onMutationError={handleMutationError}
-              onMutationSuccess={handleMutationSuccess}
+              onMutationError={mutationCallbacks.onMutationError}
+              onMutationSuccess={mutationCallbacks.onMutationSuccess}
               predicate={predicate}
             />
           ) : (
@@ -1734,7 +1750,8 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
   }
 
   return (
-    <div className="grid gap-4 text-slate-100 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[280px_340px_minmax(0,1fr)]">
+    <ExplorerSyncContext.Provider value={graphRuntime.sync}>
+      <div className="grid gap-4 text-slate-100 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[280px_340px_minmax(0,1fr)]">
       <div className="space-y-4">
         <Section title="Explorer">
           <div className="space-y-3">
@@ -1953,7 +1970,8 @@ export function Explorer({ runtime }: { runtime?: ExplorerRuntime }) {
           />
         ) : null}
       </div>
-    </div>
+      </div>
+    </ExplorerSyncContext.Provider>
   );
 }
 export function ExplorerSurface({ graph, store, sync }: ExplorerSurfaceRuntime) {

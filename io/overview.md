@@ -9,6 +9,7 @@ the graph-first application direction the rest of the workspace is proving.
 ## Docs
 
 - `../io.md`
+- `./modularity.md`
 - `./workflow.md`
 - `./backlog.md`
 - `../agent/io/overview.md`
@@ -19,6 +20,7 @@ the graph-first application direction the rest of the workspace is proving.
 
 - `../io.ts`: repo config, context registry, profiles, modules, routing
 - `../io.md`: repo-local execution guidance included in prompt context
+- `./modularity.md`: package-boundary proposal for `graph`, React adapters, taxonomies, and `app`
 - `./workflow.md`: primary user-facing workflow contract for stream, feature,
   task ownership and release/finalization behavior
 - `./backlog.md`: interactive stream backlog prompt and issue-structure contract

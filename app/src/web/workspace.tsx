@@ -8,7 +8,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PredicateFieldEditor } from "./bindings.js";
 import { performValidatedMutation } from "./mutation-validation.js";
 import { usePredicateField } from "./predicate.js";
-import { type AppRuntime, useAppRuntime } from "./runtime.js";
+import {
+  type AppRuntime,
+  useAppRuntime,
+  usePersistedMutationCallbacks,
+} from "./runtime.js";
 
 type WorkspaceRouteRuntime = Pick<AppRuntime, "graph" | "sync">;
 type WorkspaceSection = "issues" | "projects" | "labels";
@@ -805,6 +809,17 @@ export function WorkspaceManagementSurface({
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedLabelId, setSelectedLabelId] = useState("");
   const [error, setError] = useState("");
+  const mutationCallbacks = usePersistedMutationCallbacks(
+    {
+      onMutationError: (nextError) => {
+        setError(formatMutationError(nextError));
+      },
+      onMutationSuccess: () => {
+        if (error) setError("");
+      },
+    },
+    resolvedRuntime,
+  );
 
   const issueIds = workspace?.issues ?? [];
   const projectIds = workspace?.projects ?? [];
@@ -858,14 +873,6 @@ export function WorkspaceManagementSurface({
       setSelectedLabelId(labels[0]!.id);
     }
   }, [labels, selectedLabelId]);
-
-  function handleMutationError(nextError: unknown): void {
-    setError(formatMutationError(nextError));
-  }
-
-  function handleMutationSuccess(): void {
-    if (error) setError("");
-  }
 
   function openIssue(issueId: string): void {
     setSection("issues");
@@ -1042,8 +1049,8 @@ export function WorkspaceManagementSurface({
             <IssueDetail
               issueId={selectedIssueId}
               issues={issues}
-              onMutationError={handleMutationError}
-              onMutationSuccess={handleMutationSuccess}
+              onMutationError={mutationCallbacks.onMutationError}
+              onMutationSuccess={mutationCallbacks.onMutationSuccess}
               onOpenIssue={openIssue}
               projectOptions={projectOptions}
               runtime={resolvedRuntime}
@@ -1054,8 +1061,8 @@ export function WorkspaceManagementSurface({
           {section === "projects" && selectedProjectId ? (
             <ProjectDetail
               issues={issues}
-              onMutationError={handleMutationError}
-              onMutationSuccess={handleMutationSuccess}
+              onMutationError={mutationCallbacks.onMutationError}
+              onMutationSuccess={mutationCallbacks.onMutationSuccess}
               onOpenIssue={openIssue}
               projectId={selectedProjectId}
               runtime={resolvedRuntime}
@@ -1066,8 +1073,8 @@ export function WorkspaceManagementSurface({
             <LabelDetail
               issues={issues}
               labelId={selectedLabelId}
-              onMutationError={handleMutationError}
-              onMutationSuccess={handleMutationSuccess}
+              onMutationError={mutationCallbacks.onMutationError}
+              onMutationSuccess={mutationCallbacks.onMutationSuccess}
               onOpenIssue={openIssue}
               runtime={resolvedRuntime}
             />
