@@ -9,7 +9,8 @@
     "agent",
     "tui",
     "config",
-    "lib"
+    "lib",
+    "tsx"
   ],
   "type": "module",
   "scripts": {
