@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { fireEvent, render } from "@testing-library/react";
 
 import {
   GraphValidationError,
@@ -17,15 +18,11 @@ import {
   type PredicateFieldProps,
   type PredicateFieldViewCapability,
 } from "../react/index.js";
-import { Fragment, Profiler } from "react";
-import { act, create } from "react-test-renderer";
+import { Fragment, Profiler, act } from "react";
 
 import { app } from "../../../app/src/graph/app.js";
+import { getAllByData, getReactProps, getRequiredElement } from "../test-dom.js";
 import { PredicateFieldEditor, PredicateFieldView } from "./index.js";
-
-(
-  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
 
 function setupGraph() {
   const store = createStore();
@@ -70,6 +67,20 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
+function getInputByKind(container: ParentNode, kind: string) {
+  return getRequiredElement(
+    container.querySelector<HTMLInputElement>(`input[data-web-field-kind="${kind}"]`),
+    `Expected input for field kind "${kind}".`,
+  );
+}
+
+function getSelectByKind(container: ParentNode, kind: string) {
+  return getRequiredElement(
+    container.querySelector<HTMLSelectElement>(`select[data-web-field-kind="${kind}"]`),
+    `Expected select for field kind "${kind}".`,
+  );
+}
+
 describe("web predicate bindings", () => {
   it("renders a field view from a typed predicate ref through the resolver", () => {
     const { graph, companyId } = setupGraph();
@@ -94,20 +105,14 @@ describe("web predicate bindings", () => {
       ],
     });
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(<PredicateFieldView predicate={nameRef} resolver={resolver} />);
-    });
+    const { container, unmount } = render(
+      <PredicateFieldView predicate={nameRef} resolver={resolver} />,
+    );
 
-    expect(renderer?.toJSON()).toEqual({
-      type: "span",
-      props: {},
-      children: ["Acme"],
-    });
+    const span = getRequiredElement(container.querySelector("span"), "Expected rendered text view.");
+    expect(span.textContent).toBe("Acme");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("renders a field editor from a typed predicate ref and mutates through that same ref", () => {
@@ -133,24 +138,19 @@ describe("web predicate bindings", () => {
       ],
     });
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(<PredicateFieldEditor predicate={nameRef} resolver={resolver} />);
-    });
+    const { container, unmount } = render(
+      <PredicateFieldEditor predicate={nameRef} resolver={resolver} />,
+    );
 
-    const button = renderer?.root.findByType("button");
-    expect(button?.children).toEqual(["Acme"]);
+    const button = getRequiredElement(container.querySelector("button"), "Expected text editor button.");
+    expect(button.textContent).toBe("Acme");
 
-    act(() => {
-      button?.props.onClick();
-    });
+    fireEvent.click(button);
 
     expect(nameRef.get()).toBe("Acme!");
-    expect(renderer?.root.findByType("button").children).toEqual(["Acme!"]);
+    expect(button.textContent).toBe("Acme!");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("preflights generic editor mutations before calling typed predicate mutators", () => {
@@ -175,22 +175,20 @@ describe("web predicate bindings", () => {
       return originalValidateSet(nextValue);
     };
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(
-        <PredicateFieldEditor
-          onMutationError={(error) => {
-            reportedError = error;
-          }}
-          predicate={instrumented}
-        />,
-      );
-    });
+    const { container, unmount } = render(
+      <PredicateFieldEditor
+        onMutationError={(error) => {
+          reportedError = error;
+        }}
+        predicate={instrumented}
+      />,
+    );
 
-    const input = renderer?.root.findByProps({ "data-web-field-kind": "text" });
-
+    const input = getInputByKind(container, "text");
     act(() => {
-      input?.props.onChange({ target: { value: "   " } });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "   " },
+      });
     });
 
     expect(validateCalls).toBe(1);
@@ -203,9 +201,7 @@ describe("web predicate bindings", () => {
       event: "update",
     });
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("surfaces shared validation errors when required generic editors are cleared", () => {
@@ -214,28 +210,24 @@ describe("web predicate bindings", () => {
     const initialWebsite = websiteRef.get().toString();
     let reportedError: unknown;
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(
-        <PredicateFieldEditor
-          onMutationError={(error) => {
-            reportedError = error;
-          }}
-          predicate={websiteRef}
-        />,
-      );
-    });
+    const { container, unmount } = render(
+      <PredicateFieldEditor
+        onMutationError={(error) => {
+          reportedError = error;
+        }}
+        predicate={websiteRef}
+      />,
+    );
 
-    const input = renderer?.root.findByProps({ "data-web-field-kind": "url" });
-
+    const input = getInputByKind(container, "url");
     act(() => {
-      input?.props.onChange({ target: { value: "" } });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "" },
+      });
     });
 
     expect(websiteRef.get().toString()).toBe(initialWebsite);
-    expect(renderer?.root.findByProps({ "data-web-field-kind": "url" }).props["aria-invalid"]).toBe(
-      true,
-    );
+    expect(input.ariaInvalid).toBe("true");
     expect(reportedError).toBeInstanceOf(GraphValidationError);
     expect((reportedError as GraphValidationError<Record<string, unknown>>).result).toMatchObject({
       ok: false,
@@ -249,9 +241,7 @@ describe("web predicate bindings", () => {
       ],
     });
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("flushes pending synced mutations after default DOM editors succeed", async () => {
@@ -259,38 +249,34 @@ describe("web predicate bindings", () => {
     const companyRef = graph.company.ref(companyId);
     let flushCalls = 0;
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(
-        <GraphMutationRuntimeProvider
-          runtime={{
-            sync: {
-              flush: async () => {
-                flushCalls += 1;
-                return [];
-              },
-              getPendingTransactions: () => [{}],
+    const { container, unmount } = render(
+      <GraphMutationRuntimeProvider
+        runtime={{
+          sync: {
+            flush: async () => {
+              flushCalls += 1;
+              return [];
             },
-          }}
-        >
-          <PredicateFieldEditor predicate={companyRef.fields.name} />
-        </GraphMutationRuntimeProvider>,
-      );
-    });
+            getPendingTransactions: () => [{}],
+          },
+        }}
+      >
+        <PredicateFieldEditor predicate={companyRef.fields.name} />
+      </GraphMutationRuntimeProvider>,
+    );
 
-    const input = renderer?.root.findByProps({ "data-web-field-kind": "text" });
-
+    const input = getInputByKind(container, "text");
     await act(async () => {
-      input?.props.onChange({ target: { value: "Acme Labs" } });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "Acme Labs" },
+      });
       await Promise.resolve();
     });
 
     expect(companyRef.fields.name.get()).toBe("Acme Labs");
     expect(flushCalls).toBe(1);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("keeps predicate-local subscription boundaries in the common field path", () => {
@@ -343,17 +329,12 @@ describe("web predicate bindings", () => {
       );
     }
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(<CompanyFields />);
-    });
-
+    const { container, unmount } = render(<CompanyFields />);
     expect(renders).toEqual({ container: 1, name: 1, website: 1 });
 
     act(() => {
       companyRef.fields.name.set("Acme 2");
     });
-
     expect(renders).toEqual({ container: 1, name: 2, website: 1 });
 
     act(() => {
@@ -361,14 +342,12 @@ describe("web predicate bindings", () => {
     });
 
     expect(renders).toEqual({ container: 1, name: 2, website: 2 });
-    expect(renderer?.root.findAllByType("span").map((node) => node.children.join(""))).toEqual([
+    expect(Array.from(container.querySelectorAll("span")).map((node) => node.textContent ?? "")).toEqual([
       "Acme 2",
       "https://acme-2.com/",
     ]);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("keeps nested field-group composition leaf-local in resolver-driven views", () => {
@@ -408,17 +387,12 @@ describe("web predicate bindings", () => {
       );
     }
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(<AddressSection group={addressRef} />);
-    });
-
+    const { container, unmount } = render(<AddressSection group={addressRef} />);
     expect(renders).toEqual({ section: 1, line1: 1, postalCode: 1 });
 
     act(() => {
       companyRef.fields.address.locality.set("Melbourne");
     });
-
     expect(renders).toEqual({ section: 1, line1: 1, postalCode: 1 });
 
     act(() => {
@@ -426,36 +400,31 @@ describe("web predicate bindings", () => {
     });
 
     expect(renders).toEqual({ section: 1, line1: 1, postalCode: 2 });
-    expect(renderer?.root.findAllByType("span").map((node) => node.children.join(""))).toContain(
+    expect(Array.from(container.querySelectorAll("span")).map((node) => node.textContent ?? "")).toContain(
       "3000",
     );
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("renders the company proof surface through the default generic resolver", () => {
     const { graph, companyId } = setupGraph();
     const companyRef = graph.company.ref(companyId);
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(
-        <Fragment>
-          <PredicateFieldView predicate={companyRef.fields.name} />
-          <PredicateFieldView predicate={companyRef.fields.foundedYear} />
-          <PredicateFieldView predicate={companyRef.fields.website} />
-          <PredicateFieldView predicate={companyRef.fields.status} />
-        </Fragment>,
-      );
-    });
+    const { container, unmount } = render(
+      <Fragment>
+        <PredicateFieldView predicate={companyRef.fields.name} />
+        <PredicateFieldView predicate={companyRef.fields.foundedYear} />
+        <PredicateFieldView predicate={companyRef.fields.website} />
+        <PredicateFieldView predicate={companyRef.fields.status} />
+      </Fragment>,
+    );
 
-    const spans = renderer?.root.findAllByType("span") ?? [];
-    const links = renderer?.root.findAllByType("a") ?? [];
+    const spans = Array.from(container.querySelectorAll("span"));
+    const links = Array.from(container.querySelectorAll("a"));
 
     expect(
-      spans.map((node) => [node.props["data-web-field-kind"], node.children.join("")]),
+      spans.map((node) => [node.getAttribute("data-web-field-kind"), node.textContent ?? ""]),
     ).toEqual([
       ["text", "Acme"],
       ["number", ""],
@@ -463,10 +432,10 @@ describe("web predicate bindings", () => {
     ]);
     expect(
       links.map((node) => ({
-        "data-web-field-kind": node.props["data-web-field-kind"],
-        href: node.props.href,
-        rel: node.props.rel,
-        target: node.props.target,
+        "data-web-field-kind": node.getAttribute("data-web-field-kind"),
+        href: node.getAttribute("href"),
+        rel: node.getAttribute("rel"),
+        target: node.getAttribute("target"),
       })),
     ).toEqual([
       {
@@ -476,56 +445,57 @@ describe("web predicate bindings", () => {
         target: "_blank",
       },
     ]);
-    expect(links[0]?.children).toEqual(["https://acme.com/"]);
+    expect(links[0]?.textContent).toBe("https://acme.com/");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("renders generic editors and mutates proof-surface fields through predicate refs", () => {
     const { graph, companyId } = setupGraph();
     const companyRef = graph.company.ref(companyId);
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(
-        <Fragment>
-          <PredicateFieldEditor predicate={companyRef.fields.name} />
-          <PredicateFieldEditor predicate={companyRef.fields.foundedYear} />
-          <PredicateFieldEditor predicate={companyRef.fields.website} />
-          <PredicateFieldEditor predicate={companyRef.fields.status} />
-          <PredicateFieldEditor predicate={companyRef.fields.tags} />
-        </Fragment>,
-      );
-    });
+    const { container, unmount } = render(
+      <Fragment>
+        <PredicateFieldEditor predicate={companyRef.fields.name} />
+        <PredicateFieldEditor predicate={companyRef.fields.foundedYear} />
+        <PredicateFieldEditor predicate={companyRef.fields.website} />
+        <PredicateFieldEditor predicate={companyRef.fields.status} />
+        <PredicateFieldEditor predicate={companyRef.fields.tags} />
+      </Fragment>,
+    );
 
-    const inputs = renderer?.root.findAllByType("input") ?? [];
-    const select = renderer?.root.findByType("select");
-    const tagsInput = renderer?.root.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "token-list-input",
+    const inputs = Array.from(container.querySelectorAll<HTMLInputElement>("input"));
+    const select = getSelectByKind(container, "select");
+    const tagsInput = getInputByKind(container, "token-list-input");
+    const addTagButton = getRequiredElement(
+      container.querySelector<HTMLButtonElement>('button[data-web-field-action="add-token"]'),
+      "Expected add-token button.",
     );
-    const addTagButton = renderer?.root.find(
-      (node) => node.type === "button" && node.props["data-web-field-action"] === "add-token",
-    );
-    const removeTagButton = renderer?.root.find(
-      (node) =>
-        node.type === "button" &&
-        node.props["data-web-field-action"] === "remove-token" &&
-        node.props["data-web-token-value"] === "saas",
+    const removeTagButton = getRequiredElement(
+      container.querySelector<HTMLButtonElement>(
+        'button[data-web-field-action="remove-token"][data-web-token-value="saas"]',
+      ),
+      "Expected remove-token button.",
     );
 
     act(() => {
-      inputs[0]?.props.onChange({ target: { value: "Acme Labs" } });
-      inputs[1]?.props.onChange({ target: { value: "1999" } });
-      inputs[2]?.props.onChange({ target: { value: "https://labs.acme.com" } });
-      select?.props.onChange({ target: { value: app.status.values.paused.id } });
-      tagsInput?.props.onChange({ target: { value: "ai" } });
-    });
-
-    act(() => {
-      addTagButton?.props.onClick();
-      removeTagButton?.props.onClick();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(inputs[0]!).onChange({
+        target: { value: "Acme Labs" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(inputs[1]!).onChange({
+        target: { value: "1999" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(inputs[2]!).onChange({
+        target: { value: "https://labs.acme.com" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(select).onChange({
+        target: { value: app.status.values.paused.id },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(tagsInput).onChange({
+        target: { value: "ai" },
+      });
+      getReactProps<{ onClick(): void }>(addTagButton).onClick();
+      getReactProps<{ onClick(): void }>(removeTagButton).onClick();
     });
 
     expect(companyRef.fields.name.get()).toBe("Acme Labs");
@@ -533,92 +503,81 @@ describe("web predicate bindings", () => {
     expect(companyRef.fields.website.get().toString()).toBe("https://labs.acme.com/");
     expect(companyRef.fields.status.get()).toBe(app.status.values.paused.id);
     expect(companyRef.fields.tags.get()).toEqual(["enterprise", "ai"]);
-    expect(select?.props.value).toBe(app.status.values.paused.id);
+    expect(select.value).toBe(app.status.values.paused.id);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("uses editor parse metadata for validated text scalars without bespoke components", () => {
     const { graph, companyId } = setupGraph();
     const companyRef = graph.company.ref(companyId);
 
-    let renderer: ReturnType<typeof create> | undefined;
+    const { container, unmount } = render(
+      <PredicateFieldEditor predicate={companyRef.fields.contactEmail} />,
+    );
+
+    const input = getRequiredElement(container.querySelector<HTMLInputElement>("input"), "Expected email input.");
+    expect(input.type).toBe("email");
+
     act(() => {
-      renderer = create(<PredicateFieldEditor predicate={companyRef.fields.contactEmail} />);
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "not-an-email" },
+      });
     });
-
-    const input = renderer?.root.findByType("input");
-    expect(input?.props.type).toBe("email");
-
-    act(() => {
-      input?.props.onChange({ target: { value: "not-an-email" } });
-    });
-
-    expect(renderer?.root.findByType("input").props["aria-invalid"]).toBe(true);
+    expect(input.ariaInvalid).toBe("true");
     expect(companyRef.fields.contactEmail.get()).toBeUndefined();
 
     act(() => {
-      renderer?.root.findByType("input").props.onChange({ target: { value: "Team@Acme.com" } });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "Team@Acme.com" },
+      });
     });
-
     expect(companyRef.fields.contactEmail.get()).toBe("team@acme.com");
-    expect(renderer?.root.findByType("input").props.value).toBe("team@acme.com");
+    expect(input.value).toBe("team@acme.com");
 
     act(() => {
-      renderer?.root.findByType("input").props.onChange({ target: { value: "" } });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "" },
+      });
     });
-
     expect(companyRef.fields.contactEmail.get()).toBeUndefined();
-    expect(renderer?.root.findByType("input").props["aria-invalid"]).toBeUndefined();
+    expect(input.ariaInvalid).toBeNull();
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("renders migrated boolean fields through the default generic resolver", () => {
     const { blockId, graph } = setupBlockGraph();
     const blockRef = graph.block.ref(blockId);
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(
-        <Fragment>
-          <PredicateFieldView predicate={blockRef.fields.collapsed} />
-          <PredicateFieldEditor predicate={blockRef.fields.collapsed} />
-        </Fragment>,
-      );
-    });
+    const { container, unmount } = render(
+      <Fragment>
+        <PredicateFieldView predicate={blockRef.fields.collapsed} />
+        <PredicateFieldEditor predicate={blockRef.fields.collapsed} />
+      </Fragment>,
+    );
 
-    const booleanView = renderer?.root.findByProps({ "data-web-field-kind": "boolean" });
-    const checkbox = renderer?.root.findByProps({ "data-web-field-kind": "checkbox" });
+    const booleanView = getInputByKind(container, "boolean");
+    const checkbox = getInputByKind(container, "checkbox");
 
-    expect(booleanView?.props.type).toBe("checkbox");
-    expect(booleanView?.props.checked).toBe(true);
-    expect(booleanView?.props.disabled).toBe(true);
-    expect(booleanView?.props["aria-label"]).toBe("True");
-    expect(checkbox?.props.checked).toBe(true);
+    expect(booleanView.type).toBe("checkbox");
+    expect(booleanView.checked).toBe(true);
+    expect(booleanView.disabled).toBe(true);
+    expect(booleanView.getAttribute("aria-label")).toBe("True");
+    expect(checkbox.checked).toBe(true);
 
     act(() => {
-      checkbox?.props.onChange({ target: { checked: false } });
+      getReactProps<{ onChange(event: { target: { checked: boolean } }): void }>(checkbox).onChange({
+        target: { checked: false },
+      });
     });
 
     expect(blockRef.fields.collapsed.get()).toBe(false);
-    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props.checked).toBe(
-      false,
-    );
-    expect(
-      renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props["aria-label"],
-    ).toBe("False");
-    expect(renderer?.root.findByProps({ "data-web-field-kind": "checkbox" }).props.checked).toBe(
-      false,
-    );
+    expect(booleanView.checked).toBe(false);
+    expect(booleanView.getAttribute("aria-label")).toBe("False");
+    expect(checkbox.checked).toBe(false);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("keeps token-list editor rerenders scoped to its predicate slot", () => {
@@ -645,26 +604,20 @@ describe("web predicate bindings", () => {
       );
     }
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(<CompanyFields />);
-    });
-
+    const { container, unmount } = render(<CompanyFields />);
     expect(renders).toEqual({ container: 1, name: 1, tags: 1 });
 
-    const tagsInput = renderer?.root.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "token-list-input",
-    );
-    const addTagButton = renderer?.root.find(
-      (node) => node.type === "button" && node.props["data-web-field-action"] === "add-token",
+    const tagsInput = getInputByKind(container, "token-list-input");
+    const addTagButton = getRequiredElement(
+      container.querySelector<HTMLButtonElement>('button[data-web-field-action="add-token"]'),
+      "Expected add-token button.",
     );
 
     act(() => {
-      tagsInput?.props.onChange({ target: { value: "ai" } });
-    });
-
-    act(() => {
-      addTagButton?.props.onClick();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(tagsInput).onChange({
+        target: { value: "ai" },
+      });
+      getReactProps<{ onClick(): void }>(addTagButton).onClick();
     });
 
     expect(renders.container).toBe(1);
@@ -672,9 +625,7 @@ describe("web predicate bindings", () => {
     expect(renders.tags).toBeGreaterThan(1);
     expect(companyRef.fields.tags.get()).toEqual(["enterprise", "saas", "ai"]);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("renders entity-reference fields through the explicit relationship policy", () => {
@@ -695,60 +646,55 @@ describe("web predicate bindings", () => {
       create: false,
     });
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(
-        <Fragment>
-          <PredicateFieldView predicate={worksAtRef} />
-          <PredicateFieldEditor predicate={worksAtRef} />
-        </Fragment>,
-      );
-    });
+    const { container, unmount } = render(
+      <Fragment>
+        <PredicateFieldView predicate={worksAtRef} />
+        <PredicateFieldEditor predicate={worksAtRef} />
+      </Fragment>,
+    );
 
-    expect(
-      renderer?.root
-        .findAll((node) => !!node.props && typeof node.props["data-web-reference-id"] === "string")
-        .map((node) => node.props["data-web-reference-id"] as string),
-    ).toEqual([companyId]);
-    expect(renderer?.root.findAllByType("code").map((node) => node.children.join(""))).toContain(
+    expect(getAllByData(container, "data-web-reference-id").map((node) => node.dataset.webReferenceId ?? "")).toEqual([
+      companyId,
+    ]);
+    expect(Array.from(container.querySelectorAll("code")).map((node) => node.textContent ?? "")).toContain(
       companyId,
     );
-    expect(
-      renderer?.root.findAllByType("span").some((node) => node.children.join("") === "Acme"),
-    ).toBe(true);
+    expect(Array.from(container.querySelectorAll("span")).some((node) => node.textContent === "Acme")).toBe(true);
 
-    const secondCompanyToggle = renderer?.root.find(
-      (node) =>
-        node.type === "label" && node.props["data-web-reference-option-id"] === secondCompanyId,
+    const secondCompanyToggle = getRequiredElement(
+      container.querySelector<HTMLInputElement>(
+        `label[data-web-reference-option-id="${secondCompanyId}"] input`,
+      ),
+      "Expected entity-reference toggle.",
     );
-
     act(() => {
-      secondCompanyToggle?.findByType("input").props.onChange({ target: { checked: true } });
+      getReactProps<{ onChange(event: { target: { checked: boolean } }): void }>(
+        secondCompanyToggle,
+      ).onChange({
+        target: { checked: true },
+      });
     });
 
     expect(worksAtRef.get()).toEqual([companyId, secondCompanyId]);
     expect(
-      renderer?.root
-        .findAll(
-          (node) =>
-            !!node.props && typeof node.props["data-web-reference-selected-id"] === "string",
-        )
-        .map((node) => node.props["data-web-reference-selected-id"] as string),
+      getAllByData(container, "data-web-reference-selected-id").map(
+        (node) => node.dataset.webReferenceSelectedId ?? "",
+      ),
     ).toEqual([companyId, secondCompanyId]);
 
-    const removeCurrentEmployer = renderer?.root.find(
-      (node) => node.type === "li" && node.props["data-web-reference-selected-id"] === companyId,
+    const removeCurrentEmployer = getRequiredElement(
+      container.querySelector<HTMLButtonElement>(
+        `li[data-web-reference-selected-id="${companyId}"] button`,
+      ),
+      "Expected selected-reference remove button.",
     );
-
     act(() => {
-      removeCurrentEmployer?.findByType("button").props.onClick();
+      getReactProps<{ onClick(): void }>(removeCurrentEmployer).onClick();
     });
 
     expect(worksAtRef.get()).toEqual([secondCompanyId]);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("keeps migrated boolean rerenders scoped to boolean subscribers", () => {
@@ -779,17 +725,14 @@ describe("web predicate bindings", () => {
       );
     }
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(<BlockFields />);
-    });
-
+    const { container, unmount } = render(<BlockFields />);
     expect(renders).toEqual({ collapsedEditor: 1, collapsedView: 1, container: 1, text: 1 });
 
-    const checkbox = renderer?.root.findByProps({ "data-web-field-kind": "checkbox" });
-
+    const checkbox = getInputByKind(container, "checkbox");
     act(() => {
-      checkbox?.props.onChange({ target: { checked: false } });
+      getReactProps<{ onChange(event: { target: { checked: boolean } }): void }>(checkbox).onChange({
+        target: { checked: false },
+      });
     });
 
     expect(blockRef.fields.collapsed.get()).toBe(false);
@@ -797,16 +740,10 @@ describe("web predicate bindings", () => {
     expect(renders.text).toBe(1);
     expect(renders.collapsedView).toBeGreaterThan(1);
     expect(renders.collapsedEditor).toBeGreaterThan(1);
-    expect(renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props.checked).toBe(
-      false,
-    );
-    expect(
-      renderer?.root.findByProps({ "data-web-field-kind": "boolean" }).props["aria-label"],
-    ).toBe("False");
+    expect(getInputByKind(container, "boolean").checked).toBe(false);
+    expect(getInputByKind(container, "boolean").getAttribute("aria-label")).toBe("False");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("keeps generic field rerenders scoped to each predicate slot", () => {
@@ -833,17 +770,12 @@ describe("web predicate bindings", () => {
       );
     }
 
-    let renderer: ReturnType<typeof create> | undefined;
-    act(() => {
-      renderer = create(<CompanyFields />);
-    });
-
+    const { container, unmount } = render(<CompanyFields />);
     expect(renders).toEqual({ container: 1, name: 1, website: 1 });
 
     act(() => {
       companyRef.fields.name.set("Acme 2");
     });
-
     expect(renders).toEqual({ container: 1, name: 2, website: 1 });
 
     act(() => {
@@ -851,10 +783,8 @@ describe("web predicate bindings", () => {
     });
 
     expect(renders).toEqual({ container: 1, name: 2, website: 2 });
-    expect(renderer?.root.findAllByType("a")[0]?.children).toEqual(["https://acme-2.com/"]);
+    expect((container.querySelector("a")?.textContent ?? "")).toBe("https://acme-2.com/");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 });

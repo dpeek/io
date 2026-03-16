@@ -1,111 +1,92 @@
 import { describe, expect, it } from "bun:test";
+import { fireEvent, render } from "@testing-library/react";
+import { act } from "react";
 
 import { createTypeClient, core, edgeId, typeId } from "@io/graph";
-import { act, create, type ReactTestInstance } from "react-test-renderer";
 
 import { app } from "../graph/app.js";
 import { createExampleRuntime } from "../graph/runtime.js";
+import { getAllByData, getByData, getReactProps, getRequiredElement, textContent } from "../test-dom.js";
 import { Explorer, ExplorerSurface } from "./explorer.js";
-
-(
-  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
-
-function collectText(node: ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : collectText(child)))
-    .join(" ");
-}
-
-function findByProp(
-  renderer: ReturnType<typeof create>,
-  prop: string,
-  value: string,
-): ReactTestInstance {
-  return renderer.root.find((node) => node.props[prop] === value);
-}
 
 describe("explorer surface", () => {
   it("surfaces inline validation failures for invalid entity edits", async () => {
     const runtime = createExampleRuntime();
     const graph = createTypeClient(runtime.store, { ...core, ...app });
+    const { container, unmount } = render(
+      <ExplorerSurface graph={graph} store={runtime.store} sync={runtime.sync} />,
+    );
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(
-        <ExplorerSurface graph={graph} store={runtime.store} sync={runtime.sync} />,
-      );
-    });
+    const companyNodeButton = getByData(container, "data-explorer-item-entity", runtime.ids.acme);
+    fireEvent.click(companyNodeButton);
 
-    const companyNodeButton = findByProp(renderer!, "data-explorer-item-entity", runtime.ids.acme);
-    await act(async () => {
-      companyNodeButton.props.onClick();
-    });
-
-    const nameRow = findByProp(renderer!, "data-explorer-field-path", "name");
-    const nameInput = nameRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const nameRow = getByData(container, "data-explorer-field-path", "name");
+    const nameInput = getRequiredElement(
+      nameRow.querySelector<HTMLInputElement>('input[data-web-field-kind="text"]'),
+      "Expected explorer name input.",
     );
     const initialName = graph.company.ref(runtime.ids.acme).fields.name.get();
 
-    await act(async () => {
-      nameInput.props.onChange({ target: { value: "   " } });
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(nameInput).onChange({
+        target: { value: "   " },
+      });
     });
 
     expect(graph.company.ref(runtime.ids.acme).fields.name.get()).toBe(initialName);
-    const validation = findByProp(renderer!, "data-explorer-field-validation", "name");
-    expect(collectText(validation)).toContain("Validation");
-    expect(collectText(validation)).toContain("field");
-    expect(collectText(validation)).toContain("Name must not be blank.");
+    const validation = getByData(container, "data-explorer-field-validation", "name");
+    expect(textContent(validation)).toContain("Validation");
+    expect(textContent(validation)).toContain("field");
+    expect(textContent(validation)).toContain("Name must not be blank.");
 
-    await act(async () => {
-      nameInput.props.onChange({ target: { value: "Acme Graph Labs" } });
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(nameInput).onChange({
+        target: { value: "Acme Graph Labs" },
+      });
     });
 
     expect(graph.company.ref(runtime.ids.acme).fields.name.get()).toBe("Acme Graph Labs");
     expect(
-      renderer!.root.findAll((node) => node.props["data-explorer-field-validation"] === "name"),
+      getAllByData(container, "data-explorer-field-validation").filter(
+        (node) => node.getAttribute("data-explorer-field-validation") === "name",
+      ),
     ).toHaveLength(0);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("surfaces shared type validation results for invalid number edits", async () => {
     const runtime = createExampleRuntime();
     const graph = createTypeClient(runtime.store, { ...core, ...app });
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(
-        <ExplorerSurface graph={graph} store={runtime.store} sync={runtime.sync} />,
-      );
-    });
-
-    const companyNodeButton = findByProp(renderer!, "data-explorer-item-entity", runtime.ids.acme);
-    await act(async () => {
-      companyNodeButton.props.onClick();
-    });
-
-    const foundedYearRow = findByProp(renderer!, "data-explorer-field-path", "foundedYear");
-    const foundedYearInput = foundedYearRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "number",
+    const { container, unmount } = render(
+      <ExplorerSurface graph={graph} store={runtime.store} sync={runtime.sync} />,
     );
 
-    await act(async () => {
-      foundedYearInput.props.onChange({ target: { value: "Infinity" } });
+    const companyNodeButton = getByData(container, "data-explorer-item-entity", runtime.ids.acme);
+    fireEvent.click(companyNodeButton);
+
+    const foundedYearRow = getByData(container, "data-explorer-field-path", "foundedYear");
+    const foundedYearInput = getRequiredElement(
+      foundedYearRow.querySelector<HTMLInputElement>('input[data-web-field-kind="number"]'),
+      "Expected founded year input.",
+    );
+
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(
+        foundedYearInput,
+      ).onChange({
+        target: { value: "Infinity" },
+      });
     });
 
     expect(graph.company.ref(runtime.ids.acme).fields.foundedYear.get()).toBe(1987);
-    const validation = findByProp(renderer!, "data-explorer-field-validation", "foundedYear");
-    expect(collectText(validation)).toContain("Validation");
-    expect(collectText(validation)).toContain("type");
-    expect(collectText(validation)).toContain("Number values must be finite.");
+    const validation = getByData(container, "data-explorer-field-validation", "foundedYear");
+    expect(textContent(validation)).toContain("Validation");
+    expect(textContent(validation)).toContain("type");
+    expect(textContent(validation)).toContain("Number values must be finite.");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("preflights custom range editor mutations before updating predicate metadata", async () => {
@@ -114,151 +95,122 @@ describe("explorer surface", () => {
     const websitePredicateId = edgeId(app.company.fields.website);
     const initialRange = graph.predicate.ref(websitePredicateId).fields.range.get();
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(
-        <ExplorerSurface graph={graph} store={runtime.store} sync={runtime.sync} />,
-      );
-    });
-
-    const predicatesButton = findByProp(renderer!, "data-explorer-nav", "predicates");
-    await act(async () => {
-      predicatesButton.props.onClick();
-    });
-
-    const websitePredicateButton = findByProp(
-      renderer!,
-      "data-explorer-item-predicate",
-      websitePredicateId,
-    );
-    await act(async () => {
-      websitePredicateButton.props.onClick();
-    });
-
-    const rangeRow = findByProp(renderer!, "data-explorer-field-path", "metadata.range");
-    const rangeSelect = rangeRow.find(
-      (node) =>
-        node.type === "select" && node.props["data-explorer-range-editor"] === websitePredicateId,
+    const { container, unmount } = render(
+      <ExplorerSurface graph={graph} store={runtime.store} sync={runtime.sync} />,
     );
 
-    await act(async () => {
-      rangeSelect.props.onChange({ target: { value: runtime.ids.acme } });
+    fireEvent.click(getByData(container, "data-explorer-nav", "predicates"));
+
+    fireEvent.click(getByData(container, "data-explorer-item-predicate", websitePredicateId));
+
+    const rangeRow = getByData(container, "data-explorer-field-path", "metadata.range");
+    const rangeSelect = getRequiredElement(
+      rangeRow.querySelector<HTMLSelectElement>(`select[data-explorer-range-editor="${websitePredicateId}"]`),
+      "Expected range select.",
+    );
+
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(rangeSelect).onChange({
+        target: { value: runtime.ids.acme },
+      });
     });
 
     expect(graph.predicate.ref(websitePredicateId).fields.range.get()).toBe(initialRange);
-    const validation = findByProp(renderer!, "data-explorer-field-validation", "metadata.range");
-    expect(collectText(validation)).toContain("Validation");
-    expect(collectText(validation)).toContain("runtime");
-    expect(collectText(validation)).toContain('Field "range" must reference "Type" entities.');
+    const validation = getByData(container, "data-explorer-field-validation", "metadata.range");
+    expect(textContent(validation)).toContain("Validation");
+    expect(textContent(validation)).toContain("runtime");
+    expect(textContent(validation)).toContain('Field "range" must reference "Type" entities.');
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("edits entity values and schema metadata from one surface", async () => {
     const runtime = createExampleRuntime();
     const graph = createTypeClient(runtime.store, { ...core, ...app });
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(<Explorer runtime={runtime} />);
-    });
+    const { container, unmount } = render(<Explorer runtime={runtime} />);
 
-    const companyNodeButton = findByProp(renderer!, "data-explorer-item-entity", runtime.ids.acme);
-    await act(async () => {
-      companyNodeButton.props.onClick();
-    });
+    fireEvent.click(getByData(container, "data-explorer-item-entity", runtime.ids.acme));
 
-    const nameRow = findByProp(renderer!, "data-explorer-field-path", "name");
-    const nameInput = nameRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const nameRow = getByData(container, "data-explorer-field-path", "name");
+    const nameInput = getRequiredElement(
+      nameRow.querySelector<HTMLInputElement>('input[data-web-field-kind="text"]'),
+      "Expected name input.",
     );
 
-    expect(collectText(nameRow)).toContain("set");
-    expect(collectText(nameRow)).toContain("required");
+    expect(textContent(nameRow)).toContain("set");
+    expect(textContent(nameRow)).toContain("required");
 
-    await act(async () => {
-      nameInput.props.onChange({ target: { value: "Acme Graph Labs" } });
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(nameInput).onChange({
+        target: { value: "Acme Graph Labs" },
+      });
     });
 
-    expect(
-      collectText(findByProp(renderer!, "data-explorer-item-entity", runtime.ids.acme)),
-    ).toContain("Acme Graph Labs");
+    expect(textContent(getByData(container, "data-explorer-item-entity", runtime.ids.acme))).toContain(
+      "Acme Graph Labs",
+    );
 
-    const typesButton = findByProp(renderer!, "data-explorer-nav", "types");
-    await act(async () => {
-      typesButton.props.onClick();
-    });
+    fireEvent.click(getByData(container, "data-explorer-nav", "types"));
 
     const companyTypeId = typeId(app.company);
-    const companyTypeButton = findByProp(renderer!, "data-explorer-item-type", companyTypeId);
-    await act(async () => {
-      companyTypeButton.props.onClick();
-    });
+    fireEvent.click(getByData(container, "data-explorer-item-type", companyTypeId));
 
-    const typeNameRow = findByProp(renderer!, "data-explorer-field-path", "metadata.name");
-    const typeNameInput = typeNameRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const typeNameRow = getByData(container, "data-explorer-field-path", "metadata.name");
+    const typeNameInput = getRequiredElement(
+      typeNameRow.querySelector<HTMLInputElement>('input[data-web-field-kind="text"]'),
+      "Expected type name input.",
     );
 
-    await act(async () => {
-      typeNameInput.props.onChange({ target: { value: "Company Model" } });
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(typeNameInput).onChange({
+        target: { value: "Company Model" },
+      });
     });
 
-    expect(collectText(findByProp(renderer!, "data-explorer-item-type", companyTypeId))).toContain(
+    expect(textContent(getByData(container, "data-explorer-item-type", companyTypeId))).toContain(
       "Company Model",
     );
 
-    const predicatesButton = findByProp(renderer!, "data-explorer-nav", "predicates");
-    await act(async () => {
-      predicatesButton.props.onClick();
-    });
+    fireEvent.click(getByData(container, "data-explorer-nav", "predicates"));
 
     const websitePredicateId = edgeId(app.company.fields.website);
-    const websitePredicateButton = findByProp(
-      renderer!,
-      "data-explorer-item-predicate",
-      websitePredicateId,
-    );
-    await act(async () => {
-      websitePredicateButton.props.onClick();
-    });
+    fireEvent.click(getByData(container, "data-explorer-item-predicate", websitePredicateId));
 
-    const predicateNameRow = findByProp(renderer!, "data-explorer-field-path", "metadata.name");
-    const predicateNameInput = predicateNameRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const predicateNameRow = getByData(container, "data-explorer-field-path", "metadata.name");
+    const predicateNameInput = getRequiredElement(
+      predicateNameRow.querySelector<HTMLInputElement>('input[data-web-field-kind="text"]'),
+      "Expected predicate name input.",
     );
 
-    const ownerTypeButton = findByProp(renderer!, "data-explorer-open-type", companyTypeId);
-    expect(collectText(ownerTypeButton.parent!.parent!)).toContain("Company");
+    const ownerTypeButton = getByData(container, "data-explorer-open-type", companyTypeId);
+    expect(textContent(ownerTypeButton.closest("section") ?? ownerTypeButton.parentElement ?? ownerTypeButton)).toContain("Company");
 
-    await act(async () => {
-      predicateNameInput.props.onChange({ target: { value: "Website predicate" } });
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(
+        predicateNameInput,
+      ).onChange({
+        target: { value: "Website predicate" },
+      });
     });
 
     expect(graph.predicate.ref(websitePredicateId).fields.name.get()).toBe("Website predicate");
-    expect(
-      collectText(findByProp(renderer!, "data-explorer-item-predicate", websitePredicateId)),
-    ).toContain("Website predicate");
+    expect(textContent(getByData(container, "data-explorer-item-predicate", websitePredicateId))).toContain(
+      "Website predicate",
+    );
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("surfaces stream cursor, pending writes, authoritative deliveries, and reset fallbacks", async () => {
     const runtime = createExampleRuntime();
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(<Explorer runtime={runtime} />);
-    });
+    const { container, unmount } = render(<Explorer runtime={runtime} />);
 
-    expect(collectText(findByProp(renderer!, "data-explorer-stream-cursor", ""))).toContain(
+    expect(textContent(getByData(container, "data-explorer-stream-cursor", ""))).toContain(
       runtime.authority.getBaseCursor(),
     );
-    findByProp(renderer!, "data-explorer-stream-pending-count", "0");
+    getByData(container, "data-explorer-stream-pending-count", "0");
 
     await act(async () => {
       runtime.graph.company.update(runtime.ids.acme, {
@@ -266,20 +218,20 @@ describe("explorer surface", () => {
       });
     });
 
-    const pendingWrite = findByProp(renderer!, "data-explorer-stream-pending-tx", "example:local");
-    expect(collectText(pendingWrite)).toContain("assert");
-    expect(collectText(pendingWrite)).toContain("retract");
-    findByProp(renderer!, "data-explorer-stream-pending-count", "1");
+    const pendingWrite = getByData(container, "data-explorer-stream-pending-tx", "example:local");
+    expect(textContent(pendingWrite)).toContain("assert");
+    expect(textContent(pendingWrite)).toContain("retract");
+    getByData(container, "data-explorer-stream-pending-count", "1");
 
     await act(async () => {
       await runtime.sync.flush();
     });
 
-    const writeActivity = findByProp(renderer!, "data-explorer-stream-activity", "write");
-    expect(collectText(writeActivity)).toContain("Authoritative write applied");
-    expect(collectText(writeActivity)).toContain("example:1");
-    expect(collectText(writeActivity)).toContain("example:local");
-    findByProp(renderer!, "data-explorer-stream-pending-count", "0");
+    const writeActivity = getByData(container, "data-explorer-stream-activity", "write");
+    expect(textContent(writeActivity)).toContain("Authoritative write applied");
+    expect(textContent(writeActivity)).toContain("example:1");
+    expect(textContent(writeActivity)).toContain("example:local");
+    getByData(container, "data-explorer-stream-pending-count", "0");
 
     await act(async () => {
       runtime.authority.resetAuthorityStream("reset:");
@@ -290,16 +242,14 @@ describe("explorer surface", () => {
       }
     });
 
-    const fallbackActivity = findByProp(renderer!, "data-explorer-stream-activity", "fallback");
-    expect(collectText(fallbackActivity)).toContain("Snapshot recovery required");
-    expect(collectText(fallbackActivity)).toContain("after example:1 -> reset:0");
-    expect(collectText(fallbackActivity)).toContain("reset");
-    expect(collectText(findByProp(renderer!, "data-explorer-stream-error", "error"))).toContain(
+    const fallbackActivity = getByData(container, "data-explorer-stream-activity", "fallback");
+    expect(textContent(fallbackActivity)).toContain("Snapshot recovery required");
+    expect(textContent(fallbackActivity)).toContain("after example:1 -> reset:0");
+    expect(textContent(fallbackActivity)).toContain("reset");
+    expect(textContent(getByData(container, "data-explorer-stream-error", "error"))).toContain(
       'Incremental sync requires total snapshot recovery because the authority reported "reset".',
     );
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 });

@@ -25,7 +25,7 @@ import type {
   Workflow,
 } from "./types.js";
 import { loadWorkflowFile, renderPrompt, toWorkspaceKey } from "./workflow.js";
-import { WorkspaceManager, type IssueRuntimeState } from "./workspace.js";
+import { WorkspaceManager, readIssueRuntimeState, type IssueRuntimeState } from "./workspace.js";
 
 type IssueRunner = {
   run: (options: {
@@ -65,15 +65,10 @@ export function pickCandidateIssues(
       if (leftPreferred !== rightPreferred) {
         return leftPreferred ? -1 : 1;
       }
-      const stateScore = scoreState(left.state) - scoreState(right.state);
-      if (stateScore !== 0) {
-        return stateScore;
+      if (getStreamKey(left) !== getStreamKey(right)) {
+        return 0;
       }
-      const priorityScore = (right.priority ?? -1) - (left.priority ?? -1);
-      if (priorityScore !== 0) {
-        return priorityScore;
-      }
-      return left.updatedAt.localeCompare(right.updatedAt);
+      return compareIssueManualOrder(left, right);
     })) {
     const streamKey = getStreamKey(issue);
     if (reservedStreams.has(streamKey)) {
@@ -88,15 +83,19 @@ export function pickCandidateIssues(
   return selected;
 }
 
-function scoreState(state: string) {
-  const normalized = normalizeState(state);
-  if (normalized === "todo") {
-    return 0;
-  }
-  if (normalized === "in progress") {
+function compareIssueManualOrder(left: AgentIssue, right: AgentIssue) {
+  const leftSortOrder = left.sortOrder;
+  const rightSortOrder = right.sortOrder;
+  if (typeof leftSortOrder === "number" && typeof rightSortOrder === "number") {
+    if (leftSortOrder !== rightSortOrder) {
+      return leftSortOrder - rightSortOrder;
+    }
+  } else if (typeof leftSortOrder === "number") {
+    return -1;
+  } else if (typeof rightSortOrder === "number") {
     return 1;
   }
-  return 2;
+  return left.createdAt.localeCompare(right.createdAt);
 }
 
 function getStreamKey(issue: AgentIssue) {
@@ -367,6 +366,28 @@ function withSessionRuntime(
           : undefined,
     },
   };
+}
+
+function createFinalizedSession(
+  session: AgentSessionRef,
+  issueState: Pick<
+    IssueRuntimeState,
+    "commitSha" | "finalizedAt" | "finalizedLinearState" | "landedAt" | "landedCommitSha"
+  >,
+): AgentSessionRef {
+  return withSessionRuntime(
+    session,
+    createSessionRuntime({
+      finalization: {
+        commitSha: issueState.landedCommitSha ?? issueState.commitSha,
+        finalizedAt: issueState.finalizedAt,
+        landedAt: issueState.landedAt,
+        linearState: issueState.finalizedLinearState,
+        state: "finalized",
+      },
+      state: "finalized",
+    }),
+  );
 }
 
 function createWorkflowDiagnosticIssue(
@@ -1146,6 +1167,19 @@ export class AgentService {
       workspace: workspace.path,
     });
     await tracker.setIssueState(issue.id, "Done");
+    await workspaceManager.reconcileTerminalIssues(tracker, workflow.tracker.terminalStates);
+    const finalizedIssueState = await readIssueRuntimeState(workflow.workspace.root, issue.identifier);
+    if (finalizedIssueState?.status === "finalized") {
+      this.#sessionEvents.publish({
+        data: {
+          commitSha: finalizedIssueState.landedCommitSha ?? finalizedIssueState.commitSha,
+          linearState: finalizedIssueState.finalizedLinearState,
+        },
+        phase: "completed",
+        session: createFinalizedSession(session, finalizedIssueState),
+        type: "session",
+      });
+    }
     return result;
   }
 

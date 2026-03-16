@@ -22,6 +22,7 @@ export interface AgentIssue {
   parentIssueTitle?: string;
   priority: number | null;
   projectSlug?: string;
+  sortOrder?: number | null;
   state: string;
   streamIssueId?: string;
   streamIssueIdentifier?: string;

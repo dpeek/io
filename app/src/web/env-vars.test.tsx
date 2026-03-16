@@ -1,27 +1,12 @@
 import { describe, expect, it } from "bun:test";
+import { fireEvent, render } from "@testing-library/react";
+import { act } from "react";
 
 import { bootstrap, createStore, createTypeClient, core } from "@io/graph";
-import { act, create, type ReactTestInstance } from "react-test-renderer";
 
 import { app } from "../graph/app.js";
+import { getByData, getReactProps, getRequiredElement, textContent } from "../test-dom.js";
 import { EnvVarSettingsSurface } from "./env-vars.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
-
-function findByProp(
-  renderer: ReturnType<typeof create>,
-  prop: string,
-  value: string,
-): ReactTestInstance {
-  return renderer.root.find((node) => node.props[prop] === value);
-}
-
-function collectText(node: ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : collectText(child)))
-    .join(" ");
-}
 
 function createRuntime() {
   const store = createStore();
@@ -46,49 +31,56 @@ describe("env-var settings surface", () => {
       readonly secretValue?: string;
     }> = [];
 
-    let renderer: ReturnType<typeof create> | undefined;
+    const { container, unmount } = render(
+      <EnvVarSettingsSurface
+        runtime={runtime}
+        submitEnvVar={async (input) => {
+          submitted.push(input);
+          const secretId = runtime.graph.secretRef.create({
+            name: `${input.name} secret`,
+            version: 1,
+            lastRotatedAt: new Date("2026-03-13T00:00:00.000Z"),
+          });
+          const envVarId = runtime.graph.envVar.create({
+            name: input.name,
+            description: input.description,
+            secret: secretId,
+          });
+          return {
+            envVarId,
+            created: true,
+            rotated: true,
+            secretVersion: 1,
+          };
+        }}
+      />,
+    );
+
+    const newButton = getByData(container, "data-env-var-new", "button");
+    const nameInput = getByData(container, "data-env-var-input", "name");
+    const descriptionInput = getByData(container, "data-env-var-input", "description");
+    const secretInput = getByData(container, "data-env-var-input", "secret");
+    const form = getRequiredElement(container.querySelector("form"), "Expected env-var form.");
+
     await act(async () => {
-      renderer = create(
-        <EnvVarSettingsSurface
-          runtime={runtime}
-          submitEnvVar={async (input) => {
-            submitted.push(input);
-            const secretId = runtime.graph.secretRef.create({
-              name: `${input.name} secret`,
-              version: 1,
-              lastRotatedAt: new Date("2026-03-13T00:00:00.000Z"),
-            });
-            const envVarId = runtime.graph.envVar.create({
-              name: input.name,
-              description: input.description,
-              secret: secretId,
-            });
-            return {
-              envVarId,
-              created: true,
-              rotated: true,
-              secretVersion: 1,
-            };
-          }}
-        />,
-      );
+      fireEvent.click(newButton);
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(nameInput).onChange({
+        target: { value: "OPENAI_API_KEY" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(descriptionInput).onChange({
+        target: { value: "Primary model credential" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(secretInput).onChange({
+        target: { value: "sk-test-secret" },
+      });
+      await Promise.resolve();
     });
 
-    const newButton = findByProp(renderer!, "data-env-var-new", "button");
-    const nameInput = findByProp(renderer!, "data-env-var-input", "name");
-    const descriptionInput = findByProp(renderer!, "data-env-var-input", "description");
-    const secretInput = findByProp(renderer!, "data-env-var-input", "secret");
-    const form = renderer!.root.findByType("form");
-
     await act(async () => {
-      newButton.props.onClick();
-      nameInput.props.onChange({ target: { value: "OPENAI_API_KEY" } });
-      descriptionInput.props.onChange({ target: { value: "Primary model credential" } });
-      secretInput.props.onChange({ target: { value: "sk-test-secret" } });
-    });
-
-    await act(async () => {
-      form.props.onSubmit({ preventDefault() {} });
+      getReactProps<{ onSubmit(event: { preventDefault(): void }): void | Promise<void> }>(form).onSubmit({
+        preventDefault() {},
+      });
+      await Promise.resolve();
     });
 
     expect(submitted).toEqual([
@@ -98,13 +90,11 @@ describe("env-var settings surface", () => {
         secretValue: "sk-test-secret",
       },
     ]);
-    expect(collectText(renderer!.root)).toContain("OPENAI_API_KEY");
-    expect(collectText(renderer!.root)).toContain("Created OPENAI_API_KEY.");
-    expect(collectText(renderer!.root)).not.toContain("sk-test-secret");
+    expect(textContent(container)).toContain("OPENAI_API_KEY");
+    expect(textContent(container)).toContain("Created OPENAI_API_KEY.");
+    expect(textContent(container)).not.toContain("sk-test-secret");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("keeps the secret field blank while editing and omits empty rotations from the mutation payload", async () => {
@@ -133,36 +123,41 @@ describe("env-var settings surface", () => {
       readonly secretValue?: string;
     }> = [];
 
-    let renderer: ReturnType<typeof create> | undefined;
+    const { container, unmount } = render(
+      <EnvVarSettingsSurface
+        runtime={runtime}
+        submitEnvVar={async (input) => {
+          submitted.push(input);
+          return {
+            envVarId,
+            created: false,
+            rotated: false,
+            secretVersion: 3,
+          };
+        }}
+      />,
+    );
+
+    const secretInput = getByData(container, "data-env-var-input", "secret") as HTMLInputElement;
+    const descriptionInput = getByData(container, "data-env-var-input", "description");
+    const form = getRequiredElement(container.querySelector("form"), "Expected env-var form.");
+
+    expect(secretInput.value).toBe("");
+
     await act(async () => {
-      renderer = create(
-        <EnvVarSettingsSurface
-          runtime={runtime}
-          submitEnvVar={async (input) => {
-            submitted.push(input);
-            return {
-              envVarId,
-              created: false,
-              rotated: false,
-              secretVersion: 3,
-            };
-          }}
-        />,
-      );
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(
+        descriptionInput,
+      ).onChange({
+        target: { value: "Updated notifications integration" },
+      });
+      await Promise.resolve();
     });
 
-    const secretInput = findByProp(renderer!, "data-env-var-input", "secret");
-    const descriptionInput = findByProp(renderer!, "data-env-var-input", "description");
-    const form = renderer!.root.findByType("form");
-
-    expect(secretInput.props.value).toBe("");
-
     await act(async () => {
-      descriptionInput.props.onChange({ target: { value: "Updated notifications integration" } });
-    });
-
-    await act(async () => {
-      form.props.onSubmit({ preventDefault() {} });
+      getReactProps<{ onSubmit(event: { preventDefault(): void }): void | Promise<void> }>(form).onSubmit({
+        preventDefault() {},
+      });
+      await Promise.resolve();
     });
 
     expect(submitted).toEqual([
@@ -173,11 +168,9 @@ describe("env-var settings surface", () => {
         secretValue: undefined,
       },
     ]);
-    expect(collectText(renderer!.root)).toContain("Saved SLACK_BOT_TOKEN.");
-    expect(collectText(renderer!.root)).toContain("v3");
+    expect(textContent(container)).toContain("Saved SLACK_BOT_TOKEN.");
+    expect(textContent(container)).toContain("v3");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 });

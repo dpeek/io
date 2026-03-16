@@ -16,7 +16,7 @@
 
 - `../src/service.ts`: supervisor loop, task selection, and run orchestration
 - `../src/workspace.ts`: control repo, stream/feature branches, issue worktrees, runtime files, and finalization
-- `../src/workflow.ts`, `../src/context.ts`, `../src/issue-routing.ts`, `../src/builtins.ts`: workflow config, prompt docs, issue hints, routing, and built-in context
+- `../src/workflow.ts`, `../src/context.ts`, `../src/issue-routing.ts`, `../src/builtins.ts`: workflow config, prompt docs, issue-linked doc resolution, routing, and built-in context
 - `../src/runner/codex.ts`: Codex app-server process, approvals, session logging, and sandbox defaults
 - `../src/session-events.ts`, `../src/tui-runtime.ts`, `../src/tui.ts`: retained event stream, replay/attach, and operator display surface
 - `../src/tracker/linear.ts`: Linear candidate polling and state writes

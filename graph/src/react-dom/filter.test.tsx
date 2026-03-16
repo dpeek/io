@@ -1,16 +1,14 @@
 import { describe, expect, it } from "bun:test";
+import { fireEvent, render } from "@testing-library/react";
+import { act } from "react";
 
 import { core, defineType } from "../index.js";
 import { lowerWebFilterClause } from "../react/index.js";
-import { act, create } from "react-test-renderer";
 
 import { app } from "../../../app/src/graph/app.js";
 import { statusTypeModule } from "../../../app/src/type/status/index.js";
+import { getReactProps, getRequiredElement } from "../test-dom.js";
 import { FilterOperandEditor, defaultWebFilterResolver } from "./index.js";
-
-(
-  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
 
 const defs = { ...core, ...app };
 
@@ -29,33 +27,32 @@ describe("web filter resolver", () => {
     expect(prefixOperator?.operand.editor.status).toBe("resolved");
 
     let nextOperand: string | undefined;
-    let renderer: ReturnType<typeof create> | undefined;
+    const { container, unmount } = render(
+      <FilterOperandEditor
+        onChange={(value) => {
+          nextOperand = value;
+        }}
+        operator={prefixOperator!}
+        value="Ac"
+      />,
+    );
+
+    const input = getRequiredElement(
+      container.querySelector<HTMLInputElement>("input"),
+      "Expected string operand input.",
+    );
+    expect(input.dataset.webFilterOperandKind).toBe("string");
+    expect(input.value).toBe("Ac");
 
     act(() => {
-      renderer = create(
-        <FilterOperandEditor
-          onChange={(value) => {
-            nextOperand = value;
-          }}
-          operator={prefixOperator!}
-          value="Ac"
-        />,
-      );
-    });
-
-    const input = renderer?.root.findByType("input");
-    expect(input?.props["data-web-filter-operand-kind"]).toBe("string");
-    expect(input?.props.value).toBe("Ac");
-
-    act(() => {
-      input?.props.onChange({ target: { value: "Acme" } });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "Acme" },
+      });
     });
 
     expect(nextOperand).toBe("Acme");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("parses number operands through the resolved operator contract", () => {
@@ -73,40 +70,41 @@ describe("web filter resolver", () => {
     if (!greaterThan) return;
 
     let nextOperand: number | undefined;
-    let renderer: ReturnType<typeof create> | undefined;
+    const { container, unmount } = render(
+      <FilterOperandEditor
+        onChange={(value) => {
+          nextOperand = value;
+        }}
+        operator={greaterThan}
+        value={1999}
+      />,
+    );
+
+    const input = getRequiredElement(
+      container.querySelector<HTMLInputElement>("input"),
+      "Expected number operand input.",
+    );
+    expect(input.dataset.webFilterOperandKind).toBe("number");
+    expect(input.value).toBe("1999");
 
     act(() => {
-      renderer = create(
-        <FilterOperandEditor
-          onChange={(value) => {
-            nextOperand = value;
-          }}
-          operator={greaterThan}
-          value={1999}
-        />,
-      );
-    });
-
-    const input = renderer?.root.findByType("input");
-    expect(input?.props["data-web-filter-operand-kind"]).toBe("number");
-    expect(input?.props.value).toBe("1999");
-
-    act(() => {
-      input?.props.onChange({ target: { value: "2001" } });
-    });
-
-    expect(nextOperand === 2001).toBe(true);
-
-    act(() => {
-      input?.props.onChange({ target: { value: "not-a-number" } });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "2001" },
+      });
     });
 
     expect(nextOperand === 2001).toBe(true);
-    expect(renderer?.root.findByType("input").props["aria-invalid"]).toBe(true);
 
     act(() => {
-      renderer?.unmount();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "not-a-number" },
+      });
     });
+
+    expect(nextOperand === 2001).toBe(true);
+    expect(input.ariaInvalid).toBe("true");
+
+    unmount();
   });
 
   it("parses url operands into URL instances", () => {
@@ -121,26 +119,27 @@ describe("web filter resolver", () => {
     if (!equalsOperator) return;
 
     let nextOperand: URL | undefined;
-    let renderer: ReturnType<typeof create> | undefined;
+    const { container, unmount } = render(
+      <FilterOperandEditor
+        onChange={(value) => {
+          nextOperand = value;
+        }}
+        operator={equalsOperator}
+        value={new URL("https://acme.com")}
+      />,
+    );
+
+    const input = getRequiredElement(
+      container.querySelector<HTMLInputElement>("input"),
+      "Expected URL operand input.",
+    );
+    expect(input.dataset.webFilterOperandKind).toBe("url");
+    expect(input.value).toBe("https://acme.com/");
 
     act(() => {
-      renderer = create(
-        <FilterOperandEditor
-          onChange={(value) => {
-            nextOperand = value;
-          }}
-          operator={equalsOperator}
-          value={new URL("https://acme.com")}
-        />,
-      );
-    });
-
-    const input = renderer?.root.findByType("input");
-    expect(input?.props["data-web-filter-operand-kind"]).toBe("url");
-    expect(input?.props.value).toBe("https://acme.com/");
-
-    act(() => {
-      input?.props.onChange({ target: { value: "https://labs.acme.com" } });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(input).onChange({
+        target: { value: "https://labs.acme.com" },
+      });
     });
 
     expect(nextOperand).toBeInstanceOf(URL);
@@ -149,9 +148,7 @@ describe("web filter resolver", () => {
     }
     expect(nextOperand.toString()).toBe("https://labs.acme.com/");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("resolves built-in validated string helpers through field filter metadata", () => {
@@ -218,34 +215,29 @@ describe("web filter resolver", () => {
     expect(isOperator.test(app.status.values.active.id, app.status.values.active.id)).toBe(true);
 
     let nextOperand: string | undefined;
-    let renderer: ReturnType<typeof create> | undefined;
+    const { container, unmount } = render(
+      <FilterOperandEditor
+        onChange={(value) => {
+          nextOperand = value;
+        }}
+        operator={isOperator}
+        value={app.status.values.active.id}
+      />,
+    );
 
-    act(() => {
-      renderer = create(
-        <FilterOperandEditor
-          onChange={(value) => {
-            nextOperand = value;
-          }}
-          operator={isOperator}
-          value={app.status.values.active.id}
-        />,
-      );
-    });
+    const select = getRequiredElement(
+      container.querySelector<HTMLSelectElement>("select"),
+      "Expected enum operand select.",
+    );
+    expect(select.dataset.webFilterOperandKind).toBe("enum");
+    expect(select.dataset.webFilterSelection).toBe("one");
+    expect(select.value).toBe(app.status.values.active.id);
 
-    const select = renderer?.root.findByType("select");
-    expect(select?.props["data-web-filter-operand-kind"]).toBe("enum");
-    expect(select?.props["data-web-filter-selection"]).toBe("one");
-    expect(select?.props.value).toBe(app.status.values.active.id);
-
-    act(() => {
-      select?.props.onChange({ target: { value: app.status.values.paused.id } });
-    });
+    fireEvent.change(select, { target: { value: app.status.values.paused.id } });
 
     expect(nextOperand === app.status.values.paused.id).toBe(true);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("lowers resolved operators into serializable runtime clauses", () => {
@@ -340,41 +332,35 @@ describe("web filter resolver", () => {
     ).toEqual([app.status.values.active.id, app.status.values.paused.id]);
 
     let nextOperand: string[] | undefined;
-    let renderer: ReturnType<typeof create> | undefined;
+    const { container, unmount } = render(
+      <FilterOperandEditor
+        onChange={(value) => {
+          nextOperand = value;
+        }}
+        operator={oneOfOperator}
+        value={[app.status.values.active.id]}
+      />,
+    );
 
-    act(() => {
-      renderer = create(
-        <FilterOperandEditor
-          onChange={(value) => {
-            nextOperand = value;
-          }}
-          operator={oneOfOperator}
-          value={[app.status.values.active.id]}
-        />,
-      );
-    });
+    const select = getRequiredElement(
+      container.querySelector<HTMLSelectElement>("select"),
+      "Expected multi-select operand.",
+    );
+    expect(select.multiple).toBe(true);
+    expect(select.dataset.webFilterSelection).toBe("many");
 
-    const select = renderer?.root.findByType("select");
-    expect(select?.props.multiple).toBe(true);
-    expect(select?.props["data-web-filter-selection"]).toBe("many");
-
-    act(() => {
-      select?.props.onChange({
-        target: {
-          selectedOptions: [
-            { value: app.status.values.active.id },
-            { value: app.status.values.paused.id },
-          ],
-        },
-      });
-    });
+    for (const option of Array.from(select.options)) {
+      option.selected = [
+        app.status.values.active.id,
+        app.status.values.paused.id,
+      ].includes(option.value);
+    }
+    fireEvent.change(select);
 
     expect(nextOperand?.join(",")).toBe(
       [app.status.values.active.id, app.status.values.paused.id].join(","),
     );
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 });

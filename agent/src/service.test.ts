@@ -27,6 +27,7 @@ function createIssue(overrides: Partial<AgentIssue> = {}): AgentIssue {
     labels: [],
     priority: 1,
     projectSlug: "io",
+    sortOrder: null,
     state: "Todo",
     title: "Example",
     updatedAt: "2024-01-01T00:00:00.000Z",
@@ -148,6 +149,7 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
     },
     priority: 2,
     project: { slugId: "OpenSurf" },
+    sortOrder: 1200.5,
     state: { name: "Todo" },
     title: "Fix integration",
     updatedAt: "2024-01-01T00:00:00.000Z",
@@ -156,6 +158,7 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   expect(issue.description).toBe("");
   expect(issue.blockedBy).toEqual(["2"]);
   expect(issue.projectSlug).toBe("OpenSurf");
+  expect(issue.sortOrder).toBe(1200.5);
   expect(issue.hasParent).toBe(true);
   expect(issue.hasChildren).toBe(true);
   expect(issue.parentIssueId).toBe("parent-1");
@@ -321,6 +324,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
                 },
                 priority: 0,
                 project: { slugId: "io" },
+                sortOrder: 15,
                 state: { name: "Todo" },
                 team: { id: "team-1" },
                 title: "Teach candidate issues to carry parent stream state",
@@ -337,6 +341,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
                 parent: null,
                 priority: 0,
                 project: { slugId: "io" },
+                sortOrder: 25,
                 state: { name: "In Review" },
                 team: { id: "team-1" },
                 title: "Current Approach Stream",
@@ -368,6 +373,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
 
     expect(requestBody?.query).toContain("parent {");
     expect(requestBody?.query).toContain("identifier");
+    expect(requestBody?.query).toContain("sortOrder");
     expect(requestBody?.query).toContain("state { name }");
     expect(issues).toHaveLength(2);
     expect(issues[0]).toMatchObject({
@@ -376,6 +382,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
       parentIssueId: "parent-1",
       parentIssueIdentifier: "OPE-147",
       parentIssueState: "In Review",
+      sortOrder: 15,
       streamIssueId: "stream-1",
       streamIssueIdentifier: "OPE-121",
       streamIssueState: "In Progress",
@@ -384,6 +391,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
       hasChildren: true,
       hasParent: false,
       identifier: "OPE-147",
+      sortOrder: 25,
     });
     expect(issues[1]?.parentIssueId).toBeUndefined();
     expect(issues[1]?.parentIssueIdentifier).toBeUndefined();
@@ -396,7 +404,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
   }
 });
 
-test("pickCandidateIssues prefers unblocked todo issues by priority", () => {
+test("pickCandidateIssues uses Linear manual order for dependency-free sibling tasks", () => {
   const selected = pickCandidateIssues(
     [
       createTaskIssue({
@@ -415,6 +423,7 @@ test("pickCandidateIssues prefers unblocked todo issues by priority", () => {
         parentIssueId: "feature-2",
         parentIssueIdentifier: "OS-102",
         priority: 1,
+        sortOrder: 200,
         state: "In Progress",
         title: "Later",
         updatedAt: "2024-01-02T00:00:00.000Z",
@@ -422,17 +431,18 @@ test("pickCandidateIssues prefers unblocked todo issues by priority", () => {
       createTaskIssue({
         id: "task-1",
         identifier: "OS-1",
-        parentIssueId: "feature-1",
-        parentIssueIdentifier: "OS-101",
+        parentIssueId: "feature-2",
+        parentIssueIdentifier: "OS-102",
         priority: 3,
+        sortOrder: 100,
         state: "Todo",
         title: "First",
         updatedAt: "2024-01-03T00:00:00.000Z",
       }),
     ],
-    2,
+    1,
   );
-  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-1", "OS-2"]);
+  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-1"]);
 });
 
 test("pickCandidateIssues keeps feature execution to one task per parent feature", () => {
@@ -443,6 +453,7 @@ test("pickCandidateIssues keeps feature execution to one task per parent feature
         identifier: "OS-2",
         parentIssueId: "feature-1",
         parentIssueIdentifier: "OS-1",
+        sortOrder: 200,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 2,
@@ -453,6 +464,7 @@ test("pickCandidateIssues keeps feature execution to one task per parent feature
         identifier: "OS-3",
         parentIssueId: "feature-1",
         parentIssueIdentifier: "OS-1",
+        sortOrder: 100,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 1,
@@ -463,6 +475,7 @@ test("pickCandidateIssues keeps feature execution to one task per parent feature
         identifier: "OS-4",
         parentIssueId: "feature-2",
         parentIssueIdentifier: "OS-4F",
+        sortOrder: 50,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 1,
@@ -471,7 +484,7 @@ test("pickCandidateIssues keeps feature execution to one task per parent feature
     ],
     3,
   );
-  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-2", "OS-4"]);
+  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-4"]);
 });
 
 test("pickCandidateIssues allows parallel tasks from different features in the same stream", () => {
@@ -562,9 +575,9 @@ test("pickCandidateIssues leaves release gating to the scheduler", () => {
         updatedAt: "2024-01-05T00:00:00.000Z",
       }),
     ],
-    3,
+    5,
   );
-  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-6", "OS-2", "OS-3"]);
+  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-2", "OS-3", "OS-4", "OS-5", "OS-6"]);
 });
 
 test("pickCandidateIssues prefers the locally active issue within an occupied stream", () => {
@@ -575,6 +588,7 @@ test("pickCandidateIssues prefers the locally active issue within an occupied st
         identifier: "OS-2",
         parentIssueId: "feature-1",
         parentIssueIdentifier: "OS-1",
+        sortOrder: 100,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 2,
@@ -585,6 +599,7 @@ test("pickCandidateIssues prefers the locally active issue within an occupied st
         identifier: "OS-3",
         parentIssueId: "feature-1",
         parentIssueIdentifier: "OS-1",
+        sortOrder: 200,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 1,
@@ -1916,6 +1931,7 @@ test("AgentService does not auto-run parent execute issues that already have chi
 test("AgentService publishes supervisor and worker session events", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-events-"));
   const workspacePath = resolve(root, "workspace", "workers", "OPE-54", "repo");
+  const issueRuntimePath = resolve(root, "workspace", "issue", "ope-54");
   const events: AgentSessionEvent[] = [];
 
   await writeIoTsConfig(root, {
@@ -2037,6 +2053,7 @@ test("AgentService publishes supervisor and worker session events", async () => 
             branchName: "io/ope-167",
             controlPath: root,
             createdNow: true,
+            issueRuntimePath,
             originPath: root,
             path: workspacePath,
             sourceRepoPath: root,
@@ -2047,7 +2064,41 @@ test("AgentService publishes supervisor and worker session events", async () => 
             baseIssueIdentifier: "OPE-121",
             workerId: "OPE-54",
           }),
-          reconcileTerminalIssues: async () => undefined,
+          reconcileTerminalIssues: async () => {
+            await mkdir(issueRuntimePath, { recursive: true });
+            await writeFile(
+              resolve(issueRuntimePath, "issue-state.json"),
+              JSON.stringify(
+                {
+                  branchName: "io/ope-167",
+                  commitSha: "a".repeat(40),
+                  controlPath: root,
+                  finalizedAt: "2026-03-15T12:00:01.000Z",
+                  finalizedLinearState: "Done",
+                  issueId: "1",
+                  issueIdentifier: "OPE-54",
+                  issueTitle: "Execute agent",
+                  landedAt: "2026-03-15T12:00:00.000Z",
+                  landedCommitSha: "a".repeat(40),
+                  originPath: root,
+                  outputPath: resolve(issueRuntimePath, "output.log"),
+                  parentIssueId: "feature-1",
+                  parentIssueIdentifier: "OPE-167",
+                  runtimePath: issueRuntimePath,
+                  sourceRepoPath: root,
+                  status: "finalized",
+                  streamIssueId: "stream-1",
+                  streamIssueIdentifier: "OPE-121",
+                  streamRuntimePath: resolve(root, "workspace", "stream", "ope-167.json"),
+                  updatedAt: "2026-03-15T12:00:01.000Z",
+                  workerId: "OPE-54",
+                  worktreePath: workspacePath,
+                },
+                null,
+                2,
+              ),
+            );
+          },
           runAfterRunHook: async () => undefined,
           runBeforeRunHook: async () => undefined,
         }) as unknown as never,
@@ -2155,6 +2206,23 @@ test("AgentService publishes supervisor and worker session events", async () => 
         state: "pending",
       },
       state: "pending-finalization",
+    });
+    const finalizedEvent = [...events].reverse().find(
+      (event) =>
+        event.type === "session" &&
+        event.phase === "completed" &&
+        event.session.issue?.identifier === "OPE-54" &&
+        event.session.runtime?.state === "finalized",
+    );
+    expect(finalizedEvent?.session.runtime).toMatchObject({
+      finalization: {
+        commitSha: "a".repeat(40),
+        finalizedAt: "2026-03-15T12:00:01.000Z",
+        landedAt: "2026-03-15T12:00:00.000Z",
+        linearState: "Done",
+        state: "finalized",
+      },
+      state: "finalized",
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -3045,11 +3113,9 @@ test("AgentService writes unresolved issue doc warnings to the run summary", asy
                   createdAt: "2024-01-01T00:00:00.000Z",
                   description: `Investigate warning handling
 
-<!-- io
-docs:
-  - ./io/context/linked.md
-  - ./io/context/missing.md
--->`,
+Refs:
+- \`./io/context/linked.md\`
+- \`./io/context/missing.md\``,
                   id: "1",
                   identifier: "OPE-61",
                   labels: { nodes: [] },
@@ -3151,7 +3217,6 @@ docs:
 
     expect(capturedPrompt).toContain("LINKED ISSUE DOC");
     expect(capturedPrompt).toContain("Issue Description:");
-    expect(capturedPrompt).not.toContain("<!-- io");
 
     const output = await readFile(outputPath, "utf8");
     expect(output).toContain("context bundle:");

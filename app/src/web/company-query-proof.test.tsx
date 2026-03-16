@@ -1,14 +1,12 @@
 import { describe, expect, it } from "bun:test";
+import { render } from "@testing-library/react";
+import { act } from "react";
 
 import { bootstrap, createStore, createTypeClient, core } from "@io/graph";
-import { act, create, type ReactTestInstance } from "react-test-renderer";
 
 import { app } from "../graph/app.js";
+import { getAllByData, getByData, getReactProps, getRequiredElement } from "../test-dom.js";
 import { CompanyQueryProofSurface } from "./company-query-proof.js";
-
-(
-  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
 
 function setupGraph() {
   const store = createStore();
@@ -47,17 +45,9 @@ function setupGraph() {
   };
 }
 
-function findByProp(
-  renderer: ReturnType<typeof create>,
-  prop: string,
-  value: string,
-): ReactTestInstance {
-  return renderer.root.find((node) => node.props[prop] === value);
-}
-
-function readLoweredQuery(renderer: ReturnType<typeof create>) {
-  const node = findByProp(renderer, "data-company-query-json", "");
-  return JSON.parse(node.children.join("")) as {
+function readLoweredQuery(container: HTMLElement) {
+  const node = getByData(container, "data-company-query-json", "");
+  return JSON.parse(node.textContent ?? "") as {
     entityTypeKey: string;
     combinator: string;
     clauses: Array<{
@@ -79,56 +69,70 @@ function readLoweredQuery(renderer: ReturnType<typeof create>) {
 describe("company query proof surface", () => {
   it("builds filter rows from typed refs and lowers a four-clause company query", async () => {
     const { acme, companies } = setupGraph();
+    const { container, unmount } = render(
+      <CompanyQueryProofSurface companies={companies} querySource={acme} />,
+    );
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(<CompanyQueryProofSurface companies={companies} querySource={acme} />);
+    const nameRow = getByData(container, "data-company-query-row", "name");
+    const statusRow = getByData(container, "data-company-query-row", "status");
+    const websiteRow = getByData(container, "data-company-query-row", "website");
+    const foundedYearRow = getByData(container, "data-company-query-row", "foundedYear");
+
+    const nameOperator = getRequiredElement(
+      nameRow.querySelector<HTMLSelectElement>('select[data-company-query-control="operator"]'),
+      "Expected name operator select.",
+    );
+    const statusOperator = getRequiredElement(
+      statusRow.querySelector<HTMLSelectElement>('select[data-company-query-control="operator"]'),
+      "Expected status operator select.",
+    );
+    const websiteOperator = getRequiredElement(
+      websiteRow.querySelector<HTMLSelectElement>('select[data-company-query-control="operator"]'),
+      "Expected website operator select.",
+    );
+    const foundedYearOperator = getRequiredElement(
+      foundedYearRow.querySelector<HTMLSelectElement>('select[data-company-query-control="operator"]'),
+      "Expected founded year operator select.",
+    );
+
+    expect(nameOperator.value).toBe("contains");
+    expect(statusOperator.value).toBe("is");
+    expect(websiteOperator.value).toBe("equals");
+    expect(foundedYearOperator.value).toBe("equals");
+
+    const nameInput = getRequiredElement(
+      nameRow.querySelector<HTMLInputElement>('input[data-web-filter-operand-kind="string"]'),
+      "Expected name input.",
+    );
+    const statusOperand = getRequiredElement(
+      statusRow.querySelector<HTMLSelectElement>('select[data-web-filter-operand-kind="enum"]'),
+      "Expected status operand select.",
+    );
+    const websiteInput = getRequiredElement(
+      websiteRow.querySelector<HTMLInputElement>('input[data-web-filter-operand-kind="url"]'),
+      "Expected website input.",
+    );
+    const foundedYearInput = getRequiredElement(
+      foundedYearRow.querySelector<HTMLInputElement>('input[data-web-filter-operand-kind="number"]'),
+      "Expected founded year input.",
+    );
+
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(nameInput).onChange({
+        target: { value: "Acme" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(statusOperand).onChange({
+        target: { value: app.status.values.active.id },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(websiteInput).onChange({
+        target: { value: "https://acme.com" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(foundedYearInput).onChange({
+        target: { value: "1987" },
+      });
     });
 
-    const nameRow = findByProp(renderer!, "data-company-query-row", "name");
-    const statusRow = findByProp(renderer!, "data-company-query-row", "status");
-    const websiteRow = findByProp(renderer!, "data-company-query-row", "website");
-    const foundedYearRow = findByProp(renderer!, "data-company-query-row", "foundedYear");
-
-    const nameOperator = nameRow.find(
-      (node) => node.type === "select" && node.props["data-company-query-control"] === "operator",
-    );
-    const statusOperator = statusRow.find(
-      (node) => node.type === "select" && node.props["data-company-query-control"] === "operator",
-    );
-    const websiteOperator = websiteRow.find(
-      (node) => node.type === "select" && node.props["data-company-query-control"] === "operator",
-    );
-    const foundedYearOperator = foundedYearRow.find(
-      (node) => node.type === "select" && node.props["data-company-query-control"] === "operator",
-    );
-
-    expect(nameOperator.props.value).toBe("contains");
-    expect(statusOperator.props.value).toBe("is");
-    expect(websiteOperator.props.value).toBe("equals");
-    expect(foundedYearOperator.props.value).toBe("equals");
-
-    const nameInput = nameRow.find(
-      (node) => node.type === "input" && node.props["data-web-filter-operand-kind"] === "string",
-    );
-    const statusOperand = statusRow.find(
-      (node) => node.type === "select" && node.props["data-web-filter-operand-kind"] === "enum",
-    );
-    const websiteInput = websiteRow.find(
-      (node) => node.type === "input" && node.props["data-web-filter-operand-kind"] === "url",
-    );
-    const foundedYearInput = foundedYearRow.find(
-      (node) => node.type === "input" && node.props["data-web-filter-operand-kind"] === "number",
-    );
-
-    await act(async () => {
-      nameInput.props.onChange({ target: { value: "Acme" } });
-      statusOperand.props.onChange({ target: { value: app.status.values.active.id } });
-      websiteInput.props.onChange({ target: { value: "https://acme.com" } });
-      foundedYearInput.props.onChange({ target: { value: "1987" } });
-    });
-
-    const query = readLoweredQuery(renderer!);
+    const query = readLoweredQuery(container);
     expect(query.entityTypeKey).toBe(app.company.values.key);
     expect(query.combinator).toBe("and");
     expect(query.clauses).toEqual([
@@ -183,53 +187,67 @@ describe("company query proof surface", () => {
       },
     ]);
 
-    const matches = renderer!.root
-      .findAll((node) => typeof node.props["data-company-query-match"] === "string")
-      .map((node) => node.props["data-company-query-match"] as string);
+    const matches = getAllByData(container, "data-company-query-match").map(
+      (node) => node.getAttribute("data-company-query-match") ?? "",
+    );
 
     expect(matches).toEqual([acme.id]);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("switches operator-specific operands and filters optional founded years through the compiled query plan", async () => {
     const { acme, atlas, companies } = setupGraph();
+    const { container, unmount } = render(
+      <CompanyQueryProofSurface companies={companies} querySource={acme} />,
+    );
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(<CompanyQueryProofSurface companies={companies} querySource={acme} />);
+    const websiteRow = getByData(container, "data-company-query-row", "website");
+    const foundedYearRow = getByData(container, "data-company-query-row", "foundedYear");
+
+    const websiteOperator = getRequiredElement(
+      websiteRow.querySelector<HTMLSelectElement>('select[data-company-query-control="operator"]'),
+      "Expected website operator select.",
+    );
+    const foundedYearOperator = getRequiredElement(
+      foundedYearRow.querySelector<HTMLSelectElement>('select[data-company-query-control="operator"]'),
+      "Expected founded year operator select.",
+    );
+
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(
+        websiteOperator,
+      ).onChange({
+        target: { value: "host" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(
+        foundedYearOperator,
+      ).onChange({
+        target: { value: "gt" },
+      });
     });
 
-    const websiteRow = findByProp(renderer!, "data-company-query-row", "website");
-    const foundedYearRow = findByProp(renderer!, "data-company-query-row", "foundedYear");
-
-    const websiteOperator = websiteRow.find(
-      (node) => node.type === "select" && node.props["data-company-query-control"] === "operator",
+    const websiteHostInput = getRequiredElement(
+      websiteRow.querySelector<HTMLInputElement>('input[data-web-filter-operand-kind="string"]'),
+      "Expected website host input.",
     );
-    const foundedYearOperator = foundedYearRow.find(
-      (node) => node.type === "select" && node.props["data-company-query-control"] === "operator",
+    const foundedYearInput = getRequiredElement(
+      foundedYearRow.querySelector<HTMLInputElement>('input[data-web-filter-operand-kind="number"]'),
+      "Expected founded year input.",
     );
 
-    await act(async () => {
-      websiteOperator.props.onChange({ target: { value: "host" } });
-      foundedYearOperator.props.onChange({ target: { value: "gt" } });
+    act(() => {
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(
+        websiteHostInput,
+      ).onChange({
+        target: { value: "atlas.io" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(foundedYearInput).onChange({
+        target: { value: "2000" },
+      });
     });
 
-    const websiteHostInput = websiteRow.find(
-      (node) => node.type === "input" && node.props["data-web-filter-operand-kind"] === "string",
-    );
-    const foundedYearInput = foundedYearRow.find(
-      (node) => node.type === "input" && node.props["data-web-filter-operand-kind"] === "number",
-    );
-
-    await act(async () => {
-      websiteHostInput.props.onChange({ target: { value: "atlas.io" } });
-      foundedYearInput.props.onChange({ target: { value: "2000" } });
-    });
-
-    const query = readLoweredQuery(renderer!);
+    const query = readLoweredQuery(container);
     expect(query.clauses).toEqual([
       {
         cardinality: "one",
@@ -257,14 +275,12 @@ describe("company query proof surface", () => {
       },
     ]);
 
-    const matches = renderer!.root
-      .findAll((node) => typeof node.props["data-company-query-match"] === "string")
-      .map((node) => node.props["data-company-query-match"] as string);
+    const matches = getAllByData(container, "data-company-query-match").map(
+      (node) => node.getAttribute("data-company-query-match") ?? "",
+    );
 
     expect(matches).toEqual([atlas.id]);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 });

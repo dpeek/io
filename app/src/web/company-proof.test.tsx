@@ -1,14 +1,12 @@
 import { describe, expect, it } from "bun:test";
+import { render } from "@testing-library/react";
+import { act } from "react";
 
 import { bootstrap, createStore, createTypeClient, core } from "@io/graph";
-import { act, create, type ReactTestInstance } from "react-test-renderer";
 
 import { app } from "../graph/app.js";
+import { getAllByData, getByData, getReactProps, getRequiredElement } from "../test-dom.js";
 import { CompanyProofSurface } from "./company-proof.js";
-
-(
-  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
 
 function setupGraph() {
   const store = createStore();
@@ -46,39 +44,39 @@ function setupGraph() {
   };
 }
 
-function findByProofProp(
-  renderer: ReturnType<typeof create>,
-  prop: string,
-  value: string,
-): ReactTestInstance {
-  return renderer.root.find((node) => node.props[prop] === value);
+function findByProofProp(container: HTMLElement, prop: string, value: string): HTMLElement {
+  return getByData(container, prop, value);
 }
 
-function readProofCounts(renderer: ReturnType<typeof create>) {
-  const counts = renderer.root.findAll(
-    (node) => typeof node.props["data-proof-count"] === "string",
-  );
+function readProofCounts(container: HTMLElement) {
+  const counts = getAllByData(container, "data-proof-count");
   return Object.fromEntries(
     counts.map((node) => [
-      node.props["data-proof-count"] as string,
-      Number(node.children.join("")),
+      node.getAttribute("data-proof-count") ?? "",
+      Number(node.textContent ?? ""),
     ]),
   ) as Record<string, number>;
 }
 
-async function waitForInstrumentation(
-  renderer: ReturnType<typeof create>,
-  timeoutMs = 100,
-): Promise<void> {
+function getInstrumentationValue(container: HTMLElement, attribute: string): string {
+  const node = getRequiredElement(
+    container.querySelector<HTMLElement>(`[${attribute}]`),
+    `Expected instrumentation node for ${attribute}.`,
+  );
+  return node.getAttribute(attribute) ?? "";
+}
+
+async function waitForInstrumentation(container: HTMLElement, timeoutMs = 100): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 5);
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 5);
+      });
     });
-    const lastCheck = renderer.root.find(
-      (node) => typeof node.props["data-proof-last-check"] === "string",
-    );
-    if (lastCheck.props["data-proof-last-check"] !== "pending") return;
+    if (getInstrumentationValue(container, "data-proof-last-check") !== "pending") {
+      return;
+    }
   }
   throw new Error("Timed out waiting for proof instrumentation to settle.");
 }
@@ -86,109 +84,136 @@ async function waitForInstrumentation(
 describe("company proof surface", () => {
   it("renders the combined proof and mutates nested, many, and relationship fields through predicate refs", async () => {
     const { company, estiiId, person } = setupGraph();
+    const { container, unmount } = render(<CompanyProofSurface company={company} person={person} />);
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(<CompanyProofSurface company={company} person={person} />);
-    });
+    const nameRow = findByProofProp(container, "data-proof-field", "name");
+    const statusRow = findByProofProp(container, "data-proof-field", "status");
+    const websiteRow = findByProofProp(container, "data-proof-field", "website");
+    const foundedYearRow = findByProofProp(container, "data-proof-field", "foundedYear");
+    const tagsRow = findByProofProp(container, "data-proof-field", "tags");
+    const addressLine1Row = findByProofProp(container, "data-proof-field", "address.address_line1");
+    const localityRow = findByProofProp(container, "data-proof-field", "address.locality");
+    const postalCodeRow = findByProofProp(container, "data-proof-field", "address.postal_code");
+    const worksAtRow = findByProofProp(container, "data-proof-field", "worksAt");
 
-    const nameRow = findByProofProp(renderer!, "data-proof-field", "name");
-    const statusRow = findByProofProp(renderer!, "data-proof-field", "status");
-    const websiteRow = findByProofProp(renderer!, "data-proof-field", "website");
-    const foundedYearRow = findByProofProp(renderer!, "data-proof-field", "foundedYear");
-    const tagsRow = findByProofProp(renderer!, "data-proof-field", "tags");
-    const addressLine1Row = findByProofProp(renderer!, "data-proof-field", "address.address_line1");
-    const localityRow = findByProofProp(renderer!, "data-proof-field", "address.locality");
-    const postalCodeRow = findByProofProp(renderer!, "data-proof-field", "address.postal_code");
-    const worksAtRow = findByProofProp(renderer!, "data-proof-field", "worksAt");
-
-    const nameInput = nameRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const nameInput = getRequiredElement(
+      nameRow.querySelector<HTMLInputElement>('input[data-web-field-kind="text"]'),
+      "Expected proof name input.",
     );
-    const statusSelect = statusRow.find(
-      (node) => node.type === "select" && node.props["data-web-field-kind"] === "select",
+    const statusSelect = getRequiredElement(
+      statusRow.querySelector<HTMLSelectElement>('select[data-web-field-kind="select"]'),
+      "Expected proof status select.",
     );
-    const websiteInput = websiteRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "url",
+    const websiteInput = getRequiredElement(
+      websiteRow.querySelector<HTMLInputElement>('input[data-web-field-kind="url"]'),
+      "Expected proof website input.",
     );
-    const foundedYearInput = foundedYearRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "number",
+    const foundedYearInput = getRequiredElement(
+      foundedYearRow.querySelector<HTMLInputElement>('input[data-web-field-kind="number"]'),
+      "Expected proof founded year input.",
     );
-    const tagsInput = tagsRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "token-list-input",
+    const tagsInput = getRequiredElement(
+      tagsRow.querySelector<HTMLInputElement>('input[data-web-field-kind="token-list-input"]'),
+      "Expected proof tags input.",
     );
-    const addTagButton = tagsRow.find(
-      (node) => node.type === "button" && node.props["data-web-field-action"] === "add-token",
+    const addTagButton = getRequiredElement(
+      tagsRow.querySelector<HTMLButtonElement>('button[data-web-field-action="add-token"]'),
+      "Expected add-tag button.",
     );
-    const removeTagButton = tagsRow.find(
-      (node) =>
-        node.type === "button" &&
-        node.props["data-web-field-action"] === "remove-token" &&
-        node.props["data-web-token-value"] === "saas",
+    const removeTagButton = getRequiredElement(
+      tagsRow.querySelector<HTMLButtonElement>(
+        'button[data-web-field-action="remove-token"][data-web-token-value="saas"]',
+      ),
+      "Expected remove-tag button.",
     );
-    const addressLine1Input = addressLine1Row.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const addressLine1Input = getRequiredElement(
+      addressLine1Row.querySelector<HTMLInputElement>('input[data-web-field-kind="text"]'),
+      "Expected address line input.",
     );
-    const localityInput = localityRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const localityInput = getRequiredElement(
+      localityRow.querySelector<HTMLInputElement>('input[data-web-field-kind="text"]'),
+      "Expected locality input.",
     );
-    const postalCodeInput = postalCodeRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const postalCodeInput = getRequiredElement(
+      postalCodeRow.querySelector<HTMLInputElement>('input[data-web-field-kind="text"]'),
+      "Expected postal code input.",
     );
-    const worksAtToggle = worksAtRow
-      .find(
-        (node) => node.type === "label" && node.props["data-web-reference-option-id"] === estiiId,
-      )
-      .findByType("input");
-    const removeCurrentEmployer = worksAtRow.find(
-      (node) =>
-        node.type === "button" &&
-        node.props["data-web-field-action"] === "remove-reference" &&
-        node.props["data-web-reference-remove-id"] === company.id,
+    const worksAtToggle = getRequiredElement(
+      worksAtRow.querySelector<HTMLInputElement>(
+        `label[data-web-reference-option-id="${estiiId}"] input`,
+      ),
+      "Expected worksAt checkbox.",
     );
-
-    await act(async () => {
-      nameRow.props.onChangeCapture();
-      nameInput.props.onChange({ target: { value: "Acme Labs" } });
-      statusRow.props.onChangeCapture();
-      statusSelect.props.onChange({ target: { value: app.status.values.paused.id } });
-      websiteRow.props.onChangeCapture();
-      websiteInput.props.onChange({ target: { value: "https://labs.acme.com" } });
-      foundedYearRow.props.onChangeCapture();
-      foundedYearInput.props.onChange({ target: { value: "1999" } });
-      addressLine1Row.props.onChangeCapture();
-      addressLine1Input.props.onChange({ target: { value: "99 Schema Rd" } });
-      localityRow.props.onChangeCapture();
-      localityInput.props.onChange({ target: { value: "Melbourne" } });
-      postalCodeRow.props.onChangeCapture();
-      postalCodeInput.props.onChange({ target: { value: "3000" } });
-      tagsInput.props.onChange({ target: { value: "ai" } });
-    });
+    const removeCurrentEmployer = getRequiredElement(
+      worksAtRow.querySelector<HTMLButtonElement>(
+        `button[data-web-field-action="remove-reference"][data-web-reference-remove-id="${company.id}"]`,
+      ),
+      "Expected remove-reference button.",
+    );
 
     await act(async () => {
-      tagsRow.props.onClickCapture({
+      getReactProps<{ onChangeCapture(): void }>(nameRow).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(nameInput).onChange({
+        target: { value: "Acme Labs" },
+      });
+      getReactProps<{ onChangeCapture(): void }>(statusRow).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(statusSelect).onChange({
+        target: { value: app.status.values.paused.id },
+      });
+      getReactProps<{ onChangeCapture(): void }>(websiteRow).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(websiteInput).onChange({
+        target: { value: "https://labs.acme.com" },
+      });
+      getReactProps<{ onChangeCapture(): void }>(foundedYearRow).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(foundedYearInput).onChange({
+        target: { value: "1999" },
+      });
+      getReactProps<{ onChangeCapture(): void }>(addressLine1Row).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(addressLine1Input).onChange({
+        target: { value: "99 Schema Rd" },
+      });
+      getReactProps<{ onChangeCapture(): void }>(localityRow).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(localityInput).onChange({
+        target: { value: "Melbourne" },
+      });
+      getReactProps<{ onChangeCapture(): void }>(postalCodeRow).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(postalCodeInput).onChange({
+        target: { value: "3000" },
+      });
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(tagsInput).onChange({
+        target: { value: "ai" },
+      });
+      getReactProps<{
+        onClickCapture(event: { target: { getAttribute(name: string): string | null } }): void;
+      }>(tagsRow).onClickCapture({
         target: {
           getAttribute: (name: string) => (name === "data-proof-mutation" ? "collection" : null),
         },
       });
-      addTagButton.props.onClick();
-      tagsRow.props.onClickCapture({
+      getReactProps<{ onClick(): void }>(addTagButton).onClick();
+      getReactProps<{
+        onClickCapture(event: { target: { getAttribute(name: string): string | null } }): void;
+      }>(tagsRow).onClickCapture({
         target: {
           getAttribute: (name: string) => (name === "data-proof-mutation" ? "collection" : null),
         },
       });
-      removeTagButton.props.onClick();
-      worksAtRow.props.onChangeCapture();
-      worksAtToggle.props.onChange({ target: { checked: true } });
-      worksAtRow.props.onClickCapture({
+      getReactProps<{ onClick(): void }>(removeTagButton).onClick();
+      getReactProps<{ onChangeCapture(): void }>(worksAtRow).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { checked: boolean } }): void }>(worksAtToggle).onChange({
+        target: { checked: true },
+      });
+      getReactProps<{
+        onClickCapture(event: { target: { getAttribute(name: string): string | null } }): void;
+      }>(worksAtRow).onClickCapture({
         target: {
-          getAttribute: (name: string) =>
-            name === "data-proof-mutation" ? "entity-reference" : null,
+          getAttribute: (name: string) => (name === "data-proof-mutation" ? "entity-reference" : null),
         },
       });
-      removeCurrentEmployer.props.onClick();
-      await waitForInstrumentation(renderer!);
+      getReactProps<{ onClick(): void }>(removeCurrentEmployer).onClick();
+      await Promise.resolve();
     });
+    await waitForInstrumentation(container);
 
     expect(company.fields.name.get()).toBe("Acme Labs");
     expect(company.fields.status.get()).toBe(app.status.values.paused.id);
@@ -199,22 +224,16 @@ describe("company proof surface", () => {
     expect(company.fields.address.locality.get()).toBe("Melbourne");
     expect(company.fields.address.postal_code.get()).toBe("3000");
     expect(person.fields.worksAt.get()).toEqual([estiiId]);
-    expect(statusSelect.props.value).toBe(app.status.values.paused.id);
+    expect(statusSelect.value).toBe(app.status.values.paused.id);
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("records predicate-local rerender instrumentation for nested leaves and relationship edits", async () => {
     const { company, estiiId, person } = setupGraph();
+    const { container, unmount } = render(<CompanyProofSurface company={company} person={person} />);
 
-    let renderer: ReturnType<typeof create> | undefined;
-    await act(async () => {
-      renderer = create(<CompanyProofSurface company={company} person={person} />);
-    });
-
-    const initialCounts = readProofCounts(renderer!);
+    const initialCounts = readProofCounts(container);
     expect(initialCounts).toEqual({
       surface: 1,
       name: 1,
@@ -228,24 +247,29 @@ describe("company proof surface", () => {
       worksAt: 1,
     });
 
-    const localityRow = findByProofProp(renderer!, "data-proof-field", "address.locality");
-    const localityInput = localityRow.find(
-      (node) => node.type === "input" && node.props["data-web-field-kind"] === "text",
+    const localityRow = findByProofProp(container, "data-proof-field", "address.locality");
+    const localityInput = getRequiredElement(
+      localityRow.querySelector<HTMLInputElement>('input[data-web-field-kind="text"]'),
+      "Expected locality input.",
     );
-    const worksAtRow = findByProofProp(renderer!, "data-proof-field", "worksAt");
-    const worksAtToggle = worksAtRow
-      .find(
-        (node) => node.type === "label" && node.props["data-web-reference-option-id"] === estiiId,
-      )
-      .findByType("input");
+    const worksAtRow = findByProofProp(container, "data-proof-field", "worksAt");
+    const worksAtToggle = getRequiredElement(
+      worksAtRow.querySelector<HTMLInputElement>(
+        `label[data-web-reference-option-id="${estiiId}"] input`,
+      ),
+      "Expected worksAt checkbox.",
+    );
 
     await act(async () => {
-      localityRow.props.onChangeCapture();
-      localityInput.props.onChange({ target: { value: "Melbourne" } });
-      await waitForInstrumentation(renderer!);
+      getReactProps<{ onChangeCapture(): void }>(localityRow).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { value: string } }): void }>(localityInput).onChange({
+        target: { value: "Melbourne" },
+      });
+      await Promise.resolve();
     });
+    await waitForInstrumentation(container);
 
-    const localityCounts = readProofCounts(renderer!);
+    const localityCounts = readProofCounts(container);
     expect(localityCounts.surface).toBe(initialCounts.surface);
     expect(localityCounts.name).toBe(initialCounts.name);
     expect(localityCounts.status).toBe(initialCounts.status);
@@ -259,23 +283,19 @@ describe("company proof surface", () => {
     expect(localityCounts["address.postal_code"]).toBe(initialCounts["address.postal_code"]);
     expect(localityCounts.worksAt).toBe(initialCounts.worksAt);
 
-    const lastCheck = renderer!.root.find(
-      (node) => typeof node.props["data-proof-last-check"] === "string",
-    );
-    const changed = renderer!.root.find(
-      (node) => typeof node.props["data-proof-changed"] === "string",
-    );
-
-    expect(lastCheck.props["data-proof-last-check"]).toBe("holds");
-    expect(changed.props["data-proof-changed"]).toBe("address.locality");
+    expect(getInstrumentationValue(container, "data-proof-last-check")).toBe("holds");
+    expect(getInstrumentationValue(container, "data-proof-changed")).toBe("address.locality");
 
     await act(async () => {
-      worksAtRow.props.onChangeCapture();
-      worksAtToggle.props.onChange({ target: { checked: true } });
-      await waitForInstrumentation(renderer!);
+      getReactProps<{ onChangeCapture(): void }>(worksAtRow).onChangeCapture();
+      getReactProps<{ onChange(event: { target: { checked: boolean } }): void }>(worksAtToggle).onChange({
+        target: { checked: true },
+      });
+      await Promise.resolve();
     });
+    await waitForInstrumentation(container);
 
-    const relationshipCounts = readProofCounts(renderer!);
+    const relationshipCounts = readProofCounts(container);
     expect(relationshipCounts.surface).toBe(localityCounts.surface);
     expect(relationshipCounts.name).toBe(localityCounts.name);
     expect(relationshipCounts.status).toBe(localityCounts.status);
@@ -289,11 +309,9 @@ describe("company proof surface", () => {
     expect(relationshipCounts["address.postal_code"]).toBe(localityCounts["address.postal_code"]);
     expect(relationshipCounts.worksAt ?? 0).toBeGreaterThan(localityCounts.worksAt ?? 0);
     expect(person.fields.worksAt.get()).toEqual([company.id, estiiId]);
-    expect(lastCheck.props["data-proof-last-check"]).toBe("holds");
-    expect(changed.props["data-proof-changed"]).toBe("worksAt");
+    expect(getInstrumentationValue(container, "data-proof-last-check")).toBe("holds");
+    expect(getInstrumentationValue(container, "data-proof-changed")).toBe("worksAt");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 });

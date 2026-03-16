@@ -17,7 +17,6 @@
     "@io/lib": "workspace:*",
     "@io/tui": "workspace:*",
     "@linear/sdk": "^76.0.0",
-    "yaml": "^2.8.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {

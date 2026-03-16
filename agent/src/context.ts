@@ -1,9 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
-import { parse as parseYaml } from "yaml";
-import z from "zod";
-
 import {
   DEFAULT_BACKLOG_BUILTIN_DOC_IDS,
   DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
@@ -21,34 +18,11 @@ import type {
 
 const CONTEXT_ENTRYPOINT_DOC_ID = "context.entrypoint";
 const ISSUE_CONTEXT_DOC_ID = "issue.context";
-const ISSUE_HINT_BLOCK_PATTERN = /<!--\s*io\b([\s\S]*?)-->/gi;
 const BUILTIN_DOC_REF_PATTERN = /(?<![A-Za-z0-9._/-])(builtin:[A-Za-z0-9._-]+)\b/g;
 const REGISTERED_DOC_REF_PATTERN =
   /(?<![A-Za-z0-9_/:.-])([A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)+)\b/g;
 const REPO_PATH_DOC_REF_PATTERN =
   /(?<![A-Za-z0-9_./-])(\.\/[A-Za-z0-9_./-]+\.md(?:#[A-Za-z0-9._/-]+)?)\b/g;
-
-const issueBodyHintsSchema = z
-  .object({
-    agent: z.enum(["backlog", "execute"]).optional(),
-    docs: z
-      .union([
-        z.array(z.string().min(1)),
-        z
-          .string()
-          .min(1)
-          .transform((value) => [value]),
-      ])
-      .default([]),
-    profile: z.string().min(1).optional(),
-  })
-  .strict();
-
-type IssueBodyHints = {
-  agent?: AgentRole;
-  docs: string[];
-  profile?: string;
-};
 
 type PendingResolvedContextDoc = Omit<ResolvedContextDoc, "order">;
 
@@ -103,65 +77,6 @@ function getDefaultProfileInclude(agent: AgentRole) {
   return agent === "backlog"
     ? [...DEFAULT_BACKLOG_BUILTIN_DOC_IDS]
     : [...DEFAULT_EXECUTE_BUILTIN_DOC_IDS];
-}
-
-function resolveIssueSelection(
-  baseSelection: IssueRoutingSelection,
-  hints: IssueBodyHints,
-): IssueRoutingSelection {
-  const agent = hints.agent ?? baseSelection.agent;
-  return {
-    agent,
-    profile:
-      hints.profile?.trim() || (hints.agent && !hints.profile ? agent : baseSelection.profile),
-  };
-}
-
-function parseIssueBodyHints(description: string) {
-  const warnings: string[] = [];
-  const matches = [...description.matchAll(ISSUE_HINT_BLOCK_PATTERN)];
-  if (matches.length > 1) {
-    warnings.push("Multiple `<!-- io ... -->` blocks found; using the first block.");
-  }
-
-  const descriptionWithoutHints = description.replaceAll(ISSUE_HINT_BLOCK_PATTERN, "").trim();
-  const firstBlockBody = matches[0]?.[1]?.trim();
-  if (!firstBlockBody) {
-    return {
-      descriptionWithoutHints,
-      hints: { docs: [] } satisfies IssueBodyHints,
-      warnings,
-    };
-  }
-
-  try {
-    const parsed = parseYaml(firstBlockBody) ?? {};
-    const result = issueBodyHintsSchema.safeParse(parsed);
-    if (!result.success) {
-      warnings.push("Invalid issue metadata block; ignoring issue-level hints.");
-      return {
-        descriptionWithoutHints,
-        hints: { docs: [] } satisfies IssueBodyHints,
-        warnings,
-      };
-    }
-    return {
-      descriptionWithoutHints,
-      hints: {
-        agent: result.data.agent,
-        docs: uniqueOrdered(result.data.docs),
-        profile: result.data.profile?.trim(),
-      } satisfies IssueBodyHints,
-      warnings,
-    };
-  } catch {
-    warnings.push("Invalid issue metadata block; ignoring issue-level hints.");
-    return {
-      descriptionWithoutHints,
-      hints: { docs: [] } satisfies IssueBodyHints,
-      warnings,
-    };
-  }
 }
 
 function extractLinkedDocReferences(description: string) {
@@ -357,18 +272,15 @@ export async function resolveIssueContext(options: {
   workflow: Workflow;
 }): Promise<ResolvedIssueContext> {
   const { baseSelection, issue, repoRoot, workflow } = options;
-  const { descriptionWithoutHints, hints, warnings } = parseIssueBodyHints(issue.description);
-  const selection = resolveIssueSelection(baseSelection, hints);
-  const linkedDocReferences = extractLinkedDocReferences(descriptionWithoutHints);
-  const issueDocReferences = uniqueOrdered([...hints.docs, ...linkedDocReferences]);
+  const warnings: string[] = [];
+  const selection = baseSelection;
+  const linkedDocReferences = extractLinkedDocReferences(issue.description);
+  const issueDocReferences = uniqueOrdered(linkedDocReferences);
   const docs: PendingResolvedContextDoc[] = [];
   const seenDocIds = new Set<string>();
   const seenPaths = new Set<string>();
   const module = resolveIssueModule(workflow.modules, issue);
-  const issueForPrompt = {
-    ...issue,
-    description: descriptionWithoutHints,
-  };
+  const issueForPrompt = issue;
 
   const profileResolution = resolveProfileInclude(workflow, selection);
   warnings.push(...profileResolution.warnings);
@@ -418,7 +330,7 @@ export async function resolveIssueContext(options: {
     }
   }
 
-  appendDoc(docs, seenDocIds, seenPaths, createIssueContextDoc(descriptionWithoutHints));
+  appendDoc(docs, seenDocIds, seenPaths, createIssueContextDoc(issue.description));
 
   return {
     bundle: finalizeBundle(docs),

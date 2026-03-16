@@ -1,12 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { act, create, type ReactTestInstance } from "react-test-renderer";
+import { render } from "@testing-library/react";
+import { act } from "react";
 
 import { createExampleRuntime } from "../graph/runtime.js";
+import { getAllByData, getByData, textContent } from "../test-dom.js";
 
 import { AppRuntimeBootstrap, type AppRuntime, useAppRuntime } from "./runtime.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
 
 function createDeferred<TValue>() {
   let resolve!: (value: TValue) => void;
@@ -22,12 +21,6 @@ function createDeferred<TValue>() {
   };
 }
 
-function collectText(node: ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : collectText(child)))
-    .join(" ");
-}
-
 function RuntimeProbe() {
   const runtime = useAppRuntime();
   return (
@@ -40,48 +33,42 @@ function RuntimeProbe() {
 describe("app runtime bootstrap", () => {
   it("shows loading until the shared runtime has completed its initial sync", async () => {
     const deferred = createDeferred<AppRuntime>();
-    let renderer: ReturnType<typeof create> | undefined;
-
+    let rendered!: ReturnType<typeof render>;
     await act(async () => {
-      renderer = create(
+      rendered = render(
         <AppRuntimeBootstrap
           loadRuntime={() => deferred.promise}
           renderApp={() => <RuntimeProbe />}
         />,
       );
     });
+    const { container, unmount } = rendered;
 
-    expect(renderer!.root.findByProps({ "data-app-bootstrap": "loading" })).toBeDefined();
-    expect(
-      renderer!.root.findAll((node) => node.props["data-app-bootstrap"] === "ready"),
-    ).toHaveLength(0);
+    expect(getByData(container, "data-app-bootstrap", "loading")).toBeDefined();
+    expect(getAllByData(container, "data-app-bootstrap").filter((node) => node.dataset.appBootstrap === "ready")).toHaveLength(0);
 
     await act(async () => {
       deferred.resolve(createExampleRuntime() as AppRuntime);
       await deferred.promise;
     });
 
-    expect(renderer!.root.findByProps({ "data-app-bootstrap": "ready" }).children.join("")).toContain(
-      "Acme Corp",
-    );
+    expect(textContent(getByData(container, "data-app-bootstrap", "ready"))).toContain("Acme Corp");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 
   it("renders an error state when the initial sync fails", async () => {
     const deferred = createDeferred<AppRuntime>();
-    let renderer: ReturnType<typeof create> | undefined;
-
+    let rendered!: ReturnType<typeof render>;
     await act(async () => {
-      renderer = create(
+      rendered = render(
         <AppRuntimeBootstrap
           loadRuntime={() => deferred.promise}
           renderApp={() => <RuntimeProbe />}
         />,
       );
     });
+    const { container, unmount } = rendered;
 
     await act(async () => {
       deferred.reject(new Error("authority offline"));
@@ -92,12 +79,10 @@ describe("app runtime bootstrap", () => {
       }
     });
 
-    const errorState = renderer!.root.findByProps({ "data-app-bootstrap": "error" });
+    const errorState = getByData(container, "data-app-bootstrap", "error");
     expect(errorState).toBeDefined();
-    expect(collectText(errorState)).toContain("authority offline");
+    expect(textContent(errorState)).toContain("authority offline");
 
-    act(() => {
-      renderer?.unmount();
-    });
+    unmount();
   });
 });

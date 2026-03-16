@@ -39,12 +39,6 @@ Retained compatibility note:
   auto-run them and general routing now depends on explicit rules rather than an
   implicit backlog fallback
 
-Issue-body hints parsed by `../src/context.ts` can still override the base selection with:
-
-- `agent`
-- `profile`
-- `docs`
-
 ### Context assembly
 
 `../src/context.ts` already builds one ordered context bundle from:
@@ -54,7 +48,6 @@ Issue-body hints parsed by `../src/context.ts` can still override the base selec
 - profile-specific registered docs
 - module default docs
 - issue-linked doc references
-- issue-body hint docs
 - synthesized issue description context
 
 The bundle preserves source, order, override status, and file path when available.
@@ -93,8 +86,8 @@ This is already real runtime behavior, not a draft plan.
 
 ## Future Work Suggestions
 
-1. Add one end-to-end example showing `io.ts`, `io.md`, issue hints, and the resulting context bundle order.
-2. Document the expected stability of issue-body hint keys and doc-id conventions.
+1. Add one end-to-end example showing `io.ts`, `io.md`, issue-linked doc references, and the resulting context bundle order.
+2. Document the expected stability of doc-id conventions and issue-description doc linking.
 3. Add a compact routing precedence table with representative examples.
 4. Clarify when a doc should be registered by id versus linked by repo path.
 5. Add a short debugging checklist for unresolved doc warnings and scope failures.

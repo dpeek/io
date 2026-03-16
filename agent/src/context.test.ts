@@ -102,32 +102,24 @@ function createWorkspace(root: string): PreparedWorkspace {
   };
 }
 
-test("resolveIssueContext applies issue hints after repo defaults and profile docs", async () => {
+test("resolveIssueContext uses linked issue doc references after repo defaults and profile docs", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "context-"));
   const promptPath = resolve(root, "io.md");
   await mkdir(resolve(root, "io", "context"), { recursive: true });
   await writeFile(promptPath, "LOCAL {{ selection.agent }} {{ selection.profile }}\n");
-  await writeFile(resolve(root, "io", "context", "backlog.md"), "BACKLOG PROFILE DOC\n");
   await writeFile(resolve(root, "io", "context", "architecture.md"), "ARCHITECTURE DOC\n");
   await writeFile(resolve(root, "io", "context", "overview.md"), "OVERVIEW DOC\n");
-  await writeFile(resolve(root, "io", "context", "hint-extra.md"), "HINT EXTRA DOC\n");
   await writeFile(resolve(root, "io", "context", "linked.md"), "LINKED DOC\n");
 
   try {
     const issue = createIssue(`## Summary
 
-<!-- io
-agent: backlog
-docs:
-  - project.architecture
-  - ./io/context/hint-extra.md
-  - project.missing
--->
-
 Important refs:
 
+- \`project.architecture\`
 - \`project.overview\`
 - \`./io/context/linked.md\`
+- \`./io/context/missing.md\`
 - \`builtin:io.core.validation\`
 `);
     const workflow = createWorkflow(root, promptPath);
@@ -145,45 +137,34 @@ Important refs:
       workspace: createWorkspace(root),
     });
 
-    expect(resolved.selection).toEqual({
-      agent: "backlog",
-      profile: "backlog",
-    });
+    expect(resolved.selection).toEqual({ agent: "execute", profile: "execute" });
     expect(resolved.bundle.docs.map((doc) => doc.id)).toEqual([
-      "builtin:io.agent.backlog.default",
+      "builtin:io.agent.execute.default",
       "builtin:io.context.discovery",
       "builtin:io.linear.status-updates",
+      "builtin:io.core.validation",
       "builtin:io.core.git-safety",
       "context.entrypoint",
-      "project.backlog",
       "project.architecture",
-      "./io/context/hint-extra.md",
       "project.overview",
       "./io/context/linked.md",
-      "builtin:io.core.validation",
       "issue.context",
     ]);
-    expect(resolved.warnings).toEqual(["Unresolved issue doc reference: project.missing"]);
-    expect(rendered).toContain("You are the IO Backlog Agent.");
-    expect(rendered).not.toContain("You are the IO Execution Agent.");
-    expect(rendered).toContain("LOCAL backlog backlog");
-    expect(rendered).toContain("BACKLOG PROFILE DOC");
+    expect(resolved.warnings).toEqual(["Unresolved issue doc reference: ./io/context/missing.md"]);
+    expect(rendered).toContain("You are the IO Execution Agent.");
+    expect(rendered).not.toContain("You are the IO Backlog Agent.");
+    expect(rendered).toContain("LOCAL execute execute");
     expect(rendered).toContain("ARCHITECTURE DOC");
-    expect(rendered).toContain("HINT EXTRA DOC");
     expect(rendered).toContain("OVERVIEW DOC");
     expect(rendered).toContain("LINKED DOC");
     expect(rendered).toContain("run the repo's required validation before declaring the work done");
     expect(rendered).toContain("Issue Description:");
     expect(rendered).toContain("Important refs:");
-    expect(rendered).not.toContain("<!-- io");
 
-    expect(rendered.indexOf("You are the IO Backlog Agent.")).toBeLessThan(
-      rendered.indexOf("LOCAL backlog backlog"),
+    expect(rendered.indexOf("You are the IO Execution Agent.")).toBeLessThan(
+      rendered.indexOf("LOCAL execute execute"),
     );
-    expect(rendered.indexOf("LOCAL backlog backlog")).toBeLessThan(
-      rendered.indexOf("BACKLOG PROFILE DOC"),
-    );
-    expect(rendered.indexOf("BACKLOG PROFILE DOC")).toBeLessThan(
+    expect(rendered.indexOf("LOCAL execute execute")).toBeLessThan(
       rendered.indexOf("ARCHITECTURE DOC"),
     );
     expect(rendered.indexOf("LINKED DOC")).toBeLessThan(rendered.indexOf("Issue Description:"));
@@ -313,7 +294,7 @@ test("repo backlog context points at the current stream workflow docs", async ()
   expect(rendered).toContain("Feature");
   expect(rendered).toContain("Task");
   expect(rendered).toContain("do not use comment-driven workflows");
-  expect(rendered).toContain("Current code centers on a three-level issue model");
+  expect(rendered).toContain("Use the three-level stream/feature/task model");
   expect(rendered).not.toContain("@io backlog");
   expect(rendered).not.toContain("managed-stream");
 });

@@ -1,83 +1,80 @@
 import { describe, expect, it } from "bun:test";
-
-import { act, create, type ReactTestInstance } from "react-test-renderer";
+import { render } from "@testing-library/react";
+import { act } from "react";
 
 import { createExampleRuntime } from "../graph/runtime.js";
+import { getByData, getReactProps } from "../test-dom.js";
 import { AppShell, createTestAppBrowser } from "./app-shell.js";
 import { AppRuntimeBootstrap, type AppRuntime } from "./runtime.js";
 
-(
-  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
-
 async function renderShell(url: string) {
   const browser = createTestAppBrowser(url);
-  let renderer: ReturnType<typeof create> | undefined;
-
+  let rendered!: ReturnType<typeof render>;
   await act(async () => {
-    renderer = create(
+    rendered = render(
       <AppRuntimeBootstrap
         loadRuntime={() => Promise.resolve(createExampleRuntime() as AppRuntime)}
         renderApp={() => <AppShell browser={browser} />}
       />,
     );
+    await Promise.resolve();
   });
 
   return {
     browser,
-    renderer: renderer!,
+    ...rendered,
   };
-}
-
-function clickNavLink(node: ReactTestInstance): void {
-  act(() => {
-    node.props.onClick({
-      altKey: false,
-      button: 0,
-      ctrlKey: false,
-      defaultPrevented: false,
-      metaKey: false,
-      preventDefault() {},
-      shiftKey: false,
-    });
-  });
 }
 
 describe("app shell", () => {
   it("canonicalizes the legacy env-var surface URL onto the route path", async () => {
-    const { browser, renderer } = await renderShell("/?surface=env-vars&mode=demo#details");
+    const { browser, container, unmount } = await renderShell("/?surface=env-vars&mode=demo#details");
 
     expect(browser.url()).toBe("/settings/env-vars?mode=demo#details");
-    expect(renderer.root.findByProps({ "data-app-shell-route": "envVars" })).toBeDefined();
+    expect(getByData(container, "data-app-shell-route", "envVars")).toBeDefined();
 
-    act(() => {
-      renderer.unmount();
-    });
+    unmount();
   });
 
   it("strips stale surface params from explicit proof routes", async () => {
-    const { browser, renderer } = await renderShell("/query?surface=query&mode=demo#details");
+    const { browser, container, unmount } = await renderShell("/query?surface=query&mode=demo#details");
 
     expect(browser.url()).toBe("/query?mode=demo#details");
-    expect(renderer.root.findByProps({ "data-app-shell-route": "query" })).toBeDefined();
+    expect(getByData(container, "data-app-shell-route", "query")).toBeDefined();
 
-    act(() => {
-      renderer.unmount();
-    });
+    unmount();
   });
 
   it("navigates between registered routes from the shared shell", async () => {
-    const { browser, renderer } = await renderShell("/settings/env-vars");
+    const { browser, container, unmount } = await renderShell("/settings/env-vars");
 
-    const queryLink = renderer.root.findByProps({ "data-app-shell-link": "query" });
-    clickNavLink(queryLink);
+    await act(async () => {
+      getReactProps<{
+        onClick(event: {
+          altKey: boolean;
+          button: number;
+          ctrlKey: boolean;
+          defaultPrevented: boolean;
+          metaKey: boolean;
+          preventDefault(): void;
+          shiftKey: boolean;
+        }): void;
+      }>(getByData(container, "data-app-shell-link", "query")).onClick({
+        altKey: false,
+        button: 0,
+        ctrlKey: false,
+        defaultPrevented: false,
+        metaKey: false,
+        preventDefault() {},
+        shiftKey: false,
+      });
+      await Promise.resolve();
+    });
 
     expect(browser.url()).toBe("/query");
-    expect(renderer.root.findByProps({ "data-app-shell-route": "query" })).toBeDefined();
-    expect(renderer.root.findByProps({ "data-company-query-match-count": "" })).toBeDefined();
+    expect(getByData(container, "data-app-shell-route", "query")).toBeDefined();
+    expect(getByData(container, "data-company-query-match-count", "")).toBeDefined();
 
-    act(() => {
-      renderer.unmount();
-    });
+    unmount();
   });
 });
