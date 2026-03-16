@@ -295,8 +295,6 @@ test("repo backlog context points at the current stream workflow docs", async ()
   expect(rendered).toContain("Task");
   expect(rendered).toContain("do not use comment-driven workflows");
   expect(rendered).toContain("Use the three-level stream/feature/task model");
-  expect(rendered).not.toContain("@io backlog");
-  expect(rendered).not.toContain("managed-stream");
 });
 
 test("repo config allows shared repo docs in stream issue descriptions without warning", async () => {

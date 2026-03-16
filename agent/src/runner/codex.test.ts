@@ -3,10 +3,10 @@ import { expect, test } from "bun:test";
 import {
   closeAgentSessionDisplayLine,
   createAgentSessionDisplayState,
-  renderCodexNotificationEvent,
   renderAgentStatusEvent,
+  renderCodexNotificationEvent,
   type AgentSessionRef,
-} from "../session-events.js";
+} from "../tui/index.js";
 import {
   buildAutomaticUserInputResponse,
   createDefaultTurnSandbox,

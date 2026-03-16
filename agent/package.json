@@ -14,14 +14,17 @@
     "unit": "bun test"
   },
   "dependencies": {
+    "@opentui/core": "^0.1.87",
+    "@opentui/react": "^0.1.87",
     "@io/lib": "workspace:*",
-    "@io/tui": "workspace:*",
     "@linear/sdk": "^76.0.0",
+    "react": "^19.2.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bun": "^1.3.9",
     "@types/node": "^25.3.2",
+    "@types/react": "^19.2.14",
     "@typescript/native-preview": "^7.0.0-dev.20260226.1",
     "bun": "1.3.9",
     "oxfmt": "^0.35.0",

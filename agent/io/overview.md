@@ -9,6 +9,7 @@
 - `../../io/workflow.md`: primary user-facing contract for the preferred `Stream -> Feature -> Task` workflow
 - `../../io/backlog.md`: interactive stream backlog prompt and issue-structure contract
 - `./module-stream-workflow-plan.md`: workflow loading, context assembly, routing, and module scoping
+- `./tui-overview.md`: operator-facing terminal layout, transcript shaping, and live/replay display behavior
 - `../src/service.ts`: supervisor scheduling and issue run orchestration
 - `../src/workspace.ts`: branch lifecycle, task landing, and feature finalization
 
@@ -18,7 +19,8 @@
 - `../src/workspace.ts`: control repo, stream/feature branches, issue worktrees, runtime files, and finalization
 - `../src/workflow.ts`, `../src/context.ts`, `../src/issue-routing.ts`, `../src/builtins.ts`: workflow config, prompt docs, issue-linked doc resolution, routing, and built-in context
 - `../src/runner/codex.ts`: Codex app-server process, approvals, session logging, and sandbox defaults
-- `../src/session-events.ts`, `../src/tui-runtime.ts`, `../src/tui.ts`: retained event stream, replay/attach, and operator display surface
+- `../src/tui-runtime.ts`: retained replay/attach bridge over runtime files and event logs
+- `../src/tui/*`: session event schema, transcript shaping, layout, and interactive operator display surface
 - `../src/tracker/linear.ts`: Linear candidate polling and state writes
 
 ## Current vs Roadmap

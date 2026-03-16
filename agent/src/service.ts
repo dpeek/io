@@ -3,9 +3,6 @@ import { relative, resolve } from "node:path";
 
 import { createLogger, type Logger } from "@io/lib";
 
-import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
-import { resolveIssueRouting } from "./issue-routing.js";
-import { CodexAppServerRunner } from "./runner/codex.js";
 import {
   createAgentSessionEventBus,
   createAgentSessionStdoutObserver,
@@ -15,7 +12,10 @@ import {
   type AgentSessionRuntimeRef,
   type AgentWorkflowDiagnosticIssue,
   type AgentWorkflowDiagnostics,
-} from "./session-events.js";
+} from "./tui/index.js";
+import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
+import { resolveIssueRouting } from "./issue-routing.js";
+import { CodexAppServerRunner } from "./runner/codex.js";
 import { LinearTrackerAdapter } from "./tracker/linear.js";
 import type {
   AgentIssue,
@@ -141,8 +141,8 @@ function hasSeparateFeature(
 ) {
   return Boolean(
     issue.parentIssueIdentifier &&
-      issue.streamIssueIdentifier &&
-      issue.parentIssueIdentifier !== issue.streamIssueIdentifier,
+    issue.streamIssueIdentifier &&
+    issue.parentIssueIdentifier !== issue.streamIssueIdentifier,
   );
 }
 
@@ -157,8 +157,14 @@ function isTaskIssue(
 
 function formatWorkflowScope(
   issue:
-    | Pick<AgentIssue, "hasParent" | "identifier" | "parentIssueIdentifier" | "streamIssueIdentifier">
-    | Pick<IssueRuntimeState, "issueIdentifier" | "parentIssueIdentifier" | "streamIssueIdentifier">,
+    | Pick<
+        AgentIssue,
+        "hasParent" | "identifier" | "parentIssueIdentifier" | "streamIssueIdentifier"
+      >
+    | Pick<
+        IssueRuntimeState,
+        "issueIdentifier" | "parentIssueIdentifier" | "streamIssueIdentifier"
+      >,
 ) {
   const issueIdentifier = "issueIdentifier" in issue ? issue.issueIdentifier : issue.identifier;
   const hasParent = "hasParent" in issue ? issue.hasParent : Boolean(issue.parentIssueIdentifier);
@@ -259,11 +265,18 @@ function createSessionWorkflow(issue: AgentIssue): AgentSessionRef["workflow"] {
     title: issue.title,
   });
   const streamIdentifier =
-    issue.streamIssueIdentifier ?? issue.grandparentIssueIdentifier ?? issue.parentIssueIdentifier ?? issue.identifier;
+    issue.streamIssueIdentifier ??
+    issue.grandparentIssueIdentifier ??
+    issue.parentIssueIdentifier ??
+    issue.identifier;
   const stream = createWorkflowIssueRef({
     id: issue.streamIssueId ?? issue.grandparentIssueId ?? issue.parentIssueId ?? issue.id,
     identifier: streamIdentifier,
-    state: issue.streamIssueState ?? issue.grandparentIssueState ?? issue.parentIssueState ?? issue.state,
+    state:
+      issue.streamIssueState ??
+      issue.grandparentIssueState ??
+      issue.parentIssueState ??
+      issue.state,
     title:
       streamIdentifier === issue.identifier
         ? issue.title
@@ -341,6 +354,20 @@ function createSessionRuntime(runtime: AgentSessionRuntimeRef): AgentSessionRunt
   return runtime;
 }
 
+function mergeFinalizationRef(
+  current: AgentSessionRuntimeRef["finalization"],
+  next: AgentSessionRuntimeRef["finalization"],
+) {
+  if (!current && !next) {
+    return undefined;
+  }
+  return {
+    ...current,
+    ...next,
+    state: next?.state ?? current?.state ?? "pending",
+  };
+}
+
 function withSessionRuntime(
   session: AgentSessionRef,
   runtime: AgentSessionRuntimeRef,
@@ -357,13 +384,7 @@ function withSessionRuntime(
               ...runtime.blocker,
             }
           : undefined,
-      finalization:
-        session.runtime?.finalization || runtime.finalization
-          ? {
-              ...session.runtime?.finalization,
-              ...runtime.finalization,
-            }
-          : undefined,
+      finalization: mergeFinalizationRef(session.runtime?.finalization, runtime.finalization),
     },
   };
 }
@@ -556,10 +577,7 @@ export class AgentService {
       const issues = await tracker.fetchCandidateIssues();
       const maxConcurrentAgents = Math.max(1, activeWorkflow.agent.maxConcurrentAgents);
       const availableSlots = Math.max(0, maxConcurrentAgents - this.#activeRuns.size);
-      const launchableIssues = this.#selectLaunchableIssues(
-        issues,
-        occupiedStreams,
-      );
+      const launchableIssues = this.#selectLaunchableIssues(issues, occupiedStreams);
       this.#publishWorkflowDiagnosticLines(
         this.#buildWorkflowDiagnosticLines({
           availableSlots,
@@ -722,7 +740,9 @@ export class AgentService {
       formatRetainedIssueLine(issue),
     );
     const runnableIssueLines = runnableIssues.map((issue) => formatRunnableIssueLine(issue));
-    const waitingForSlotIssueLines = waitingForSlotIssues.map((issue) => formatRunnableIssueLine(issue));
+    const waitingForSlotIssueLines = waitingForSlotIssues.map((issue) =>
+      formatRunnableIssueLine(issue),
+    );
     const blockedByDependencyLines = blockedByDependency.map((issue) =>
       formatDependencyBlockedIssueLine(issue),
     );
@@ -757,7 +777,9 @@ export class AgentService {
         : undefined,
     ].filter((part): part is string => Boolean(part));
 
-    const summaryText = summaryParts.length ? `Workflow: ${summaryParts.join(", ")}` : "Workflow: idle";
+    const summaryText = summaryParts.length
+      ? `Workflow: ${summaryParts.join(", ")}`
+      : "Workflow: idle";
     const diagnostics: AgentWorkflowDiagnostics = {
       counts: {
         active: activeIssueStates.length || undefined,
@@ -792,7 +814,9 @@ export class AgentService {
         "pending-finalization": pendingFinalizationIssueStates.map((issue) =>
           createWorkflowDiagnosticIssueFromRuntime(issue),
         ),
-        runnable: options.launchableIssues.map((issue) => createWorkflowDiagnosticIssueFromIssue(issue)),
+        runnable: options.launchableIssues.map((issue) =>
+          createWorkflowDiagnosticIssueFromIssue(issue),
+        ),
         "waiting-for-agent-slot": waitingForSlotIssues.map((issue) =>
           createWorkflowDiagnosticIssueFromIssue(issue),
         ),
@@ -1092,7 +1116,10 @@ export class AgentService {
         }),
       );
       await workspaceManager.markBlocked(workspace, issue, reason);
-      await this.#appendIssueOutput(workspace.outputPath, `${issue.identifier}: blocked: ${reason}\n`);
+      await this.#appendIssueOutput(
+        workspace.outputPath,
+        `${issue.identifier}: blocked: ${reason}\n`,
+      );
       this.#sessionEvents.publish({
         code: "issue-blocked",
         data: {
@@ -1168,7 +1195,10 @@ export class AgentService {
     });
     await tracker.setIssueState(issue.id, "Done");
     await workspaceManager.reconcileTerminalIssues(tracker, workflow.tracker.terminalStates);
-    const finalizedIssueState = await readIssueRuntimeState(workflow.workspace.root, issue.identifier);
+    const finalizedIssueState = await readIssueRuntimeState(
+      workflow.workspace.root,
+      issue.identifier,
+    );
     if (finalizedIssueState?.status === "finalized") {
       this.#sessionEvents.publish({
         data: {

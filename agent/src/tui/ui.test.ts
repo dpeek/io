@@ -10,7 +10,22 @@ type SessionRefOverrides = Omit<Partial<AgentSessionRef>, "issue"> & {
   issue?: Partial<NonNullable<AgentSessionRef["issue"]>>;
 };
 
+function resolveIssueRef(
+  base: NonNullable<AgentSessionRef["issue"]> | undefined,
+  override: SessionRefOverrides["issue"],
+): AgentSessionRef["issue"] {
+  if (!base && !override) {
+    return undefined;
+  }
+  return {
+    id: override?.id ?? base?.id,
+    identifier: override?.identifier ?? base?.identifier ?? "unknown",
+    title: override?.title ?? base?.title ?? "Unknown",
+  };
+}
+
 function createSupervisorSession(overrides: SessionRefOverrides = {}): AgentSessionRef {
+  const { issue: issueOverrides, ...sessionOverrides } = overrides;
   return {
     id: "supervisor",
     kind: "supervisor",
@@ -18,7 +33,8 @@ function createSupervisorSession(overrides: SessionRefOverrides = {}): AgentSess
     title: "Supervisor",
     workerId: "supervisor",
     workspacePath: "/Users/dpeek/code/io",
-    ...overrides,
+    ...sessionOverrides,
+    issue: resolveIssueRef(undefined, issueOverrides),
   };
 }
 
@@ -39,11 +55,12 @@ function createWorkerSession(overrides: SessionRefOverrides = {}): AgentSessionR
     workerId: "OPE-68",
     workspacePath: "/Users/dpeek/code/io/.io/tree/ope-68",
     ...sessionOverrides,
-    issue: issueOverrides ? { ...baseIssue, ...issueOverrides } : baseIssue,
+    issue: resolveIssueRef(baseIssue, issueOverrides),
   };
 }
 
 function createChildSession(overrides: SessionRefOverrides = {}): AgentSessionRef {
+  const { issue: issueOverrides, ...sessionOverrides } = overrides;
   return {
     id: "child:OPE-68:1",
     kind: "child",
@@ -52,7 +69,8 @@ function createChildSession(overrides: SessionRefOverrides = {}): AgentSessionRe
     title: "Helper",
     workerId: "OPE-68",
     workspacePath: "/Users/dpeek/code/io/.io/tree/ope-68",
-    ...overrides,
+    ...sessionOverrides,
+    issue: resolveIssueRef(undefined, issueOverrides),
   };
 }
 

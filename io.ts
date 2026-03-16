@@ -79,11 +79,6 @@ export default defineIoConfig({
       docs: ["./lib/io/overview.md"],
       path: "./lib",
     },
-    tui: {
-      allowedSharedPaths: ["./agent/doc", "./io"],
-      docs: ["./tui/io/overview.md"],
-      path: "./tui",
-    },
   },
   install: {
     brews: [

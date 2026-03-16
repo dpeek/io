@@ -1,12 +1,9 @@
+import type { AgentCodexNotificationEventInit, AgentStatusEventInit } from "../tui/index.js";
 import type {
   RequestId,
   ServerNotification,
   ServerRequest,
 } from "../plugin/codex/server/api/index.js";
-import type {
-  AgentCodexNotificationEventInit,
-  AgentStatusEventInit,
-} from "../session-events.js";
 
 export type JsonRpcError = {
   code?: number;
@@ -98,7 +95,9 @@ export function isServerNotificationMessage(
   return "method" in message && !("id" in message) && message.method !== "malformed";
 }
 
-function isLegacyCodexEventMessage(message: CodexSessionMessage): message is LegacyCodexEventMessage {
+function isLegacyCodexEventMessage(
+  message: CodexSessionMessage,
+): message is LegacyCodexEventMessage {
   return "method" in message && message.method.startsWith("codex/event/");
 }
 
@@ -127,8 +126,13 @@ export function summarizeCodexParams(params: unknown) {
   };
 }
 
-function summarizeCommandExecution(item: { command: string; commandActions: Array<{ command: string }> }) {
-  return item.commandActions.map((action) => action.command).find(Boolean) ?? item.command ?? "command";
+function summarizeCommandExecution(item: {
+  command: string;
+  commandActions: Array<{ command: string }>;
+}) {
+  return (
+    item.commandActions.map((action) => action.command).find(Boolean) ?? item.command ?? "command"
+  );
 }
 
 function normalizeLegacyCodexEventMessage(message: LegacyCodexEventMessage): CodexStatusEvent[] {
@@ -350,4 +354,3 @@ export function normalizeCodexSessionMessage(message: CodexSessionMessage): Code
       return [];
   }
 }
-

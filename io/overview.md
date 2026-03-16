@@ -13,8 +13,8 @@ the graph-first application direction the rest of the workspace is proving.
 - `./workflow.md`
 - `./backlog.md`
 - `../agent/io/overview.md`
+- `../agent/io/tui-overview.md`
 - `../graph/io/overview.md`
-- `../tui/io/overview.md`
 
 ## Layout
 
@@ -25,7 +25,8 @@ the graph-first application direction the rest of the workspace is proving.
   task ownership and release/finalization behavior
 - `./backlog.md`: interactive stream backlog prompt and issue-structure contract
 - `./overview.md`: repo map and context entrypoint
-- `../agent/`: scheduler, context assembly, tracker integration, TUI runtime
+- `../agent/`: scheduler, context assembly, tracker integration, retained runtime,
+  and the operator TUI
 - `../config/`, `../lib/`: shared config loading and typed config surface
 - `../graph/`, `../app/`: graph runtime, schema-driven UI proofs, application surfaces
-- `../cli/`, `../tui/`: operator command and terminal surfaces
+- `../cli/`: operator command surface

@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { toCodexNotificationEvent } from "./runner/codex-events.js";
 import type {
   AgentCodexNotificationEvent,
   AgentRawLineEvent,
@@ -15,7 +14,8 @@ import type {
   AgentSessionWorkflowRef,
   AgentStatusCode,
   AgentStatusEvent,
-} from "./session-events.js";
+} from "./tui/index.js";
+import { toCodexNotificationEvent } from "./runner/codex-events.js";
 import type { IssueRuntimeState } from "./workspace.js";
 
 export type AgentTuiRetainedMode = "attach" | "replay";
@@ -97,6 +97,7 @@ function mergeRuntimeRef(
         ? {
             ...current?.finalization,
             ...next?.finalization,
+            state: next?.finalization?.state ?? current?.finalization?.state ?? "pending",
           }
         : undefined,
   };
@@ -130,7 +131,9 @@ function createFallbackWorkerSession(issueState: IssueRuntimeState): AgentSessio
     title: issueState.issueTitle,
   };
   const streamIdentifier =
-    issueState.streamIssueIdentifier ?? issueState.parentIssueIdentifier ?? issueState.issueIdentifier;
+    issueState.streamIssueIdentifier ??
+    issueState.parentIssueIdentifier ??
+    issueState.issueIdentifier;
   const stream = {
     id: issueState.streamIssueId ?? issueState.parentIssueId ?? issueState.issueId,
     identifier: streamIdentifier,
@@ -146,7 +149,8 @@ function createFallbackWorkerSession(issueState: IssueRuntimeState): AgentSessio
           stream,
           task: current,
         }
-      : issueState.parentIssueIdentifier && issueState.parentIssueIdentifier !== issueState.issueIdentifier
+      : issueState.parentIssueIdentifier &&
+          issueState.parentIssueIdentifier !== issueState.issueIdentifier
         ? {
             feature: current,
             stream,
@@ -682,11 +686,7 @@ export class AgentTuiRetainedReader {
           beforeTerminalIndex = failedPhaseIndex;
         } else {
           trailing.push(
-            this.#buildRuntimeStatusEvent(
-              this.#workerSession,
-              "issue-blocked",
-              eventText,
-            ),
+            this.#buildRuntimeStatusEvent(this.#workerSession, "issue-blocked", eventText),
           );
         }
       }
@@ -796,11 +796,7 @@ export class AgentTuiRetainedReader {
   }
 
   #resolveCommitSha(outputSummary: RetainedOutputSummary | undefined) {
-    return (
-      this.issueState.landedCommitSha ??
-      this.issueState.commitSha ??
-      outputSummary?.commitSha
-    );
+    return this.issueState.landedCommitSha ?? this.issueState.commitSha ?? outputSummary?.commitSha;
   }
 
   #resolveFailureReason(outputSummary: RetainedOutputSummary | undefined) {
@@ -810,7 +806,8 @@ export class AgentTuiRetainedReader {
   #runtimeFromEvent(event: AgentSessionEvent): AgentSessionRuntimeRef | undefined {
     if (event.type === "session") {
       const reason = typeof event.data?.reason === "string" ? event.data.reason : undefined;
-      const commitSha = typeof event.data?.commitSha === "string" ? event.data.commitSha : undefined;
+      const commitSha =
+        typeof event.data?.commitSha === "string" ? event.data.commitSha : undefined;
       switch (event.phase) {
         case "completed":
           return {

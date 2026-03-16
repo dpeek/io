@@ -3,6 +3,21 @@ import { basename, join } from "node:path";
 
 import { createLogger, type Logger } from "@io/lib";
 
+import {
+  closeAgentSessionDisplayLine,
+  createAgentSessionDisplayState,
+  createAgentSessionEventBus,
+  renderAgentStatusEvent,
+  renderCodexNotificationEvent,
+  type AgentCodexNotificationEventInit,
+  type AgentRawLineEventInit,
+  type AgentSessionEventBus,
+  type AgentSessionEventInit,
+  type AgentSessionEventObserver,
+  type AgentSessionLifecycleEventInit,
+  type AgentSessionRef,
+  type AgentStatusEventInit,
+} from "../tui/index.js";
 import type {
   ApplyPatchApprovalResponse,
   ExecCommandApprovalResponse,
@@ -22,6 +37,7 @@ import type {
   TurnStartParams,
   TurnStartResponse,
 } from "../plugin/codex/server/api/v2/index.js";
+import type { AgentIssue, CodexConfig, IssueRunResult, PreparedWorkspace } from "../types.js";
 import {
   isJsonRpcErrorResponse,
   isJsonRpcSuccessResponse,
@@ -32,27 +48,8 @@ import {
   toCodexNotificationEvent,
   type CodexSessionMessage,
 } from "./codex-events.js";
-import {
-  closeAgentSessionDisplayLine,
-  renderCodexNotificationEvent,
-  createAgentSessionDisplayState,
-  createAgentSessionEventBus,
-  renderAgentStatusEvent,
-  type AgentCodexNotificationEventInit,
-  type AgentSessionEventBus,
-  type AgentSessionEventInit,
-  type AgentSessionLifecycleEventInit,
-  type AgentSessionEventObserver,
-  type AgentRawLineEventInit,
-  type AgentSessionRef,
-  type AgentStatusEventInit,
-} from "../session-events.js";
-import type { AgentIssue, CodexConfig, IssueRunResult, PreparedWorkspace } from "../types.js";
 
-export {
-  toCodexNotificationEvent,
-  type CodexSessionMessage,
-} from "./codex-events.js";
+export { toCodexNotificationEvent, type CodexSessionMessage } from "./codex-events.js";
 
 type PendingTurnState = {
   inputRequired: boolean;
@@ -184,7 +181,10 @@ export function createDefaultTurnSandbox(workspace: PreparedWorkspace) {
 }
 
 function toWireSandboxPolicy(
-  policy: CodexConfig["turnSandboxPolicy"] | ReturnType<typeof createDefaultTurnSandbox> | undefined,
+  policy:
+    | CodexConfig["turnSandboxPolicy"]
+    | ReturnType<typeof createDefaultTurnSandbox>
+    | undefined,
 ): TurnStartParams["sandboxPolicy"] {
   if (!policy) {
     return undefined;

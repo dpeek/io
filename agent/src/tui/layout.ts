@@ -1,4 +1,4 @@
-import type { AgentSessionWorkflowIssueRef } from "./session-events.js";
+import type { AgentSessionWorkflowIssueRef, AgentSessionWorkflowRef } from "./session-events.js";
 import { formatBlocks, hasStreamingReasoningBlocks } from "./transcript.js";
 import type {
   AgentTuiColumnSnapshot,
@@ -102,20 +102,20 @@ function mergeWorkflowIssueRef(
   primary: AgentSessionWorkflowIssueRef | undefined,
   inherited: AgentSessionWorkflowIssueRef | undefined,
 ) {
-  if (!primary && !inherited) {
-    return undefined;
-  }
-  return {
+  const merged = primary || inherited
+    ? {
     ...inherited,
     ...primary,
-  };
+      }
+    : undefined;
+  return merged?.identifier ? (merged as AgentSessionWorkflowIssueRef) : undefined;
 }
 
 function resolveInheritedWorkflow(
   column: AgentTuiColumnSnapshot,
   columnsById: Map<string, AgentTuiColumnSnapshot>,
   visited = new Set<string>(),
-) {
+): AgentSessionWorkflowRef | undefined {
   if (visited.has(column.session.id)) {
     return column.session.workflow;
   }
@@ -124,7 +124,7 @@ function resolveInheritedWorkflow(
     column.parentSessionId && column.parentSessionId !== column.session.id
       ? columnsById.get(column.parentSessionId)
       : undefined;
-  const inherited = parent
+  const inherited: AgentSessionWorkflowRef | undefined = parent
     ? resolveInheritedWorkflow(parent, columnsById, visited)
     : undefined;
   if (!column.session.workflow) {

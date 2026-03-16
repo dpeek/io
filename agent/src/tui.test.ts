@@ -3,16 +3,31 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-import type { AgentSessionRef } from "./session-events.js";
+import { createAgentTuiStore, renderAgentTuiFrame } from "./tui/index.js";
+import type { AgentSessionRef } from "./tui/index.js";
 import { AgentTuiRetainedReader } from "./tui-runtime.js";
-import { createAgentTuiStore, renderAgentTuiFrame } from "./tui.js";
 import type { IssueRuntimeState } from "./workspace.js";
 
 type SessionRefOverrides = Omit<Partial<AgentSessionRef>, "issue"> & {
   issue?: Partial<NonNullable<AgentSessionRef["issue"]>>;
 };
 
+function resolveIssueRef(
+  base: NonNullable<AgentSessionRef["issue"]> | undefined,
+  override: SessionRefOverrides["issue"],
+): AgentSessionRef["issue"] {
+  if (!base && !override) {
+    return undefined;
+  }
+  return {
+    id: override?.id ?? base?.id,
+    identifier: override?.identifier ?? base?.identifier ?? "unknown",
+    title: override?.title ?? base?.title ?? "Unknown",
+  };
+}
+
 function createSupervisorSession(overrides: SessionRefOverrides = {}): AgentSessionRef {
+  const { issue: issueOverrides, ...sessionOverrides } = overrides;
   return {
     id: "supervisor",
     kind: "supervisor",
@@ -20,7 +35,8 @@ function createSupervisorSession(overrides: SessionRefOverrides = {}): AgentSess
     title: "Supervisor",
     workerId: "supervisor",
     workspacePath: "/Users/dpeek/code/io",
-    ...overrides,
+    ...sessionOverrides,
+    issue: resolveIssueRef(undefined, issueOverrides),
   };
 }
 
@@ -41,7 +57,7 @@ function createWorkerSession(overrides: SessionRefOverrides = {}): AgentSessionR
     workerId: "OPE-67",
     workspacePath: "/Users/dpeek/code/io/.io/tree/ope-67",
     ...sessionOverrides,
-    issue: issueOverrides ? { ...baseIssue, ...issueOverrides } : baseIssue,
+    issue: resolveIssueRef(baseIssue, issueOverrides),
   };
 }
 
@@ -411,7 +427,9 @@ test("AgentTuiRetainedReader keeps workflow blocker context visible in attach mo
       },
       state: "blocked",
     });
-    expect(snapshot.sessions[1]?.body).toContain("Session scheduled | io/ope-174 | /repo/.io/tree/ope-188");
+    expect(snapshot.sessions[1]?.body).toContain(
+      "Session scheduled | io/ope-174 | /repo/.io/tree/ope-188",
+    );
     expect(snapshot.sessions[1]?.body).toContain("OPE-188: blocked");
     expect(snapshot.sessions[1]?.body).toContain(
       "Session failed | io/ope-174 | /repo/.io/tree/ope-188: Blocked on OPE-187 finalization",
@@ -458,7 +476,9 @@ test("AgentTuiRetainedReader falls back to codex.stdout.jsonl for replay", async
     ]);
     expect(snapshot.sessions[0]?.body).toContain("Replay OPE-67 from codex.stdout.jsonl\n");
     expect(snapshot.sessions[0]?.body).toContain("workflow: stream OPE-67\n");
-    expect(snapshot.sessions[0]?.body).toContain("runtime state: waiting on finalization on ope-67\n");
+    expect(snapshot.sessions[0]?.body).toContain(
+      "runtime state: waiting on finalization on ope-67\n",
+    );
     expect(snapshot.sessions[1]?.phase).toBe("completed");
     expect(snapshot.sessions[1]?.body).toContain("Session completed");
   } finally {
@@ -564,7 +584,9 @@ test("AgentTuiRetainedReader keeps finalized workflow context visible in replay 
       state: "finalized",
     });
     expect(snapshot.sessions[1]?.phase).toBe("completed");
-    expect(snapshot.sessions[1]?.body).toContain("Session completed | io/ope-174 | /repo/.io/tree/ope-174");
+    expect(snapshot.sessions[1]?.body).toContain(
+      "Session completed | io/ope-174 | /repo/.io/tree/ope-174",
+    );
     expect(frame).toContain("Replay OPE-174 from codex.stdout.jsonl");
     expect(frame).toContain("Session completed | io/ope-174");
   } finally {
@@ -652,7 +674,9 @@ test("AgentTuiRetainedReader supplements partial events.log with retained workfl
       },
       text: `OPE-174: committed ${commitSha} on io/ope-174`,
     });
-    expect(snapshot.sessions[1]?.body).toContain("Session scheduled | io/ope-174 | /repo/.io/tree/ope-174");
+    expect(snapshot.sessions[1]?.body).toContain(
+      "Session scheduled | io/ope-174 | /repo/.io/tree/ope-174",
+    );
     expect(snapshot.sessions[1]?.body).toContain("Session started");
     expect(snapshot.sessions[1]?.body).toContain(`OPE-174: committed ${commitSha} on io/ope-174`);
     expect(snapshot.sessions[1]?.body).toContain(
@@ -810,7 +834,9 @@ test("AgentTuiRetainedReader reconstructs blocker context from runtime files whe
       },
       state: "blocked",
     });
-    expect(snapshot.sessions[1]?.body).toContain("Session scheduled | io/ope-174 | /repo/.io/tree/ope-188");
+    expect(snapshot.sessions[1]?.body).toContain(
+      "Session scheduled | io/ope-174 | /repo/.io/tree/ope-188",
+    );
     expect(snapshot.sessions[1]?.body).toContain("OPE-188: blocked");
     expect(snapshot.sessions[1]?.body).toContain(
       "Session failed | io/ope-174 | /repo/.io/tree/ope-188: Blocked on OPE-187 finalization",

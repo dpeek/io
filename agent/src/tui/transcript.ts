@@ -1016,6 +1016,7 @@ function formatToolBlock(options: {
   argumentsText?: string;
   errorText?: string;
   resultData?: unknown;
+  resultText?: string;
   server?: string;
   status?: "completed" | "failed" | "running";
   tool?: string;

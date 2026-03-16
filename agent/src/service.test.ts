@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
+import type { AgentSessionEvent, AgentStatusEvent } from "./tui/index.js";
 import {
   DEFAULT_BACKLOG_BUILTIN_DOC_IDS,
   DEFAULT_EXECUTE_BUILTIN_DOC_IDS,
@@ -10,7 +11,6 @@ import {
 } from "./builtins.js";
 import { resolveIssueRouting } from "./issue-routing.js";
 import { AgentService, pickCandidateIssues } from "./service.js";
-import type { AgentSessionEvent } from "./session-events.js";
 import { LinearTrackerAdapter, normalizeLinearIssue } from "./tracker/linear.js";
 import type { AgentIssue, PreparedWorkspace } from "./types.js";
 import { renderPrompt } from "./workflow.js";
@@ -51,6 +51,16 @@ function createTaskIssue(overrides: Partial<AgentIssue> = {}): AgentIssue {
     title: "Example task",
     ...overrides,
   });
+}
+
+function isSupervisorWorkflowDiagnosticEvent(
+  event: AgentSessionEvent,
+): event is AgentStatusEvent & { code: "workflow-diagnostic"; session: { id: "supervisor" } } {
+  return (
+    event.type === "status" &&
+    event.code === "workflow-diagnostic" &&
+    event.session.id === "supervisor"
+  );
 }
 function buildExpectedPrompt(
   builtinIds: readonly string[],
@@ -204,93 +214,6 @@ test("normalizeLinearIssue leaves parent and stream fields empty for standalone 
   expect(issue.streamIssueIdentifier).toBeUndefined();
   expect(issue.streamIssueState).toBeUndefined();
   expect(issue.teamId).toBe("team-1");
-});
-
-test("LinearTrackerAdapter writes managed blockedBy relations in scheduler-readable direction", async () => {
-  const createdRelations: Array<{ issueId: string; relatedIssueId: string; type: string }> = [];
-  let createdIssueIndex = 0;
-  const issueRef = {
-    children: async () => ({ nodes: [] }),
-    teamId: "team-1",
-  };
-  const tracker = new LinearTrackerAdapter(
-    {
-      activeStates: ["Todo", "In Progress"],
-      apiKey: "linear-token",
-      endpoint: "https://api.linear.app/graphql",
-      kind: "linear",
-      projectSlug: "io",
-      terminalStates: ["Done"],
-    },
-    undefined,
-    {
-      createComment: mock(async () => ({ commentId: "comment-1", success: true })),
-      createIssue: mock(async ({ title }: { title: string }) => {
-        createdIssueIndex += 1;
-        return {
-          issue: Promise.resolve({ identifier: `OPE-${createdIssueIndex}` }),
-          issueId: `issue-${createdIssueIndex}`,
-          success: true,
-        };
-      }),
-      createIssueRelation: mock(
-        async (input: { issueId: string; relatedIssueId: string; type: string }) => {
-          createdRelations.push(input);
-          return { success: true };
-        },
-      ),
-      issue: mock(async () => issueRef),
-    } as unknown as ConstructorParameters<typeof LinearTrackerAdapter>[2],
-  );
-
-  const result = await tracker.applyManagedCommentMutation({
-    children: [
-      {
-        blockedBy: [],
-        description: "First task",
-        docs: [],
-        labels: [],
-        priority: 0,
-        reference: "managed-backlog-1",
-        state: "",
-        title: "First task",
-      },
-      {
-        blockedBy: ["managed-backlog-1"],
-        description: "Second task",
-        docs: [],
-        labels: [],
-        priority: 0,
-        reference: "managed-backlog-2",
-        state: "",
-        title: "Second task",
-      },
-    ],
-    comment: {
-      commentId: "comment-0",
-      issue: createIssue({
-        description: "Parent issue",
-        id: "parent-1",
-        identifier: "OPE-100",
-        teamId: "team-1",
-      }),
-    },
-    reply: {
-      command: "@io backlog",
-      issueIdentifier: "OPE-100",
-      lines: [],
-      result: "updated",
-    },
-  });
-
-  expect(result.dependencyCount).toBe(1);
-  expect(createdRelations).toEqual([
-    {
-      issueId: "issue-1",
-      relatedIssueId: "issue-2",
-      type: "blocks",
-    },
-  ]);
 });
 
 test("LinearTrackerAdapter fetches parent stream state for child issue candidates", async () => {
@@ -577,7 +500,13 @@ test("pickCandidateIssues leaves release gating to the scheduler", () => {
     ],
     5,
   );
-  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-2", "OS-3", "OS-4", "OS-5", "OS-6"]);
+  expect(selected.map((issue) => issue.identifier)).toEqual([
+    "OS-2",
+    "OS-3",
+    "OS-4",
+    "OS-5",
+    "OS-6",
+  ]);
 });
 
 test("pickCandidateIssues prefers the locally active issue within an occupied stream", () => {
@@ -2118,18 +2047,14 @@ test("AgentService publishes supervisor and worker session events", async () => 
     expect(
       events.some(
         (event) =>
-          event.type === "status" &&
-          event.code === "workflow-diagnostic" &&
-          event.session.id === "supervisor" &&
-          event.text === "Workflow: 1 runnable",
+          isSupervisorWorkflowDiagnosticEvent(event) && event.text === "Workflow: 1 runnable",
       ),
     ).toBe(true);
     const workflowSummaryEvent = events.find(
-      (event) =>
-        event.type === "status" &&
-        event.code === "workflow-diagnostic" &&
-        event.session.id === "supervisor" &&
-        event.text === "Workflow: 1 runnable",
+      (
+        event,
+      ): event is AgentStatusEvent & { code: "workflow-diagnostic"; session: { id: "supervisor" } } =>
+        isSupervisorWorkflowDiagnosticEvent(event) && event.text === "Workflow: 1 runnable",
     );
     expect(workflowSummaryEvent?.data?.workflowDiagnostics).toMatchObject({
       counts: {
@@ -2207,13 +2132,15 @@ test("AgentService publishes supervisor and worker session events", async () => 
       },
       state: "pending-finalization",
     });
-    const finalizedEvent = [...events].reverse().find(
-      (event) =>
-        event.type === "session" &&
-        event.phase === "completed" &&
-        event.session.issue?.identifier === "OPE-54" &&
-        event.session.runtime?.state === "finalized",
-    );
+    const finalizedEvent = [...events]
+      .reverse()
+      .find(
+        (event) =>
+          event.type === "session" &&
+          event.phase === "completed" &&
+          event.session.issue?.identifier === "OPE-54" &&
+          event.session.runtime?.state === "finalized",
+      );
     expect(finalizedEvent?.session.runtime).toMatchObject({
       finalization: {
         commitSha: "a".repeat(40),
@@ -2452,19 +2379,14 @@ test("AgentService surfaces workflow diagnostics for retained and skipped task s
     await service.start();
 
     const diagnosticLines = events
-      .filter(
-        (event) =>
-          event.type === "status" &&
-          event.code === "workflow-diagnostic" &&
-          event.session.id === "supervisor",
-      )
+      .filter(isSupervisorWorkflowDiagnosticEvent)
       .map((event) => event.text);
     const workflowSummaryEvent = events.find(
-      (event) =>
-        event.type === "status" &&
-        event.code === "workflow-diagnostic" &&
-        event.session.id === "supervisor" &&
-        event.text?.startsWith("Workflow:"),
+      (
+        event,
+      ): event is AgentStatusEvent & { code: "workflow-diagnostic"; session: { id: "supervisor" } } =>
+        isSupervisorWorkflowDiagnosticEvent(event) &&
+        (event.text?.startsWith("Workflow:") ?? false),
     );
 
     expect(diagnosticLines).toContain(

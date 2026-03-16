@@ -3,11 +3,8 @@ import type {
   AgentSessionDisplayState,
   AgentStatusEvent,
 } from "./session-events.js";
-import type {
-  AgentTuiStatusSummary,
-  AgentTuiBlock,
-} from "./transcript.js";
 import { summarizeLinearToolCall } from "./linear-tool-format.js";
+import type { AgentTuiBlock, AgentTuiStatusSummary } from "./transcript.js";
 
 type CodexBlockAdapter = {
   appendEntry: (entry: AgentTuiBlock) => void;
@@ -60,11 +57,7 @@ function getCodexCommandText(item: Record<string, unknown> | undefined) {
   return actionCommand ?? command ?? "command";
 }
 
-function getCodexToolText(
-  server: string | undefined,
-  tool: string | undefined,
-  args: unknown,
-) {
+function getCodexToolText(server: string | undefined, tool: string | undefined, args: unknown) {
   if (!server || !tool) {
     return undefined;
   }
@@ -307,7 +300,14 @@ function toDisplayStatusEventsForCodexNotification(
               {
                 ...base,
                 code: "tool-failed",
-                data: { arguments: item?.arguments, message, result: resultData, resultText, server, tool },
+                data: {
+                  arguments: item?.arguments,
+                  message,
+                  result: resultData,
+                  resultText,
+                  server,
+                  tool,
+                },
                 format: "line",
                 text: getLinearFailureText(summaryText, message),
               },
@@ -366,10 +366,7 @@ export function renderCodexNotificationEvent(options: {
   }
 }
 
-function appendCodexMessageEntry(
-  adapter: CodexBlockAdapter,
-  event: AgentCodexNotificationEvent,
-) {
+function appendCodexMessageEntry(adapter: CodexBlockAdapter, event: AgentCodexNotificationEvent) {
   const itemId = asString(event.params.itemId) ?? asString(asRecord(event.params.item)?.id);
   const text = asString(event.params.delta) ?? "";
   if (!text) {
@@ -398,10 +395,7 @@ function appendCodexMessageEntry(
   });
 }
 
-function completeCodexMessageEntry(
-  adapter: CodexBlockAdapter,
-  event: AgentCodexNotificationEvent,
-) {
+function completeCodexMessageEntry(adapter: CodexBlockAdapter, event: AgentCodexNotificationEvent) {
   const item = asRecord(event.params.item);
   const itemId = asString(item?.id);
   const existing = adapter.findEntryByItemId(itemId);
@@ -433,10 +427,7 @@ function completeCodexMessageEntry(
   });
 }
 
-function appendCodexApprovalEntry(
-  adapter: CodexBlockAdapter,
-  event: AgentCodexNotificationEvent,
-) {
+function appendCodexApprovalEntry(adapter: CodexBlockAdapter, event: AgentCodexNotificationEvent) {
   adapter.appendEntry({
     count: 1,
     kind: "approval",
@@ -447,10 +438,7 @@ function appendCodexApprovalEntry(
   });
 }
 
-function appendCodexCommandEntry(
-  adapter: CodexBlockAdapter,
-  event: AgentCodexNotificationEvent,
-) {
+function appendCodexCommandEntry(adapter: CodexBlockAdapter, event: AgentCodexNotificationEvent) {
   const item = asRecord(event.params.item);
   const itemId = asString(item?.id) ?? asString(event.params.itemId);
   const existing = adapter.findEntryByItemId(itemId);
@@ -545,10 +533,7 @@ function appendCodexCommandCompletionEntry(
   });
 }
 
-function appendCodexToolEntry(
-  adapter: CodexBlockAdapter,
-  event: AgentCodexNotificationEvent,
-) {
+function appendCodexToolEntry(adapter: CodexBlockAdapter, event: AgentCodexNotificationEvent) {
   const item = asRecord(event.params.item);
   const itemId = asString(item?.id) ?? asString(event.params.itemId);
   const server = asString(item?.server) ?? "tool";
@@ -566,7 +551,9 @@ function appendCodexToolEntry(
   adapter.appendEntry({
     argumentsData: item?.arguments,
     argumentsText:
-      item?.arguments && typeof item.arguments === "object" ? JSON.stringify(item.arguments) : undefined,
+      item?.arguments && typeof item.arguments === "object"
+        ? JSON.stringify(item.arguments)
+        : undefined,
     count: 1,
     itemId,
     kind: "tool",
@@ -608,7 +595,9 @@ function appendCodexToolCompletionEntry(
   adapter.appendEntry({
     argumentsData: item?.arguments,
     argumentsText:
-      item?.arguments && typeof item.arguments === "object" ? JSON.stringify(item.arguments) : undefined,
+      item?.arguments && typeof item.arguments === "object"
+        ? JSON.stringify(item.arguments)
+        : undefined,
     count: 1,
     errorText,
     itemId,
@@ -624,10 +613,7 @@ function appendCodexToolCompletionEntry(
   });
 }
 
-function appendCodexReasoningEntry(
-  adapter: CodexBlockAdapter,
-  event: AgentCodexNotificationEvent,
-) {
+function appendCodexReasoningEntry(adapter: CodexBlockAdapter, event: AgentCodexNotificationEvent) {
   const itemId = asString(event.params.itemId) ?? asString(asRecord(event.params.item)?.id);
   const existing = adapter.findEntryByItemId(itemId);
   const delta = asString(event.params.delta);
@@ -672,10 +658,7 @@ function appendCodexReasoningEntry(
   });
 }
 
-function appendCodexPlanEntry(
-  adapter: CodexBlockAdapter,
-  event: AgentCodexNotificationEvent,
-) {
+function appendCodexPlanEntry(adapter: CodexBlockAdapter, event: AgentCodexNotificationEvent) {
   const itemId = asString(event.params.itemId) ?? asString(asRecord(event.params.item)?.id);
   const existing = adapter.findEntryByItemId(itemId);
   const delta = asString(event.params.delta) ?? "";
@@ -840,10 +823,15 @@ export function formatCodexNotificationSummary(event: AgentCodexNotificationEven
           if (errorMessage) {
             return getLinearFailureText(summaryText, errorMessage);
           }
-          return summaryText ?? getCodexToolText(asString(item?.server), asString(item?.tool), item?.arguments);
+          return (
+            summaryText ??
+            getCodexToolText(asString(item?.server), asString(item?.tool), item?.arguments)
+          );
         }
         case "plan":
-          return asString(item?.text) ? `Plan: ${truncateSummary(asString(item?.text) ?? "")}` : "Plan updated";
+          return asString(item?.text)
+            ? `Plan: ${truncateSummary(asString(item?.text) ?? "")}`
+            : "Plan updated";
         default:
           return undefined;
       }
@@ -897,7 +885,9 @@ export function createStatusSummaryFromCodexNotification(
           code: "turn-failed",
           data: { message: asString(error?.message) },
           format: "line",
-          text: asString(error?.message) ? `Turn failed: ${asString(error?.message)}` : "Turn failed",
+          text: asString(error?.message)
+            ? `Turn failed: ${asString(error?.message)}`
+            : "Turn failed",
           timestamp: event.timestamp,
         };
       }
@@ -962,7 +952,9 @@ export function createStatusSummaryFromCodexNotification(
           return server && tool
             ? {
                 code: "tool",
-                data: text?.startsWith("Linear ") ? undefined : { arguments: item?.arguments, server, tool },
+                data: text?.startsWith("Linear ")
+                  ? undefined
+                  : { arguments: item?.arguments, server, tool },
                 format: "line",
                 itemId: asString(item?.id),
                 text,

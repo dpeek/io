@@ -112,6 +112,28 @@ function isRetainedTerminalWorker(state: AgentTuiInternalColumnState) {
   );
 }
 
+function mergeFinalizationRef(
+  current: AgentSessionRuntimeRef["finalization"],
+  next: AgentSessionRuntimeRef["finalization"],
+) {
+  if (!current && !next) {
+    return undefined;
+  }
+  return {
+    ...current,
+    ...next,
+    state: next?.state ?? current?.state ?? "pending",
+  };
+}
+
+function mergeWorkflowIssueRef(
+  current: AgentSessionWorkflowIssueRef | undefined,
+  next: AgentSessionWorkflowIssueRef | undefined,
+) {
+  const merged = current || next ? { ...current, ...next } : undefined;
+  return merged?.identifier ? (merged as AgentSessionWorkflowIssueRef) : undefined;
+}
+
 function mergeRuntimeRef(
   current: AgentSessionRuntimeRef | undefined,
   next: AgentSessionRuntimeRef | undefined,
@@ -129,13 +151,7 @@ function mergeRuntimeRef(
             ...next?.blocker,
           }
         : undefined,
-    finalization:
-      current?.finalization || next?.finalization
-        ? {
-            ...current?.finalization,
-            ...next?.finalization,
-          }
-        : undefined,
+    finalization: mergeFinalizationRef(current?.finalization, next?.finalization),
   };
 }
 
@@ -150,28 +166,10 @@ function mergeSessionRef(current: AgentSessionRef, next: AgentSessionRef): Agent
   let workflow: AgentSessionWorkflowRef | undefined;
   if (current.workflow || next.workflow) {
     workflow = {
-      feature: {
-        ...(current.workflow?.feature as AgentSessionWorkflowIssueRef | undefined),
-        ...(next.workflow?.feature as AgentSessionWorkflowIssueRef | undefined),
-      },
-      stream: {
-        ...(current.workflow?.stream as AgentSessionWorkflowIssueRef | undefined),
-        ...(next.workflow?.stream as AgentSessionWorkflowIssueRef | undefined),
-      },
-      task: {
-        ...(current.workflow?.task as AgentSessionWorkflowIssueRef | undefined),
-        ...(next.workflow?.task as AgentSessionWorkflowIssueRef | undefined),
-      },
+      feature: mergeWorkflowIssueRef(current.workflow?.feature, next.workflow?.feature),
+      stream: mergeWorkflowIssueRef(current.workflow?.stream, next.workflow?.stream),
+      task: mergeWorkflowIssueRef(current.workflow?.task, next.workflow?.task),
     };
-    if (!workflow.feature?.identifier) {
-      delete workflow.feature;
-    }
-    if (!workflow.stream?.identifier) {
-      delete workflow.stream;
-    }
-    if (!workflow.task?.identifier) {
-      delete workflow.task;
-    }
   }
   return {
     ...current,

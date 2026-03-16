@@ -70,8 +70,8 @@ test("repo workflow docs point backlog work at the three-level stream model", ()
   expect(workflow).toContain("Humans own:");
   expect(workflow).toContain("The agent/runtime owns:");
   expect(workflow).toContain("Current Gaps And Compatibility Notes");
-  expect(workflow).toContain("released leaf issue as runnable");
-  expect(workflow).toContain("feature-branch squashing, rebasing, and merge into the stream branch");
+  expect(workflow).toContain("selecting released leaf issues for execution");
+  expect(workflow).toContain("feature branch onto the current stream branch head");
 
   expect(backlog).toContain("You are the IO backlog editor for the three-level Linear workflow.");
   expect(backlog).toContain("Stream");
@@ -89,10 +89,9 @@ test("repo workflow docs point backlog work at the three-level stream model", ()
   expect(overview).toContain("the stream/feature/task workflow contract");
   expect(overview).toContain("./workflow.md");
   expect(overview).toContain("./backlog.md");
-  expect(overview).not.toContain("managed-stream-contract");
 
   expect(agentOverview).toContain("../../io/workflow.md");
-  expect(agentOverview).toContain("Feature-to-stream finalization is still being tightened");
+  expect(agentOverview).toContain("reconciles `Done` features by squashing");
 
   expect(workflowPlan).toContain("## Current Workflow Surface");
   expect(workflowPlan).toContain("## Current Doc Reference Rules");
@@ -100,30 +99,4 @@ test("repo workflow docs point backlog work at the three-level stream model", ()
   expect(workflowPlan).toContain("../../io/workflow.md");
   expect(workflowPlan).not.toContain("managed-parent detection");
   expect(workflowPlan).not.toContain("OPE-121 Proof Status");
-});
-
-test("legacy managed-stream docs are clearly marked as retained implementation notes", () => {
-  const contract = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-contract.md"), "utf8");
-  const backlog = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-backlog.md"), "utf8");
-  const comments = readFileSync(resolve(repoRoot, "./agent/io/managed-stream-comments.md"), "utf8");
-
-  expect(contract).toContain("# Legacy Managed Stream Contract");
-  expect(contract).toContain("It is not the current default workflow surface.");
-  expect(contract).toContain("- it has the `io` label");
-  expect(contract).toContain("exactly one label that matches a configured module id");
-  expect(contract).toContain("The retained automation still owns:");
-
-  expect(backlog).toContain("# Legacy Managed Stream Backlog Refresh");
-  expect(backlog).toContain("default planning workflow");
-  expect(backlog).toContain("## Historical Stream Brief Shape");
-  expect(backlog).toContain("Roadmap");
-  expect(backlog).toContain("stream description directly");
-
-  expect(comments).toContain("# Legacy Managed Stream Comments");
-  expect(comments).toContain("not the current default workflow surface");
-  expect(comments).toContain("@io backlog");
-  expect(comments).toContain("@io status");
-  expect(comments).toContain("the first non-empty line is always the command line");
-  expect(comments).toContain("<!-- io-managed:comment-result -->");
-  expect(comments).not.toContain("@io focus");
 });

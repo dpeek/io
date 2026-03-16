@@ -197,17 +197,6 @@ export interface PreparedWorkspace {
   workerId: string;
 }
 
-export interface ManagedCommentChildMutation {
-  blockedBy: string[];
-  description: string;
-  docs: string[];
-  labels: string[];
-  priority: number | null;
-  reference: string;
-  state: string;
-  title: string;
-}
-
 export interface StreamRuntimeState {
   activeIssueId?: string;
   activeIssueIdentifier?: string;

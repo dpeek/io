@@ -838,10 +838,7 @@ export class CheckoutManager {
         });
       } catch (error) {
         this.#reportStreamProgress(
-          {
-            ...branchState,
-            streamIssueIdentifier,
-          },
+          branchState,
           `preserving ${branchState.branchName}; feature finalization into ${streamIssueIdentifier} failed`,
         );
         this.#log.error("feature_branch_finalize.failed", {

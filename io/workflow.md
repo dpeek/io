@@ -80,9 +80,6 @@ The agent/runtime owns:
 
 ## Current Gaps And Compatibility Notes
 
-- Top-level issues with `io` plus exactly one configured module label still fall
-  back to backlog routing for retained comment workflows, but the supervisor
-  does not auto-run them.
 - The runtime still uses some legacy "stream" naming in internal state files
   for the current branch owner, even when that branch is actually a feature
   branch in the preferred workflow.

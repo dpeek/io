@@ -32,13 +32,6 @@ Resolved workflow state already includes:
 - first matching explicit routing rule
 - fallback repo defaults
 
-Retained compatibility note:
-
-- legacy top-level issues with `io` plus exactly one configured module label are
-  still recognized for retained comment workflows, but the supervisor does not
-  auto-run them and general routing now depends on explicit rules rather than an
-  implicit backlog fallback
-
 ### Context assembly
 
 `../src/context.ts` already builds one ordered context bundle from:
