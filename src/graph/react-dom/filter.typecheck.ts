@@ -1,23 +1,22 @@
-import { app } from "@io/core/app";
-
 import { core, defineDefaultEnumTypeModule, defineType } from "../index.js";
 import type { FilterOperandEditorProps } from "../react/index.js";
+import { kitchenSink } from "../schema/test.js";
 import { defaultWebFilterResolver } from "./index.js";
 
-const defs = { ...core, ...app };
-const statusTypeModule = defineDefaultEnumTypeModule(app.status);
+const defs = { ...core, ...kitchenSink };
+const statusTypeModule = defineDefaultEnumTypeModule(kitchenSink.status);
 
-const foundedYearResolution = defaultWebFilterResolver.resolveField(
-  app.company.fields.foundedYear,
+const estimateResolution = defaultWebFilterResolver.resolveField(
+  kitchenSink.record.fields.estimate,
   defs,
 );
 
-if (foundedYearResolution.status === "resolved") {
-  const greaterThan = foundedYearResolution.resolveOperator("gt");
+if (estimateResolution.status === "resolved") {
+  const greaterThan = estimateResolution.resolveOperator("gt");
 
   if (greaterThan) {
     const acceptsNumber: FilterOperandEditorProps<
-      typeof app.company.fields.foundedYear,
+      typeof kitchenSink.record.fields.estimate,
       typeof defs,
       "gt"
     > = {
@@ -32,7 +31,7 @@ if (foundedYearResolution.status === "resolved") {
     void acceptsNumber;
 
     const rejectsString: FilterOperandEditorProps<
-      typeof app.company.fields.foundedYear,
+      typeof kitchenSink.record.fields.estimate,
       typeof defs,
       "gt"
     > = {
@@ -48,14 +47,17 @@ if (foundedYearResolution.status === "resolved") {
     void rejectsString;
   }
 
-  // @ts-expect-error founded year does not expose string operators
-  foundedYearResolution.resolveOperator("contains");
+  // @ts-expect-error estimate does not expose string operators
+  estimateResolution.resolveOperator("contains");
 }
 
-const statusResolution = defaultWebFilterResolver.resolveField(app.company.fields.status, defs);
+const statusResolution = defaultWebFilterResolver.resolveField(
+  kitchenSink.record.fields.status,
+  defs,
+);
 
 if (statusResolution.status === "resolved") {
-  // @ts-expect-error company status narrows enum operators to "is"
+  // @ts-expect-error record status narrows enum operators to "is"
   statusResolution.resolveOperator("oneOf");
 }
 
@@ -82,7 +84,7 @@ if (broadStatusResolution.status === "resolved") {
       "oneOf"
     > = {
       operator: oneOf,
-      value: [app.status.values.active.id],
+      value: [kitchenSink.status.values.draft.id],
       onChange(value) {
         const nextValue: string[] | undefined = value;
         void nextValue;
@@ -98,7 +100,7 @@ if (broadStatusResolution.status === "resolved") {
     > = {
       operator: oneOf,
       // @ts-expect-error enum multi-select operators require string arrays
-      value: app.status.values.active.id,
+      value: kitchenSink.status.values.draft.id,
       onChange(value) {
         const nextValue: string[] | undefined = value;
         void nextValue;

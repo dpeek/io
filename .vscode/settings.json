@@ -13,17 +13,19 @@
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
   "files.exclude": {
-    "**/.vscode": true,
-    "**/node_modules": true,
-    "**/.oxlintrc.json": true,
-    "**/.oxfmtrc.json": true,
-    "**/bun.lock": true,
-    "**/.gitignore": true,
-    "**/tsconfig.json": true,
-    "**/package.json": true,
-    "**/bunfig.toml": true,
-    "**/.env": true,
-    "**/components.json": true,
-    "**/tmp": true
+    "**/.vscode": false,
+    "**/node_modules": false,
+    "**/.oxlintrc.json": false,
+    "**/.oxfmtrc.json": false,
+    "**/bun.lock": false,
+    "**/.gitignore": false,
+    "**/tsconfig.json": false,
+    "**/package.json": false,
+    "**/bunfig.toml": false,
+    "**/.env": false,
+    "**/components.json": false,
+    "**/tmp": false,
+    "**/skills-lock.json": false,
+    "**/.agents": false
   }
 }

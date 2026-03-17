@@ -1,4 +1,12 @@
-import type { Cardinality, EdgeInput, EnumTypeOutput, RangeRef, ScalarTypeOutput } from "./schema";
+import type {
+  Cardinality,
+  EdgeInput,
+  EnumTypeOutput,
+  GraphFieldAuthority,
+  GraphFieldVisibility,
+  RangeRef,
+  ScalarTypeOutput,
+} from "./schema";
 
 type EnumOptionLike = { key: string; id?: string };
 type EnumTypeLike = { options: Record<string, EnumOptionLike> };
@@ -189,24 +197,35 @@ export type TypeModuleFieldInput<
   Filter extends { operators: Record<string, unknown>; defaultOperator: string },
   Card extends Cardinality,
   Allowed extends readonly FilterKey<Filter>[] | undefined = undefined,
-> = EdgeInput<
-  Type,
-  {
-    meta: NormalizedMeta<Meta>;
-    filter: {
-      defaultOperator: Allowed extends readonly FilterKey<Filter>[]
-        ? Allowed[number]
-        : FilterKey<Filter>;
-      operators: FieldFilterOperators<Filter, Allowed>;
-    };
-  }
-> & { cardinality: Card };
+  CreateOptional extends boolean = false,
+> = Omit<
+  EdgeInput<
+    Type,
+    {
+      authority?: GraphFieldAuthority;
+      meta: NormalizedMeta<Meta>;
+      filter: {
+        defaultOperator: Allowed extends readonly FilterKey<Filter>[]
+          ? Allowed[number]
+          : FilterKey<Filter>;
+        operators: FieldFilterOperators<Filter, Allowed>;
+      };
+    }
+  >,
+  "createOptional"
+> &
+  (CreateOptional extends true ? { createOptional: true } : {}) & { cardinality: Card };
 
 export type ReferenceFieldInput<
   Range extends RangeRef = RangeRef,
   Extra extends object = {},
   Card extends Cardinality = Cardinality,
-> = EdgeInput<Range, Extra> & { cardinality: Card };
+  CreateOptional extends boolean = false,
+> = Omit<EdgeInput<Range>, "cardinality" | "createOptional"> &
+  Extra &
+  (CreateOptional extends true ? { createOptional: true } : {}) & {
+    cardinality: Card;
+  };
 
 type TypeModuleShape<
   Type extends ScalarTypeOutput<any, any> | EnumTypeOutput<any, any>,
@@ -219,9 +238,17 @@ type TypeModuleShape<
   field<
     Card extends Cardinality,
     Allowed extends readonly FilterKey<NormalizedFilter<Filter>>[] | undefined = undefined,
+    CreateOptional extends boolean = false,
   >(
-    input: TypeModuleFieldConfig<Meta, Filter, Type, Card, Allowed>,
-  ): TypeModuleFieldInput<Type, NormalizedMeta<Meta>, NormalizedFilter<Filter>, Card, Allowed>;
+    input: TypeModuleFieldConfig<Meta, Filter, Type, Card, Allowed, CreateOptional>,
+  ): TypeModuleFieldInput<
+    Type,
+    NormalizedMeta<Meta>,
+    NormalizedFilter<Filter>,
+    Card,
+    Allowed,
+    CreateOptional
+  >;
 };
 
 type TypeModuleFieldConfig<
@@ -230,8 +257,11 @@ type TypeModuleFieldConfig<
   Type extends ScalarTypeOutput<any, any> | EnumTypeOutput<any, any>,
   Card extends Cardinality,
   Allowed extends readonly FilterKey<NormalizedFilter<Filter>>[] | undefined = undefined,
-> = Omit<EdgeInput<Type>, "cardinality" | "range"> & {
+  CreateOptional extends boolean = false,
+> = Omit<EdgeInput<Type>, "cardinality" | "createOptional" | "range"> & {
+  authority?: GraphFieldAuthority;
   cardinality: Card;
+  createOptional?: CreateOptional extends true ? true : never;
   meta?: FieldMetaOverride<NormalizedMeta<Meta>>;
   filter?: FieldFilterOverride<NormalizedFilter<Filter>, Allowed>;
 };
@@ -313,22 +343,29 @@ function createTypeModule<
     field<
       Card extends Cardinality,
       Allowed extends readonly FilterKey<NormalizedFilter<Filter>>[] | undefined = undefined,
+      CreateOptional extends boolean = false,
     >({
       cardinality,
+      createOptional,
       filter,
+      icon,
       key,
       meta,
       onCreate,
       onUpdate,
       validate,
-    }: TypeModuleFieldConfig<Meta, Filter, Type, Card, Allowed>) {
+      authority,
+    }: TypeModuleFieldConfig<Meta, Filter, Type, Card, Allowed, CreateOptional>) {
       return {
         ...(key ? { key } : {}),
         range: input.type,
         cardinality,
+        ...(createOptional ? { createOptional } : {}),
+        ...(icon ? { icon } : {}),
         ...(onCreate ? { onCreate } : {}),
         ...(onUpdate ? { onUpdate } : {}),
         ...(validate ? { validate } : {}),
+        ...(authority ? { authority } : {}),
         meta: composeMeta(moduleMeta, meta),
         filter: composeFilter(moduleFilter, filter),
       } as unknown as TypeModuleFieldInput<
@@ -336,7 +373,8 @@ function createTypeModule<
         NormalizedMeta<Meta>,
         NormalizedFilter<Filter>,
         Card,
-        Allowed
+        Allowed,
+        CreateOptional
       >;
     },
   };
@@ -354,8 +392,50 @@ export function defineReferenceField<
   const Range extends RangeRef,
   const Extra extends object = {},
   const Card extends Cardinality = Cardinality,
->(input: ReferenceFieldInput<Range, Extra, Card>): ReferenceFieldInput<Range, Extra, Card> {
+  const CreateOptional extends boolean = false,
+>(
+  input: ReferenceFieldInput<Range, Extra, Card, CreateOptional>,
+): ReferenceFieldInput<Range, Extra, Card, CreateOptional> {
   return input;
+}
+
+export type SecretFieldInput = {
+  range: RangeRef;
+  cardinality: Cardinality;
+  authority?: Omit<GraphFieldAuthority, "secret">;
+  metadataVisibility?: GraphFieldVisibility;
+  revealCapability?: string;
+  rotateCapability?: string;
+} & Record<string, unknown>;
+
+export function defineSecretField<const Input extends SecretFieldInput>(
+  input: Input,
+): Omit<Input, "authority" | "metadataVisibility" | "revealCapability" | "rotateCapability"> & {
+  authority: GraphFieldAuthority;
+} {
+  const { authority, metadataVisibility, revealCapability, rotateCapability, ...rest } = input;
+
+  const field = {
+    ...rest,
+    authority: {
+      visibility: "replicated",
+      write: "server-command",
+      ...authority,
+      secret: {
+        kind: "sealed-handle",
+        metadataVisibility: metadataVisibility ?? authority?.visibility ?? "replicated",
+        ...(revealCapability ? { revealCapability } : {}),
+        ...(rotateCapability ? { rotateCapability } : {}),
+      },
+    },
+  } as unknown as ReferenceFieldInput<RangeRef, Record<string, unknown>, Cardinality>;
+
+  return defineReferenceField(field) as unknown as Omit<
+    Input,
+    "authority" | "metadataVisibility" | "revealCapability" | "rotateCapability"
+  > & {
+    authority: GraphFieldAuthority;
+  };
 }
 
 export function defineEnumModule<

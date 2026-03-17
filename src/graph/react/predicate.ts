@@ -1,7 +1,7 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 
 import {
-  entityReferenceChecklistEditorKind,
+  entityReferenceComboboxEditorKind,
   entityReferenceListDisplayKind,
   isEntityType,
   isEnumType,
@@ -101,10 +101,10 @@ export function getPredicateDisplayKind<T extends EdgeOutput>(field: T): string 
 
 export function getPredicateEditorKind<T extends EdgeOutput>(field: T): string | undefined {
   const meta = getPredicateFieldMeta(field) as { editor?: { kind?: string } } | undefined;
-  return (
-    meta?.editor?.kind ??
-    (getPredicateEntityReferencePolicy(field) ? entityReferenceChecklistEditorKind : undefined)
-  );
+  if (getPredicateEntityReferencePolicy(field)) {
+    return meta?.editor?.kind ?? entityReferenceComboboxEditorKind;
+  }
+  return meta?.editor?.kind;
 }
 
 export function getPredicateEditorPlaceholder<T extends EdgeOutput>(field: T): string | undefined {
@@ -233,11 +233,15 @@ export function getPredicateEntityReferenceOptions<
   Defs extends Record<string, AnyTypeOutput>,
 >(predicate: PredicateRef<T, Defs>): PredicateEntityReferenceOption[] {
   if (!predicate.rangeType || !isEntityType(predicate.rangeType)) return [];
-  if (!getPredicateEntityReferencePolicy(predicate.field)) return [];
-  return predicate.listEntities().map((entity) => ({
-    entity,
-    id: entity.id,
-  }));
+  const referencePolicy = getPredicateEntityReferencePolicy(predicate.field);
+  if (!referencePolicy) return [];
+  return predicate
+    .listEntities()
+    .filter((entity) => !referencePolicy.excludeSubject || entity.id !== predicate.subjectId)
+    .map((entity) => ({
+      entity,
+      id: entity.id,
+    }));
 }
 
 export function getPredicateEntityReferenceSelection<

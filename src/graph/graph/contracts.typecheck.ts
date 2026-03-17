@@ -5,81 +5,81 @@ import type {
 } from "../index.js";
 import type { GraphCommandSpec, ObjectViewSpec, WorkflowSpec } from "./index.js";
 
-const workspaceIssueSummaryView = {
-  key: "app:workspaceIssue:summary",
-  entity: "app:workspaceIssue",
+const topicSummaryView = {
+  key: "app:topic:summary",
+  entity: "app:topic",
   titleField: "name",
-  subtitleField: "status",
+  subtitleField: "kind",
   sections: [
     {
       key: "summary",
       title: "Summary",
       fields: [
         { path: "name", label: "Name", span: 2 },
-        { path: "status", label: "Status" },
+        { path: "kind", label: "Kind" },
       ],
     },
   ],
   related: [
     {
-      key: "children",
-      title: "Child issues",
-      relationPath: "children",
+      key: "references",
+      title: "References",
+      relationPath: "references",
       presentation: "list",
     },
   ],
-  commands: ["app:workspaceIssue:save"],
+  commands: ["app:topic:save"],
 } satisfies ObjectViewSpec;
 
-const workspaceIssueTriageWorkflow = {
-  key: "app:workspaceIssue:triage",
-  label: "Triage issue",
-  description: "Review and update a workspace issue.",
-  subjects: ["app:workspaceIssue"],
+const topicReviewWorkflow = {
+  key: "app:topic:review",
+  label: "Review topic",
+  description: "Review and update a topic.",
+  subjects: ["app:topic"],
   steps: [
     {
       key: "review",
       title: "Review details",
-      objectView: workspaceIssueSummaryView.key,
+      objectView: topicSummaryView.key,
     },
     {
       key: "save",
       title: "Save changes",
-      command: "app:workspaceIssue:save",
+      command: "app:topic:save",
     },
   ],
-  commands: ["app:workspaceIssue:save"],
+  commands: ["app:topic:save"],
 } satisfies WorkflowSpec;
 
-const saveWorkspaceIssueCommand = {
-  key: "app:workspaceIssue:save",
-  label: "Save issue",
-  subject: "app:workspaceIssue",
+const saveTopicCommand = {
+  key: "app:topic:save",
+  label: "Save topic",
+  subject: "app:topic",
   execution: "optimisticVerify",
   input: {
-    title: "Tighten acceptance criteria",
+    title: "Document graph explorer affordances",
   },
   output: {
-    issueId: "issue-1",
+    topicId: "topic-1",
   },
   policy: {
-    capabilities: ["workspace.write"],
-    touchesPredicates: ["app:workspaceIssue.name", "app:workspaceIssue.status"],
+    capabilities: ["topic.write"],
+    touchesPredicates: ["app:topic.name", "app:topic.content"],
   },
-} satisfies GraphCommandSpec<{ title: string }, { issueId: string }>;
+} satisfies GraphCommandSpec<{ title: string }, { topicId: string }>;
 
-const rootObjectView: ObjectViewSpecFromRoot = workspaceIssueSummaryView;
-const rootWorkflow: WorkflowSpecFromRoot = workspaceIssueTriageWorkflow;
-const rootCommand: GraphCommandSpecFromRoot<{ title: string }, { issueId: string }> =
-  saveWorkspaceIssueCommand;
+const rootObjectView: ObjectViewSpecFromRoot = topicSummaryView;
+const rootWorkflow: WorkflowSpecFromRoot = topicReviewWorkflow;
+const rootCommand: GraphCommandSpecFromRoot<{ title: string }, { topicId: string }> =
+  saveTopicCommand;
 
 void rootObjectView;
 void rootWorkflow;
 void rootCommand;
 
 void ({
-  key: "app:workspaceIssue:summary",
-  entity: "app:workspaceIssue",
+  key: "app:topic:summary",
+  entity: "app:topic",
   sections: [
     {
       key: "summary",
@@ -96,10 +96,10 @@ void ({
 } satisfies ObjectViewSpec);
 
 void ({
-  key: "app:workspaceIssue:triage",
-  label: "Triage issue",
-  description: "Review and update a workspace issue.",
-  subjects: ["app:workspaceIssue"],
+  key: "app:topic:review",
+  label: "Review topic",
+  description: "Review and update a topic.",
+  subjects: ["app:topic"],
   steps: [
     {
       key: "review",
@@ -111,14 +111,14 @@ void ({
 } satisfies WorkflowSpec);
 
 void ({
-  key: "app:workspaceIssue:save",
-  label: "Save issue",
+  key: "app:topic:save",
+  label: "Save topic",
   // @ts-expect-error commands must use one of the supported execution modes
   execution: "eventual",
   input: {
-    title: "Tighten acceptance criteria",
+    title: "Document graph explorer affordances",
   },
   output: {
-    issueId: "issue-1",
+    topicId: "topic-1",
   },
 } satisfies GraphCommandSpec);

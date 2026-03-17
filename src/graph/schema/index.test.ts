@@ -8,52 +8,40 @@ import {
   probeSaveContractItemCommand,
 } from "../graph/contracts.probe.js";
 import { core } from "../graph/index.js";
-import { dateFilter as compatDateFilter } from "../type/date/filter.js";
-import { dateTypeModule as compatDateTypeModule } from "../type/date/index.js";
-import { parseDate as compatParseDate } from "../type/date/parse.js";
-import { emailTypeModule as compatEmailTypeModule } from "../type/email/index.js";
-import { urlTypeModule as compatUrlTypeModule } from "../type/url/index.js";
-import { urlMeta as compatUrlMeta } from "../type/url/meta.js";
+import { app as canonicalApp } from "./app.js";
 import {
   envVar,
   envVarNameBlankMessage,
   envVarNameInvalidMessage,
   envVarNamePattern,
   envVarsSchema,
-  secretRef,
 } from "./app/env-vars/index.js";
-import { block, outlinerSchema } from "./app/outliner/index.js";
-import {
-  saveWorkspaceIssueCommand,
-  saveWorkspaceLabelCommand,
-  saveWorkspaceProjectCommand,
-  workspaceManagementWorkflow,
-  workflowStatus,
-  workflowStatusCategory,
-  workspace,
-  workspaceCommands,
-  workspaceIssue,
-  workspaceIssueObjectView,
-  workspaceLabel,
-  workspaceLabelObjectView,
-  workspaceObjectViews,
-  workspaceProject,
-  workspaceProjectObjectView,
-  workspaceSchema,
-  workspaceWorkflows,
-} from "./app/workspace/index.js";
+import { topic, topicKind, topicSchema } from "./app/topic/index.js";
+import { core as canonicalCore } from "./core.js";
 import { cardinality } from "./core/cardinality/index.js";
-import { dateFilter } from "./core/date/filter.js";
+import { colorTypeModule } from "./core/color/index.js";
 import { dateTypeModule } from "./core/date/index.js";
-import { parseDate } from "./core/date/parse.js";
 import { emailTypeModule } from "./core/email/index.js";
 import { enumType } from "./core/enum/index.js";
+import {
+  graphIconSeeds,
+  icon,
+  iconReferenceField,
+  resolvePredicateDefinitionIconId,
+  resolveTypeDefinitionIconId,
+} from "./core/icon/index.js";
+import { jsonTypeModule } from "./core/json/index.js";
+import { markdownTypeModule } from "./core/markdown/index.js";
 import { node } from "./core/node/index.js";
 import { predicate } from "./core/predicate/index.js";
+import { secretHandle } from "./core/secret/index.js";
 import { stringTypeModule } from "./core/string/index.js";
+import { svgTypeModule } from "./core/svg/index.js";
+import { tag } from "./core/tag/index.js";
 import { coreType } from "./core/type/index.js";
 import { urlTypeModule } from "./core/url/index.js";
-import { urlMeta } from "./core/url/meta.js";
+import { estii } from "./estii.js";
+import { deal, estiiSchema, feature, resourceTag, space, task } from "./estii/types.js";
 import * as schemaExports from "./index.js";
 
 function resolvedTypeId(typeDef: { values: { key: string } }): string {
@@ -83,14 +71,55 @@ describe("schema entry surfaces", () => {
     expect(predicate).toBe(core.predicate);
     expect(enumType).toBe(core.enum);
     expect(stringTypeModule.type.values.key).toBe("core:string");
+    expect(colorTypeModule.type.values.key).toBe("core:color");
+    expect(jsonTypeModule.type.values.key).toBe("core:json");
+    expect(markdownTypeModule.type.values.key).toBe("core:markdown");
+    expect(svgTypeModule.type.values.key).toBe("core:svg");
+    expect(icon.values.key).toBe("core:icon");
+    expect(tag.values.key).toBe("core:tag");
+    expect(stringTypeModule.type.values.icon).toBe(graphIconSeeds.string);
+    expect(resolveTypeDefinitionIconId(cardinality)).toBe(graphIconSeeds.tag.id);
+    expect(resolvePredicateDefinitionIconId(node.fields.type, coreType)).toBe(
+      graphIconSeeds.edge.id,
+    );
+  });
+
+  it("defines canonical core and app namespaces from schema entrypoints", () => {
+    expect(canonicalCore.node.values.key).toBe(node.values.key);
+    expect(canonicalCore.string.values.key).toBe(stringTypeModule.type.values.key);
+    expect(canonicalCore.color.values.key).toBe(colorTypeModule.type.values.key);
+    expect(canonicalCore.json.values.key).toBe(jsonTypeModule.type.values.key);
+    expect(canonicalCore.markdown.values.key).toBe(markdownTypeModule.type.values.key);
+    expect(canonicalCore.svg.values.key).toBe(svgTypeModule.type.values.key);
+    expect(canonicalCore.icon.values.key).toBe(icon.values.key);
+    expect(canonicalCore.tag.values.key).toBe(tag.values.key);
+    expect(canonicalCore.secretHandle.values.key).toBe(secretHandle.values.key);
+    expect(String(canonicalCore.type.fields.icon.range)).toBe(resolvedTypeId(icon));
+    expect(String(canonicalCore.predicate.fields.icon.range)).toBe(resolvedTypeId(icon));
+    expect(canonicalApp.envVar.values.key).toBe(envVar.values.key);
+    expect(canonicalApp.topic.values.key).toBe(topic.values.key);
+    expect(canonicalApp.topicKind.values.key).toBe(topicKind.values.key);
   });
 
   it("exports the env-var slice from the canonical app schema tree", () => {
     expect(envVarsSchema).toEqual({
       envVar,
-      secretRef,
     });
-    expect(String(envVar.fields.secret.range)).toBe(resolvedTypeId(secretRef));
+    expect(String(envVar.fields.secret.range)).toBe(resolvedTypeId(secretHandle));
+    expect(envVar.fields.secret.authority).toEqual({
+      visibility: "replicated",
+      write: "server-command",
+      secret: {
+        kind: "sealed-handle",
+        metadataVisibility: "replicated",
+        revealCapability: "secret:reveal",
+        rotateCapability: "secret:rotate",
+      },
+    });
+    expect(secretHandle.fields.version.authority).toEqual({
+      visibility: "replicated",
+      write: "server-command",
+    });
     expect(envVarNamePattern.test("OPENAI_API_KEY")).toBe(true);
     expect(
       envVar.fields.name.validate?.({
@@ -112,43 +141,35 @@ describe("schema entry surfaces", () => {
     });
   });
 
-  it("exports the outliner and workspace slices from the canonical app schema tree", () => {
-    expect(outlinerSchema).toEqual({
-      block,
+  it("exports the topic slice from the canonical app schema tree", () => {
+    expect(topicSchema).toEqual({
+      topic,
+      topicKind,
     });
-    expect(String(block.fields.parent.range)).toBe(resolvedTypeId(block));
-
-    expect(workspaceSchema).toEqual({
-      workflowStatus,
-      workflowStatusCategory,
-      workspace,
-      workspaceIssue,
-      workspaceLabel,
-      workspaceProject,
+    expect(String(topic.fields.kind.range)).toBe(resolvedTypeId(topicKind));
+    expect(String(topic.fields.content.range)).toBe(resolvedTypeId(core.markdown));
+    expect(String(topic.fields.tags.range)).toBe(resolvedTypeId(core.tag));
+    expect(String(topic.fields.parent.range)).toBe(resolvedTypeId(topic));
+    expect(topic.fields.parent.meta.reference).toEqual({
+      selection: "existing-only",
+      create: false,
+      excludeSubject: true,
     });
-    expect(String(workspace.fields.statuses.range)).toBe(resolvedTypeId(workflowStatus));
-    expect(String(workspace.fields.issues.range)).toBe(resolvedTypeId(workspaceIssue));
-    expect(String(workspaceIssue.fields.project.range)).toBe(resolvedTypeId(workspaceProject));
-    expect(String(workspaceIssue.fields.status.range)).toBe(resolvedTypeId(workflowStatus));
-    expect(String(workspaceIssue.fields.labels.range)).toBe(resolvedTypeId(workspaceLabel));
-    expect(String(workspaceIssue.fields.parent.range)).toBe(resolvedTypeId(workspaceIssue));
+    expect(String(topic.fields.references.range)).toBe(resolvedTypeId(topic));
   });
 
   it("keeps the schema root index wired to the new tree", () => {
     expect(schemaExports.node).toBe(node);
+    expect(schemaExports.icon).toBe(icon);
+    expect(schemaExports.iconReferenceField).toBe(iconReferenceField);
     expect(schemaExports.envVar).toBe(envVar);
-    expect(schemaExports.block).toBe(block);
-    expect(schemaExports.workspace).toBe(workspace);
-    expect(schemaExports.workspaceIssueObjectView).toBe(workspaceIssueObjectView);
-    expect(schemaExports.workspaceProjectObjectView).toBe(workspaceProjectObjectView);
-    expect(schemaExports.workspaceLabelObjectView).toBe(workspaceLabelObjectView);
-    expect(schemaExports.saveWorkspaceIssueCommand).toBe(saveWorkspaceIssueCommand);
-    expect(schemaExports.saveWorkspaceProjectCommand).toBe(saveWorkspaceProjectCommand);
-    expect(schemaExports.saveWorkspaceLabelCommand).toBe(saveWorkspaceLabelCommand);
-    expect(schemaExports.workspaceObjectViews).toBe(workspaceObjectViews);
-    expect(schemaExports.workspaceCommands).toBe(workspaceCommands);
-    expect(schemaExports.workspaceManagementWorkflow).toBe(workspaceManagementWorkflow);
-    expect(schemaExports.workspaceWorkflows).toBe(workspaceWorkflows);
+    expect(schemaExports.secretHandle).toBe(secretHandle);
+    expect(schemaExports.topic).toBe(topic);
+    expect(schemaExports.topicKind).toBe(topicKind);
+    expect(schemaExports.jsonTypeModule).toBe(jsonTypeModule);
+    expect(schemaExports.markdownTypeModule).toBe(markdownTypeModule);
+    expect(schemaExports.svgTypeModule).toBe(svgTypeModule);
+    expect(schemaExports.estii).toBe(estii);
   });
 
   it("keeps contract probes root-safe without polluting the canonical schema tree", () => {
@@ -166,16 +187,29 @@ describe("schema entry surfaces", () => {
     expect("probeContractWorkflow" in schemaExports).toBe(false);
   });
 
-  it("keeps migrated built-ins aligned with legacy compatibility paths", () => {
-    expect(dateTypeModule).toBe(compatDateTypeModule);
-    expect(dateFilter).toBe(compatDateFilter);
-    expect(parseDate).toBe(compatParseDate);
-    expect(urlTypeModule).toBe(compatUrlTypeModule);
-    expect(urlMeta).toBe(compatUrlMeta);
-    expect(emailTypeModule).toBe(compatEmailTypeModule);
-
+  it("keeps migrated built-ins aligned with the canonical core namespace", () => {
     expect(dateTypeModule.type).toBe(core.date);
     expect(urlTypeModule.type).toBe(core.url);
     expect(emailTypeModule.type).toBe(core.email);
+    expect(colorTypeModule.type).toBe(core.color);
+    expect(jsonTypeModule.type).toBe(core.json);
+    expect(markdownTypeModule.type).toBe(core.markdown);
+    expect(svgTypeModule.type).toBe(core.svg);
+    expect(tag).toBe(core.tag);
+  });
+
+  it("defines the estii namespace from the canonical schema tree", () => {
+    expect(estiiSchema.deal).toBe(deal);
+    expect(estiiSchema.space).toBe(space);
+    expect(estii.deal.values.key).toBe(deal.values.key);
+    expect(estii.space.values.key).toBe(space.values.key);
+    expect(String(deal.fields.account.range)).toBe(resolvedTypeId(estii.account));
+    expect(String(space.fields.deals.range)).toBe(resolvedTypeId(estii.deal));
+    expect(String(deal.fields.avatarColor.range)).toBe(resolvedTypeId(core.color));
+    expect(String(estii.theme.fields.backgroundColor.range)).toBe(resolvedTypeId(core.color));
+    expect(String(resourceTag.fields.color.range)).toBe(resolvedTypeId(core.color));
+    expect(String(feature.fields.tags.range)).toBe(resolvedTypeId(core.tag));
+    expect(String(task.fields.tags.range)).toBe(resolvedTypeId(core.tag));
+    expect(resourceTag.fields.key.key.endsWith(":key")).toBe(true);
   });
 });

@@ -1,11 +1,16 @@
 import { expect, test } from "bun:test";
 
 import { createTestRenderer } from "@opentui/core/testing";
+import { act } from "react";
 
 import { buildAgentTuiRootComponentModel } from "./layout.js";
 import type { AgentSessionRef } from "./session-events.js";
 import { createAgentTuiStore } from "./store.js";
 import { createAgentTui } from "./tui.js";
+
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 type SessionRefOverrides = Omit<Partial<AgentSessionRef>, "issue"> & {
   issue?: Partial<NonNullable<AgentSessionRef["issue"]>>;
@@ -1418,85 +1423,99 @@ test("createAgentTui supports keyboard column navigation and content scrolling",
   const child = createChildSession();
 
   try {
-    await tui.start();
-    tui.observe({
-      phase: "started",
-      sequence: 1,
-      session: supervisor,
-      timestamp: "2026-03-10T02:10:00.000Z",
-      type: "session",
+    await act(async () => {
+      await tui.start();
     });
-    tui.observe({
-      phase: "scheduled",
-      sequence: 2,
-      session: worker,
-      timestamp: "2026-03-10T02:10:01.000Z",
-      type: "session",
-    });
-    tui.observe({
-      code: "thread-started",
-      format: "line",
-      sequence: 3,
-      session: worker,
-      text: "Session started",
-      timestamp: "2026-03-10T02:10:02.000Z",
-      type: "status",
-    });
-    tui.observe({
-      phase: "started",
-      sequence: 4,
-      session: child,
-      timestamp: "2026-03-10T02:10:03.000Z",
-      type: "session",
-    });
-    tui.observe({
-      code: "tool",
-      format: "line",
-      sequence: 5,
-      session: child,
-      text: "Tool: helper.spawn",
-      timestamp: "2026-03-10T02:10:04.000Z",
-      type: "status",
-    });
-    for (let index = 0; index < 12; index++) {
+    await act(async () => {
       tui.observe({
-        code: "command-output",
-        format: "line",
-        sequence: 6 + index,
+        phase: "started",
+        sequence: 1,
+        session: supervisor,
+        timestamp: "2026-03-10T02:10:00.000Z",
+        type: "session",
+      });
+      tui.observe({
+        phase: "scheduled",
+        sequence: 2,
         session: worker,
-        text: `| output line ${index}`,
-        timestamp: `2026-03-10T02:10:${String(5 + index).padStart(2, "0")}.000Z`,
+        timestamp: "2026-03-10T02:10:01.000Z",
+        type: "session",
+      });
+      tui.observe({
+        code: "thread-started",
+        format: "line",
+        sequence: 3,
+        session: worker,
+        text: "Session started",
+        timestamp: "2026-03-10T02:10:02.000Z",
         type: "status",
       });
-    }
+      tui.observe({
+        phase: "started",
+        sequence: 4,
+        session: child,
+        timestamp: "2026-03-10T02:10:03.000Z",
+        type: "session",
+      });
+      tui.observe({
+        code: "tool",
+        format: "line",
+        sequence: 5,
+        session: child,
+        text: "Tool: helper.spawn",
+        timestamp: "2026-03-10T02:10:04.000Z",
+        type: "status",
+      });
+      for (let index = 0; index < 12; index++) {
+        tui.observe({
+          code: "command-output",
+          format: "line",
+          sequence: 6 + index,
+          session: worker,
+          text: `| output line ${index}`,
+          timestamp: `2026-03-10T02:10:${String(5 + index).padStart(2, "0")}.000Z`,
+          type: "status",
+        });
+      }
 
-    await Promise.resolve();
-    await renderOnce();
+      await Promise.resolve();
+      await renderOnce();
+    });
 
     let frame = captureCharFrame();
     expect(frame).toContain("/Users/dpeek/code/io");
 
-    mockInput.pressArrow("right");
-    await renderOnce();
+    await act(async () => {
+      mockInput.pressArrow("right");
+      await renderOnce();
+    });
     frame = captureCharFrame();
     expect(frame).toContain("OPE-68");
     expect(frame).toContain("output line 11");
 
-    mockInput.pressArrow("up");
-    await renderOnce();
+    await act(async () => {
+      mockInput.pressArrow("up");
+      await renderOnce();
+    });
     frame = captureCharFrame();
     expect(frame).toContain("output line 10");
 
-    mockInput.pressArrow("up");
-    await renderOnce();
+    await act(async () => {
+      mockInput.pressArrow("up");
+      await renderOnce();
+    });
     frame = captureCharFrame();
     expect(frame).toContain("output line 9");
 
-    await mockInput.typeText("q");
-    await Promise.resolve();
+    await act(async () => {
+      await mockInput.typeText("q");
+      await Promise.resolve();
+    });
     expect(exitRequested).toBe(1);
   } finally {
-    await tui.stop();
+    await act(async () => {
+      await tui.stop();
+    });
     renderer.destroy();
   }
 });
@@ -1550,66 +1569,70 @@ test("createAgentTui keeps a short recent completed and failed worker tail in li
   });
 
   try {
-    await tui.start();
-    tui.observe({
-      phase: "started",
-      sequence: 1,
-      session: supervisor,
-      timestamp: "2026-03-10T02:12:00.000Z",
-      type: "session",
+    await act(async () => {
+      await tui.start();
     });
-    tui.observe({
-      phase: "started",
-      sequence: 2,
-      session: completedWorker,
-      timestamp: "2026-03-10T02:12:01.000Z",
-      type: "session",
-    });
-    tui.observe({
-      phase: "completed",
-      sequence: 3,
-      session: completedWorker,
-      timestamp: "2026-03-10T02:12:02.000Z",
-      type: "session",
-    });
-    tui.observe({
-      phase: "started",
-      sequence: 4,
-      session: failedWorker,
-      timestamp: "2026-03-10T02:12:03.000Z",
-      type: "session",
-    });
-    tui.observe({
-      phase: "failed",
-      sequence: 5,
-      session: failedWorker,
-      timestamp: "2026-03-10T02:12:04.000Z",
-      type: "session",
-    });
-    tui.observe({
-      phase: "started",
-      sequence: 6,
-      session: activeWorker,
-      timestamp: "2026-03-10T02:12:05.000Z",
-      type: "session",
-    });
-    tui.observe({
-      phase: "started",
-      sequence: 7,
-      session: recentCompletedWorker,
-      timestamp: "2026-03-10T02:12:06.000Z",
-      type: "session",
-    });
-    tui.observe({
-      phase: "completed",
-      sequence: 8,
-      session: recentCompletedWorker,
-      timestamp: "2026-03-10T02:12:07.000Z",
-      type: "session",
-    });
+    await act(async () => {
+      tui.observe({
+        phase: "started",
+        sequence: 1,
+        session: supervisor,
+        timestamp: "2026-03-10T02:12:00.000Z",
+        type: "session",
+      });
+      tui.observe({
+        phase: "started",
+        sequence: 2,
+        session: completedWorker,
+        timestamp: "2026-03-10T02:12:01.000Z",
+        type: "session",
+      });
+      tui.observe({
+        phase: "completed",
+        sequence: 3,
+        session: completedWorker,
+        timestamp: "2026-03-10T02:12:02.000Z",
+        type: "session",
+      });
+      tui.observe({
+        phase: "started",
+        sequence: 4,
+        session: failedWorker,
+        timestamp: "2026-03-10T02:12:03.000Z",
+        type: "session",
+      });
+      tui.observe({
+        phase: "failed",
+        sequence: 5,
+        session: failedWorker,
+        timestamp: "2026-03-10T02:12:04.000Z",
+        type: "session",
+      });
+      tui.observe({
+        phase: "started",
+        sequence: 6,
+        session: activeWorker,
+        timestamp: "2026-03-10T02:12:05.000Z",
+        type: "session",
+      });
+      tui.observe({
+        phase: "started",
+        sequence: 7,
+        session: recentCompletedWorker,
+        timestamp: "2026-03-10T02:12:06.000Z",
+        type: "session",
+      });
+      tui.observe({
+        phase: "completed",
+        sequence: 8,
+        session: recentCompletedWorker,
+        timestamp: "2026-03-10T02:12:07.000Z",
+        type: "session",
+      });
 
-    await Promise.resolve();
-    await renderOnce();
+      await Promise.resolve();
+      await renderOnce();
+    });
     expect(tui.getSnapshot().columns.map((column) => column.session.id)).toEqual([
       "supervisor",
       "worker:OPE-70:1",
@@ -1617,7 +1640,9 @@ test("createAgentTui keeps a short recent completed and failed worker tail in li
       "worker:OPE-69:1",
     ]);
   } finally {
-    await tui.stop();
+    await act(async () => {
+      await tui.stop();
+    });
     renderer.destroy();
   }
 });

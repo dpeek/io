@@ -1,4 +1,18 @@
 export type Cardinality = "one" | "one?" | "many";
+export type GraphFieldVisibility = "replicated" | "authority-only";
+export type GraphFieldWritePolicy = "client-tx" | "server-command" | "authority-only";
+export type GraphSecretFieldAuthority = {
+  kind: "sealed-handle";
+  metadataVisibility?: GraphFieldVisibility;
+  revealCapability?: string;
+  rotateCapability?: string;
+};
+export type GraphFieldAuthority = {
+  visibility?: GraphFieldVisibility;
+  write?: GraphFieldWritePolicy;
+  secret?: GraphSecretFieldAuthority;
+};
+export type DefinitionIconRef = string | { id: string };
 
 type TypeLike = { values: { key: string } };
 export type RangeRef = string | TypeLike;
@@ -58,8 +72,10 @@ type NormalizeRange<R extends RangeRef> = R extends string
 
 export type EdgeInput<R extends RangeRef = RangeRef, Extra extends object = {}> = {
   key?: string;
+  icon?: DefinitionIconRef;
   range: R;
   cardinality: Cardinality;
+  createOptional?: true;
   onCreate?: PredicateValueHook;
   onUpdate?: PredicateValueHook;
   validate?: PredicateValidator;
@@ -140,6 +156,18 @@ export function edgeId(edge: EdgeWithId): string {
   return edge.id ?? edge.key;
 }
 
+export function fieldVisibility(field: { authority?: GraphFieldAuthority } | undefined) {
+  return field?.authority?.visibility ?? "replicated";
+}
+
+export function fieldWritePolicy(field: { authority?: GraphFieldAuthority } | undefined) {
+  return field?.authority?.write ?? "client-tx";
+}
+
+export function isSecretBackedField(field: { authority?: GraphFieldAuthority } | undefined) {
+  return field?.authority?.secret?.kind === "sealed-handle";
+}
+
 function ns<const T extends FieldsInput>(key: string, input: T): FieldsOutput<T> {
   function build(path: string, tree: FieldsInput): FieldsOutput<FieldsInput> {
     const out: Record<string, unknown> = {};
@@ -160,6 +188,7 @@ function ns<const T extends FieldsInput>(key: string, input: T): FieldsOutput<T>
           key: edgeKey,
           range,
           cardinality,
+          createOptional,
           onCreate,
           onUpdate,
           validate,
@@ -171,6 +200,7 @@ function ns<const T extends FieldsInput>(key: string, input: T): FieldsOutput<T>
           key: edgeKey ?? nextKey,
           range: normalizeRangeRef(range),
           cardinality: cardinality as Cardinality,
+          ...(createOptional ? { createOptional } : {}),
           ...(onCreate ? { onCreate } : {}),
           ...(onUpdate ? { onUpdate } : {}),
           ...(validate ? { validate } : {}),
@@ -186,7 +216,11 @@ function ns<const T extends FieldsInput>(key: string, input: T): FieldsOutput<T>
   return build(key, input) as FieldsOutput<T>;
 }
 
-type TypeValues<K extends string = string> = { key: K; name?: string };
+type TypeValues<K extends string = string> = {
+  key: K;
+  name?: string;
+  icon?: DefinitionIconRef;
+};
 type ResolvedTypeValues<K extends string = string> = TypeValues<K> & { id: string };
 export type EnumOptionInput<K extends string = string> = {
   key?: K;

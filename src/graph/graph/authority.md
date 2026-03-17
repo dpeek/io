@@ -189,7 +189,7 @@ actually depend on data it is not allowed to see.
 Sensitive values should still be representable in the graph, but not as normal
 client-readable scalars.
 
-The right mental model is a sealed secret reference.
+The right mental model is a sealed secret handle.
 
 The graph stores a stable reference to encrypted secret material, while the
 plaintext remains available only through a server-side unseal path with policy

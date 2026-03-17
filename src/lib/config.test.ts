@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
@@ -10,7 +10,9 @@ import {
 } from "./config.js";
 
 test("loadIoConfig prefers io.ts and resolves env-backed values", async () => {
-  const root = await mkdtemp(resolve(process.cwd(), "tmp/workspace-config-"));
+  const tempRoot = resolve(process.cwd(), "tmp");
+  await mkdir(tempRoot, { recursive: true });
+  const root = await mkdtemp(resolve(tempRoot, "workspace-config-"));
   process.env.LINEAR_API_KEY = "linear-token";
   process.env.LINEAR_PROJECT_SLUG = "project-slug";
 

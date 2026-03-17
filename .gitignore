@@ -1,8 +1,11 @@
 out
 .DS_Store
 node_modules
-tmp/workspace
 .env
 out
 tmp
+dist
+.wrangler
+.tanstack
 .gitnexus
+.claude

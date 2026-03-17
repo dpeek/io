@@ -177,22 +177,27 @@ This is real engine code, not just a design sketch.
 - renderer and editor resolution do not live on the root `@io/core/graph` surface;
   current resolver primitives live on `@io/core/graph/react`, and default DOM
   capabilities live on `@io/core/graph/react-dom`
-- entity-reference fields still use `defineReferenceField(...)` plus narrow
+- entity-reference fields still use `defineReferenceField(...)` plus
   reference-policy helpers rather than a richer module family
 - richer entity-level layout and composition beyond pure specs is still mostly
   roadmap
 
 ## Reference-Policy Helpers
 
-`@io/core/graph` already exports a narrow helper surface for relationship authoring:
+`@io/core/graph` already exports a small helper surface for relationship authoring:
 
 - `existingEntityReferenceField(...)`
 - `existingEntityReferenceFieldMeta(...)`
 
-Today those helpers only encode an existing-entity-only selection policy. They
-attach `meta.reference` data that `@io/core/graph/react` can read to infer the
-default entity-reference display and editor kinds. They are thin field-authoring
-conveniences, not route code, DOM widgets, or a full relationship-search layer.
+Today those helpers encode the existing-entity-only selection policy plus the
+most common UI hints that travel with it, such as collection semantics and an
+explicit collection editor kind like the shared entity-reference combobox.
+They also carry simple picker rules such as excluding the current subject from
+self-referential single-value selections.
+Entity-reference fields now resolve to the shared combobox across both
+single-value and collection cardinalities. These helpers are still thin
+field-authoring conveniences, not route code, DOM widgets, or a full
+relationship-search layer.
 
 ## Roadmap
 
@@ -205,7 +210,7 @@ conveniences, not route code, DOM widgets, or a full relationship-search layer.
 ## Future Work Suggestions
 
 1. Add one “how to author a new scalar family” example that walks through `type.ts`, `meta.ts`, and `filter.ts`.
-2. Document which metadata keys are already relied on by app proof surfaces.
+2. Document which metadata keys are already relied on by the web explorer and other UI surfaces.
 3. Decide whether reference fields should gain their own first-class module abstraction or stay helper-based.
 4. Add a small contract test suite that proves override composition across representative families.
 5. Capture when `web.tsx` or `tui.tsx` belongs in this package versus an adapter package.

@@ -18,6 +18,7 @@ export default defineIoConfig({
     docs: {
       "project.backlog": "./src/agent/skill/backlog.md",
       "project.goals": "./src/agent/index.md",
+      "project.mcp": "./src/mcp.md",
       "project.module-stream-workflow-plan": "./src/agent/workflow.md",
       "project.overview": "./src/index.md",
       "project.workflow": "./src/agent/workflow.md",
@@ -54,11 +55,6 @@ export default defineIoConfig({
       docs: ["./src/agent/index.md", "./src/agent/workflow.md"],
       path: "./src/agent",
     },
-    app: {
-      allowedSharedPaths: ["./src"],
-      docs: ["./src/app/index.md"],
-      path: "./src/app",
-    },
     cli: {
       allowedSharedPaths: ["./src"],
       docs: ["./src/cli/index.md"],
@@ -71,7 +67,7 @@ export default defineIoConfig({
     },
     graph: {
       allowedSharedPaths: ["./src"],
-      docs: ["./src/graph/index.md", "./src/graph/spec/architecture.md"],
+      docs: ["./src/graph/index.md", "./src/graph/icon.md", "./src/graph/spec/architecture.md"],
       path: "./src/graph",
     },
     lib: {

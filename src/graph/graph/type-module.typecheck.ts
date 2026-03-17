@@ -1,9 +1,9 @@
-import { booleanTypeModule } from "../type/boolean/index.js";
-import { defineDefaultEnumTypeModule } from "../type/enum-module.js";
-import { stringTypeModule } from "../type/string/index.js";
+import { booleanTypeModule } from "../schema/core/boolean/index.js";
+import { defineDefaultEnumTypeModule } from "../schema/core/enum-module.js";
+import { stringTypeModule } from "../schema/core/string/index.js";
 import { existingEntityReferenceField } from "./reference-policy.js";
 import { defineEnum, defineScalar, defineType } from "./schema.js";
-import { defineReferenceField, defineScalarModule } from "./type-module.js";
+import { defineReferenceField, defineScalarModule, defineSecretField } from "./type-module.js";
 
 const probeStringType = defineScalar({
   values: { key: "probe:string", name: "Probe String" },
@@ -36,8 +36,27 @@ void existingEntityReferenceField(probeEntityType, {
   label: "Related entities",
 });
 
+void existingEntityReferenceField(probeEntityType, {
+  cardinality: "many",
+  collection: "unordered",
+  create: true,
+  editorKind: "entity-reference-combobox",
+  label: "Searchable related entities",
+});
+
+void defineSecretField({
+  range: probeEntityType,
+  cardinality: "one?",
+  revealCapability: "secret:reveal",
+  rotateCapability: "secret:rotate",
+});
+
 void stringTypeModule.field({
   cardinality: "one",
+  authority: {
+    visibility: "authority-only",
+    write: "authority-only",
+  },
   meta: {
     editor: {
       kind: "textarea",

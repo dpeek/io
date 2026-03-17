@@ -2,12 +2,25 @@ import { bootstrap } from "./bootstrap";
 import {
   GraphValidationError,
   createTypeClient,
+  validateGraphStore,
   type GraphValidationIssue,
   type GraphValidationResult,
   type NamespaceClient,
-  validateGraphStore,
 } from "./client";
-import type { AnyTypeOutput } from "./schema";
+import { core } from "./core";
+import {
+  edgeId,
+  fieldVisibility,
+  fieldWritePolicy,
+  isEntityType,
+  isFieldsOutput,
+  typeId,
+  type AnyTypeOutput,
+  type FieldsOutput,
+  type GraphFieldVisibility,
+  type GraphFieldWritePolicy,
+  type ResolvedEdgeOutput,
+} from "./schema";
 import { createStore, type Store, type StoreSnapshot } from "./store";
 
 export type SyncCompleteness = "complete" | "incomplete";
@@ -103,6 +116,8 @@ export type GraphWriteTransaction = {
   readonly id: string;
   readonly ops: readonly GraphWriteOperation[];
 };
+
+export type AuthoritativeWriteScope = GraphFieldWritePolicy;
 
 export type AuthoritativeGraphWriteResult = {
   readonly txId: string;
@@ -617,6 +632,197 @@ function materializeTotalSyncPayload(
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
+}
+
+type FieldAuthorityPolicy = {
+  readonly key: string;
+  readonly visibility: GraphFieldVisibility;
+  readonly write: GraphFieldWritePolicy;
+};
+
+type FieldAuthorityPolicyIndex = Map<string, Map<string, FieldAuthorityPolicy>>;
+
+function isResolvedEdgeOutput(value: unknown): value is ResolvedEdgeOutput {
+  const candidate = value as Partial<ResolvedEdgeOutput>;
+  return (
+    typeof candidate.key === "string" &&
+    typeof candidate.range === "string" &&
+    typeof candidate.cardinality === "string"
+  );
+}
+
+function collectFieldAuthorityPolicies(
+  fields: FieldsOutput,
+  policies: Map<string, FieldAuthorityPolicy>,
+): void {
+  for (const value of Object.values(fields) as unknown[]) {
+    if (isFieldsOutput(value)) {
+      collectFieldAuthorityPolicies(value, policies);
+      continue;
+    }
+
+    if (!isResolvedEdgeOutput(value)) continue;
+    policies.set(edgeId(value), {
+      key: value.key,
+      visibility: fieldVisibility(value as Parameters<typeof fieldVisibility>[0]),
+      write: fieldWritePolicy(value as Parameters<typeof fieldWritePolicy>[0]),
+    });
+  }
+}
+
+function createFieldAuthorityPolicyIndex(
+  namespace: Record<string, AnyTypeOutput>,
+): FieldAuthorityPolicyIndex {
+  const policiesByTypeId: FieldAuthorityPolicyIndex = new Map();
+
+  for (const typeDef of Object.values(namespace)) {
+    if (!isEntityType(typeDef)) continue;
+    const policies = new Map<string, FieldAuthorityPolicy>();
+    collectFieldAuthorityPolicies(typeDef.fields, policies);
+    policiesByTypeId.set(typeId(typeDef), policies);
+  }
+
+  return policiesByTypeId;
+}
+
+function findSubjectTypeId(
+  store: Store,
+  nodeId: string,
+  nodeTypePredicateId: string,
+): string | undefined {
+  return store.get(nodeId, nodeTypePredicateId) ?? store.find(nodeId, nodeTypePredicateId)[0]?.o;
+}
+
+function findFieldAuthorityPolicy(
+  policiesByTypeId: FieldAuthorityPolicyIndex,
+  store: Store,
+  nodeId: string,
+  predicateId: string,
+): FieldAuthorityPolicy | undefined {
+  const subjectTypeId = findSubjectTypeId(store, nodeId, edgeId(core.node.fields.type));
+  if (!subjectTypeId) return undefined;
+  return policiesByTypeId.get(subjectTypeId)?.get(predicateId);
+}
+
+function createEdgeIndex(snapshot: StoreSnapshot): Map<string, StoreSnapshot["edges"][number]> {
+  return new Map(snapshot.edges.map((edge) => [edge.id, edge]));
+}
+
+function resolveTransactionOperationTarget(
+  operation: GraphWriteOperation,
+  edgeById: Map<string, StoreSnapshot["edges"][number]>,
+): { subjectId: string; predicateId: string } | undefined {
+  if (operation.op === "assert") {
+    return {
+      subjectId: operation.edge.s,
+      predicateId: operation.edge.p,
+    };
+  }
+
+  const edge = edgeById.get(operation.edgeId);
+  if (!edge) return undefined;
+  return {
+    subjectId: edge.s,
+    predicateId: edge.p,
+  };
+}
+
+function filterReplicatedSnapshot(
+  store: Store,
+  namespace: Record<string, AnyTypeOutput>,
+): StoreSnapshot {
+  const policiesByTypeId = createFieldAuthorityPolicyIndex(namespace);
+  const snapshot = store.snapshot();
+  const edges = snapshot.edges
+    .filter((edge) => {
+      const policy = findFieldAuthorityPolicy(policiesByTypeId, store, edge.s, edge.p);
+      return (policy?.visibility ?? "replicated") === "replicated";
+    })
+    .map((edge) => ({ ...edge }));
+  const visibleEdgeIds = new Set(edges.map((edge) => edge.id));
+
+  return {
+    edges,
+    retracted: snapshot.retracted.filter((edgeId) => visibleEdgeIds.has(edgeId)),
+  };
+}
+
+function filterReplicatedWriteResult(
+  result: AuthoritativeGraphWriteResult,
+  store: Store,
+  policiesByTypeId: FieldAuthorityPolicyIndex,
+  edgeById: Map<string, StoreSnapshot["edges"][number]>,
+): AuthoritativeGraphWriteResult | undefined {
+  const ops = result.transaction.ops.filter((operation) => {
+    const target = resolveTransactionOperationTarget(operation, edgeById);
+    if (!target) return true;
+
+    const policy = findFieldAuthorityPolicy(
+      policiesByTypeId,
+      store,
+      target.subjectId,
+      target.predicateId,
+    );
+    return (policy?.visibility ?? "replicated") === "replicated";
+  });
+
+  if (ops.length === 0) return undefined;
+  return cloneAuthoritativeGraphWriteResult({
+    ...result,
+    transaction: {
+      ...result.transaction,
+      ops,
+    },
+  });
+}
+
+function validateAuthoritativeFieldWritePolicies(
+  transaction: GraphWriteTransaction,
+  snapshot: StoreSnapshot,
+  namespace: Record<string, AnyTypeOutput>,
+  writeScope: AuthoritativeWriteScope,
+): readonly GraphValidationIssue[] {
+  const policiesByTypeId = createFieldAuthorityPolicyIndex(namespace);
+  const validationStore = createStore();
+  validationStore.replace(snapshot);
+  const edgeById = createEdgeIndex(snapshot);
+  const issues: GraphValidationIssue[] = [];
+
+  for (const [index, operation] of transaction.ops.entries()) {
+    const target = resolveTransactionOperationTarget(operation, edgeById);
+    if (!target) continue;
+
+    const policy = findFieldAuthorityPolicy(
+      policiesByTypeId,
+      validationStore,
+      target.subjectId,
+      target.predicateId,
+    );
+    if (!policy || writeScopeAllows(writeScope, policy.write)) continue;
+
+    issues.push(
+      createTransactionValidationIssue(
+        [`ops[${index}]`],
+        "sync.tx.op.write.policy",
+        `Field "${policy.key}" requires "${policy.write}" writes and cannot be changed through an ordinary transaction.`,
+      ),
+    );
+  }
+
+  return issues;
+}
+
+const authoritativeWriteScopeLevel: Record<AuthoritativeWriteScope, number> = {
+  "client-tx": 0,
+  "server-command": 1,
+  "authority-only": 2,
+};
+
+function writeScopeAllows(
+  writeScope: AuthoritativeWriteScope,
+  required: GraphFieldWritePolicy,
+): boolean {
+  return authoritativeWriteScopeLevel[writeScope] >= authoritativeWriteScopeLevel[required];
 }
 
 function validateGraphWriteTransactionShape(
@@ -1423,28 +1629,30 @@ function validateIncrementalSyncPayloadShape(
   }
 
   if (!hasFallback) {
+    const parsedAfter =
+      typeof candidate.after === "string" ? parseAuthoritativeGraphCursor(candidate.after) : null;
+    const parsedCursor =
+      typeof candidate.cursor === "string" ? parseAuthoritativeGraphCursor(candidate.cursor) : null;
+
     if (transactions.length === 0) {
-      if (
-        typeof candidate.after === "string" &&
-        typeof candidate.cursor === "string" &&
-        candidate.cursor !== candidate.after
-      ) {
+      if (parsedAfter && parsedCursor && !isCursorAtOrAfter(parsedCursor, parsedAfter)) {
         issues.push(
           createIncrementalSyncValidationIssue(
             ["cursor"],
             "sync.incremental.cursor.head",
-            'Field "cursor" must match "after" when "transactions" is empty.',
+            'Field "cursor" must not move before "after" when "transactions" is empty.',
           ),
         );
       }
     } else {
       const tail = transactions[transactions.length - 1];
-      if (typeof candidate.cursor === "string" && tail && tail.cursor !== candidate.cursor) {
+      const parsedTail = tail ? parseAuthoritativeGraphCursor(tail.cursor) : null;
+      if (parsedTail && parsedCursor && !isCursorAtOrAfter(parsedCursor, parsedTail)) {
         issues.push(
           createIncrementalSyncValidationIssue(
             ["cursor"],
             "sync.incremental.cursor.tail",
-            'Field "cursor" must match the last delivered transaction cursor.',
+            'Field "cursor" must not move before the last delivered transaction cursor.',
           ),
         );
       }
@@ -1539,12 +1747,12 @@ function validateIncrementalSyncCursorSequence(
       continue;
     }
 
-    if (current.prefix !== previous.prefix || current.sequence !== previous.sequence + 1) {
+    if (!isCursorAtOrAfter(current, previous) || current.sequence === previous.sequence) {
       issues.push(
         createIncrementalSyncValidationIssue(
           [`transactions[${index}]`, "cursor"],
           "sync.incremental.transaction.cursor.sequence",
-          `Field "transactions[${index}].cursor" must advance contiguously from the previous cursor.`,
+          `Field "transactions[${index}].cursor" must move forward from the previous visible cursor.`,
         ),
       );
       continue;
@@ -1553,25 +1761,23 @@ function validateIncrementalSyncCursorSequence(
     previous = current;
   }
 
-  if (result.transactions.length === 0) {
-    const cursor = parseAuthoritativeGraphCursor(result.cursor);
-    if (!cursor) {
-      issues.push(
-        createIncrementalSyncValidationIssue(
-          ["cursor"],
-          "sync.incremental.cursor.sequence",
-          'Field "cursor" must be a cursor with a trailing numeric sequence.',
-        ),
-      );
-    } else if (cursor.prefix !== after.prefix || cursor.sequence !== after.sequence) {
-      issues.push(
-        createIncrementalSyncValidationIssue(
-          ["cursor"],
-          "sync.incremental.cursor.sequence",
-          'Field "cursor" must match "after" when no transactions are delivered.',
-        ),
-      );
-    }
+  const cursor = parseAuthoritativeGraphCursor(result.cursor);
+  if (!cursor) {
+    issues.push(
+      createIncrementalSyncValidationIssue(
+        ["cursor"],
+        "sync.incremental.cursor.sequence",
+        'Field "cursor" must be a cursor with a trailing numeric sequence.',
+      ),
+    );
+  } else if (!isCursorAtOrAfter(cursor, previous)) {
+    issues.push(
+      createIncrementalSyncValidationIssue(
+        ["cursor"],
+        "sync.incremental.cursor.sequence",
+        'Field "cursor" must not move before the last delivered cursor.',
+      ),
+    );
   }
 
   return issues;
@@ -1733,7 +1939,7 @@ export interface SyncedTypeSyncController extends TotalSyncController {
 
 export type SyncedTypeClient<T extends Record<string, AnyTypeOutput>> = {
   store: Store;
-  graph: NamespaceClient<T>;
+  graph: NamespaceClient<typeof core & T>;
   sync: SyncedTypeSyncController;
 };
 
@@ -1746,7 +1952,12 @@ export interface TotalSyncSession {
 }
 
 export interface AuthoritativeGraphWriteSession {
-  apply(transaction: GraphWriteTransaction): AuthoritativeGraphWriteResult;
+  apply(
+    transaction: GraphWriteTransaction,
+    options?: {
+      writeScope?: AuthoritativeWriteScope;
+    },
+  ): AuthoritativeGraphWriteResult;
   getCursor(): string | undefined;
   getBaseCursor(): string;
   getChangesAfter(cursor?: string): AuthoritativeGraphChangesAfterResult;
@@ -1785,12 +1996,26 @@ export function validateAuthoritativeGraphWriteTransaction<
   transaction: GraphWriteTransaction,
   store: Store,
   namespace: T,
+  options: {
+    writeScope?: AuthoritativeWriteScope;
+  } = {},
 ): GraphValidationResult<GraphWriteTransaction> {
   const prepared = prepareGraphWriteTransaction(transaction);
   if (!prepared.ok) return prepared.result;
 
   const materialized = materializeGraphWriteTransactionSnapshot(store, prepared.value);
   if (!materialized.ok) return exposeGraphWriteValidationResult(materialized.result);
+  const writePolicyIssues = validateAuthoritativeFieldWritePolicies(
+    prepared.value,
+    materialized.value,
+    namespace,
+    options.writeScope ?? "client-tx",
+  );
+  if (writePolicyIssues.length > 0) {
+    return exposeGraphWriteValidationResult(
+      invalidTransactionResult(prepared.value, writePolicyIssues),
+    );
+  }
 
   const validationStore = createStore();
   validationStore.replace(materialized.value);
@@ -1905,6 +2130,13 @@ function parseAuthoritativeGraphCursor(cursor: string): {
   };
 }
 
+function isCursorAtOrAfter(
+  cursor: { prefix: string; sequence: number },
+  previous: { prefix: string; sequence: number },
+): boolean {
+  return cursor.prefix === previous.prefix && cursor.sequence >= previous.sequence;
+}
+
 function classifyIncrementalSyncFallbackReason(
   cursor: string,
   options: {
@@ -1962,6 +2194,7 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
 ): AuthoritativeGraphWriteSession {
   const cursorPrefix = options.cursorPrefix ?? "tx:";
   const baseSequence = options.initialSequence ?? 0;
+  const policiesByTypeId = createFieldAuthorityPolicyIndex(namespace);
   if (!Number.isInteger(baseSequence) || baseSequence < 0) {
     throw new Error(
       "Authoritative graph write sessions require a non-negative integer initial sequence.",
@@ -2031,7 +2264,12 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
   ): IncrementalSyncResult {
     const changes = getChangesAfter(after);
     if (changes.kind === "changes") {
-      return createIncrementalSyncPayload(changes.changes, {
+      const edgeById = createEdgeIndex(store.snapshot());
+      const transactions = changes.changes.flatMap((result) => {
+        const filtered = filterReplicatedWriteResult(result, store, policiesByTypeId, edgeById);
+        return filtered ? [filtered] : [];
+      });
+      return createIncrementalSyncPayload(transactions, {
         after,
         cursor: changes.cursor,
         freshness: options.freshness,
@@ -2087,7 +2325,12 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
     });
   }
 
-  function apply(transaction: GraphWriteTransaction): AuthoritativeGraphWriteResult {
+  function apply(
+    transaction: GraphWriteTransaction,
+    options: {
+      writeScope?: AuthoritativeWriteScope;
+    } = {},
+  ): AuthoritativeGraphWriteResult {
     const prepared = prepareGraphWriteTransaction(transaction);
     if (!prepared.ok) throw new GraphValidationError(prepared.result);
 
@@ -2119,7 +2362,14 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
       throw new GraphValidationError(materialized.result);
     }
 
-    const validation = validateAuthoritativeGraphWriteTransaction(prepared.value, store, namespace);
+    const validation = validateAuthoritativeGraphWriteTransaction(
+      prepared.value,
+      store,
+      namespace,
+      {
+        writeScope: options.writeScope,
+      },
+    );
     if (!validation.ok) {
       txRecords.set(prepared.value.id, {
         ok: false,
@@ -2431,17 +2681,20 @@ export function createTotalSyncSession(
   };
 }
 
-export function createTotalSyncPayload(
+export function createTotalSyncPayload<const T extends Record<string, AnyTypeOutput>>(
   store: Store,
   options: {
     cursor?: string;
     freshness?: SyncFreshness;
+    namespace?: T;
   } = {},
 ): TotalSyncPayload {
   return {
     mode: "total",
     scope: graphSyncScope,
-    snapshot: store.snapshot(),
+    snapshot: options.namespace
+      ? filterReplicatedSnapshot(store, options.namespace)
+      : store.snapshot(),
     cursor: options.cursor ?? "full",
     completeness: "complete",
     freshness: options.freshness ?? "current",
@@ -2489,7 +2742,9 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
   bootstrap(authoritativeStore);
   bootstrap(authoritativeStore, namespace);
   const preserveSnapshot = authoritativeStore.snapshot();
-  const rawGraph = createTypeClient(store, namespace);
+  const rawGraph = createTypeClient(store, { ...core, ...namespace }) as NamespaceClient<
+    typeof core & T
+  >;
   const session = createTotalSyncSession(authoritativeStore, {
     preserveSnapshot,
     validate: createAuthoritativeTotalSyncValidator(namespace),
@@ -2739,7 +2994,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
       if (!isObjectRecord(value)) return value;
       return wrapTypeHandle(value);
     },
-  }) as NamespaceClient<T>;
+  }) as NamespaceClient<typeof core & T>;
 
   session.subscribe(() => {
     publishState();

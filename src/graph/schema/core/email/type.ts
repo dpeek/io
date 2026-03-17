@@ -1,9 +1,10 @@
-import { defineValidatedStringTypeModule } from "../../../type/validated-string.js";
+import { graphIconSeeds } from "../icon/seed.js";
+import { defineValidatedStringTypeModule } from "../validated-string.js";
 import { emailFilter } from "./filter.js";
 import { emailAddressLabel, parseEmail } from "./parse.js";
 
 export const emailTypeModule = defineValidatedStringTypeModule({
-  values: { key: "core:email", name: "Email" },
+  values: { key: "core:email", name: "Email", icon: graphIconSeeds.email },
   parse: parseEmail,
   filter: emailFilter,
   placeholder: emailAddressLabel,

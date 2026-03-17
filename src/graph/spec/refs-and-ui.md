@@ -61,6 +61,10 @@ Adapter subpaths now exist at `@io/core/graph/react`, `@io/core/graph/react-dom`
 Today `@io/core/graph/react` ships the host-neutral layer:
 
 - predicate hooks and field metadata helpers
+- entity-level traversal helpers such as
+  `useEntityPredicateEntries(...)` and `EntityPredicates`
+- selected relationship traversal helpers such as
+  `usePredicateRelatedEntities(...)` and `PredicateRelatedEntities`
 - mutation validation helpers
 - reference-policy readers such as `getPredicateEntityReferencePolicy(...)`
 - field and filter resolver primitives that still require host-supplied
@@ -73,6 +77,8 @@ or browser-specific input behavior.
 `@io/core/graph/react-dom` ships DOM defaults on top of that layer:
 
 - default field view and editor capabilities
+- editor modules split under `src/graph/react-dom/editor/*`, with `fields.tsx`
+  reduced to view capabilities plus editor-capability wiring
 - default filter operand editors and filter resolvers
 - browser fallback rendering around `PredicateFieldView` and
   `PredicateFieldEditor`
@@ -94,17 +100,28 @@ The subpath exists today, but it does not ship widget capabilities yet.
 
 ## Reference-Policy Flow
 
-The current reference-policy helpers are intentionally narrow:
+The current reference-policy helpers are intentionally small:
 
 - `existingEntityReferenceField(...)` builds a reference field with
-  `meta.reference`
+  `meta.reference` and optional relationship UI hints
 - `existingEntityReferenceFieldMeta(...)` encodes the existing-entity-only
-  selection policy
+  selection policy, including whether the UI may create-and-link new entities,
+  whether the current subject should be excluded from its own picker, collection
+  semantics, and an explicit editor kind when needed
 
 `@io/core/graph/react` reads that policy through
 `getPredicateEntityReferencePolicy(...)` and uses it to infer the default
 entity-reference display and editor kinds. `@io/core/graph/react-dom` then supplies
-the default list and checklist widgets for those kinds.
+the default list view plus a shared Base UI entity-reference combobox editor for
+both single-value and collection relationships. That editor lives in its own
+module, uses the standard clear affordance for optional single-value edges,
+renders inline chips for `many` fields, and includes target icons wherever the
+referenced entities expose them. Shared combobox option rows must expose visible
+hover, highlight, and selected states so pointer and keyboard navigation are
+both legible. Tag fields currently add the extra
+create-on-Enter behavior on top of that shared combobox. Enum-backed and other
+closed-option pickers now use the same shared Base UI combobox mechanics with a
+lighter-weight item renderer.
 
 That keeps reference-selection semantics in the graph authoring layer while
 leaving host widgets and route-level relationship search UX in adapter or app
@@ -126,7 +143,7 @@ subpaths rather than the root or the host-neutral React entry.
 - root-safe object-view, workflow, and command contracts
 - narrow reference-policy helpers for entity-reference fields
 
-### Still roadmap or app proof work
+### Still roadmap or higher-level UI work
 
 - generic object or workflow renderers over `ObjectViewSpec` and `WorkflowSpec`
 - schema-driven form composition
@@ -140,4 +157,4 @@ subpaths rather than the root or the host-neutral React entry.
 2. Document ref identity expectations more explicitly so UI layers do not fight the cache model.
 3. Add a note about which ref methods are safe public contracts for app-level bindings.
 4. Capture expected collection semantics for ordered versus unordered `many` fields before more UI proof code lands.
-5. Decide whether future renderer contracts should live in `graph`, `app`, or a dedicated adapter package.
+5. Decide whether future renderer contracts should live in `graph`, `web`, or a dedicated adapter package.

@@ -53,7 +53,7 @@ though the full directory migration is still ahead:
   `core:locale` stay in `core:` for now.
 - `app:` is the only other namespace bucket justified today. It covers the
   current experiment and domain slices that are still being proven out. That
-  includes the current company/person, outliner block, env-var/secret-ref, and
+  includes the current company/person, outliner block, env-var/secret-handle, and
   workspace/workflow proof types composed by `app`.
 - Do not pre-create extra namespace buckets such as `geo:`, `locale:`,
   `finance:`, or `collab:` before reusable code actually needs them.

@@ -42,11 +42,19 @@ The current implementation keeps ids stable per key and treats rename as an expl
 
 ### Core schema and bootstrap
 
-`../../src/graph/graph/core.ts` and `../../src/graph/graph/bootstrap.ts` define and materialize the base graph model:
+`../../src/graph/schema/core.ts` and `../../src/graph/graph/bootstrap.ts` define and materialize the base graph model:
 
 - core scalars include string, number, date, boolean, url, email, and slug
 - core entities include `core:node`, `core:type`, `core:predicate`, and `core:enum`
-- bootstrap writes type, predicate, field-tree, enum-member, and core metadata facts into the store
+- the canonical namespace id map lives beside that entrypoint at `../../src/graph/schema/core.json`
+- bootstrap materializes seeded schema entities through the shared validated create path when it
+  owns the full typed shape, then writes the remaining schema metadata facts into the store
+- bootstrap-owned typed entities pin `createdAt` and `updatedAt` to the canonical
+  `2000-01-01T00:00:00.000Z` timestamp so independently bootstrapped stores converge on the same
+  logical schema facts during sync and preserve-snapshot merges
+- `core:type.icon` and `core:predicate.icon` track definition-level icons, with inferred defaults
+  for enum types (`tag.svg`) and entity-reference predicates (`edge.svg`) before falling back to
+  `unknown.svg`
 - schema itself is represented as graph data, not only TypeScript structure
 
 ### Authoritative persistence

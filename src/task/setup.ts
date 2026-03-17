@@ -25,6 +25,8 @@ const vscodeSettings = {
     "**/.env": true,
     "**/components.json": true,
     "**/tmp": true,
+    "**/skills-lock.json": true,
+    "**/.agents": true,
   },
 };
 
@@ -84,6 +86,9 @@ node_modules
 .env
 out
 tmp
+dist
+.wrangler
+.tanstack
 .gitnexus
 .claude
 `;

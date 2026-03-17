@@ -37,6 +37,11 @@ This applies to:
 - entity-ref `validateUpdate`, `update`, `validateDelete`, `delete`
 - predicate-ref `validateSet`, `validateClear`, `validateReplace`, `validateAdd`, `validateRemove`, and the matching mutators
 
+Lifecycle-managed required predicates can opt into `createOptional: true` on the field
+definition. That keeps them optional in `create(...)` input while still treating the stored
+value as required for projected entities and query results. Those fields can still accept explicit
+create-time values when callers need deterministic imports or bootstrap-owned records.
+
 ## Current Runtime Invariants
 
 The runtime pass in `validateGraphStore(...)` currently checks things the field/type layers cannot know in isolation:
@@ -44,6 +49,8 @@ The runtime pass in `validateGraphStore(...)` currently checks things the field/
 - required and cardinality constraints against current store state
 - enum membership using resolved allowed ids
 - entity-reference integrity
+- `core:predicate.range` is allowed to point at a type id that is not locally bootstrapped yet;
+  if that target exists locally it must still be a `core:type` node
 - node typing via `core:node:type`
 - delete safety against remaining references
 
@@ -90,5 +97,5 @@ Issues currently carry:
 1. Add a compact matrix mapping each mutation API to its validation path and returned result type.
 2. Add regression tests for the most important shared-local-vs-authoritative parity cases.
 3. Document which validation codes are intended to be stable for UI consumption.
-4. Add examples of lifecycle-managed predicates such as timestamps and their validation implications.
+4. Document when `createOptional: true` is appropriate beyond timestamps and managed ids.
 5. Capture how async or authority-only validation would layer onto the current synchronous result surface.

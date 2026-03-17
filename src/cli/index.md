@@ -1,17 +1,3 @@
 # CLI Overview
 
-## Purpose
-
-`cli` owns the end-user command surface for creating, installing, and running IO in a repo.
-
-## Docs
-
-- `../lib/index.md`
-- `../index.md`
-
-## Layout
-
-- `../../src/cli/cli.ts`: main command entrypoint
-- `../../src/cli/create.ts`: repo scaffolding
-- `../../src/cli/install.ts`: install/setup flows
-- `../../src/cli/vscode.ts`: editor integration helpers
+The `io` runs scripts in `./src/task/*` calling an exported function `run` and passing argv.

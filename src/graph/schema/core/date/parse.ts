@@ -1,4 +1,4 @@
-import { expectDateInput } from "../../../type/input.js";
+import { expectDateInput } from "../input.js";
 
 export function parseDate(raw: string): Date {
   const value = new Date(raw);

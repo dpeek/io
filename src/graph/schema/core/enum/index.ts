@@ -1,3 +1,17 @@
-import { core } from "../../../graph/core.js";
+import { defineType } from "@io/core/graph/def";
 
-export const enumType = core.enum;
+import { defineReferenceField } from "../../../graph/type-module.js";
+import { graphIconSeeds } from "../icon/seed.js";
+import { node } from "../node/index.js";
+import { coreType } from "../type/index.js";
+
+export const enumType = defineType({
+  values: { key: "core:enum", name: "Enum", icon: graphIconSeeds.enum },
+  fields: {
+    ...node.fields,
+    member: defineReferenceField({
+      range: coreType.values.key,
+      cardinality: "many",
+    }),
+  },
+});

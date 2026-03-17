@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { kitchenSink } from "../schema/test";
 import {
   createJsonPersistedAuthoritativeGraph,
   createPersistedAuthoritativeGraph,
@@ -16,7 +17,15 @@ import { core } from "./core";
 import { createIdMap, defineNamespace } from "./identity";
 import { defineType, edgeId } from "./schema";
 import { createStore } from "./store";
-import type { AuthoritativeGraphWriteResult, GraphWriteTransaction } from "./sync";
+import {
+  createAuthoritativeGraphWriteSession,
+  createGraphWriteTransactionFromSnapshots,
+  createTotalSyncPayload,
+  validateAuthoritativeTotalSyncPayload,
+  validateIncrementalSyncResult,
+  type AuthoritativeGraphWriteResult,
+  type GraphWriteTransaction,
+} from "./sync";
 
 const tempDirs: string[] = [];
 let testCursorEpoch = 0;
@@ -280,6 +289,145 @@ describe("persisted authoritative graph", () => {
       changes: [],
     });
     expect(rewrittenState.writeHistory.results).toEqual([]);
+  });
+
+  it("filters authority-only predicates from total sync snapshots", () => {
+    const store = createStore();
+    bootstrap(store, core);
+    bootstrap(store, kitchenSink);
+    const graph = createTypeClient(store, kitchenSink);
+
+    const secretId = graph.secret.create({
+      name: "Primary API secret",
+      version: 1,
+      fingerprint: "fp-1",
+    });
+    const personId = graph.person.create({
+      name: "Ada Lovelace",
+      status: kitchenSink.status.values.inReview.id,
+      confidentialNotes: "Authority-only notes",
+    });
+    const payload = createTotalSyncPayload(store, {
+      cursor: "server:1",
+      namespace: kitchenSink,
+    });
+
+    expect(validateAuthoritativeTotalSyncPayload(payload, kitchenSink).ok).toBe(true);
+    expect(
+      payload.snapshot.edges.some(
+        (edge) => edge.s === secretId && edge.p === edgeId(kitchenSink.secret.fields.fingerprint),
+      ),
+    ).toBe(false);
+    expect(
+      payload.snapshot.edges.some(
+        (edge) =>
+          edge.s === personId && edge.p === edgeId(kitchenSink.person.fields.confidentialNotes),
+      ),
+    ).toBe(false);
+    expect(
+      payload.snapshot.edges.some(
+        (edge) => edge.s === secretId && edge.p === edgeId(kitchenSink.secret.fields.version),
+      ),
+    ).toBe(true);
+  });
+
+  it("omits hidden-only incremental writes while still advancing the cursor", () => {
+    const store = createStore();
+    bootstrap(store, core);
+    bootstrap(store, kitchenSink);
+    const graph = createTypeClient(store, kitchenSink);
+
+    const secretId = graph.secret.create({
+      name: "Primary API secret",
+      version: 1,
+    });
+    const before = store.snapshot();
+    store.assert(secretId, edgeId(kitchenSink.secret.fields.fingerprint), "fp-1");
+    const hiddenWrite = createGraphWriteTransactionFromSnapshots(
+      before,
+      store.snapshot(),
+      "tx:hidden",
+    );
+    const session = createAuthoritativeGraphWriteSession(store, kitchenSink, {
+      cursorPrefix: "server:hidden:",
+      history: [
+        {
+          txId: "tx:hidden",
+          cursor: "server:hidden:1",
+          replayed: false,
+          transaction: hiddenWrite,
+        },
+      ],
+    });
+    const result = session.getIncrementalSyncResult(session.getBaseCursor());
+
+    expect(validateIncrementalSyncResult(result).ok).toBe(true);
+    if ("fallback" in result) throw new Error("Expected an incremental payload.");
+    expect(result.transactions).toEqual([]);
+    expect(result.cursor).toBe("server:hidden:1");
+  });
+
+  it("keeps visible incremental writes even when hidden writes are skipped", () => {
+    const store = createStore();
+    bootstrap(store, core);
+    bootstrap(store, kitchenSink);
+    const graph = createTypeClient(store, kitchenSink);
+
+    const secretId = graph.secret.create({
+      name: "Primary API secret",
+      version: 1,
+    });
+    const beforeHidden = store.snapshot();
+    store.assert(secretId, edgeId(kitchenSink.secret.fields.fingerprint), "fp-1");
+    const hiddenWrite = createGraphWriteTransactionFromSnapshots(
+      beforeHidden,
+      store.snapshot(),
+      "tx:hidden",
+    );
+    const beforeVisible = store.snapshot();
+    const versionEdge = store.facts(secretId, edgeId(kitchenSink.secret.fields.version))[0];
+    if (!versionEdge) throw new Error("Expected the secret version edge to exist.");
+    store.batch(() => {
+      store.retract(versionEdge.id);
+      store.assert(secretId, edgeId(kitchenSink.secret.fields.version), "2");
+    });
+    const visibleWrite = createGraphWriteTransactionFromSnapshots(
+      beforeVisible,
+      store.snapshot(),
+      "tx:visible",
+    );
+    const session = createAuthoritativeGraphWriteSession(store, kitchenSink, {
+      cursorPrefix: "server:mixed:",
+      history: [
+        {
+          txId: "tx:hidden",
+          cursor: "server:mixed:1",
+          replayed: false,
+          transaction: hiddenWrite,
+        },
+        {
+          txId: "tx:visible",
+          cursor: "server:mixed:2",
+          replayed: false,
+          transaction: visibleWrite,
+        },
+      ],
+    });
+    const result = session.getIncrementalSyncResult(session.getBaseCursor());
+
+    expect(validateIncrementalSyncResult(result).ok).toBe(true);
+    if ("fallback" in result) throw new Error("Expected an incremental payload.");
+    expect(result.cursor).toBe("server:mixed:2");
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0]?.txId).toBe("tx:visible");
+    expect(result.transactions[0]?.cursor).toBe("server:mixed:2");
+    expect(
+      result.transactions[0]?.transaction.ops.some(
+        (operation) =>
+          operation.op === "assert" &&
+          operation.edge.p === edgeId(kitchenSink.secret.fields.fingerprint),
+      ),
+    ).toBe(false);
   });
 
   it("rolls back the in-memory authority when persisting an accepted transaction fails", async () => {

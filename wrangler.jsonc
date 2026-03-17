@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "io",
+  "compatibility_date": "2026-02-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./src/web/worker/index.ts",
+  "preview_urls": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GRAPH_AUTHORITY",
+        "class_name": "WebGraphAuthorityDurableObject",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["WebGraphAuthorityDurableObject"],
+    },
+  ],
+  "assets": {
+    // Keep API routes on the Worker and let static navigations fall back to
+    // the SPA entry for TanStack Router deep links.
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+  },
+}

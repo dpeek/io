@@ -61,7 +61,7 @@ The persisted authority helper layers durable snapshot load/save, retained histo
 ### Typed synced client
 
 - `createSyncedTypeClient(namespace, { pull, push?, createTxId? })`
-- exposes `graph` plus `sync`
+- exposes `graph` for both `core` and the provided namespace, plus `sync`
 - local typed mutations capture committed diffs as pending `GraphWriteTransaction`s
 - `sync.flush()` pushes queued writes
 - `sync.sync()` pulls authoritative state
@@ -71,7 +71,7 @@ The persisted authority helper layers durable snapshot load/save, retained histo
 
 - `graph` owns the total/incremental payload contracts, cursor progression rules, fallback semantics, and the persisted-authority history that feeds those contracts after restart.
 - Consumer packages own transport and endpoint policy: when to call `createSyncPayload()` or `getIncrementalSyncResult(...)`, how to expose them over HTTP or another transport, and what auth wraps those endpoints.
-- The app proof is one such consumer: it composes `@io/core/graph` persistence in `src/app/authority.ts` and exposes a thin `GET /api/sync` wrapper in `src/app/server-app.ts`.
+- The web Worker is one such consumer: it composes `@io/core/graph` persistence in `src/web/lib/authority.ts` and exposes thin `GET /api/sync` and `POST /api/secret-fields` wrappers through the Durable Object transport.
 
 ## Current Behavior
 

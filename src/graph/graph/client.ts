@@ -65,13 +65,17 @@ type TreeCreate<T, Defs extends Record<string, AnyTypeOutput>> = T extends EdgeO
     ? {
         [K in Exclude<keyof T, typeof fieldsMeta> as T[K] extends EdgeOutput
           ? T[K]["cardinality"] extends "one"
-            ? K
+            ? T[K] extends { createOptional: true }
+              ? never
+              : K
             : never
           : never]-?: TreeCreate<T[K], Defs>;
       } & {
         [K in Exclude<keyof T, typeof fieldsMeta> as T[K] extends EdgeOutput
           ? T[K]["cardinality"] extends "one"
-            ? never
+            ? T[K] extends { createOptional: true }
+              ? K
+              : never
             : K
           : K]?: TreeCreate<T[K], Defs>;
       }
@@ -1139,6 +1143,7 @@ function validateEntityReferenceValue(
   const targetTypeIds = new Set(store.facts(value, nodeTypePredicateId).map((edge) => edge.o));
 
   if (targetTypeIds.size === 0) {
+    if (entry.predicate.key === (core.predicate.fields.range as EdgeOutput).key) return;
     appendRuntimeValidationIssue(
       issues,
       entry,
@@ -2056,8 +2061,9 @@ function retractPredicateFacts(store: Store, id: string, predicate: EdgeOutput):
   for (const edge of store.facts(id, edgeId(predicate))) store.retract(edge.id);
 }
 
-function createEntity<T extends TypeOutput>(
+function createEntityAtId<T extends TypeOutput>(
   store: Store,
+  id: string,
   typeDef: T,
   data: CreateInputOfType<T, Record<string, AnyTypeOutput>>,
   scalarByKey: Map<string, ScalarTypeOutput<any>>,
@@ -2066,7 +2072,6 @@ function createEntity<T extends TypeOutput>(
   namespace: Record<string, AnyTypeOutput>,
 ): string {
   const now = getStableValidationNow(store);
-  const id = getStableCreateNodeId(store);
   const validationStore = cloneStoreForValidation(store);
   const prepared = prepareMutationInput(
     validationStore,
@@ -2100,6 +2105,27 @@ function createEntity<T extends TypeOutput>(
     scalarByKey,
     typeByKey,
     enumValuesByRange,
+  );
+}
+
+function createEntity<T extends TypeOutput>(
+  store: Store,
+  typeDef: T,
+  data: CreateInputOfType<T, Record<string, AnyTypeOutput>>,
+  scalarByKey: Map<string, ScalarTypeOutput<any>>,
+  typeByKey: Map<string, AnyTypeOutput>,
+  enumValuesByRange: Map<string, Set<string>>,
+  namespace: Record<string, AnyTypeOutput>,
+): string {
+  return createEntityAtId(
+    store,
+    getStableCreateNodeId(store),
+    typeDef,
+    data,
+    scalarByKey,
+    typeByKey,
+    enumValuesByRange,
+    namespace,
   );
 }
 
@@ -2690,6 +2716,36 @@ export function validateGraphStore<const T extends Record<string, AnyTypeOutput>
   return issues.length > 0
     ? invalidResult(phase, event, undefined, collectIssuePredicateKeys(issues), issues)
     : validResult(phase, event, undefined, new Set<string>());
+}
+
+export function createEntityWithId<
+  const T extends TypeOutput,
+  const Defs extends Record<string, AnyTypeOutput>,
+>(
+  store: Store,
+  namespace: Defs,
+  typeDef: T,
+  id: string,
+  input: CreateInputOfType<T, Defs>,
+): string {
+  if (store.facts(id).length > 0) {
+    throw new Error(`Cannot create "${typeDef.values.key}" at existing node id "${id}".`);
+  }
+
+  const allTypes = namespace as Record<string, AnyTypeOutput>;
+  const scalarByKey = collectScalarCodecs(allTypes);
+  const typeByKey = collectTypeIndex(allTypes);
+  const enumValuesByRange = collectEnumValueIds(allTypes, typeByKey);
+  return createEntityAtId(
+    store,
+    id,
+    typeDef,
+    input as CreateInputOfType<T, Record<string, AnyTypeOutput>>,
+    scalarByKey,
+    typeByKey,
+    enumValuesByRange,
+    allTypes,
+  );
 }
 
 export function createTypeClient<const T extends Record<string, AnyTypeOutput>>(

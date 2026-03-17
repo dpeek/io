@@ -8,6 +8,7 @@ type PersistableGraphSync = {
 };
 
 export type PersistedMutationRuntime = {
+  graph?: unknown;
   sync: PersistableGraphSync;
 };
 
