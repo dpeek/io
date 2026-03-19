@@ -504,10 +504,10 @@ describe("total sync", () => {
       foundedYear: 1987,
       website: new URL("https://acme.com"),
     });
-    const estiiId = server.graph.company.create({
-      name: "Estii",
+    const betaWorksId = server.graph.company.create({
+      name: "Beta Works",
       status: testNamespace.status.values.approved.id,
-      website: new URL("https://estii.com"),
+      website: new URL("https://betaworks.example"),
     });
 
     const client = createSyncedTypeClient(testNamespace, {
@@ -539,8 +539,8 @@ describe("total sync", () => {
     expect(syncStatuses).toEqual(["syncing", "ready"]);
 
     const companies = client.graph.company.list();
-    expect(companies.map((company) => company.id)).toEqual([acmeId, estiiId]);
-    expect(companies.map((company) => company.name)).toEqual(["Acme Corp", "Estii"]);
+    expect(companies.map((company) => company.id)).toEqual([acmeId, betaWorksId]);
+    expect(companies.map((company) => company.name)).toEqual(["Acme Corp", "Beta Works"]);
     expect(client.graph.company.get(acmeId)).toMatchObject({
       id: acmeId,
       name: "Acme Corp",

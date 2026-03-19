@@ -1,5 +1,5 @@
 {
-  "ignorePatterns": [],
+  "ignorePatterns": ["src/web/routeTree.gen.ts"],
   "experimentalSortImports": {},
   "experimentalTailwindcss": {}
 }

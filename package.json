@@ -24,7 +24,6 @@
     "./graph/schema/app/env-vars": "./src/graph/schema/app/env-vars/index.ts",
     "./graph/schema/app/topic": "./src/graph/schema/app/topic/index.ts",
     "./graph/schema/core": "./src/graph/schema/core.ts",
-    "./graph/schema/estii": "./src/graph/schema/estii.ts",
     "./graph/schema/test": "./src/graph/schema/test.ts",
     "./lib": "./src/lib/index.ts",
     "./lib/config": "./src/lib/config.ts",

@@ -35,7 +35,7 @@ const vscodeExtentions = {
 };
 
 const oxfmtSettings = {
-  ignorePatterns: [],
+  ignorePatterns: ["src/web/routeTree.gen.ts"],
   experimentalSortImports: {},
   experimentalTailwindcss: {},
 };
@@ -77,7 +77,7 @@ const oxlintSettings = {
     builtin: true,
   },
   globals: {},
-  ignorePatterns: [],
+  ignorePatterns: ["src/web/routeTree.gen.ts"],
 };
 
 const gitignore = `out

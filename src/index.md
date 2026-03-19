@@ -15,6 +15,8 @@ the graph-first application direction the rest of the workspace is proving.
 - `./agent/tui/index.md`
 - `./graph/index.md`
 - `./mcp.md`
+- `./structure.md`
+- `./structure-plan.md`
 - `./storage.md`
 - `./web/index.md`
 
@@ -27,6 +29,8 @@ the graph-first application direction the rest of the workspace is proving.
 - `./agent/tui/index.md`: operator-facing TUI layout and retained runtime display
 - `./graph/index.md`: graph package layout including engine, adapters, taxonomies, and focused subdocs
 - `./mcp.md`: proposal for a read-first graph MCP server plus opt-in write support
+- `./structure.md`: repo-level structure direction, naming rules, phased migration, and execution model
+- `./structure-plan.md`: phased structure rollout, dependencies, exit criteria, and suggested Linear feature/task breakdown
 - `./storage.md`: Durable Object SQLite storage-adapter design, raw-SQL decision, and implementation plan
 - `./index.md`: repo map and context entrypoint
 - `../src/agent/`: scheduler, context assembly, tracker integration, retained runtime,

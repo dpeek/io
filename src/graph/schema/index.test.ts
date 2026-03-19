@@ -40,8 +40,6 @@ import { svgTypeModule } from "./core/svg/index.js";
 import { tag } from "./core/tag/index.js";
 import { coreType } from "./core/type/index.js";
 import { urlTypeModule } from "./core/url/index.js";
-import { estii } from "./estii.js";
-import { deal, estiiSchema, feature, resourceTag, space, task } from "./estii/types.js";
 import * as schemaExports from "./index.js";
 
 function resolvedTypeId(typeDef: { values: { key: string } }): string {
@@ -169,7 +167,6 @@ describe("schema entry surfaces", () => {
     expect(schemaExports.jsonTypeModule).toBe(jsonTypeModule);
     expect(schemaExports.markdownTypeModule).toBe(markdownTypeModule);
     expect(schemaExports.svgTypeModule).toBe(svgTypeModule);
-    expect(schemaExports.estii).toBe(estii);
   });
 
   it("keeps contract probes root-safe without polluting the canonical schema tree", () => {
@@ -196,20 +193,5 @@ describe("schema entry surfaces", () => {
     expect(markdownTypeModule.type).toBe(core.markdown);
     expect(svgTypeModule.type).toBe(core.svg);
     expect(tag).toBe(core.tag);
-  });
-
-  it("defines the estii namespace from the canonical schema tree", () => {
-    expect(estiiSchema.deal).toBe(deal);
-    expect(estiiSchema.space).toBe(space);
-    expect(estii.deal.values.key).toBe(deal.values.key);
-    expect(estii.space.values.key).toBe(space.values.key);
-    expect(String(deal.fields.account.range)).toBe(resolvedTypeId(estii.account));
-    expect(String(space.fields.deals.range)).toBe(resolvedTypeId(estii.deal));
-    expect(String(deal.fields.avatarColor.range)).toBe(resolvedTypeId(core.color));
-    expect(String(estii.theme.fields.backgroundColor.range)).toBe(resolvedTypeId(core.color));
-    expect(String(resourceTag.fields.color.range)).toBe(resolvedTypeId(core.color));
-    expect(String(feature.fields.tags.range)).toBe(resolvedTypeId(core.tag));
-    expect(String(task.fields.tags.range)).toBe(resolvedTypeId(core.tag));
-    expect(resourceTag.fields.key.key.endsWith(":key")).toBe(true);
   });
 });
