@@ -64,8 +64,10 @@ shared `@io/web` primitive rather than reintroducing browser chrome locally.
 ## Current Package Layout
 
 - `../../src/graph/runtime/`: runtime kernel, schema authoring contracts, ids,
-  bootstrap, client, sync, the persisted-authority contract, and the file-backed JSON adapter
-  used outside the web Durable Object path
+  bootstrap, the typed client split across `client.ts`, `client-validation.ts`,
+  `client-store.ts`, `client-refs.ts`, and `client-query.ts`, sync, the
+  persisted-authority contract, and the file-backed JSON adapter used outside
+  the web Durable Object path
 - `../../src/graph/runtime/react/`: host-neutral React ownership for predicate hooks,
   traversal helpers, mutation helpers, and resolver primitives that still depend on graph refs
 - `../../src/graph/modules/`: canonical home for built-in graph module authoring, including the
