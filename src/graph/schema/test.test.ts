@@ -11,6 +11,7 @@ import {
   fieldWritePolicy,
   isSecretBackedField,
 } from "../index.js";
+import { defaultMoneyCurrencyKey } from "../modules/core/money/index.js";
 import {
   kitchenSink,
   kitchenSinkBlock,
@@ -42,6 +43,8 @@ describe("kitchen sink schema namespace", () => {
     expect(kitchenSink.record.fields.score.range as string).toBe(kitchenSink.score.values.id);
     expect(kitchenSink.record.fields.completion.range as string).toBe(core.percent.values.id);
     expect(kitchenSink.record.fields.duration.range as string).toBe(core.duration.values.id);
+    expect(kitchenSink.record.fields.quantity.range as string).toBe(core.quantity.values.id);
+    expect(kitchenSink.record.fields.budget.range as string).toBe(core.money.values.id);
     expect(kitchenSink.record.fields.status.range as string).toBe(kitchenSink.status.values.id);
     expect(kitchenSink.record.fields.secret.range as string).toBe(kitchenSink.secret.values.id);
     expect(kitchenSink.status.values.inReview.key).toBe("kitchen:status.in_review");
@@ -58,6 +61,10 @@ describe("kitchen sink schema namespace", () => {
     expect(kitchenSink.record.fields.completion.meta.editor.kind).toBe("number/percent");
     expect(kitchenSink.record.fields.duration.meta.display.kind).toBe("number/duration");
     expect(kitchenSink.record.fields.duration.meta.editor.kind).toBe("number/duration");
+    expect(kitchenSink.record.fields.quantity.meta.display.kind).toBe("number/quantity");
+    expect(kitchenSink.record.fields.quantity.meta.editor.kind).toBe("number/quantity");
+    expect(kitchenSink.record.fields.budget.meta.display.kind).toBe("money/amount");
+    expect(kitchenSink.record.fields.budget.meta.editor.kind).toBe("money/amount");
     expect(kitchenSink.record.fields.reviewers.meta.collection?.kind).toBe("ordered");
     expect(kitchenSink.record.fields.tags.meta.reference.selection).toBe("existing-only");
     expect(kitchenSink.record.fields.tags.meta.reference.create).toBe(true);
@@ -133,6 +140,8 @@ describe("kitchen sink schema namespace", () => {
       score: 84,
       completion: 72.5,
       duration: 90_000,
+      quantity: { amount: 12.5, unit: "kg" },
+      budget: { amount: 1250, currency: defaultMoneyCurrencyKey },
       owner: personId,
       reviewers: [personId],
       secret: secretId,
@@ -152,6 +161,8 @@ describe("kitchen sink schema namespace", () => {
       score: 84,
       completion: 72.5,
       duration: 90_000,
+      quantity: { amount: 12.5, unit: "kg" },
+      budget: { amount: 1250, currency: defaultMoneyCurrencyKey },
       owner: personId,
       reviewers: [personId],
       secret: secretId,

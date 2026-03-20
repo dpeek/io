@@ -16,9 +16,11 @@ import {
 } from "../modules/core/icon/index.js";
 import { jsonTypeModule } from "../modules/core/json/index.js";
 import { markdownTypeModule } from "../modules/core/markdown/index.js";
+import { moneyTypeModule } from "../modules/core/money/index.js";
 import { node } from "../modules/core/node/index.js";
 import { percentTypeModule } from "../modules/core/percent/index.js";
 import { predicate } from "../modules/core/predicate/index.js";
+import { quantityTypeModule } from "../modules/core/quantity/index.js";
 import { secretHandle } from "../modules/core/secret/index.js";
 import { stringTypeModule } from "../modules/core/string/index.js";
 import { svgTypeModule } from "../modules/core/svg/index.js";
@@ -75,9 +77,11 @@ describe("schema entry surfaces", () => {
     expect(colorTypeModule.type.values.key).toBe("core:color");
     expect(jsonTypeModule.type.values.key).toBe("core:json");
     expect(markdownTypeModule.type.values.key).toBe("core:markdown");
+    expect(moneyTypeModule.type.values.key).toBe("core:money");
     expect(svgTypeModule.type.values.key).toBe("core:svg");
     expect(durationTypeModule.type.values.key).toBe("core:duration");
     expect(percentTypeModule.type.values.key).toBe("core:percent");
+    expect(quantityTypeModule.type.values.key).toBe("core:quantity");
     expect(icon.values.key).toBe("core:icon");
     expect(tag.values.key).toBe("core:tag");
     expect(stringTypeModule.type.values.icon).toBe(graphIconSeeds.string);
@@ -93,9 +97,11 @@ describe("schema entry surfaces", () => {
     expect(canonicalCore.color.values.key).toBe(colorTypeModule.type.values.key);
     expect(canonicalCore.json.values.key).toBe(jsonTypeModule.type.values.key);
     expect(canonicalCore.markdown.values.key).toBe(markdownTypeModule.type.values.key);
+    expect(canonicalCore.money.values.key).toBe(moneyTypeModule.type.values.key);
     expect(canonicalCore.svg.values.key).toBe(svgTypeModule.type.values.key);
     expect(canonicalCore.duration.values.key).toBe(durationTypeModule.type.values.key);
     expect(canonicalCore.percent.values.key).toBe(percentTypeModule.type.values.key);
+    expect(canonicalCore.quantity.values.key).toBe(quantityTypeModule.type.values.key);
     expect(canonicalCore.icon.values.key).toBe(icon.values.key);
     expect(canonicalCore.tag.values.key).toBe(tag.values.key);
     expect(canonicalCore.secretHandle.values.key).toBe(secretHandle.values.key);
@@ -179,6 +185,8 @@ describe("schema entry surfaces", () => {
     expect(schemaExports.topicKind).toBe(topicKind);
     expect(schemaExports.jsonTypeModule).toBe(jsonTypeModule);
     expect(schemaExports.markdownTypeModule).toBe(markdownTypeModule);
+    expect(schemaExports.moneyTypeModule).toBe(moneyTypeModule);
+    expect(schemaExports.quantityTypeModule).toBe(quantityTypeModule);
     expect(schemaExports.svgTypeModule).toBe(svgTypeModule);
   });
 
@@ -205,8 +213,10 @@ describe("schema entry surfaces", () => {
     expect(colorTypeModule.type).toBe(core.color);
     expect(jsonTypeModule.type).toBe(core.json);
     expect(markdownTypeModule.type).toBe(core.markdown);
+    expect(moneyTypeModule.type).toBe(core.money);
     expect(svgTypeModule.type).toBe(core.svg);
     expect(percentTypeModule.type).toBe(core.percent);
+    expect(quantityTypeModule.type).toBe(core.quantity);
     expect(tag).toBe(core.tag);
   });
 });

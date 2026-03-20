@@ -243,33 +243,39 @@ We are not carrying an imported fit-test schema in-tree right now.
 If that changes later, keep those schemas clearly outside product taxonomy and
 module naming.
 
-## Value Families To Add Soon
+## Structured Value Families
 
-The next wave should focus on structured value types instead of more loose
-`string` and `json` placeholders.
+Structured value work should keep replacing loose `string` and `json`
+placeholders with durable module-owned shapes.
 
-Priorities:
+Implemented core families:
 
-- `unit`
-- `quantity`
-- `money`
-- `rate`
 - `duration`
 - `percent`
+- `quantity`
+- `money`
+
+Near-term follow-ups:
+
+- `unit`
+- `rate`
 - `range`
 
 `measure` is not a good canonical type name because it is too vague. Use more
 specific terms such as `quantity` or `rate`.
 
-## Editors To Build Soon
+## Structured Editors
 
-Priority editor families:
+Current shared editor families:
 
 - quantity editor: amount + unit
 - money editor: amount + currency
-- rate editor: numerator + denominator
 - duration editor: human units instead of raw milliseconds
 - percent editor: constrained numeric entry and display formatting
+
+Near-term editor families:
+
+- rate editor: numerator + denominator
 - range editor: min/max pair
 - generic source/preview editor: markdown, SVG, JSON, code
 - file/image editor: upload + preview

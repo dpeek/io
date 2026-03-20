@@ -10,10 +10,12 @@ import { enumType } from "./core/enum/index.js";
 import { icon } from "./core/icon/index.js";
 import { jsonTypeModule } from "./core/json/index.js";
 import { markdownTypeModule } from "./core/markdown/index.js";
+import { moneyTypeModule } from "./core/money/index.js";
 import { node } from "./core/node/index.js";
 import { numberTypeModule } from "./core/number/index.js";
 import { percentTypeModule } from "./core/percent/index.js";
 import { predicate } from "./core/predicate/index.js";
+import { quantityTypeModule } from "./core/quantity/index.js";
 import { secretHandle } from "./core/secret/index.js";
 import { slugTypeModule } from "./core/slug/index.js";
 import { stringTypeModule } from "./core/string/index.js";
@@ -42,11 +44,15 @@ const json = jsonTypeModule.type;
 
 const markdown = markdownTypeModule.type;
 
+const money = moneyTypeModule.type;
+
 const slug = slugTypeModule.type;
 
 const svg = svgTypeModule.type;
 
 const percent = percentTypeModule.type;
+
+const quantity = quantityTypeModule.type;
 
 export const core = defineNamespace(coreIdMap, {
   string,
@@ -59,9 +65,11 @@ export const core = defineNamespace(coreIdMap, {
   email,
   json,
   markdown,
+  money,
   slug,
   svg,
   percent,
+  quantity,
   icon,
   tag,
   type: coreType,

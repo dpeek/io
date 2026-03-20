@@ -5,8 +5,10 @@ import { DateFieldEditor } from "./date.js";
 import { DurationFieldEditor } from "./duration.js";
 import { EnumComboboxEditor } from "./enum-combobox.js";
 import { MarkdownFieldEditor } from "./markdown.js";
+import { MoneyFieldEditor } from "./money.js";
 import { NumberFieldEditor } from "./number.js";
 import { PercentFieldEditor } from "./percent.js";
+import { QuantityFieldEditor } from "./quantity.js";
 import { EntityReferenceComboboxEditor } from "./reference.js";
 import { SvgFieldEditor } from "./svg.js";
 import { TextFieldEditor } from "./text.js";
@@ -23,6 +25,8 @@ export const genericWebFieldEditorCapabilities = [
   { kind: "number", Component: NumberFieldEditor },
   { kind: "number/duration", Component: DurationFieldEditor },
   { kind: "number/percent", Component: PercentFieldEditor },
+  { kind: "number/quantity", Component: QuantityFieldEditor },
+  { kind: "money/amount", Component: MoneyFieldEditor },
   { kind: "url", Component: UrlFieldEditor },
   { kind: "select", Component: EnumComboboxEditor },
   { kind: "entity-reference-combobox", Component: EntityReferenceComboboxEditor },

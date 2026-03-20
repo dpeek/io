@@ -82,6 +82,8 @@ describe("entity traversal helpers", () => {
       "score",
       "completion",
       "duration",
+      "quantity",
+      "budget",
       "estimate",
       "archived",
       "published",

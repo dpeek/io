@@ -26,6 +26,16 @@ export function expectBooleanInput(value: unknown): boolean {
   return value;
 }
 
+export function expectRecordInput(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw createInputTypeError("plain object", value);
+  }
+  if (Object.getPrototypeOf(value) !== Object.prototype) {
+    throw createInputTypeError("plain object", value);
+  }
+  return value as Record<string, unknown>;
+}
+
 export function expectUrlInput(value: unknown): URL {
   if (!(value instanceof URL)) throw createInputTypeError("URL", value);
   return value;
