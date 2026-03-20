@@ -4,6 +4,7 @@ import { core } from "../index.js";
 import { cardinality } from "../modules/core/cardinality/index.js";
 import { colorTypeModule } from "../modules/core/color/index.js";
 import { dateTypeModule } from "../modules/core/date/index.js";
+import { durationTypeModule } from "../modules/core/duration/index.js";
 import { emailTypeModule } from "../modules/core/email/index.js";
 import { enumType } from "../modules/core/enum/index.js";
 import {
@@ -16,6 +17,7 @@ import {
 import { jsonTypeModule } from "../modules/core/json/index.js";
 import { markdownTypeModule } from "../modules/core/markdown/index.js";
 import { node } from "../modules/core/node/index.js";
+import { percentTypeModule } from "../modules/core/percent/index.js";
 import { predicate } from "../modules/core/predicate/index.js";
 import { secretHandle } from "../modules/core/secret/index.js";
 import { stringTypeModule } from "../modules/core/string/index.js";
@@ -74,6 +76,8 @@ describe("schema entry surfaces", () => {
     expect(jsonTypeModule.type.values.key).toBe("core:json");
     expect(markdownTypeModule.type.values.key).toBe("core:markdown");
     expect(svgTypeModule.type.values.key).toBe("core:svg");
+    expect(durationTypeModule.type.values.key).toBe("core:duration");
+    expect(percentTypeModule.type.values.key).toBe("core:percent");
     expect(icon.values.key).toBe("core:icon");
     expect(tag.values.key).toBe("core:tag");
     expect(stringTypeModule.type.values.icon).toBe(graphIconSeeds.string);
@@ -90,6 +94,8 @@ describe("schema entry surfaces", () => {
     expect(canonicalCore.json.values.key).toBe(jsonTypeModule.type.values.key);
     expect(canonicalCore.markdown.values.key).toBe(markdownTypeModule.type.values.key);
     expect(canonicalCore.svg.values.key).toBe(svgTypeModule.type.values.key);
+    expect(canonicalCore.duration.values.key).toBe(durationTypeModule.type.values.key);
+    expect(canonicalCore.percent.values.key).toBe(percentTypeModule.type.values.key);
     expect(canonicalCore.icon.values.key).toBe(icon.values.key);
     expect(canonicalCore.tag.values.key).toBe(tag.values.key);
     expect(canonicalCore.secretHandle.values.key).toBe(secretHandle.values.key);
@@ -193,12 +199,14 @@ describe("schema entry surfaces", () => {
 
   it("keeps migrated built-ins aligned with the canonical core namespace", () => {
     expect(dateTypeModule.type).toBe(core.date);
+    expect(durationTypeModule.type).toBe(core.duration);
     expect(urlTypeModule.type).toBe(core.url);
     expect(emailTypeModule.type).toBe(core.email);
     expect(colorTypeModule.type).toBe(core.color);
     expect(jsonTypeModule.type).toBe(core.json);
     expect(markdownTypeModule.type).toBe(core.markdown);
     expect(svgTypeModule.type).toBe(core.svg);
+    expect(percentTypeModule.type).toBe(core.percent);
     expect(tag).toBe(core.tag);
   });
 });

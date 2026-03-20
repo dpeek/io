@@ -80,6 +80,8 @@ describe("entity traversal helpers", () => {
       "statusHistory",
       "severity",
       "score",
+      "completion",
+      "duration",
       "estimate",
       "archived",
       "published",

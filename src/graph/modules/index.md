@@ -11,6 +11,8 @@ from top-level `schema/` ownership toward explicit module ownership.
 - `@io/core/graph/modules`, `@io/core/graph/modules/core`,
   `@io/core/graph/modules/ops`, and `@io/core/graph/modules/pkm` are the
   ownership-first package entry surfaces
+- structured core value families such as `duration` and `percent` live here as
+  authored modules instead of being modeled as loose number/string conventions
 - focused product slices stay available from `@io/core/graph/modules/pkm/topic`
   and `@io/core/graph/modules/ops/env-var`
 - per-type authoring stays in singular folders such as

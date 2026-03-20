@@ -9,10 +9,12 @@ import { core } from "../../modules/core.js";
 import { booleanTypeModule } from "../../modules/core/boolean/index.js";
 import { colorTypeModule } from "../../modules/core/color/index.js";
 import { dateTypeModule } from "../../modules/core/date/index.js";
+import { durationTypeModule } from "../../modules/core/duration/index.js";
 import { emailTypeModule } from "../../modules/core/email/index.js";
 import { jsonTypeModule } from "../../modules/core/json/index.js";
 import { markdownTypeModule } from "../../modules/core/markdown/index.js";
 import { numberTypeModule } from "../../modules/core/number/index.js";
+import { percentTypeModule } from "../../modules/core/percent/index.js";
 import { slugTypeModule } from "../../modules/core/slug/index.js";
 import { stringTypeModule } from "../../modules/core/string/index.js";
 import { urlTypeModule } from "../../modules/core/url/index.js";
@@ -249,6 +251,18 @@ export const kitchenSinkRecord = defineType({
       cardinality: "one",
       meta: {
         label: "Score",
+      },
+    }),
+    completion: percentTypeModule.field({
+      cardinality: "one?",
+      meta: {
+        label: "Completion",
+      },
+    }),
+    duration: durationTypeModule.field({
+      cardinality: "one?",
+      meta: {
+        label: "Duration",
       },
     }),
     estimate: numberTypeModule.field({

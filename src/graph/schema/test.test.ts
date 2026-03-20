@@ -40,6 +40,8 @@ describe("kitchen sink schema namespace", () => {
     expect(kitchenSink.record.values.key).toBe(kitchenSinkRecord.values.key);
     expect(typeof kitchenSink.record.values.id).toBe("string");
     expect(kitchenSink.record.fields.score.range as string).toBe(kitchenSink.score.values.id);
+    expect(kitchenSink.record.fields.completion.range as string).toBe(core.percent.values.id);
+    expect(kitchenSink.record.fields.duration.range as string).toBe(core.duration.values.id);
     expect(kitchenSink.record.fields.status.range as string).toBe(kitchenSink.status.values.id);
     expect(kitchenSink.record.fields.secret.range as string).toBe(kitchenSink.secret.values.id);
     expect(kitchenSink.status.values.inReview.key).toBe("kitchen:status.in_review");
@@ -52,6 +54,10 @@ describe("kitchen sink schema namespace", () => {
 
   it("captures metadata, validators, lifecycle hooks, and authority policies", () => {
     expect(kitchenSink.record.fields.status.meta.display.kind).toBe("badge");
+    expect(kitchenSink.record.fields.completion.meta.display.kind).toBe("number/percent");
+    expect(kitchenSink.record.fields.completion.meta.editor.kind).toBe("number/percent");
+    expect(kitchenSink.record.fields.duration.meta.display.kind).toBe("number/duration");
+    expect(kitchenSink.record.fields.duration.meta.editor.kind).toBe("number/duration");
     expect(kitchenSink.record.fields.reviewers.meta.collection?.kind).toBe("ordered");
     expect(kitchenSink.record.fields.tags.meta.reference.selection).toBe("existing-only");
     expect(kitchenSink.record.fields.tags.meta.reference.create).toBe(true);
@@ -125,6 +131,8 @@ describe("kitchen sink schema namespace", () => {
       status: kitchenSink.status.values.draft.id,
       statusHistory: [kitchenSink.status.values.draft.id],
       score: 84,
+      completion: 72.5,
+      duration: 90_000,
       owner: personId,
       reviewers: [personId],
       secret: secretId,
@@ -142,6 +150,8 @@ describe("kitchen sink schema namespace", () => {
       status: kitchenSink.status.values.draft.id,
       statusHistory: [kitchenSink.status.values.draft.id],
       score: 84,
+      completion: 72.5,
+      duration: 90_000,
       owner: personId,
       reviewers: [personId],
       secret: secretId,

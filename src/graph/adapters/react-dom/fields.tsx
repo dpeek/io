@@ -64,6 +64,18 @@ function NumberFieldView({ predicate }: AnyFieldProps) {
   return <span data-web-field-kind="number">{formatPredicateValue(predicate, value)}</span>;
 }
 
+function DurationFieldView({ predicate }: AnyFieldProps) {
+  const { value } = usePredicateField(predicate);
+  return (
+    <span data-web-field-kind="number/duration">{formatPredicateValue(predicate, value)}</span>
+  );
+}
+
+function PercentFieldView({ predicate }: AnyFieldProps) {
+  const { value } = usePredicateField(predicate);
+  return <span data-web-field-kind="number/percent">{formatPredicateValue(predicate, value)}</span>;
+}
+
 function DateFieldView({ predicate }: AnyFieldProps) {
   const { value } = usePredicateField(predicate);
   if (!(value instanceof Date)) {
@@ -135,6 +147,8 @@ export const genericWebFieldViewCapabilities = [
   { kind: "svg", Component: SvgFieldView },
   { kind: "date", Component: DateFieldView },
   { kind: "number", Component: NumberFieldView },
+  { kind: "number/duration", Component: DurationFieldView },
+  { kind: "number/percent", Component: PercentFieldView },
   { kind: "link", Component: LinkFieldView },
   { kind: "external-link", Component: ExternalLinkFieldView },
   { kind: "badge", Component: BadgeFieldView },

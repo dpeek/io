@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { app } from "../schema/app";
+import { pkm } from "../schema/pkm";
 import { bootstrap } from "./bootstrap";
 import { createTypeClient } from "./client";
 import { core } from "./core";
@@ -107,9 +107,9 @@ describe("createHttpGraphClient", () => {
   it("does not resurrect bootstrapped retracted facts during total sync", async () => {
     const authorityStore = createStore();
     bootstrap(authorityStore, core);
-    bootstrap(authorityStore, app);
+    bootstrap(authorityStore, pkm);
 
-    const topicTypeId = typeId(app.topic);
+    const topicTypeId = typeId(pkm.topic);
     const topicNamePredicateId = edgeId(core.node.fields.name);
     const currentNameEdge = authorityStore.facts(topicTypeId, topicNamePredicateId)[0];
     if (!currentNameEdge) throw new Error("Expected bootstrapped topic name edge.");
@@ -121,10 +121,10 @@ describe("createHttpGraphClient", () => {
 
     const payload = createTotalSyncPayload(authorityStore, {
       cursor: "server:1",
-      namespace: app,
+      namespace: pkm,
     });
 
-    const client = createSyncedTypeClient(app, {
+    const client = createSyncedTypeClient(pkm, {
       createTxId: () => "cli:1",
       pull: async () => payload,
     });
