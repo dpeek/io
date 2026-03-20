@@ -19,6 +19,8 @@ from top-level `schema/` ownership toward explicit module ownership.
 - per-type authoring stays in singular folders such as
   `../../src/graph/modules/pkm/topic/`, with `schema.ts` as the slice entry
   file and direct compatibility shims at `../../src/graph/schema/<namespace>/<type>.ts`
+- large static enum datasets can live in adjacent `data.ts` modules so the
+  type entry file stays focused on schema wiring
 - `../../src/graph/schema/` and `@io/core/graph/schema*` remain as compatibility
   wrappers for existing imports
 - follow-up slices can extend module families here without reintroducing the
