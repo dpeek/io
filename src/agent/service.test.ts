@@ -28,6 +28,7 @@ function createIssue(overrides: Partial<AgentIssue> = {}): AgentIssue {
     priority: 1,
     projectSlug: "io",
     sortOrder: null,
+    subIssueSortOrder: null,
     state: "Todo",
     title: "Example",
     updatedAt: "2024-01-01T00:00:00.000Z",
@@ -160,6 +161,7 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
     priority: 2,
     project: { slugId: "OpenSurf" },
     sortOrder: 1200.5,
+    subIssueSortOrder: 321.25,
     state: { name: "Todo" },
     title: "Fix integration",
     updatedAt: "2024-01-01T00:00:00.000Z",
@@ -169,6 +171,7 @@ test("normalizeLinearIssue lowercases labels and fills defaults", () => {
   expect(issue.blockedBy).toEqual(["2"]);
   expect(issue.projectSlug).toBe("OpenSurf");
   expect(issue.sortOrder).toBe(1200.5);
+  expect(issue.subIssueSortOrder).toBe(321.25);
   expect(issue.hasParent).toBe(true);
   expect(issue.hasChildren).toBe(true);
   expect(issue.parentIssueId).toBe("parent-1");
@@ -248,6 +251,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
                 priority: 0,
                 project: { slugId: "io" },
                 sortOrder: 15,
+                subIssueSortOrder: 7,
                 state: { name: "Todo" },
                 team: { id: "team-1" },
                 title: "Teach candidate issues to carry parent stream state",
@@ -265,6 +269,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
                 priority: 0,
                 project: { slugId: "io" },
                 sortOrder: 25,
+                subIssueSortOrder: 12,
                 state: { name: "In Review" },
                 team: { id: "team-1" },
                 title: "Current Approach Stream",
@@ -297,6 +302,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
     expect(requestBody?.query).toContain("parent {");
     expect(requestBody?.query).toContain("identifier");
     expect(requestBody?.query).toContain("sortOrder");
+    expect(requestBody?.query).toContain("subIssueSortOrder");
     expect(requestBody?.query).toContain("state { name }");
     expect(issues).toHaveLength(2);
     expect(issues[0]).toMatchObject({
@@ -306,6 +312,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
       parentIssueIdentifier: "OPE-147",
       parentIssueState: "In Review",
       sortOrder: 15,
+      subIssueSortOrder: 7,
       streamIssueId: "stream-1",
       streamIssueIdentifier: "OPE-121",
       streamIssueState: "In Progress",
@@ -315,6 +322,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
       hasParent: false,
       identifier: "OPE-147",
       sortOrder: 25,
+      subIssueSortOrder: 12,
     });
     expect(issues[1]?.parentIssueId).toBeUndefined();
     expect(issues[1]?.parentIssueIdentifier).toBeUndefined();
@@ -346,7 +354,8 @@ test("pickCandidateIssues uses Linear manual order for dependency-free sibling t
         parentIssueId: "feature-2",
         parentIssueIdentifier: "OS-102",
         priority: 1,
-        sortOrder: 200,
+        sortOrder: 10,
+        subIssueSortOrder: 200,
         state: "In Progress",
         title: "Later",
         updatedAt: "2024-01-02T00:00:00.000Z",
@@ -357,7 +366,8 @@ test("pickCandidateIssues uses Linear manual order for dependency-free sibling t
         parentIssueId: "feature-2",
         parentIssueIdentifier: "OS-102",
         priority: 3,
-        sortOrder: 100,
+        sortOrder: 900,
+        subIssueSortOrder: 100,
         state: "Todo",
         title: "First",
         updatedAt: "2024-01-03T00:00:00.000Z",
@@ -376,7 +386,8 @@ test("pickCandidateIssues keeps feature execution to one task per parent feature
         identifier: "OS-2",
         parentIssueId: "feature-1",
         parentIssueIdentifier: "OS-1",
-        sortOrder: 200,
+        sortOrder: 10,
+        subIssueSortOrder: 200,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 2,
@@ -387,7 +398,8 @@ test("pickCandidateIssues keeps feature execution to one task per parent feature
         identifier: "OS-3",
         parentIssueId: "feature-1",
         parentIssueIdentifier: "OS-1",
-        sortOrder: 100,
+        sortOrder: 900,
+        subIssueSortOrder: 100,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 1,
@@ -398,7 +410,8 @@ test("pickCandidateIssues keeps feature execution to one task per parent feature
         identifier: "OS-4",
         parentIssueId: "feature-2",
         parentIssueIdentifier: "OS-4F",
-        sortOrder: 50,
+        sortOrder: 800,
+        subIssueSortOrder: 50,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 1,
@@ -435,6 +448,66 @@ test("pickCandidateIssues allows parallel tasks from different features in the s
     2,
   );
   expect(selected.map((issue) => issue.identifier)).toEqual(["OS-2", "OS-3"]);
+});
+
+test("pickCandidateIssues prefers Linear sub-issue manual order over global issue order", () => {
+  const selected = pickCandidateIssues(
+    [
+      createTaskIssue({
+        id: "task-2",
+        identifier: "OS-2",
+        parentIssueId: "feature-2",
+        parentIssueIdentifier: "OS-10",
+        sortOrder: 50,
+        subIssueSortOrder: 200,
+        streamIssueId: "stream-1",
+        streamIssueIdentifier: "OS-1",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      }),
+      createTaskIssue({
+        id: "task-3",
+        identifier: "OS-3",
+        parentIssueId: "feature-3",
+        parentIssueIdentifier: "OS-11",
+        sortOrder: 200,
+        subIssueSortOrder: 100,
+        streamIssueId: "stream-1",
+        streamIssueIdentifier: "OS-1",
+        updatedAt: "2024-01-02T00:00:00.000Z",
+      }),
+    ],
+    2,
+  );
+  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-2"]);
+});
+
+test("pickCandidateIssues falls back to issue order when sub-issue order is missing", () => {
+  const selected = pickCandidateIssues(
+    [
+      createTaskIssue({
+        id: "task-2",
+        identifier: "OS-2",
+        parentIssueId: "feature-2",
+        parentIssueIdentifier: "OS-10",
+        sortOrder: 200,
+        streamIssueId: "stream-1",
+        streamIssueIdentifier: "OS-1",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      }),
+      createTaskIssue({
+        id: "task-3",
+        identifier: "OS-3",
+        parentIssueId: "feature-3",
+        parentIssueIdentifier: "OS-11",
+        sortOrder: 100,
+        streamIssueId: "stream-1",
+        streamIssueIdentifier: "OS-1",
+        updatedAt: "2024-01-02T00:00:00.000Z",
+      }),
+    ],
+    2,
+  );
+  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-2"]);
 });
 
 test("pickCandidateIssues leaves release gating to the scheduler", () => {
@@ -517,7 +590,8 @@ test("pickCandidateIssues uses Linear manual order across runnable feature tasks
         identifier: "OS-2",
         parentIssueId: "feature-1",
         parentIssueIdentifier: "OS-1",
-        sortOrder: 200,
+        sortOrder: 10,
+        subIssueSortOrder: 200,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 2,
@@ -528,7 +602,8 @@ test("pickCandidateIssues uses Linear manual order across runnable feature tasks
         identifier: "OS-3",
         parentIssueId: "feature-2",
         parentIssueIdentifier: "OS-2F",
-        sortOrder: 100,
+        sortOrder: 900,
+        subIssueSortOrder: 100,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 1,
@@ -541,7 +616,8 @@ test("pickCandidateIssues uses Linear manual order across runnable feature tasks
         parentIssueIdentifier: "OS-3F",
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
-        sortOrder: 150,
+        sortOrder: 800,
+        subIssueSortOrder: 150,
         priority: 1,
         updatedAt: "2024-01-03T00:00:00.000Z",
       }),

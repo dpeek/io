@@ -68,8 +68,8 @@ export function pickCandidateIssues(issues: AgentIssue[], limit: number) {
 }
 
 function compareIssueManualOrder(left: AgentIssue, right: AgentIssue) {
-  const leftSortOrder = left.sortOrder;
-  const rightSortOrder = right.sortOrder;
+  const leftSortOrder = getIssueManualOrder(left);
+  const rightSortOrder = getIssueManualOrder(right);
   if (typeof leftSortOrder === "number" && typeof rightSortOrder === "number") {
     if (leftSortOrder !== rightSortOrder) {
       return leftSortOrder - rightSortOrder;
@@ -80,6 +80,13 @@ function compareIssueManualOrder(left: AgentIssue, right: AgentIssue) {
     return 1;
   }
   return left.createdAt.localeCompare(right.createdAt);
+}
+
+function getIssueManualOrder(issue: Pick<AgentIssue, "sortOrder" | "subIssueSortOrder">) {
+  if (typeof issue.subIssueSortOrder === "number") {
+    return issue.subIssueSortOrder;
+  }
+  return issue.sortOrder;
 }
 
 function getStreamKey(issue: AgentIssue) {

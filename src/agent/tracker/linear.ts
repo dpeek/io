@@ -10,6 +10,7 @@ const ISSUE_FIELDS = `
   description
   priority
   sortOrder
+  subIssueSortOrder
   createdAt
   updatedAt
   project { slugId }
@@ -128,6 +129,7 @@ interface CandidateIssueNode {
   priority?: number | null;
   project?: { slugId?: string | null } | null;
   sortOrder?: number | null;
+  subIssueSortOrder?: number | null;
   state?: { name?: string | null } | null;
   team?: { id?: string | null } | null;
   title: string;
@@ -210,6 +212,7 @@ export function normalizeLinearIssue(node: CandidateIssueNode): AgentIssue {
       typeof node.priority === "number" && Number.isInteger(node.priority) ? node.priority : null,
     projectSlug: node.project?.slugId?.trim() || undefined,
     sortOrder: typeof node.sortOrder === "number" ? node.sortOrder : null,
+    subIssueSortOrder: typeof node.subIssueSortOrder === "number" ? node.subIssueSortOrder : null,
     state: node.state?.name?.trim() || "Unknown",
     streamIssueId: streamIssueId || undefined,
     streamIssueIdentifier: streamIssueId
