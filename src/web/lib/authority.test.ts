@@ -11,7 +11,8 @@ import {
 } from "@io/core/graph";
 import { app } from "@io/core/graph/schema/app";
 
-import { createInMemoryWebAppAuthorityStorage, createWebAppAuthority } from "./authority.js";
+import { createInMemoryTestWebAppAuthorityStorage } from "./authority-test-storage.js";
+import { createWebAppAuthority } from "./authority.js";
 import { handleSecretFieldRequest } from "./server-routes.js";
 
 const appGraph = { ...core, ...app } as const;
@@ -43,7 +44,7 @@ function buildGraphWriteTransaction(
 
 describe("web authority", () => {
   it("stores secret plaintext outside sync and reloads it across restart", async () => {
-    const storage = createInMemoryWebAppAuthorityStorage();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createWebAppAuthority(storage.storage);
     const envVarId = authority.graph.envVar.create({
       description: "Primary model credential",
@@ -62,7 +63,7 @@ describe("web authority", () => {
     expect(created.rotated).toBe(false);
     expect(created.secretVersion).toBe(1);
     expect(JSON.stringify(authority.createSyncPayload())).not.toContain("sk-live-first");
-    expect(storage.read()?.secretValues?.[createdSecretId]).toBe("sk-live-first");
+    expect(storage.read()?.secrets?.[createdSecretId]?.value).toBe("sk-live-first");
 
     const rotated = await authority.writeSecretField({
       entityId: envVarId,
@@ -76,7 +77,7 @@ describe("web authority", () => {
     expect(rotated.created).toBe(false);
     expect(rotated.rotated).toBe(true);
     expect(rotated.secretVersion).toBe(2);
-    expect(storage.read()?.secretValues?.[createdSecretId]).toBe("sk-live-second");
+    expect(storage.read()?.secrets?.[createdSecretId]?.value).toBe("sk-live-second");
     expect(restartedSecretId).toBe(createdSecretId);
     expect(restarted.graph.secretHandle.get(restartedSecretId)?.version).toBe(2);
     expect(JSON.stringify(restarted.createSyncPayload())).not.toContain("sk-live-second");
@@ -96,7 +97,7 @@ describe("web authority", () => {
   });
 
   it("rejects ordinary transactions that directly rewrite secret-backed refs", async () => {
-    const storage = createInMemoryWebAppAuthorityStorage();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createWebAppAuthority(storage.storage);
 
     const primaryEnvVarId = authority.graph.envVar.create({
@@ -149,7 +150,7 @@ describe("web authority", () => {
   });
 
   it("routes generic secret-field writes through the web server helper", async () => {
-    const storage = createInMemoryWebAppAuthorityStorage();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createWebAppAuthority(storage.storage);
     const envVarId = authority.graph.envVar.create({
       description: "Notifications integration",

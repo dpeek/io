@@ -6,6 +6,8 @@ import {
   persistedAuthoritativeGraphStateVersion,
   type JsonPersistedAuthoritativeGraphOptions,
   type PersistedAuthoritativeGraph,
+  type PersistedAuthoritativeGraphStorageCommitInput,
+  type PersistedAuthoritativeGraphStoragePersistInput,
   type PersistedAuthoritativeGraphState,
   type PersistedAuthoritativeGraphStorage,
   type PersistedAuthoritativeGraphStorageLoadResult,
@@ -92,13 +94,13 @@ export function createJsonPersistedAuthoritativeGraphStorage<
         return {
           snapshot,
           writeHistory,
-          needsRewrite: writeHistory === undefined,
+          needsPersistence: writeHistory === undefined,
         };
       }
 
       return {
         snapshot: validatePersistedSnapshot(parsed as StoreSnapshot, path, namespace),
-        needsRewrite: true,
+        needsPersistence: true,
       };
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return null;
@@ -106,10 +108,18 @@ export function createJsonPersistedAuthoritativeGraphStorage<
     }
   }
 
-  async function save(state: PersistedAuthoritativeGraphState): Promise<void> {
+  async function writeState({
+    snapshot,
+    writeHistory,
+  }: PersistedAuthoritativeGraphStoragePersistInput): Promise<void> {
     await mkdir(dirname(path), { recursive: true });
 
     const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+    const state: PersistedAuthoritativeGraphState = {
+      version: persistedAuthoritativeGraphStateVersion,
+      snapshot,
+      writeHistory,
+    };
 
     try {
       await writeFile(tempPath, JSON.stringify(state, null, 2) + "\n", "utf8");
@@ -122,7 +132,10 @@ export function createJsonPersistedAuthoritativeGraphStorage<
 
   return {
     load,
-    save,
+    async commit(input: PersistedAuthoritativeGraphStorageCommitInput): Promise<void> {
+      await writeState(input);
+    },
+    persist: writeState,
   };
 }
 
@@ -137,5 +150,6 @@ export async function createJsonPersistedAuthoritativeGraph<
     storage: createJsonPersistedAuthoritativeGraphStorage(options.path, namespace),
     seed: options.seed,
     createCursorPrefix: options.createCursorPrefix,
+    maxRetainedTransactions: options.maxRetainedTransactions,
   });
 }

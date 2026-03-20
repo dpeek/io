@@ -65,7 +65,7 @@ Accepted mutations write two different surfaces:
 
 - graph state: `envVar`, `core:secretHandle`, and the safe metadata used by
   sync/UI
-- authority-only state: `secretValues[secretId] = plaintext`
+- authority-only state: `io_secret_value[secretId].value = plaintext`
 
 That split keeps the explorer explicit:
 

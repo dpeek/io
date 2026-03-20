@@ -1,0 +1,888 @@
+import { Database } from "bun:sqlite";
+import { describe, expect, it } from "bun:test";
+
+import {
+  bootstrap,
+  createStore,
+  createTypeClient,
+  core,
+  edgeId,
+  type GraphWriteTransaction,
+  type NamespaceClient,
+  type StoreSnapshot,
+} from "@io/core/graph";
+import { app } from "@io/core/graph/schema/app";
+
+import { WebGraphAuthorityDurableObject } from "./graph-authority-do.js";
+
+const appGraph = { ...core, ...app } as const;
+const envVarSecretPredicateId = edgeId(app.envVar.fields.secret);
+
+type SqliteMasterRow = {
+  name: string;
+  type: "index" | "table";
+};
+
+type GraphTxRow = {
+  cursor: string;
+  seq: number;
+  tx_id: string;
+};
+
+type GraphTxOpRow = {
+  edge_id: string;
+  op_index: number;
+  op_kind: "assert" | "retract";
+  tx_seq: number;
+};
+
+type GraphEdgeRow = {
+  asserted_tx_seq?: number;
+  edge_id: string;
+  o: string;
+  p: string;
+  retracted_tx_seq: number | null;
+  s: string;
+};
+
+type SecretValueRow = {
+  rowid?: number;
+  secret_id: string;
+  stored_at?: string;
+  value: string;
+  version: number;
+};
+
+type SyncPayload = {
+  readonly cursor: string;
+  readonly fallback?: "gap" | "reset" | "unknown-cursor";
+  readonly snapshot?: StoreSnapshot;
+  readonly transactions?: readonly {
+    readonly cursor: string;
+    readonly replayed: boolean;
+    readonly txId: string;
+  }[];
+};
+
+type TransactionResponse = {
+  readonly cursor: string;
+  readonly replayed: boolean;
+  readonly txId: string;
+};
+
+type SecretFieldResponse = {
+  readonly created: boolean;
+  readonly entityId: string;
+  readonly predicateId: string;
+  readonly rotated: boolean;
+  readonly secretId: string;
+  readonly secretVersion: number;
+};
+
+type DurableObjectSqlCursor<T extends Record<string, unknown>> = Iterable<T> & {
+  one(): T | null;
+};
+
+type SqlExecHook = (query: string, bindings: readonly unknown[]) => void;
+
+function createCursor<T extends Record<string, unknown>>(
+  rows: readonly T[],
+): DurableObjectSqlCursor<T> {
+  return {
+    one() {
+      return rows[0] ?? null;
+    },
+    *[Symbol.iterator]() {
+      yield* rows;
+    },
+  };
+}
+
+function createSqliteDurableObjectState(): {
+  readonly db: Database;
+  getBlockConcurrencyWhileCount(): number;
+  setExecHook(hook: SqlExecHook | null): void;
+  readonly state: ConstructorParameters<typeof WebGraphAuthorityDurableObject>[0];
+} {
+  const db = new Database(":memory:");
+  let execHook: SqlExecHook | null = null;
+  let blockConcurrencyWhileCount = 0;
+
+  return {
+    db,
+    getBlockConcurrencyWhileCount() {
+      return blockConcurrencyWhileCount;
+    },
+    setExecHook(hook) {
+      execHook = hook;
+    },
+    state: {
+      storage: {
+        sql: {
+          exec<T extends Record<string, unknown>>(
+            query: string,
+            ...bindings: unknown[]
+          ): DurableObjectSqlCursor<T> {
+            execHook?.(query, bindings);
+            const statement = db.query(query);
+            const trimmed = query.trimStart();
+            if (/^(SELECT|PRAGMA|WITH|EXPLAIN)\b/i.test(trimmed)) {
+              return createCursor(
+                statement.all(...(bindings as never as Parameters<typeof statement.all>)) as T[],
+              );
+            }
+            statement.run(...(bindings as never as Parameters<typeof statement.run>));
+            return createCursor([]);
+          },
+        },
+        transactionSync<T>(callback: () => T): T {
+          return db.transaction(callback)();
+        },
+      },
+      async blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T> {
+        blockConcurrencyWhileCount += 1;
+        return callback();
+      },
+    },
+  };
+}
+
+function queryAll<T extends Record<string, unknown>>(
+  db: Database,
+  query: string,
+  ...bindings: unknown[]
+): T[] {
+  const statement = db.query(query);
+  return statement.all(...(bindings as never as Parameters<typeof statement.all>)) as T[];
+}
+
+function buildGraphWriteTransaction(
+  before: StoreSnapshot,
+  after: StoreSnapshot,
+  id: string,
+): GraphWriteTransaction {
+  const previousEdgeIds = new Set(before.edges.map((edge) => edge.id));
+  const previousRetractedIds = new Set(before.retracted);
+
+  return {
+    id,
+    ops: [
+      ...after.retracted
+        .filter((edgeId) => !previousRetractedIds.has(edgeId))
+        .map((edgeId) => ({ op: "retract" as const, edgeId })),
+      ...after.edges
+        .filter((edge) => !previousEdgeIds.has(edge.id))
+        .map((edge) => ({
+          op: "assert" as const,
+          edge: { ...edge },
+        })),
+    ],
+  };
+}
+
+function buildTransactionFromSnapshot<TResult>(
+  snapshot: StoreSnapshot,
+  id: string,
+  mutate: (graph: NamespaceClient<typeof appGraph>) => TResult,
+): {
+  readonly result: TResult;
+  readonly transaction: GraphWriteTransaction;
+} {
+  const mutationStore = createStore();
+  bootstrap(mutationStore, core);
+  bootstrap(mutationStore, app);
+  mutationStore.replace(snapshot);
+  const mutationGraph = createTypeClient(mutationStore, appGraph);
+  const before = mutationStore.snapshot();
+  const result = mutate(mutationGraph);
+
+  return {
+    result,
+    transaction: buildGraphWriteTransaction(before, mutationStore.snapshot(), id),
+  };
+}
+
+async function readSyncPayload(
+  durableObject: WebGraphAuthorityDurableObject,
+  after?: string,
+): Promise<SyncPayload> {
+  const url = new URL("https://graph-authority.local/api/sync");
+  if (after) url.searchParams.set("after", after);
+  const response = await durableObject.fetch(new Request(url));
+
+  expect(response.status).toBe(200);
+  return (await response.json()) as SyncPayload;
+}
+
+async function postTransaction(
+  durableObject: WebGraphAuthorityDurableObject,
+  transaction: GraphWriteTransaction,
+): Promise<TransactionResponse> {
+  const response = await durableObject.fetch(
+    new Request("https://graph-authority.local/api/tx", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(transaction),
+    }),
+  );
+
+  expect(response.status).toBe(200);
+  return (await response.json()) as TransactionResponse;
+}
+
+async function postSecretField(
+  durableObject: WebGraphAuthorityDurableObject,
+  input: {
+    readonly entityId: string;
+    readonly plaintext: string;
+    readonly predicateId: string;
+  },
+): Promise<SecretFieldResponse> {
+  const response = await durableObject.fetch(
+    new Request("https://graph-authority.local/api/secret-fields", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(input),
+    }),
+  );
+
+  expect(response.status).toBe(201);
+  return (await response.json()) as SecretFieldResponse;
+}
+
+async function getDurableAuthority(durableObject: WebGraphAuthorityDurableObject): Promise<{
+  persist(): Promise<void>;
+  store: {
+    snapshot(): StoreSnapshot;
+  };
+}> {
+  return (
+    durableObject as unknown as {
+      getAuthority(): Promise<{
+        persist(): Promise<void>;
+        store: {
+          snapshot(): StoreSnapshot;
+        };
+      }>;
+    }
+  ).getAuthority();
+}
+
+describe("web graph authority durable object", () => {
+  it("bootstraps the graph tables and indexes in the constructor", () => {
+    const { db, state } = createSqliteDurableObjectState();
+
+    new WebGraphAuthorityDurableObject(state);
+
+    const entries = queryAll<SqliteMasterRow>(
+      db,
+      `SELECT type, name
+      FROM sqlite_master
+      WHERE name LIKE 'io_graph_%' OR name = 'io_secret_value'
+      ORDER BY type ASC, name ASC`,
+    );
+
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { type: "table", name: "io_graph_meta" },
+        { type: "table", name: "io_graph_tx" },
+        { type: "table", name: "io_graph_tx_op" },
+        { type: "table", name: "io_graph_edge" },
+        { type: "table", name: "io_secret_value" },
+        { type: "index", name: "io_graph_edge_subject_predicate_idx" },
+        { type: "index", name: "io_graph_edge_predicate_object_idx" },
+        { type: "index", name: "io_graph_edge_retracted_tx_seq_idx" },
+      ]),
+    );
+  });
+
+  it("keeps constructor setup synchronous and defers async hydration until the first request", async () => {
+    const { getBlockConcurrencyWhileCount, state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state);
+
+    expect(getBlockConcurrencyWhileCount()).toBe(0);
+
+    await readSyncPayload(durableObject);
+    expect(getBlockConcurrencyWhileCount()).toBe(1);
+
+    await readSyncPayload(durableObject);
+    expect(getBlockConcurrencyWhileCount()).toBe(1);
+  });
+
+  it("persists accepted graph transactions as ordered rows and hydrates from SQL after restart", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const envVarWrite = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+    const createdTx = await postTransaction(durableObject, envVarWrite.transaction);
+    const replayedTx = await postTransaction(durableObject, envVarWrite.transaction);
+    const afterCreateRows = queryAll<GraphTxRow>(
+      db,
+      `SELECT seq, tx_id, cursor
+      FROM io_graph_tx
+      ORDER BY seq ASC`,
+    );
+    const secretWrite = await postSecretField(durableObject, {
+      entityId: envVarWrite.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+    const txRows = queryAll<GraphTxRow>(
+      db,
+      `SELECT seq, tx_id, cursor
+      FROM io_graph_tx
+      ORDER BY seq ASC`,
+    );
+    const txOpRows = queryAll<GraphTxOpRow>(
+      db,
+      `SELECT tx_seq, op_index, op_kind, edge_id
+      FROM io_graph_tx_op
+      ORDER BY tx_seq ASC, op_index ASC`,
+    );
+    const secretEdge = queryAll<GraphEdgeRow>(
+      db,
+      `SELECT edge_id, s, p, o, retracted_tx_seq
+      FROM io_graph_edge
+      WHERE s = ? AND p = ?`,
+      envVarWrite.result,
+      envVarSecretPredicateId,
+    );
+    const secretRows = queryAll<SecretValueRow>(
+      db,
+      `SELECT secret_id, value, version
+      FROM io_secret_value`,
+    );
+    const metaRows = queryAll<{
+      cursor_prefix: string;
+      head_cursor: string;
+      head_seq: number;
+      history_retained_from_seq: number;
+    }>(
+      db,
+      `SELECT cursor_prefix, head_seq, head_cursor, history_retained_from_seq
+      FROM io_graph_meta
+      WHERE id = 1`,
+    );
+    const latestTx = txRows[1];
+    const secretEdgeRow = secretEdge[0];
+    const metaRow = metaRows[0];
+    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restartedSync = await readSyncPayload(restarted);
+    const incremental = await readSyncPayload(restarted, initialSync.cursor);
+
+    if (!latestTx) throw new Error("Expected the secret-field transaction row.");
+    if (!secretEdgeRow) throw new Error("Expected the current env var secret edge row.");
+    if (!metaRow) throw new Error("Expected durable graph metadata.");
+
+    expect(createdTx).toMatchObject({
+      txId: "tx:create-env-var",
+      replayed: false,
+    });
+    expect(replayedTx).toMatchObject({
+      txId: "tx:create-env-var",
+      replayed: true,
+      cursor: createdTx.cursor,
+    });
+    expect(afterCreateRows).toHaveLength(1);
+    expect(txRows).toHaveLength(2);
+    expect(txRows.map((row) => row.seq)).toEqual([1, 2]);
+    expect(txRows[0]).toMatchObject({
+      seq: 1,
+      tx_id: "tx:create-env-var",
+      cursor: createdTx.cursor,
+    });
+    expect(
+      latestTx.tx_id.startsWith(`secret-field:${envVarWrite.result}:${envVarSecretPredicateId}:`),
+    ).toBe(true);
+    expect(txOpRows.filter((row) => row.tx_seq === 1).map((row) => row.op_index)).toEqual([
+      ...txOpRows.filter((row) => row.tx_seq === 1).keys(),
+    ]);
+    expect(txOpRows.filter((row) => row.tx_seq === 2).map((row) => row.op_index)).toEqual([
+      ...txOpRows.filter((row) => row.tx_seq === 2).keys(),
+    ]);
+    expect(secretWrite).toMatchObject({
+      created: true,
+      entityId: envVarWrite.result,
+      predicateId: envVarSecretPredicateId,
+      rotated: false,
+      secretVersion: 1,
+    });
+    expect(secretEdge).toEqual([
+      {
+        edge_id: secretEdgeRow.edge_id,
+        s: envVarWrite.result,
+        p: envVarSecretPredicateId,
+        o: secretWrite.secretId,
+        retracted_tx_seq: null,
+      },
+    ]);
+    expect(secretRows).toEqual([
+      {
+        secret_id: secretWrite.secretId,
+        value: "sk-live-first",
+        version: 1,
+      },
+    ]);
+    expect(metaRows).toEqual([
+      {
+        cursor_prefix: metaRow.cursor_prefix,
+        head_seq: 2,
+        head_cursor: latestTx.cursor,
+        history_retained_from_seq: 0,
+      },
+    ]);
+    expect(restartedSync.cursor).toBe(latestTx.cursor);
+    expect(JSON.stringify(restartedSync)).not.toContain("sk-live-first");
+    expect(incremental.transactions?.map((transaction) => transaction.txId)).toEqual([
+      "tx:create-env-var",
+      latestTx.tx_id,
+    ]);
+  });
+
+  it("preserves secret side-table rows across graph-only commits and baseline persists", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, createdEnvVar.transaction);
+    const secretWrite = await postSecretField(durableObject, {
+      entityId: createdEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+    const secretRowsBeforeGraphUpdate = queryAll<Required<SecretValueRow>>(
+      db,
+      `SELECT rowid, secret_id, value, version, stored_at
+      FROM io_secret_value`,
+    );
+    const secretRowBeforeGraphUpdate = secretRowsBeforeGraphUpdate[0];
+
+    const afterCreateSync = await readSyncPayload(durableObject);
+    const renameEnvVar = buildTransactionFromSnapshot(
+      afterCreateSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:update-env-var",
+      (graph) =>
+        graph.envVar.update(createdEnvVar.result, {
+          description: "Primary model credential (renamed)",
+        }),
+    );
+
+    await postTransaction(durableObject, renameEnvVar.transaction);
+
+    const secretRowsAfterGraphUpdate = queryAll<Required<SecretValueRow>>(
+      db,
+      `SELECT rowid, secret_id, value, version, stored_at
+      FROM io_secret_value`,
+    );
+    const authority = await getDurableAuthority(durableObject);
+
+    await authority.persist();
+
+    const secretRowsAfterPersist = queryAll<Required<SecretValueRow>>(
+      db,
+      `SELECT rowid, secret_id, value, version, stored_at
+      FROM io_secret_value`,
+    );
+
+    if (!secretRowBeforeGraphUpdate) {
+      throw new Error("Expected the initial secret side-table row.");
+    }
+
+    expect(secretWrite.secretVersion).toBe(1);
+    expect(secretRowsBeforeGraphUpdate).toEqual([
+      {
+        rowid: secretRowBeforeGraphUpdate.rowid,
+        secret_id: secretWrite.secretId,
+        value: "sk-live-first",
+        version: 1,
+        stored_at: secretRowBeforeGraphUpdate.stored_at,
+      },
+    ]);
+    expect(secretRowsAfterGraphUpdate).toEqual(secretRowsBeforeGraphUpdate);
+    expect(secretRowsAfterPersist).toEqual(secretRowsBeforeGraphUpdate);
+  });
+
+  it("rolls back graph and secret rows together when the secret side-table write fails", async () => {
+    const { db, setExecHook, state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, createdEnvVar.transaction);
+
+    setExecHook((query) => {
+      if (query.includes("INSERT INTO io_secret_value")) {
+        throw new Error("forced secret side-table failure");
+      }
+    });
+
+    await expect(
+      postSecretField(durableObject, {
+        entityId: createdEnvVar.result,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-first",
+      }),
+    ).rejects.toThrow("forced secret side-table failure");
+
+    setExecHook(null);
+
+    const txRows = queryAll<GraphTxRow>(
+      db,
+      `SELECT seq, tx_id, cursor
+      FROM io_graph_tx
+      ORDER BY seq ASC`,
+    );
+    const secretEdgeRows = queryAll<GraphEdgeRow>(
+      db,
+      `SELECT edge_id, s, p, o, retracted_tx_seq
+      FROM io_graph_edge
+      WHERE s = ? AND p = ?`,
+      createdEnvVar.result,
+      envVarSecretPredicateId,
+    );
+    const secretRows = queryAll<SecretValueRow>(
+      db,
+      `SELECT secret_id, value, version
+      FROM io_secret_value`,
+    );
+    const afterFailureSync = await readSyncPayload(durableObject);
+
+    expect(txRows).toHaveLength(1);
+    expect(txRows[0]?.tx_id).toBe("tx:create-env-var");
+    expect(secretEdgeRows).toEqual([]);
+    expect(secretRows).toEqual([]);
+    expect(
+      afterFailureSync.snapshot?.edges.some(
+        (edge) => edge.s === createdEnvVar.result && edge.p === envVarSecretPredicateId,
+      ),
+    ).toBe(false);
+  });
+
+  it("rolls back graph rows when a SQL commit fails after graph inserts begin", async () => {
+    const { db, setExecHook, state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    setExecHook((query) => {
+      if (query.includes("INSERT INTO io_graph_meta")) {
+        throw new Error("forced graph meta failure");
+      }
+    });
+
+    await expect(postTransaction(durableObject, createdEnvVar.transaction)).rejects.toThrow(
+      "forced graph meta failure",
+    );
+
+    setExecHook(null);
+
+    const txRows = queryAll<GraphTxRow>(
+      db,
+      `SELECT seq, tx_id, cursor
+      FROM io_graph_tx
+      ORDER BY seq ASC`,
+    );
+    const createdEntityRows = queryAll<GraphEdgeRow>(
+      db,
+      `SELECT edge_id, s, p, o, retracted_tx_seq
+      FROM io_graph_edge
+      WHERE s = ?`,
+      createdEnvVar.result,
+    );
+    const afterFailureSync = await readSyncPayload(durableObject);
+
+    expect(txRows).toEqual([]);
+    expect(createdEntityRows).toEqual([]);
+    expect(afterFailureSync.snapshot?.edges.some((edge) => edge.s === createdEnvVar.result)).toBe(
+      false,
+    );
+  });
+
+  it("hydrates retracted edge order from SQL rows after restart", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, createdEnvVar.transaction);
+
+    const afterCreateSync = await readSyncPayload(durableObject);
+    const renameEnvVar = buildTransactionFromSnapshot(
+      afterCreateSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:update-env-var",
+      (graph) =>
+        graph.envVar.update(createdEnvVar.result, {
+          description: "Primary model credential (rotated)",
+        }),
+    );
+
+    await postTransaction(durableObject, renameEnvVar.transaction);
+
+    const authority = await getDurableAuthority(durableObject);
+    const snapshotBeforeRestart = authority.store.snapshot();
+    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restartedSync = await readSyncPayload(restarted);
+
+    expect(snapshotBeforeRestart.retracted.length).toBeGreaterThan(1);
+    expect(restartedSync.snapshot).toEqual(snapshotBeforeRestart);
+  });
+
+  it("preserves retracted snapshot edges when a baseline rewrite drops retained history", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, createdEnvVar.transaction);
+
+    const afterCreateSync = await readSyncPayload(durableObject);
+    const renameEnvVar = buildTransactionFromSnapshot(
+      afterCreateSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:update-env-var",
+      (graph) =>
+        graph.envVar.update(createdEnvVar.result, {
+          description: "Primary model credential (rotated)",
+        }),
+    );
+
+    const updatedTx = await postTransaction(durableObject, renameEnvVar.transaction);
+    const authority = await getDurableAuthority(durableObject);
+    const snapshotBeforePersist = authority.store.snapshot();
+
+    expect(snapshotBeforePersist.retracted.length).toBeGreaterThan(0);
+
+    await authority.persist();
+
+    const txCount = queryAll<{ count: number }>(db, `SELECT COUNT(*) AS count FROM io_graph_tx`);
+    const retractedRows = queryAll<GraphEdgeRow>(
+      db,
+      `SELECT edge_id, retracted_tx_seq
+      FROM io_graph_edge
+      WHERE retracted_tx_seq IS NOT NULL
+      ORDER BY retracted_tx_seq ASC, rowid ASC`,
+    );
+    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restartedSync = await readSyncPayload(restarted);
+    const reset = await readSyncPayload(restarted, updatedTx.cursor);
+
+    expect(txCount).toEqual([{ count: 0 }]);
+    expect(retractedRows).toHaveLength(snapshotBeforePersist.retracted.length);
+    expect(restartedSync.snapshot).toEqual(snapshotBeforePersist);
+    expect(reset).toMatchObject({
+      fallback: "reset",
+      transactions: [],
+    });
+  });
+
+  it("rewrites a reset baseline when retained transaction rows no longer reach the hydrated snapshot", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+    const createdTx = await postTransaction(durableObject, createdEnvVar.transaction);
+    const secretWrite = await postSecretField(durableObject, {
+      entityId: createdEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+    const expectedSnapshot = (await readSyncPayload(durableObject)).snapshot;
+
+    db.query(`DELETE FROM io_graph_tx_op WHERE tx_seq = 2`).run();
+    db.query(`DELETE FROM io_graph_tx WHERE seq = 2`).run();
+
+    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restartedSync = await readSyncPayload(restarted);
+    const reset = await readSyncPayload(restarted, createdTx.cursor);
+    const txCount = queryAll<{ count: number }>(db, `SELECT COUNT(*) AS count FROM io_graph_tx`);
+    const metaRows = queryAll<{
+      cursor_prefix: string;
+      head_cursor: string;
+      head_seq: number;
+      history_retained_from_seq: number;
+    }>(
+      db,
+      `SELECT cursor_prefix, head_seq, head_cursor, history_retained_from_seq
+      FROM io_graph_meta
+      WHERE id = 1`,
+    );
+
+    expect(secretWrite.secretVersion).toBe(1);
+    expect(restartedSync.snapshot).toEqual(expectedSnapshot);
+    expect(restartedSync.cursor).not.toBe(createdTx.cursor);
+    expect(txCount).toEqual([{ count: 0 }]);
+    expect(metaRows).toHaveLength(1);
+    expect(metaRows[0]?.head_seq).toBe(0);
+    expect(metaRows[0]?.history_retained_from_seq).toBe(0);
+    expect(reset).toMatchObject({
+      fallback: "reset",
+      transactions: [],
+    });
+  });
+
+  it("prunes retained transaction rows and falls back for old or unknown cursors", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state, {
+      GRAPH_AUTHORITY_MAX_RETAINED_TRANSACTIONS: 2,
+    });
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+    const createdTx = await postTransaction(durableObject, createdEnvVar.transaction);
+    const afterCreateSync = await readSyncPayload(durableObject);
+    const firstUpdate = buildTransactionFromSnapshot(
+      afterCreateSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:update-env-var:1",
+      (graph) =>
+        graph.envVar.update(createdEnvVar.result, {
+          description: "Primary model credential (rotated once)",
+        }),
+    );
+    const updatedTx = await postTransaction(durableObject, firstUpdate.transaction);
+    const afterFirstUpdateSync = await readSyncPayload(durableObject);
+    const secondUpdate = buildTransactionFromSnapshot(
+      afterFirstUpdateSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:update-env-var:2",
+      (graph) =>
+        graph.envVar.update(createdEnvVar.result, {
+          description: "Primary model credential (rotated twice)",
+        }),
+    );
+    const latestTx = await postTransaction(durableObject, secondUpdate.transaction);
+    const txRows = queryAll<GraphTxRow>(
+      db,
+      `SELECT seq, tx_id, cursor
+      FROM io_graph_tx
+      ORDER BY seq ASC`,
+    );
+    const txOpSequences = queryAll<{ tx_seq: number }>(
+      db,
+      `SELECT DISTINCT tx_seq
+      FROM io_graph_tx_op
+      ORDER BY tx_seq ASC`,
+    );
+    const metaRows = queryAll<{
+      cursor_prefix: string;
+      head_cursor: string;
+      head_seq: number;
+      history_retained_from_seq: number;
+    }>(
+      db,
+      `SELECT cursor_prefix, head_seq, head_cursor, history_retained_from_seq
+      FROM io_graph_meta
+      WHERE id = 1`,
+    );
+    const gap = await readSyncPayload(durableObject, initialSync.cursor);
+    const retained = await readSyncPayload(durableObject, createdTx.cursor);
+    const unknown = await readSyncPayload(durableObject, "web-authority:unknown");
+    const restarted = new WebGraphAuthorityDurableObject(state, {
+      GRAPH_AUTHORITY_MAX_RETAINED_TRANSACTIONS: 2,
+    });
+    const restartedGap = await readSyncPayload(restarted, initialSync.cursor);
+    const restartedRetained = await readSyncPayload(restarted, createdTx.cursor);
+
+    expect(txRows).toEqual([
+      { seq: 2, tx_id: "tx:update-env-var:1", cursor: updatedTx.cursor },
+      { seq: 3, tx_id: "tx:update-env-var:2", cursor: latestTx.cursor },
+    ]);
+    expect(txOpSequences).toEqual([{ tx_seq: 2 }, { tx_seq: 3 }]);
+    expect(metaRows).toEqual([
+      {
+        cursor_prefix: metaRows[0]?.cursor_prefix ?? "",
+        head_seq: 3,
+        head_cursor: latestTx.cursor,
+        history_retained_from_seq: 1,
+      },
+    ]);
+    expect(gap).toMatchObject({
+      fallback: "gap",
+      cursor: latestTx.cursor,
+      transactions: [],
+    });
+    expect(retained.transactions?.map((transaction) => transaction.txId)).toEqual([
+      "tx:update-env-var:1",
+      "tx:update-env-var:2",
+    ]);
+    expect(unknown).toMatchObject({
+      fallback: "unknown-cursor",
+      cursor: latestTx.cursor,
+      transactions: [],
+    });
+    expect(restartedGap).toMatchObject({
+      fallback: "gap",
+      cursor: latestTx.cursor,
+      transactions: [],
+    });
+    expect(restartedRetained.transactions?.map((transaction) => transaction.txId)).toEqual([
+      "tx:update-env-var:1",
+      "tx:update-env-var:2",
+    ]);
+  });
+});

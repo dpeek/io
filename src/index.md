@@ -31,11 +31,13 @@ the graph-first application direction the rest of the workspace is proving.
 - `./mcp.md`: current graph MCP read surface, opt-in writes, and the remaining command roadmap
 - `./structure.md`: repo-level structure direction, naming rules, phased migration, and execution model
 - `./structure-plan.md`: phased structure rollout, dependencies, exit criteria, and suggested Linear feature/task breakdown
-- `./storage.md`: Durable Object SQLite storage-adapter design, raw-SQL decision, and implementation plan
+- `./storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,
+  retained-history model, and secret side-storage split
 - `./index.md`: repo map and context entrypoint
 - `../src/agent/`: scheduler, context assembly, tracker integration, retained runtime,
   and the operator TUI
 - `../src/config/`, `../src/lib/`: shared config loading and typed config surface
-- `../src/graph/`, `../src/web/`: graph runtime, canonical schema, worker-backed
-  browser surfaces, and the TanStack Router SPA shell
+- `../src/graph/`, `../src/web/`: graph runtime, canonical schema, the persisted-authority
+  contract, worker-backed browser surfaces, and the SQLite Durable Object authority path that
+  backs the web shell
 - `../src/cli/`: operator command surface

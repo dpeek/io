@@ -34,7 +34,7 @@ const loadResult = {
     edges: [],
     retracted: [],
   },
-  needsRewrite: false,
+  needsPersistence: false,
 } satisfies PersistedAuthoritativeGraphStorageLoadResult;
 
 const durableState = {
@@ -51,8 +51,13 @@ const storage = {
   async load() {
     return loadResult;
   },
-  async save(state) {
-    void (state satisfies PersistedAuthoritativeGraphState);
+  async commit(input) {
+    void (input.snapshot satisfies PersistedAuthoritativeGraphState["snapshot"]);
+    void (input.writeHistory satisfies PersistedAuthoritativeGraphState["writeHistory"]);
+  },
+  async persist(input) {
+    void (input.snapshot satisfies PersistedAuthoritativeGraphState["snapshot"]);
+    void (input.writeHistory satisfies PersistedAuthoritativeGraphState["writeHistory"]);
   },
 } satisfies PersistedAuthoritativeGraphStorage;
 

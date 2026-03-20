@@ -108,7 +108,22 @@ async function createJsonAuthority(
 
 function createMemoryStorage() {
   let current: PersistedAuthoritativeGraphState | null = null;
-  let failNextSave = false;
+  let failNextWrite = false;
+
+  function writeState(
+    snapshot: PersistedAuthoritativeGraphState["snapshot"],
+    writeHistory: PersistedAuthoritativeGraphState["writeHistory"],
+  ): void {
+    if (failNextWrite) {
+      failNextWrite = false;
+      throw new Error("persist failed");
+    }
+    current = {
+      version: 1,
+      snapshot: cloneJson(snapshot),
+      writeHistory: cloneJson(writeHistory),
+    };
+  }
 
   const storage: PersistedAuthoritativeGraphStorage = {
     async load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null> {
@@ -116,15 +131,14 @@ function createMemoryStorage() {
       return {
         snapshot: cloneJson(current.snapshot),
         writeHistory: cloneJson(current.writeHistory),
-        needsRewrite: false,
+        needsPersistence: false,
       };
     },
-    async save(state: PersistedAuthoritativeGraphState): Promise<void> {
-      if (failNextSave) {
-        failNextSave = false;
-        throw new Error("persist failed");
-      }
-      current = cloneJson(state);
+    async commit(input): Promise<void> {
+      writeState(input.snapshot, input.writeHistory);
+    },
+    async persist(input): Promise<void> {
+      writeState(input.snapshot, input.writeHistory);
     },
   };
 
@@ -133,8 +147,8 @@ function createMemoryStorage() {
     getCurrent() {
       return current ? cloneJson(current) : null;
     },
-    failOnNextSave() {
-      failNextSave = true;
+    failOnNextWrite() {
+      failNextWrite = true;
     },
   };
 }
@@ -239,6 +253,147 @@ describe("persisted authoritative graph", () => {
       changes: [second],
     });
     expect(restarted.graph.item.get(itemId).name).toBe("Durable Item Two");
+  });
+
+  it("prunes retained history and falls back for cursors older than the retained window", async () => {
+    const retainedStorage = createMemoryStorage();
+    const createRetainedAuthority = async () => {
+      const store = createStore();
+      bootstrap(store, core);
+      bootstrap(store, testGraph);
+
+      return createPersistedAuthoritativeGraph(store, testGraph, {
+        storage: retainedStorage.storage,
+        seed(graph) {
+          graph.item.create({ name: "Retained Item" });
+        },
+        createCursorPrefix: () => "persisted:retained:",
+        maxRetainedTransactions: 2,
+      });
+    };
+
+    const authority = await createRetainedAuthority();
+    const itemId = authority.graph.item.list()[0]?.id;
+    if (!itemId) throw new Error("Expected retained item.");
+
+    const initialCursor = authority.createSyncPayload().cursor;
+    const first = await authority.applyTransaction(
+      createItemNameWriteTransaction(authority.store, itemId, "Retained Item One", "tx:retain:1"),
+    );
+    const second = await authority.applyTransaction(
+      createItemNameWriteTransaction(authority.store, itemId, "Retained Item Two", "tx:retain:2"),
+    );
+    const third = await authority.applyTransaction(
+      createItemNameWriteTransaction(authority.store, itemId, "Retained Item Three", "tx:retain:3"),
+    );
+    const persistedState = retainedStorage.getCurrent();
+    const restarted = await createRetainedAuthority();
+
+    if (!persistedState) throw new Error("Expected retained persisted state.");
+
+    expect(persistedState.writeHistory.baseSequence).toBe(1);
+    expect(persistedState.writeHistory.results).toEqual([second, third]);
+    expect(authority.getIncrementalSyncResult(initialCursor)).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: initialCursor,
+      transactions: [],
+      cursor: third.cursor,
+      completeness: "complete",
+      freshness: "current",
+      fallback: "gap",
+    });
+    expect(authority.getIncrementalSyncResult(first.cursor)).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: first.cursor,
+      transactions: [second, third],
+      cursor: third.cursor,
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(restarted.getIncrementalSyncResult(initialCursor)).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: initialCursor,
+      transactions: [],
+      cursor: third.cursor,
+      completeness: "complete",
+      freshness: "current",
+      fallback: "gap",
+    });
+    expect(restarted.getIncrementalSyncResult(first.cursor)).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: first.cursor,
+      transactions: [second, third],
+      cursor: third.cursor,
+      completeness: "complete",
+      freshness: "current",
+    });
+  });
+
+  it("commits accepted transactions incrementally and reserves persist for snapshot baselines", async () => {
+    let commitCount = 0;
+    let persistCount = 0;
+    let committedTxId: string | null = null;
+    let current: PersistedAuthoritativeGraphState | null = null;
+
+    const store = createStore();
+    bootstrap(store, core);
+    bootstrap(store, testGraph);
+    const authority = await createPersistedAuthoritativeGraph(store, testGraph, {
+      storage: {
+        async load() {
+          return current
+            ? {
+                snapshot: cloneJson(current.snapshot),
+                writeHistory: cloneJson(current.writeHistory),
+                needsPersistence: false,
+              }
+            : null;
+        },
+        async commit(input) {
+          commitCount += 1;
+          committedTxId = input.result.txId;
+          current = {
+            version: 1,
+            snapshot: cloneJson(input.snapshot),
+            writeHistory: cloneJson(input.writeHistory),
+          };
+        },
+        async persist(input) {
+          persistCount += 1;
+          current = {
+            version: 1,
+            snapshot: cloneJson(input.snapshot),
+            writeHistory: cloneJson(input.writeHistory),
+          };
+        },
+      },
+      seed(graph) {
+        graph.item.create({ name: "Boundary Item" });
+      },
+      createCursorPrefix: createTestCursorPrefix,
+    });
+    const itemId = authority.graph.item.list()[0]?.id;
+    if (!itemId) throw new Error("Expected seeded item.");
+
+    expect(commitCount).toBe(0);
+    expect(persistCount).toBe(1);
+
+    await authority.applyTransaction(
+      createItemNameWriteTransaction(authority.store, itemId, "Boundary Item Updated", "tx:1"),
+    );
+
+    expect(commitCount).toBe(1);
+    expect(persistCount).toBe(1);
+    expect(committedTxId === "tx:1").toBe(true);
+
+    await authority.persist();
+
+    expect(commitCount).toBe(1);
+    expect(persistCount).toBe(2);
   });
 
   it("falls back to a reset when persisted write history cannot be replayed", async () => {
@@ -447,7 +602,7 @@ describe("persisted authoritative graph", () => {
 
     const previousPersistedState = storage.getCurrent();
     const previousCursor = authority.createSyncPayload().cursor;
-    storage.failOnNextSave();
+    storage.failOnNextWrite();
 
     await expect(
       authority.applyTransaction(
@@ -483,7 +638,7 @@ describe("persisted authoritative graph", () => {
     authority.graph.item.update(itemId, { name: "Reset Item Updated" });
     const previousPersistedState = storage.getCurrent();
     const previousCursor = authority.createSyncPayload().cursor;
-    storage.failOnNextSave();
+    storage.failOnNextWrite();
 
     await expect(authority.persist()).rejects.toThrow("persist failed");
 

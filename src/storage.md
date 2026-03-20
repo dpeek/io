@@ -2,16 +2,16 @@
 
 ## Purpose
 
-Describe the replacement for the current Durable Object storage adapter used by
-the web graph authority.
+Document the current SQLite-backed Durable Object storage adapter used by the
+web graph authority and the persisted-authority contract it consumes.
 
-The current adapter persists one opaque blob containing the full graph
-`snapshot`, retained `writeHistory`, and secret side-data on every mutation.
-That is simple, but it is the wrong shape for a graph runtime whose writes are
-already represented as ordered transactions.
+The previous Durable Object path persisted one opaque blob containing the full
+graph `snapshot`, retained `writeHistory`, and secret side-data on every
+mutation. That was simple, but it was the wrong shape for a graph runtime whose
+writes are already represented as ordered transactions.
 
-The replacement should use raw SQLite access inside the Durable Object and
-persist graph mutations incrementally.
+The current adapter uses raw SQLite access inside the Durable Object and
+persists graph mutations incrementally.
 
 ## Decision Summary
 
@@ -43,6 +43,30 @@ Official references:
 - <https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/>
 - <https://developers.cloudflare.com/durable-objects/best-practices/access-durable-objects-storage/>
 
+## Current Status
+
+The first raw-SQL Durable Object adapter now exists in
+`../../src/web/lib/graph-authority-do.ts`.
+
+Current behavior:
+
+- the Durable Object constructor bootstraps the SQLite schema synchronously
+- startup hydrates graph snapshot rows, retained transaction rows, and secret
+  side-data from SQL tables
+- startup treats broken retained transaction windows as reset baselines instead
+  of advertising stale cursors after restart
+- retained history is pruned by transaction count (currently a 128-transaction
+  window), advancing
+  `history_retained_from_seq` and forcing old cursors onto total-sync fallback
+- accepted graph transactions commit through one Durable Object storage
+  transaction that writes `io_graph_tx`, `io_graph_tx_op`, `io_graph_edge`, and
+  `io_secret_value`
+
+Still deferred:
+
+- persisting transaction write scope explicitly; the current persisted-authority
+  boundary does not carry it yet
+
 ### Constructor Implication
 
 Yes: with SQLite-backed Durable Objects we can now do synchronous SQL work in
@@ -67,9 +91,9 @@ Work that should still stay in `blockConcurrencyWhile(...)`:
 The constructor should establish schema and cheap invariants. The authority
 bootstrap path should still own full runtime hydration.
 
-## Current Problem
+## Previous Blob Path
 
-Today the Durable Object adapter stores one key:
+The old Durable Object adapter stored one key:
 
 - full `StoreSnapshot`
 - full retained `AuthoritativeGraphWriteHistory`
@@ -88,7 +112,7 @@ The graph runtime already has a better unit of persistence:
 - one ordered cursor
 - one bounded history window for incremental sync
 
-The storage adapter should persist those units directly.
+The SQLite adapter now persists those units directly.
 
 ## Design Goals
 
@@ -109,7 +133,7 @@ The storage adapter should persist those units directly.
 
 ## Storage Model
 
-The adapter should store two kinds of durable state:
+The adapter stores two kinds of durable state:
 
 1. Current graph state for fast hydration and local authoritative reads.
 2. Ordered transaction history for incremental sync and replay boundaries.
@@ -148,7 +172,6 @@ Columns:
 - `seq INTEGER PRIMARY KEY`
 - `tx_id TEXT NOT NULL UNIQUE`
 - `cursor TEXT NOT NULL UNIQUE`
-- `write_scope TEXT NOT NULL`
 - `committed_at TEXT NOT NULL`
 
 Purpose:
@@ -157,6 +180,9 @@ Purpose:
 - cursor lookup for incremental sync
 - duplicate transaction detection
 - sync retention window management
+
+The current adapter does not persist `write_scope` yet because the
+persisted-authority storage commit contract does not currently provide it.
 
 #### `io_graph_tx_op`
 
@@ -196,6 +222,7 @@ Columns:
 - `o TEXT NOT NULL`
 - `asserted_tx_seq INTEGER NOT NULL`
 - `retracted_tx_seq INTEGER`
+- `retracted_op_index INTEGER`
 
 Purpose:
 
@@ -205,7 +232,9 @@ Purpose:
 - preservation of retracted edge ids for snapshot fidelity
 
 This table is the durable fact store. Retraction marks a row; it does not
-delete it.
+delete it. `retracted_op_index` preserves the in-transaction or compacted
+snapshot order of retractions so restart hydration can rebuild
+`StoreSnapshot.retracted` exactly.
 
 #### `io_secret_value`
 
@@ -251,7 +280,7 @@ rebuildable.
 
 ## Required Indexes
 
-Start with a very small set of explicit indexes:
+The current adapter uses a very small set of explicit indexes:
 
 - `io_graph_edge(s, p)` for subject-predicate lookups
 - `io_graph_edge(p, o)` for reverse/reference lookups
@@ -312,8 +341,8 @@ previous snapshot exactly as it does today.
 
 ### Incremental Sync
 
-Incremental sync should read from retained transaction rows, not from a
-serialized in-memory history blob.
+Incremental sync reads from retained transaction rows, not from a serialized
+in-memory history blob.
 
 Behavior:
 
@@ -326,8 +355,7 @@ This matches the existing sync contract without whole-graph rewrites.
 
 ### Retention
 
-The adapter should retain only a bounded transaction window for incremental
-sync.
+The adapter retains only a bounded transaction window for incremental sync.
 
 Retention can be defined by:
 
@@ -351,12 +379,12 @@ Secret-backed fields already have the right logical split:
 - graph facts store the `secretHandle` reference and safe metadata
 - authority side storage stores the secret value
 
-The new adapter should preserve that split and improve it:
+The current adapter preserves that split:
 
-- secret writes should commit alongside the graph transaction in one DO storage
+- secret writes commit alongside the graph transaction in one DO storage
   transaction
-- the graph transaction should never embed plaintext secret data
-- the secret table schema should already allow a later move to sealed payloads
+- the graph transaction never embeds plaintext secret data
+- the secret table schema still allows a later move to sealed payloads
   or an external provider handle
 
 ## What Else We Need To Store
@@ -368,7 +396,7 @@ For the first adapter, store only what the current authority actually needs:
 - authority metadata
 - secret side-data
 
-The broader storage roadmap should also reserve space for:
+The broader storage roadmap still reserves space for:
 
 - module manifests
 - workflow state
@@ -394,35 +422,30 @@ Raw SQL is the simpler and more honest abstraction here.
 If we want migration helpers later, Drizzle can be reconsidered for schema
 generation only. It should not define the graph adapter contract.
 
-## Required Refactor
+## Persistence Boundary
 
-The current `PersistedAuthoritativeGraphStorage` contract is snapshot-oriented:
+The graph package now exposes a commit-oriented persistence boundary so
+authoritative runtimes no longer assume that every accepted mutation rewrites a
+whole serialized state blob.
 
-- `load(): snapshot + writeHistory`
-- `save(state): whole state`
-
-That contract is exactly why the Durable Object adapter rewrites everything on
-every mutation.
-
-The new adapter should not be forced through that interface.
-
-Instead, introduce an operation-oriented persistence boundary with methods
-roughly shaped like:
+The current shape is:
 
 ```ts
-type LoadedAuthorityState = {
+type PersistedAuthoritativeGraphStorageLoadResult = {
   snapshot: StoreSnapshot;
-  writeHistory: AuthoritativeGraphWriteHistory;
+  writeHistory?: AuthoritativeGraphWriteHistory;
+  needsPersistence: boolean;
 };
 
-interface AuthoritativeGraphCommitBackend {
-  load(): Promise<LoadedAuthorityState | null>;
+interface PersistedAuthoritativeGraphStorage {
+  load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null>;
   commit(input: {
     snapshot: StoreSnapshot;
     transaction: GraphWriteTransaction;
     result: AuthoritativeGraphWriteResult;
+    writeHistory: AuthoritativeGraphWriteHistory;
   }): Promise<void>;
-  persist?(input: {
+  persist(input: {
     snapshot: StoreSnapshot;
     writeHistory: AuthoritativeGraphWriteHistory;
   }): Promise<void>;
@@ -432,75 +455,43 @@ interface AuthoritativeGraphCommitBackend {
 Important point:
 
 - `commit(...)` is the primary durable write path
-- `persist(...)` becomes optional maintenance work, not the normal mutation path
+- `persist(...)` is reserved for explicit snapshot baselines and hydration
+  rewrites, not the normal mutation path
 
 The web authority can then layer secret side-data writes on top of that graph
 commit.
 
-## Implementation Plan
+## Implementation Status
 
-### Phase 1: Document and Freeze the Design
+Done in the current web Durable Object path:
 
-- add this doc
-- keep the decision explicit: raw SQL, no Drizzle
-- keep the initial table set small
+- the Durable Object constructor bootstraps tables and indexes synchronously
+- `graph` exposes the `load(...)`, `commit(...)`, and `persist(...)`
+  persistence boundary consumed by the adapter
+- accepted writes append `io_graph_tx` and `io_graph_tx_op`, materialize
+  `io_graph_edge`, and upsert `io_secret_value` inside one Durable Object
+  storage transaction
+- startup hydrates snapshot rows and retained transaction rows from SQL, and
+  rewrites reset baselines when retained history no longer matches the hydrated
+  head
+- retained history is bounded by transaction count, `history_retained_from_seq`
+  advances with pruning, and old or unknown cursors fall back to total sync
+- coverage in `../../src/web/lib/graph-authority-do.test.ts` exercises
+  constructor bootstrap, restart hydration, retained-history pruning, reset
+  baselines, rollback on SQL failure, secret side-storage behavior, and
+  retraction fidelity
+- the web Durable Object authority path in
+  `../../src/web/lib/graph-authority-do.ts` no longer uses
+  `state.storage.get/put(...)` whole-blob persistence
 
-### Phase 2: Add SQL Schema Bootstrap
+Still deferred:
 
-- create a new SQL-backed adapter module for the web authority
-- move all `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` work
-  into synchronous constructor bootstrap
-- add adapter version metadata in `io_graph_meta`
+- persisting transaction `writeScope` explicitly; the current
+  persisted-authority storage contract does not carry it yet
+- optional checkpoint and projection tables only if read or recovery paths
+  justify them
 
-### Phase 3: Refactor the Persistence Boundary
-
-- replace or bypass the current snapshot-only
-  `PersistedAuthoritativeGraphStorage` contract
-- add a transaction-oriented commit interface
-- keep rollback behavior in memory if a durable commit fails
-
-### Phase 4: Implement Graph Row Persistence
-
-- write accepted transactions to `io_graph_tx` and `io_graph_tx_op`
-- materialize current edge state in `io_graph_edge`
-- hydrate `StoreSnapshot` from SQL rows on startup
-- rebuild retained `writeHistory` from the retained transaction window
-
-### Phase 5: Move Secret Side Storage Into SQL
-
-- replace the current serialized `secretValues` blob with `io_secret_value`
-- commit graph changes and secret changes in one Durable Object transaction
-- preserve the existing authority-only secret API shape
-
-### Phase 6: Add Retention and Reset Boundaries
-
-- add a retained-history pruning policy
-- track `history_retained_from_seq` in `io_graph_meta`
-- ensure old cursors cleanly trigger total-sync fallback
-
-### Phase 7: Test the Adapter
-
-Add coverage for:
-
-- clean bootstrap from an empty database
-- restart hydration from SQL rows
-- exact incremental sync behavior across retained history
-- fallback behavior after retained-history pruning
-- atomic secret+graph commits
-- rollback on SQL write failure
-- duplicate transaction rejection
-- retraction persistence and hydration fidelity
-
-### Phase 8: Remove the Blob Adapter From the DO Path
-
-- stop using `state.storage.get/put(...)` for the web authority graph state
-- keep the JSON adapter only where it still serves tests or non-DO environments
-- delete the old blob-based Durable Object adapter path once the SQL adapter is
-  proven
-
-## Expected Outcome
-
-After this refactor:
+## Current Outcome
 
 - one mutation no longer rewrites the whole graph
 - startup hydrates from explicit rows rather than a giant serialized blob

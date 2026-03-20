@@ -2190,20 +2190,45 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
     cursorPrefix?: string;
     initialSequence?: number;
     history?: readonly AuthoritativeGraphWriteResult[];
+    maxRetainedResults?: number;
   } = {},
 ): AuthoritativeGraphWriteSession {
   const cursorPrefix = options.cursorPrefix ?? "tx:";
-  const baseSequence = options.initialSequence ?? 0;
+  let baseSequence = options.initialSequence ?? 0;
+  const maxRetainedResults = options.maxRetainedResults;
   const policiesByTypeId = createFieldAuthorityPolicyIndex(namespace);
   if (!Number.isInteger(baseSequence) || baseSequence < 0) {
     throw new Error(
       "Authoritative graph write sessions require a non-negative integer initial sequence.",
     );
   }
+  if (
+    maxRetainedResults !== undefined &&
+    (!Number.isInteger(maxRetainedResults) || maxRetainedResults < 1)
+  ) {
+    throw new Error(
+      "Authoritative graph write sessions require maxRetainedResults to be a positive integer.",
+    );
+  }
   const txRecords = new Map<string, AuthoritativeGraphWriteRecord>();
   const acceptedResults: AuthoritativeGraphWriteResult[] = [];
   const cursorToIndex = new Map<string, number>();
   let sequence = baseSequence;
+
+  function rebuildRetainedCursorIndex(): void {
+    cursorToIndex.clear();
+    acceptedResults.forEach((result, index) => {
+      cursorToIndex.set(result.cursor, index);
+    });
+  }
+
+  function enforceRetentionWindow(): void {
+    if (maxRetainedResults === undefined || acceptedResults.length <= maxRetainedResults) return;
+    const pruneCount = acceptedResults.length - maxRetainedResults;
+    acceptedResults.splice(0, pruneCount);
+    baseSequence += pruneCount;
+    rebuildRetainedCursorIndex();
+  }
 
   function baseCursor(): string {
     return formatAuthoritativeGraphCursor(cursorPrefix, baseSequence);
@@ -2313,8 +2338,9 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
       result: normalized,
     });
     acceptedResults.push(normalized);
-    cursorToIndex.set(normalized.cursor, acceptedResults.length - 1);
   });
+  rebuildRetainedCursorIndex();
+  enforceRetentionWindow();
   sequence = baseSequence + acceptedResults.length;
 
   function getHistory(): AuthoritativeGraphWriteHistory {
@@ -2393,7 +2419,8 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
       result: storedResult,
     });
     acceptedResults.push(storedResult);
-    cursorToIndex.set(storedResult.cursor, acceptedResults.length - 1);
+    rebuildRetainedCursorIndex();
+    enforceRetentionWindow();
     return cloneAuthoritativeGraphWriteResult(storedResult);
   }
 

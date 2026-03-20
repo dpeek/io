@@ -8,11 +8,15 @@ the graph explorer, the dedicated sync monitor, and the topic browser/editor.
 The current explorer now uses the canonical type-first `/graph` route and
 search-param selection model described in `./explorer.md`, plus a shared
 inspector shell, draft-backed generic create flow for supported entity types,
-and opt-in debug disclosures for raw ids and keys.
+and opt-in debug disclosures for raw ids and keys. Its authoritative graph path
+now runs through a raw-SQL SQLite-backed Durable Object adapter that retains a
+bounded transaction window and keeps secret plaintext in authority-only side
+storage.
 
 ## Docs
 
 - `../index.md`
+- `../storage.md`
 - `./explorer.md`
 - `../graph/spec/refs-and-ui.md`
 
@@ -39,6 +43,13 @@ and opt-in debug disclosures for raw ids and keys.
   closed-option fields, markdown authoring UI, and shared `ColorInput`-backed
   color predicate editing with an inline swatch trigger in the input chrome
 - `../../src/web/components/app-shell.tsx`: shared shell and navigation
+- `../../src/web/lib/graph-authority-do.ts`: SQLite-backed Durable Object
+  adapter that bootstraps graph tables in the constructor, hydrates retained
+  history during authority init, commits graph and secret side-storage changes
+  in one Durable Object storage transaction, and prunes old transaction rows
+- `../../src/web/lib/authority.ts`: shared web authority behavior, secret-field
+  mutation flow, and the storage abstraction consumed by both tests and the
+  Durable Object adapter
 - `../../src/web/lib/`: worker-backed graph authority, generic secret-field
   mutation contracts, seeded example data/runtime fixtures, and HTTP route
   helpers

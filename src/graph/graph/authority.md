@@ -205,6 +205,22 @@ A client may know that a secret exists and may hold opaque metadata about it,
 but it should not receive plaintext unless a very explicit, audited policy says
 it may.
 
+## Current Web Authority Storage Shape
+
+The current web Worker path keeps that boundary explicit in durable storage as
+well.
+
+- graph facts and retained sync history live in raw-SQL SQLite-backed Durable
+  Object tables owned by `../../src/web/lib/graph-authority-do.ts`
+- the Durable Object constructor bootstraps SQL schema synchronously, while full
+  runtime hydration stays in `blockConcurrencyWhile(...)`
+- plaintext secret values live only in the authority-only `io_secret_value`
+  side table and commit in the same Durable Object storage transaction as the
+  graph write when a secret-backed field changes
+
+That keeps the replicated graph model and the secret storage lifecycle coupled
+for consistency without pretending they are the same data.
+
 ## What This Buys Us
 
 This approach keeps the system coherent in a few important ways.

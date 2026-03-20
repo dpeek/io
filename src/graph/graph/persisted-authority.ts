@@ -27,7 +27,19 @@ export type PersistedAuthoritativeGraphState = {
 export type PersistedAuthoritativeGraphStorageLoadResult = {
   readonly snapshot: StoreSnapshot;
   readonly writeHistory?: AuthoritativeGraphWriteHistory;
-  readonly needsRewrite: boolean;
+  readonly needsPersistence: boolean;
+};
+
+export type PersistedAuthoritativeGraphStorageCommitInput = {
+  readonly snapshot: StoreSnapshot;
+  readonly transaction: GraphWriteTransaction;
+  readonly result: AuthoritativeGraphWriteResult;
+  readonly writeHistory: AuthoritativeGraphWriteHistory;
+};
+
+export type PersistedAuthoritativeGraphStoragePersistInput = {
+  readonly snapshot: StoreSnapshot;
+  readonly writeHistory: AuthoritativeGraphWriteHistory;
 };
 
 export type PersistedAuthoritativeGraphSeed<T extends Record<string, AnyTypeOutput>> = (
@@ -38,19 +50,22 @@ export type PersistedAuthoritativeGraphCursorPrefixFactory = () => string;
 
 export interface PersistedAuthoritativeGraphStorage {
   load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null>;
-  save(state: PersistedAuthoritativeGraphState): Promise<void>;
+  commit(input: PersistedAuthoritativeGraphStorageCommitInput): Promise<void>;
+  persist(input: PersistedAuthoritativeGraphStoragePersistInput): Promise<void>;
 }
 
 export type JsonPersistedAuthoritativeGraphOptions<T extends Record<string, AnyTypeOutput>> = {
   readonly path: string;
   readonly seed?: PersistedAuthoritativeGraphSeed<T>;
   readonly createCursorPrefix?: PersistedAuthoritativeGraphCursorPrefixFactory;
+  readonly maxRetainedTransactions?: number;
 };
 
 export type PersistedAuthoritativeGraphOptions<T extends Record<string, AnyTypeOutput>> = {
   readonly storage: PersistedAuthoritativeGraphStorage;
   readonly seed?: PersistedAuthoritativeGraphSeed<T>;
   readonly createCursorPrefix?: PersistedAuthoritativeGraphCursorPrefixFactory;
+  readonly maxRetainedTransactions?: number;
 };
 
 export type PersistedAuthoritativeGraph<T extends Record<string, AnyTypeOutput>> = {
@@ -98,19 +113,20 @@ export async function createPersistedAuthoritativeGraph<
   const createFreshWriteSession = () =>
     createAuthoritativeGraphWriteSession(store, namespace, {
       cursorPrefix: createCursorPrefix(),
+      maxRetainedResults: options.maxRetainedTransactions,
     });
   const createWriteSession = (writeHistory: AuthoritativeGraphWriteHistory) =>
     createAuthoritativeGraphWriteSession(store, namespace, {
       cursorPrefix: writeHistory.cursorPrefix,
       initialSequence: writeHistory.baseSequence,
       history: writeHistory.results,
+      maxRetainedResults: options.maxRetainedTransactions,
     });
 
   let writes = createFreshWriteSession();
 
-  async function saveCurrentState(): Promise<void> {
-    await options.storage.save({
-      version: persistedAuthoritativeGraphStateVersion,
+  async function persistCurrentState(): Promise<void> {
+    await options.storage.persist({
       snapshot: store.snapshot(),
       writeHistory: writes.getHistory(),
     });
@@ -120,7 +136,7 @@ export async function createPersistedAuthoritativeGraph<
     const previousHistory = writes.getHistory();
     writes = createFreshWriteSession();
     try {
-      await saveCurrentState();
+      await persistCurrentState();
     } catch (error) {
       writes = createWriteSession(previousHistory);
       throw error;
@@ -129,16 +145,23 @@ export async function createPersistedAuthoritativeGraph<
 
   async function applyTransaction(
     transaction: GraphWriteTransaction,
-    options: {
+    applyOptions: {
       writeScope?: AuthoritativeWriteScope;
     } = {},
   ): Promise<AuthoritativeGraphWriteResult> {
     const previousSnapshot = store.snapshot();
     const previousHistory = writes.getHistory();
-    const result = writes.apply(transaction, options);
+    const result = writes.apply(transaction, applyOptions);
+    const currentSnapshot = store.snapshot();
+    const currentHistory = writes.getHistory();
 
     try {
-      await saveCurrentState();
+      await options.storage.commit({
+        snapshot: currentSnapshot,
+        transaction: result.transaction,
+        result,
+        writeHistory: currentHistory,
+      });
     } catch (error) {
       store.replace(previousSnapshot);
       writes = createWriteSession(previousHistory);
@@ -154,19 +177,25 @@ export async function createPersistedAuthoritativeGraph<
     if (persistedState.writeHistory) {
       try {
         writes = createWriteSession(persistedState.writeHistory);
-        if (persistedState.needsRewrite) await saveCurrentState();
+        if (
+          persistedState.needsPersistence ||
+          (options.maxRetainedTransactions !== undefined &&
+            persistedState.writeHistory.results.length > options.maxRetainedTransactions)
+        ) {
+          await persistCurrentState();
+        }
       } catch {
         writes = createFreshWriteSession();
-        await saveCurrentState();
+        await persistCurrentState();
       }
     } else {
       writes = createFreshWriteSession();
-      await saveCurrentState();
+      await persistCurrentState();
     }
   } else {
     if (options.seed) await options.seed(graph);
     writes = createFreshWriteSession();
-    await saveCurrentState();
+    await persistCurrentState();
   }
 
   return {

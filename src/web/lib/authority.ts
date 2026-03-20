@@ -12,7 +12,8 @@ import {
   type GraphWriteTransaction,
   type NamespaceClient,
   type PersistedAuthoritativeGraph,
-  type PersistedAuthoritativeGraphState,
+  type PersistedAuthoritativeGraphStorageCommitInput,
+  type PersistedAuthoritativeGraphStoragePersistInput,
   type PersistedAuthoritativeGraphStorage,
   type PersistedAuthoritativeGraphStorageLoadResult,
   type Store,
@@ -48,22 +49,37 @@ type SecretFieldDefinition = {
   readonly pathLabel: string;
 };
 
-export type PersistedWebAppAuthorityState = PersistedAuthoritativeGraphState & {
-  readonly secretValues?: Record<string, string>;
+export type WebAppAuthoritySecretRecord = {
+  readonly value: string;
+  readonly version: number;
+  readonly storedAt?: string;
+  readonly provider?: string;
+  readonly fingerprint?: string;
+  readonly externalKeyId?: string;
 };
 
-export type PersistedWebAppAuthorityStorageLoadResult =
-  PersistedAuthoritativeGraphStorageLoadResult & {
-    readonly secretValues?: Record<string, string>;
-  };
+export type WebAppAuthoritySecretWrite = WebAppAuthoritySecretRecord & {
+  readonly secretId: string;
+};
 
 export interface WebAppAuthorityStorage {
-  load(): Promise<PersistedWebAppAuthorityStorageLoadResult | null>;
-  save(state: PersistedWebAppAuthorityState): Promise<void>;
+  load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null>;
+  loadSecrets(): Promise<Record<string, WebAppAuthoritySecretRecord>>;
+  commit(
+    input: PersistedAuthoritativeGraphStorageCommitInput,
+    options?: {
+      readonly secretWrite?: WebAppAuthoritySecretWrite;
+    },
+  ): Promise<void>;
+  persist(input: PersistedAuthoritativeGraphStoragePersistInput): Promise<void>;
 }
 
 export type WebAppAuthority = PersistedAuthoritativeGraph<WebAppGraph> & {
   writeSecretField(input: WriteSecretFieldInput): Promise<WriteSecretFieldResult>;
+};
+
+export type WebAppAuthorityOptions = {
+  readonly maxRetainedTransactions?: number;
 };
 
 const typePredicateId = edgeId(core.node.fields.type);
@@ -84,21 +100,6 @@ function clonePersistedValue<T>(value: T): T {
 function trimOptionalString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
-}
-
-function serializeSecretValues(secretValues: ReadonlyMap<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    [...secretValues.entries()].sort((left, right) => left[0].localeCompare(right[0])),
-  );
-}
-
-function readPersistedSecretValues(rawValues: unknown): Record<string, string> {
-  if (!rawValues || typeof rawValues !== "object") return {};
-  return Object.fromEntries(
-    Object.entries(rawValues).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
-  );
 }
 
 class WebAppAuthorityMutationError extends Error {
@@ -257,12 +258,11 @@ function planAuthorityMutation<TResult>(
 
 function createAuthorityStorage(
   storage: WebAppAuthorityStorage,
-  secretValuesRef: { current: Map<string, string> },
+  pendingSecretWriteRef: { current: WebAppAuthoritySecretWrite | null },
 ): PersistedAuthoritativeGraphStorage {
   return {
     async load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null> {
       const persistedState = await storage.load();
-      secretValuesRef.current = new Map(Object.entries(persistedState?.secretValues ?? {}));
       if (!persistedState) return null;
 
       return {
@@ -270,34 +270,50 @@ function createAuthorityStorage(
         writeHistory: persistedState.writeHistory
           ? clonePersistedValue(persistedState.writeHistory)
           : undefined,
-        needsRewrite: persistedState.needsRewrite,
+        needsPersistence: persistedState.needsPersistence,
       };
     },
-    async save(persistedState): Promise<void> {
-      await storage.save({
-        ...clonePersistedValue(persistedState),
-        secretValues: serializeSecretValues(secretValuesRef.current),
-      });
+    async commit(input): Promise<void> {
+      const secretWrite = pendingSecretWriteRef.current
+        ? clonePersistedValue(pendingSecretWriteRef.current)
+        : undefined;
+
+      try {
+        await storage.commit(clonePersistedValue(input), secretWrite ? { secretWrite } : undefined);
+      } finally {
+        pendingSecretWriteRef.current = null;
+      }
+    },
+    async persist(input): Promise<void> {
+      await storage.persist(clonePersistedValue(input));
     },
   };
 }
 
 export async function createWebAppAuthority(
   storage: WebAppAuthorityStorage,
+  options: WebAppAuthorityOptions = {},
 ): Promise<WebAppAuthority> {
   const store = createStore();
   bootstrap(store, core);
   bootstrap(store, app);
 
+  const persistedSecrets = await storage.loadSecrets();
   const secretValuesRef = {
-    current: new Map<string, string>(),
+    current: new Map(
+      Object.entries(persistedSecrets).map(([secretId, secret]) => [secretId, secret.value]),
+    ),
+  };
+  const pendingSecretWriteRef = {
+    current: null as WebAppAuthoritySecretWrite | null,
   };
   const authority = await createPersistedAuthoritativeGraph(store, webAppGraph, {
-    storage: createAuthorityStorage(storage, secretValuesRef),
+    storage: createAuthorityStorage(storage, pendingSecretWriteRef),
     seed() {
       seedExampleGraph(createTypeClient(store, webAppGraph));
     },
     createCursorPrefix: createAuthorityCursorPrefix,
+    maxRetainedTransactions: options.maxRetainedTransactions,
   });
 
   async function writeSecretField(input: WriteSecretFieldInput): Promise<WriteSecretFieldResult> {
@@ -399,12 +415,18 @@ export async function createWebAppAuthority(
     if (planned.changed) {
       const previousSecretValues = secretValuesRef.current;
       secretValuesRef.current = nextSecretValues;
+      pendingSecretWriteRef.current = {
+        secretId: planned.result.secretId,
+        value: plaintext,
+        version: planned.result.secretVersion,
+      };
       try {
         await authority.applyTransaction(planned.transaction, {
           writeScope: "server-command",
         });
       } catch (error) {
         secretValuesRef.current = previousSecretValues;
+        pendingSecretWriteRef.current = null;
         throw error;
       }
     }
@@ -415,37 +437,5 @@ export async function createWebAppAuthority(
   return {
     ...authority,
     writeSecretField,
-  };
-}
-
-export function createInMemoryWebAppAuthorityStorage(
-  initialState: PersistedWebAppAuthorityState | null = null,
-): {
-  readonly storage: WebAppAuthorityStorage;
-  read(): PersistedWebAppAuthorityState | null;
-} {
-  let persistedState = initialState ? clonePersistedValue(initialState) : null;
-
-  return {
-    storage: {
-      async load(): Promise<PersistedWebAppAuthorityStorageLoadResult | null> {
-        if (!persistedState) return null;
-        return {
-          snapshot: clonePersistedValue(persistedState.snapshot),
-          writeHistory: clonePersistedValue(persistedState.writeHistory),
-          needsRewrite: false,
-          secretValues: clonePersistedValue(readPersistedSecretValues(persistedState.secretValues)),
-        };
-      },
-      async save(state): Promise<void> {
-        persistedState = clonePersistedValue({
-          ...state,
-          secretValues: readPersistedSecretValues(state.secretValues),
-        });
-      },
-    },
-    read() {
-      return persistedState ? clonePersistedValue(persistedState) : null;
-    },
   };
 }

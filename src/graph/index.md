@@ -6,7 +6,8 @@
 
 ## Entry Points
 
-- `../storage.md`: Durable Object SQLite storage-adapter design, persistence boundary refactor, and retained-history plan
+- `../storage.md`: current SQLite-backed Durable Object authority adapter, persistence boundary,
+  retained-history model, and secret side-storage split
 - `./spec/architecture.md`: durable engine model, current persistence ownership, and longer-range platform shape
 - `./icon.md`: graph-owned SVG/icon types, opt-in icon predicates, sanitization rules, and generic source/preview field editing
 - `./graph/authority.md`: authority boundaries, predicate visibility, typed business methods, and secrets
@@ -18,7 +19,9 @@
 
 ## Current Package Layout
 
-- `../../src/graph/graph/`: runtime kernel, schema, ids, bootstrap, client, sync, and helper APIs
+- `../../src/graph/graph/`: runtime kernel, schema, ids, bootstrap, client, sync, the
+  persisted-authority contract, and the file-backed JSON adapter used outside the web Durable
+  Object path
 - `../../src/graph/react/`, `../../src/graph/react-dom/`, `../../src/graph/react-opentui/`: reserved adapter entry surfaces kept separate from the root-safe package export, with DOM predicate editors split into `../../src/graph/react-dom/editor/*`
 - `../../src/graph/schema/`: canonical namespace-shaped schema tree for core modules and graph-owned app slices
 - `../../src/graph/test-graph.ts`: shared graph test fixtures used by engine proof coverage
@@ -28,7 +31,12 @@
 
 ## Current vs Roadmap
 
-Current code already ships JSON-backed authoritative persistence, typed entity/predicate refs, predicate-slot subscriptions, type-module metadata/filter contracts, and incremental authoritative sync primitives. The remaining roadmap is mostly around additional persistence backends, richer query semantics, policy/secrets, transport, and fully realized web/TUI tooling.
+Current code already ships typed entity/predicate refs, predicate-slot subscriptions, type-module
+metadata/filter contracts, incremental authoritative sync primitives, the shared
+persisted-authority storage contract, and the file-backed JSON adapter that non-DO runtimes can
+use. The web package now consumes that contract with a raw-SQL SQLite Durable Object adapter for
+authoritative graph persistence. The remaining roadmap is mostly around additional storage
+backends, richer query semantics, policy/secrets, transport, and fully realized web/TUI tooling.
 
 ## Future Work Suggestions
 

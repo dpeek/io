@@ -47,7 +47,7 @@ Incremental payloads carry:
 - `getHistory()`
 
 The current authority session already treats transaction ids as idempotency keys and emits monotonic cursors.
-The persisted authority helper layers durable snapshot load/save, retained history recovery, legacy snapshot rewrite, and rollback-on-save-failure on top of that session model without changing the sync payload shapes clients consume.
+The persisted authority helper layers restart hydration, per-transaction durable commits, explicit snapshot persistence, retained history recovery, legacy snapshot rewrite, and rollback-on-durable-write-failure on top of that session model without changing the sync payload shapes clients consume.
 
 ### Client/session side
 
@@ -71,7 +71,7 @@ The persisted authority helper layers durable snapshot load/save, retained histo
 
 - `graph` owns the total/incremental payload contracts, cursor progression rules, fallback semantics, and the persisted-authority history that feeds those contracts after restart.
 - Consumer packages own transport and endpoint policy: when to call `createSyncPayload()` or `getIncrementalSyncResult(...)`, how to expose them over HTTP or another transport, and what auth wraps those endpoints.
-- The web Worker is one such consumer: it composes `@io/core/graph` persistence in `src/web/lib/authority.ts` and exposes thin `GET /api/sync` and `POST /api/secret-fields` wrappers through the Durable Object transport.
+- The web Worker is one such consumer: `src/web/lib/graph-authority-do.ts` now owns the SQLite-backed Durable Object storage path, while `src/web/lib/authority.ts` stays focused on the shared web authority behavior and request handlers.
 
 ## Current Behavior
 

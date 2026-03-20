@@ -25,7 +25,7 @@ This document is the high-level entry point for agents reasoning about the engin
 - `../../src/graph/graph/identity.ts`: stable key-to-id resolution and id-map helpers
 - `../../src/graph/graph/bootstrap.ts`: schema bootstrap into store facts
 - `../../src/graph/graph/client.ts`: typed CRUD, refs, query, and validation lifecycle
-- `../../src/graph/graph/authority.ts`: persisted authority orchestration, storage contracts, and JSON load/save
+- `../../src/graph/graph/authority.ts`: persisted authority orchestration, storage contracts, and JSON hydration/commit/persist helpers
 - `../../src/graph/graph/sync.ts`: authoritative validation, sync sessions, write replay, and state
 - `../../src/graph/graph/type-module.ts`: typed scalar/enum module contracts
 
@@ -77,7 +77,7 @@ do not own new durable namespace buckets.
 
 ## Ownership Boundary
 
-- `graph` owns the authoritative persistence primitives: the storage contract, JSON adapter, versioned persisted state, retained write history, cursor recovery, and rollback-on-save-failure behavior.
+- `graph` owns the authoritative persistence primitives: the storage contract, JSON adapter, versioned persisted state, retained write history, cursor recovery, and rollback-on-durable-write-failure behavior.
 - Consumer packages own composition around those primitives: bootstrap ordering, seed policy, file-path/config resolution, and process lifecycle.
 - Transport remains consumer-owned. `graph` defines the sync payloads and replay rules, while packages like `app` choose how to expose them over HTTP or other transports.
 
