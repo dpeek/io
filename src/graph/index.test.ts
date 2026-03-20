@@ -5,37 +5,61 @@ import {
   probeContractObjectView,
   probeContractWorkflow,
   probeSaveContractItemCommand,
-} from "./graph/contracts.probe.js";
+} from "./runtime/contracts.probe.js";
 
 type GraphPackageJson = {
   exports: Record<string, string>;
 };
 
-describe("@io/core/graph adapter entry surfaces", () => {
-  it("declares the reserved adapter subpath exports", async () => {
+describe("@io/core/graph package entry surfaces", () => {
+  it("declares canonical module, adapter, and compatibility subpath exports", async () => {
     const packageJson = (await Bun.file(
       new URL("../../package.json", import.meta.url),
     ).json()) as GraphPackageJson;
 
     expect(packageJson.exports).toMatchObject({
       "./graph": "./src/graph/index.ts",
+      "./graph/runtime": "./src/graph/runtime/index.ts",
+      "./graph/authority": "./src/graph/runtime/authority.ts",
+      "./graph/def": "./src/graph/runtime/def.ts",
+      "./graph/modules": "./src/graph/modules/index.ts",
+      "./graph/modules/app": "./src/graph/modules/app.ts",
+      "./graph/modules/app/env-vars": "./src/graph/modules/app/env-vars/index.ts",
+      "./graph/modules/app/topic": "./src/graph/modules/app/topic/index.ts",
+      "./graph/modules/core": "./src/graph/modules/core.ts",
       "./graph/react": "./src/graph/react/index.ts",
       "./graph/react-dom": "./src/graph/react-dom/index.ts",
       "./graph/react-opentui": "./src/graph/react-opentui/index.ts",
+      "./graph/adapters/react": "./src/graph/adapters/react/index.ts",
+      "./graph/adapters/react-dom": "./src/graph/adapters/react-dom/index.ts",
+      "./graph/adapters/react-opentui": "./src/graph/adapters/react-opentui/index.ts",
       "./graph/schema": "./src/graph/schema/index.ts",
       "./graph/schema/app": "./src/graph/schema/app.ts",
       "./graph/schema/app/env-vars": "./src/graph/schema/app/env-vars/index.ts",
+      "./graph/schema/app/topic": "./src/graph/schema/app/topic/index.ts",
       "./graph/schema/core": "./src/graph/schema/core.ts",
     });
+    expect(packageJson.exports["./graph/modules/*"]).toBeUndefined();
+    expect(packageJson.exports["./graph/adapters/*"]).toBeUndefined();
     expect(packageJson.exports["./graph/schema/*"]).toBeUndefined();
     expect(packageJson.exports["./graph/taxonomy/*"]).toBeUndefined();
   });
 
-  it("exports the host-neutral React adapter while keeping host widgets on later subpaths", async () => {
-    const [reactExports, reactDomExports, reactOpentuiExports] = await Promise.all([
+  it("keeps canonical adapter exports aligned with the stable adapter shims", async () => {
+    const [
+      reactExports,
+      reactAdapterExports,
+      reactDomExports,
+      reactDomAdapterExports,
+      reactOpentuiExports,
+      reactOpentuiAdapterExports,
+    ] = await Promise.all([
       import("./react/index.js"),
+      import("./adapters/react/index.js"),
       import("./react-dom/index.js"),
+      import("./adapters/react-dom/index.js"),
       import("./react-opentui/index.js"),
+      import("./adapters/react-opentui/index.js"),
     ]);
 
     expect(Object.keys(reactExports).sort()).toEqual([
@@ -76,6 +100,9 @@ describe("@io/core/graph adapter entry surfaces", () => {
       "usePredicateRelatedEntities",
       "usePredicateValue",
     ]);
+    expect(Object.keys(reactAdapterExports).sort()).toEqual(Object.keys(reactExports).sort());
+    expect(reactAdapterExports.createWebFieldResolver).toBe(reactExports.createWebFieldResolver);
+    expect(reactAdapterExports.usePredicateField).toBe(reactExports.usePredicateField);
     expect(Object.keys(reactDomExports).sort()).toEqual([
       "FilterOperandEditor",
       "GraphIcon",
@@ -95,7 +122,11 @@ describe("@io/core/graph adapter entry surfaces", () => {
       "lowerWebFilterClause",
       "lowerWebFilterQuery",
     ]);
+    expect(Object.keys(reactDomAdapterExports).sort()).toEqual(Object.keys(reactDomExports).sort());
+    expect(reactDomAdapterExports.GraphIcon).toBe(reactDomExports.GraphIcon);
+    expect(reactDomAdapterExports.PredicateFieldEditor).toBe(reactDomExports.PredicateFieldEditor);
     expect(Object.keys(reactOpentuiExports)).toEqual([]);
+    expect(Object.keys(reactOpentuiAdapterExports)).toEqual([]);
   });
 
   it("supports root-safe contract authoring from the package root without exposing host widgets", async () => {

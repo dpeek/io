@@ -14,12 +14,21 @@
     "./cli": "./src/cli/index.ts",
     "./config": "./src/config/index.ts",
     "./graph": "./src/graph/index.ts",
-    "./graph/authority": "./src/graph/graph/authority.ts",
+    "./graph/runtime": "./src/graph/runtime/index.ts",
+    "./graph/authority": "./src/graph/runtime/authority.ts",
+    "./graph/def": "./src/graph/runtime/def.ts",
+    "./graph/modules": "./src/graph/modules/index.ts",
+    "./graph/modules/app": "./src/graph/modules/app.ts",
+    "./graph/modules/app/env-vars": "./src/graph/modules/app/env-vars/index.ts",
+    "./graph/modules/app/topic": "./src/graph/modules/app/topic/index.ts",
+    "./graph/modules/core": "./src/graph/modules/core.ts",
     "./graph/react": "./src/graph/react/index.ts",
     "./graph/react-dom": "./src/graph/react-dom/index.ts",
     "./graph/react-opentui": "./src/graph/react-opentui/index.ts",
+    "./graph/adapters/react": "./src/graph/adapters/react/index.ts",
+    "./graph/adapters/react-dom": "./src/graph/adapters/react-dom/index.ts",
+    "./graph/adapters/react-opentui": "./src/graph/adapters/react-opentui/index.ts",
     "./graph/schema": "./src/graph/schema/index.ts",
-    "./graph/def": "./src/graph/graph/def.ts",
     "./graph/schema/app": "./src/graph/schema/app.ts",
     "./graph/schema/app/env-vars": "./src/graph/schema/app/env-vars/index.ts",
     "./graph/schema/app/topic": "./src/graph/schema/app/topic/index.ts",
@@ -30,7 +39,7 @@
     "./tsconfig/base": "./tsconfig.base.json"
   },
   "scripts": {
-    "check": "io check"
+    "check": "bun src/cli/index.ts check"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

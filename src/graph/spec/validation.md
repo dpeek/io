@@ -14,14 +14,14 @@ The code already enforces a three-layer validation split:
 
 Relevant source:
 
-- `../../src/graph/graph/schema.ts`
-- `../../src/graph/graph/type-module.ts`
-- `../../src/graph/graph/client.ts`
-- `../../src/graph/graph/sync.ts`
+- `../../src/graph/runtime/schema.ts`
+- `../../src/graph/runtime/type-module.ts`
+- `../../src/graph/runtime/client.ts`
+- `../../src/graph/runtime/sync.ts`
 
 ## Current Local Lifecycle
 
-Local typed mutations in `../../src/graph/graph/client.ts` already follow one shared path:
+Local typed mutations in `../../src/graph/runtime/client.ts` already follow one shared path:
 
 1. normalize and clone caller input
 2. run `onCreate` or `onUpdate` lifecycle hooks
@@ -68,7 +68,7 @@ That keeps local optimistic mutation and authoritative reconciliation on one iss
 
 ## Current Result Surface
 
-`GraphValidationResult` and `GraphValidationError` in `../../src/graph/graph/client.ts` are the shared public-facing shape:
+`GraphValidationResult` and `GraphValidationError` in `../../src/graph/runtime/client.ts` are the shared public-facing shape:
 
 - `ok`
 - `phase`

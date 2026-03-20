@@ -1,3 +1,2 @@
-// Reserved adapter entry surface for future OpenTUI-specific React bindings.
-// Terminal widgets should stay on this subpath rather than the @io/core/graph root.
-export {};
+// Stable public entry surface; OpenTUI adapter ownership lives under ../adapters.
+export * from "../adapters/react-opentui/index.js";

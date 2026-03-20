@@ -10,7 +10,7 @@ import {
   fieldVisibility,
   fieldWritePolicy,
   isSecretBackedField,
-} from "../graph/index.js";
+} from "../index.js";
 import {
   kitchenSink,
   kitchenSinkBlock,

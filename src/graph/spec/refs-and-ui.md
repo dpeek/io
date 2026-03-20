@@ -8,7 +8,7 @@ This document is the entry point for agents working on typed refs, predicate-slo
 
 The legacy docs treated typed refs as roadmap. That is no longer accurate.
 
-`../../src/graph/graph/client.ts` already exports:
+`../../src/graph/runtime/client.ts` already exports:
 
 - typed `EntityRef`
 - typed `PredicateRef`
@@ -27,9 +27,9 @@ The legacy docs treated typed refs as roadmap. That is no longer accurate.
 
 Relevant source:
 
-- `../../src/graph/graph/client.ts`
-- `../../src/graph/graph/store.ts`
-- `../../src/graph/graph/sync.ts`
+- `../../src/graph/runtime/client.ts`
+- `../../src/graph/runtime/store.ts`
+- `../../src/graph/runtime/sync.ts`
 
 ## Current UI-Adjacent Contracts
 
@@ -58,7 +58,9 @@ What the root engine entry does not currently ship:
 Adapter subpaths now exist at `@io/core/graph/react`, `@io/core/graph/react-dom`, and
 `@io/core/graph/react-opentui`.
 
-Today `@io/core/graph/react` ships the host-neutral layer:
+Today `@io/core/graph/react` ships the host-neutral layer from
+`src/graph/runtime/react/*`, while `src/graph/react/index.ts` stays as the stable
+public entry shim:
 
 - predicate hooks and field metadata helpers
 - entity-level traversal helpers such as
@@ -74,17 +76,19 @@ Despite the current `Web` naming on some resolver helpers, this package is the
 host-neutral React layer. It depends on graph refs and metadata, not DOM tags
 or browser-specific input behavior.
 
-`@io/core/graph/react-dom` ships DOM defaults on top of that layer:
+`@io/core/graph/react-dom` ships DOM defaults from `src/graph/adapters/react-dom/*`
+on top of that layer:
 
 - default field view and editor capabilities
-- editor modules split under `src/graph/react-dom/editor/*`, with `fields.tsx`
-  reduced to view capabilities plus editor-capability wiring
+- editor modules split under `src/graph/adapters/react-dom/editor/*`, with
+  `fields.tsx` reduced to view capabilities plus editor-capability wiring
 - default filter operand editors and filter resolvers
 - browser fallback rendering around `PredicateFieldView` and
   `PredicateFieldEditor`
 
 `@io/core/graph/react-opentui` is the reserved terminal-specific adapter boundary.
-The subpath exists today, but it does not ship widget capabilities yet.
+The subpath exists today as a stable shim over `src/graph/adapters/react-opentui/`,
+but it does not ship widget capabilities yet.
 
 ## How The Contracts Cross The Boundary
 

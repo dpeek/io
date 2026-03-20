@@ -39,15 +39,15 @@ The repo now ships its own MCP server, and the underlying runtime pieces were
 already in place:
 
 - the graph already has a typed client and query surface in
-  `../../src/graph/graph/client.ts`
+  `../../src/graph/runtime/client.ts`
 - the current HTTP-backed graph adapter already exists in
-  `../../src/graph/graph/http-client.ts`
+  `../../src/graph/runtime/http-client.ts`
 - the Worker authority already exposes thin sync and write routes in
   `../../src/web/lib/server-routes.ts`
 - the Durable Object wrapper already hosts that authority in
   `../../src/web/lib/graph-authority-do.ts`
 - field visibility and write policy already exist in
-  `../../src/graph/graph/schema.ts`
+  `../../src/graph/runtime/schema.ts`
 - secret-backed and `server-command` fields already reject ordinary writes in
   `../../src/web/lib/authority.test.ts`
 
@@ -281,7 +281,7 @@ The first write pass should not expose:
 The long-term direction should still be command-oriented, not CRUD-only.
 
 The repo already has the right conceptual shape for this in
-`../../src/graph/graph/authority.md` and `../../src/graph/graph/contracts.ts`:
+`../../src/graph/runtime/authority.md` and `../../src/graph/runtime/contracts.ts`:
 
 - graph methods should lower to explicit authority commands
 - commands should carry policy and execution metadata

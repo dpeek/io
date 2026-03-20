@@ -1,2 +1,1 @@
-export * from "./schema.js";
-export * from "./type-module.js";
+export * from "../runtime/def.js";

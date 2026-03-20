@@ -1,5 +1,5 @@
-import { createIdMap } from "../graph/identity.js";
-import { defineNamespace } from "../graph/schema.js";
+import { createIdMap } from "../runtime/identity.js";
+import { defineNamespace } from "../runtime/schema.js";
 import { kitchenSinkEnumSchema } from "./test/enums.js";
 import { kitchenSinkScalarSchema } from "./test/scalars.js";
 import { kitchenSinkTypeSchema } from "./test/types.js";

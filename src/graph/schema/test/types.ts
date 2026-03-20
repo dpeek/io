@@ -5,17 +5,17 @@ import {
   existingEntityReferenceField,
 } from "../../graph/reference-policy.js";
 import { defineSecretField } from "../../graph/type-module.js";
-import { core } from "../core.js";
-import { booleanTypeModule } from "../core/boolean/index.js";
-import { colorTypeModule } from "../core/color/index.js";
-import { dateTypeModule } from "../core/date/index.js";
-import { emailTypeModule } from "../core/email/index.js";
-import { jsonTypeModule } from "../core/json/index.js";
-import { markdownTypeModule } from "../core/markdown/index.js";
-import { numberTypeModule } from "../core/number/index.js";
-import { slugTypeModule } from "../core/slug/index.js";
-import { stringTypeModule } from "../core/string/index.js";
-import { urlTypeModule } from "../core/url/index.js";
+import { core } from "../../modules/core.js";
+import { booleanTypeModule } from "../../modules/core/boolean/index.js";
+import { colorTypeModule } from "../../modules/core/color/index.js";
+import { dateTypeModule } from "../../modules/core/date/index.js";
+import { emailTypeModule } from "../../modules/core/email/index.js";
+import { jsonTypeModule } from "../../modules/core/json/index.js";
+import { markdownTypeModule } from "../../modules/core/markdown/index.js";
+import { numberTypeModule } from "../../modules/core/number/index.js";
+import { slugTypeModule } from "../../modules/core/slug/index.js";
+import { stringTypeModule } from "../../modules/core/string/index.js";
+import { urlTypeModule } from "../../modules/core/url/index.js";
 import { kitchenSinkSeverityTypeModule, kitchenSinkStatusTypeModule } from "./enums.js";
 import { kitchenSinkReferenceField } from "./reference-field.js";
 import { kitchenSinkScoreTypeModule } from "./scalars.js";

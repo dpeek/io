@@ -1,6 +1,6 @@
 import { defineEnum } from "@io/core/graph/def";
 
-import { defineDefaultEnumTypeModule } from "../core/enum-module.js";
+import { defineDefaultEnumTypeModule } from "../../modules/core/enum-module.js";
 
 const kitchenSinkStatusType = defineEnum({
   values: { key: "kitchen:status", name: "Kitchen Sink Status" },

@@ -20,14 +20,14 @@ This document is the high-level entry point for agents reasoning about the engin
 
 ### Main source boundaries
 
-- `../../src/graph/graph/store.ts`: append-only facts, batching, slot subscriptions, snapshots
-- `../../src/graph/graph/schema.ts`: schema definitions, field trees, type helpers
-- `../../src/graph/graph/identity.ts`: stable key-to-id resolution and id-map helpers
-- `../../src/graph/graph/bootstrap.ts`: schema bootstrap into store facts
-- `../../src/graph/graph/client.ts`: typed CRUD, refs, query, and validation lifecycle
-- `../../src/graph/graph/authority.ts`: persisted authority orchestration, storage contracts, and JSON hydration/commit/persist helpers
-- `../../src/graph/graph/sync.ts`: authoritative validation, sync sessions, write replay, and state
-- `../../src/graph/graph/type-module.ts`: typed scalar/enum module contracts
+- `../../src/graph/runtime/store.ts`: append-only facts, batching, slot subscriptions, snapshots
+- `../../src/graph/runtime/schema.ts`: schema definitions, field trees, type helpers
+- `../../src/graph/runtime/identity.ts`: stable key-to-id resolution and id-map helpers
+- `../../src/graph/runtime/bootstrap.ts`: schema bootstrap into store facts
+- `../../src/graph/runtime/client.ts`: typed CRUD, refs, query, and validation lifecycle
+- `../../src/graph/runtime/authority.ts`: persisted authority orchestration, storage contracts, and JSON hydration/commit/persist helpers
+- `../../src/graph/runtime/sync.ts`: authoritative validation, sync sessions, write replay, and state
+- `../../src/graph/runtime/type-module.ts`: typed scalar/enum module contracts
 
 ## What Is Current
 
@@ -42,11 +42,10 @@ This document is the high-level entry point for agents reasoning about the engin
 
 ## Current Schema Ownership
 
-The initial namespace and schema-module ownership rules are concrete now, even
-though the full directory migration is still ahead:
+The initial namespace and schema-module ownership rules are concrete now:
 
 - `core:` is reserved for the engine metamodel plus the shared built-in type
-  families already shipped from `../../src/graph/type/`. That means `core:node`,
+  families shipped from `../../src/graph/modules/core/`. That means `core:node`,
   `core:type`, `core:predicate`, `core:enum`, `core:string`, `core:number`,
   `core:boolean`, `core:date`, `core:url`, `core:email`, `core:slug`,
   `core:address`, `core:country`, `core:currency`, `core:language`, and

@@ -14,7 +14,9 @@ contracts rather than generic browser chrome.
 
 - keep generic browser primitives in `@io/web`, including Monaco bootstrapping,
   source/preview shells, markdown rendering, and reusable controls
-- keep graph-aware field resolver composition in `../../src/graph/react-dom/*`
+- keep host-neutral React graph bindings in `../../src/graph/runtime/react/*`
+- keep DOM capability registries and browser composition in
+  `../../src/graph/adapters/react-dom/*`
 - keep graph validation, predicate mutation wiring, field-kind capability
   lists, typed entity-reference behavior, and SVG sanitization/preview in
   `graph`
@@ -29,40 +31,74 @@ shared `@io/web` primitive rather than reintroducing browser chrome locally.
 
 - `../storage.md`: current SQLite-backed Durable Object authority adapter, persistence boundary,
   retained-history model, and secret side-storage split
+- `./modules/index.md`: canonical built-in module ownership and package subpaths after the reshape
+- `./adapters/index.md`: adapter ownership and the stable shim relationship for host-specific entrypoints
 - `./spec/architecture.md`: durable engine model, current persistence ownership, and longer-range platform shape
 - `./icon.md`: graph-owned SVG/icon types, opt-in icon predicates,
   sanitization rules, and graph-side SVG field behavior layered on the shared
   `@io/web` source/preview shell
-- `./graph/authority.md`: authority boundaries, predicate visibility, typed business methods, and secrets
+- `./runtime/authority.md`: authority boundaries, predicate visibility, typed business methods, and secrets
 - `./spec/runtime.md`: schema authoring, id maps, core schema, bootstrap, store behavior, and persisted authority helpers
 - `./spec/validation.md`: local and authoritative validation lifecycle plus result surfaces
-- `./graph/sync.md`: total snapshot bootstrap, retained history recovery, incremental write reconciliation, and sync state
-- `./graph/type-module.md`: scalar/enum modules, field metadata/filter contracts, and reference-field helpers
+- `./runtime/sync.md`: total snapshot bootstrap, retained history recovery, incremental write reconciliation, and sync state
+- `./runtime/type-module.md`: scalar/enum modules, field metadata/filter contracts, and reference-field helpers
 - `./spec/refs-and-ui.md`: typed refs, predicate-slot subscriptions, and the current UI-adjacent surface
+
+## Package Entry Surfaces
+
+- `@io/core/graph`: root-safe package entry surface from `../../src/graph/index.ts`; re-exports
+  runtime contracts plus canonical built-in modules from `../../src/graph/modules/`
+- `@io/core/graph/runtime`, `@io/core/graph/authority`, `@io/core/graph/def`: stable runtime,
+  authoritative persistence, and schema-authoring contracts
+- `@io/core/graph/modules`, `@io/core/graph/modules/app`, `@io/core/graph/modules/core`,
+  `@io/core/graph/modules/app/env-vars`, `@io/core/graph/modules/app/topic`: ownership-first
+  module entry surfaces that match the moved tree
+- `@io/core/graph/adapters/react`, `@io/core/graph/adapters/react-dom`,
+  `@io/core/graph/adapters/react-opentui`: ownership-first adapter entry surfaces that match
+  `../../src/graph/adapters/`
+- `@io/core/graph/schema*` and `@io/core/graph/react*`: compatibility shims preserved while
+  imports drain away from the superseded layout
 
 ## Current Package Layout
 
-- `../../src/graph/graph/`: runtime kernel, schema, ids, bootstrap, client, sync, the
-  persisted-authority contract, and the file-backed JSON adapter used outside the web Durable
-  Object path
-- `../../src/graph/react/`, `../../src/graph/react-dom/`, `../../src/graph/react-opentui/`: reserved adapter entry surfaces kept separate from the root-safe package export, with DOM predicate editors split into `../../src/graph/react-dom/editor/*`
-- `../../src/graph/react-dom/editor/markdown.tsx`,
-  `../../src/graph/react-dom/editor/svg.tsx`: graph-owned markdown and SVG
+- `../../src/graph/runtime/`: runtime kernel, schema authoring contracts, ids,
+  bootstrap, client, sync, the persisted-authority contract, and the file-backed JSON adapter
+  used outside the web Durable Object path
+- `../../src/graph/runtime/react/`: host-neutral React ownership for predicate hooks,
+  traversal helpers, mutation helpers, and resolver primitives that still depend on graph refs
+- `../../src/graph/modules/`: canonical home for built-in graph module authoring, including the
+  `core:` and `app:` schema families plus their namespace id maps
+- `../../src/graph/adapters/`: host-specific adapter ownership for React entry composition,
+  DOM capability registries, and the OpenTUI placeholder boundary
+- `../../src/graph/adapters/react-dom/editor/markdown.tsx`,
+  `../../src/graph/adapters/react-dom/editor/svg.tsx`: graph-owned markdown and SVG
   mutation/preview wiring layered on the shared `@io/web/markdown` renderer,
   `@io/web/monaco` wrapper plus shared source-editor preset, and the
   `@io/web/source-preview` shell
-- `../../src/graph/react-dom/editor/svg-preview.tsx`: graph-owned SVG preview
+- `../../src/graph/adapters/react-dom/editor/svg-preview.tsx`: graph-owned SVG preview
   wiring on top of the shared `@io/web/source-preview` shell and style surface
-- `../../src/graph/react-dom/resolver.tsx`,
-  `../../src/graph/react-dom/fields.tsx`,
-  `../../src/graph/react-dom/editor/shared.tsx`: graph-owned field capability
+- `../../src/graph/adapters/react-dom/resolver.tsx`,
+  `../../src/graph/adapters/react-dom/fields.tsx`,
+  `../../src/graph/adapters/react-dom/editor/shared.tsx`: graph-owned field capability
   registries, resolver composition, typed predicate mutation helpers, and
   other browser-editor behavior that still depends on graph contracts
-- `../../src/graph/schema/`: canonical namespace-shaped schema tree for core modules and graph-owned app slices
 - `../../src/graph/test-graph.ts`: shared graph test fixtures used by engine proof coverage
 - `../../src/graph/*.test.ts`, `../../src/graph/*.typecheck.ts`: root-level graph proof coverage for typed refs, validation, sync, subscriptions, icons, and schema-facing client contracts
-- `../../src/graph/type/`: built-in scalar and helper modules, with thin compatibility exports preserved during schema migration
-- `../../src/graph/index.ts`: public package exports
+- `../../src/graph/modules/core/`: built-in scalar and helper modules, with the root-safe
+  authoring surface preserved through `@io/core/graph/def`
+
+## Compatibility Surfaces
+
+- `../../src/graph/index.ts`: root-safe package root that now re-exports canonical modules while
+  preserving the existing symbol set
+- `../../src/graph/schema/`: compatibility entry surfaces that preserve the existing
+  `@io/core/graph/schema*` import contract while built-in ownership lives under
+  `../../src/graph/modules/`
+- `../../src/graph/react/`, `../../src/graph/react-dom/`, `../../src/graph/react-opentui/`:
+  stable public adapter shims that mirror the ownership-first `@io/core/graph/adapters/*`
+  package subpaths
+- `../../src/graph/graph/`: compatibility re-exports preserved while legacy runtime import paths
+  drain toward `../../src/graph/runtime/`
 
 ## Current vs Roadmap
 

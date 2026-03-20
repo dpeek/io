@@ -1,1 +1,1 @@
-export { core } from "../schema/core.js";
+export * from "../runtime/core.js";

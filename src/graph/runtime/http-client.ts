@@ -1,0 +1,120 @@
+import { createGraphId } from "./id";
+import type { AnyTypeOutput } from "./schema";
+import {
+  createSyncedTypeClient,
+  type AuthoritativeGraphWriteResult,
+  type GraphWriteTransaction,
+  type SyncPayload,
+  type SyncedTypeClient,
+} from "./sync";
+
+export type FetchImpl = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+export const defaultHttpGraphUrl = "http://io.localhost:1355/";
+
+export type HttpGraphClientOptions = {
+  readonly url?: string;
+  readonly syncPath?: string;
+  readonly transactionPath?: string;
+  readonly fetch?: FetchImpl;
+  readonly createTxId?: () => string;
+};
+
+function readErrorMessage(
+  status: number,
+  statusText: string,
+  payload: unknown,
+  fallback: string,
+): string {
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "error" in payload &&
+    typeof (payload as { error?: unknown }).error === "string"
+  ) {
+    return (payload as { error: string }).error;
+  }
+  return `${fallback} with ${status} ${statusText}.`;
+}
+
+function resolveEndpointUrl(path: string, baseUrl: string): string {
+  return new URL(path, baseUrl).toString();
+}
+
+export function createHttpGraphTxIdFactory(prefix = "cli"): () => string {
+  const sessionId = createGraphId();
+  let txSequence = 0;
+  return () => {
+    txSequence += 1;
+    return `${prefix}:${sessionId}:${txSequence}`;
+  };
+}
+
+export async function createHttpGraphClient<const T extends Record<string, AnyTypeOutput>>(
+  namespace: T,
+  options: HttpGraphClientOptions = {},
+): Promise<SyncedTypeClient<T>> {
+  const baseUrl = options.url ?? defaultHttpGraphUrl;
+  const syncUrl = resolveEndpointUrl(options.syncPath ?? "/api/sync", baseUrl);
+  const transactionUrl = resolveEndpointUrl(options.transactionPath ?? "/api/tx", baseUrl);
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+  const createTxId = options.createTxId ?? createHttpGraphTxIdFactory();
+
+  async function fetchSyncPayload(after?: string): Promise<SyncPayload> {
+    const requestUrl = new URL(syncUrl);
+    if (after) requestUrl.searchParams.set("after", after);
+
+    const response = await fetchImpl(requestUrl, {
+      cache: "no-store",
+      headers: {
+        accept: "application/json",
+      },
+    });
+
+    const payload = (await response.json().catch(() => undefined)) as
+      | SyncPayload
+      | { error?: string }
+      | undefined;
+    if (!response.ok) {
+      throw new Error(
+        readErrorMessage(response.status, response.statusText, payload, "Sync request failed"),
+      );
+    }
+
+    return payload as SyncPayload;
+  }
+
+  async function pushTransaction(
+    transaction: GraphWriteTransaction,
+  ): Promise<AuthoritativeGraphWriteResult> {
+    const response = await fetchImpl(transactionUrl, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(transaction),
+    });
+
+    const payload = (await response.json().catch(() => undefined)) as
+      | AuthoritativeGraphWriteResult
+      | { error?: string }
+      | undefined;
+    if (!response.ok) {
+      throw new Error(
+        readErrorMessage(response.status, response.statusText, payload, "Graph write failed"),
+      );
+    }
+
+    return payload as AuthoritativeGraphWriteResult;
+  }
+
+  const client = createSyncedTypeClient(namespace, {
+    createTxId,
+    pull: (state) => fetchSyncPayload(state.cursor),
+    push: pushTransaction,
+  });
+
+  await client.sync.sync();
+  return client;
+}

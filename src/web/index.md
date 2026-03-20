@@ -19,7 +19,8 @@ storage.
 
 - keep reusable browser UI and editor chrome in `../../lib/web/src/*`
 - keep graph-aware field resolver, predicate mutation, and typed preview logic
-  in `../../src/graph/react-dom/*`
+  in `../../src/graph/runtime/react/*` and
+  `../../src/graph/adapters/react-dom/*`
 - keep route/page composition, explorer state, topic workflows, and Worker
   authority wiring in `../../src/web/*`
 

@@ -8,7 +8,7 @@ This document is the entry point for agents working on schema authoring, stable 
 
 ### Store
 
-`../../src/graph/graph/store.ts` owns the schema-agnostic store:
+`../../src/graph/runtime/store.ts` owns the schema-agnostic store:
 
 - facts are `Edge { id, s, p, o }`
 - `assert(...)` appends a new edge
@@ -20,7 +20,7 @@ This document is the entry point for agents working on schema authoring, stable 
 
 ### Schema authoring
 
-`../../src/graph/graph/schema.ts` defines the core authoring contract:
+`../../src/graph/runtime/schema.ts` defines the core authoring contract:
 
 - `defineType(...)` for entity types
 - `defineScalar(...)` for scalar codecs and reusable scalar validation
@@ -30,7 +30,7 @@ This document is the entry point for agents working on schema authoring, stable 
 
 ### Stable ids
 
-`../../src/graph/graph/identity.ts` and `../../src/graph/graph/ids-cli.ts` own key-to-id stability:
+`../../src/graph/runtime/identity.ts` owns key-to-id stability:
 
 - `defineNamespace(...)` injects resolved ids into schema definitions
 - `createIdMap(...)` and `extractSchemaKeys(...)` generate and reconcile id maps
@@ -42,11 +42,11 @@ The current implementation keeps ids stable per key and treats rename as an expl
 
 ### Core schema and bootstrap
 
-`../../src/graph/schema/core.ts` and `../../src/graph/graph/bootstrap.ts` define and materialize the base graph model:
+`../../src/graph/modules/core.ts` and `../../src/graph/runtime/bootstrap.ts` define and materialize the base graph model:
 
 - core scalars include string, number, date, boolean, url, email, and slug
 - core entities include `core:node`, `core:type`, `core:predicate`, and `core:enum`
-- the canonical namespace id map lives beside that entrypoint at `../../src/graph/schema/core.json`
+- the canonical namespace id map lives beside that entrypoint at `../../src/graph/modules/core.json`
 - bootstrap materializes seeded schema entities through the shared validated create path when it
   owns the full typed shape, then writes the remaining schema metadata facts into the store
 - bootstrap-owned typed entities pin `createdAt` and `updatedAt` to the canonical
@@ -59,7 +59,7 @@ The current implementation keeps ids stable per key and treats rename as an expl
 
 ### Authoritative persistence
 
-`../../src/graph/graph/authority.ts` owns the persisted authoritative runtime surface:
+`../../src/graph/runtime/authority.ts` owns the persisted authoritative runtime surface:
 
 - `PersistedAuthoritativeGraphStorage` defines the hydration, incremental commit, and explicit snapshot-persist contract for durable state
 - `createJsonPersistedAuthoritativeGraphStorage(path, namespace)` provides the shipped file-backed JSON adapter for non-DO runtimes
@@ -73,8 +73,8 @@ The current implementation keeps ids stable per key and treats rename as an expl
 
 ### Runtime helpers
 
-- `../../src/graph/graph/serialize.ts` contains internal helpers for turning store state into plain objects and schema views
-- `../../src/graph/type/input.ts` contains input-kind guards used by scalar codecs
+- `../../src/graph/runtime/serialize.ts` contains internal helpers for turning store state into plain objects and schema views
+- `../../src/graph/modules/core/input.ts` contains input-kind guards used by scalar codecs
 
 ## Current Constraints
 

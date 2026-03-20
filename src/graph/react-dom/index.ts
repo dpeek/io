@@ -1,6 +1,2 @@
-// Browser widgets stay on this subpath rather than the @io/core/graph root.
-export * from "./fields.js";
-export * from "./filter.js";
-export * from "./filter-editors.js";
-export * from "./icon.js";
-export * from "./resolver.js";
+// Stable public entry surface; DOM adapter ownership lives under ../adapters.
+export * from "../adapters/react-dom/index.js";

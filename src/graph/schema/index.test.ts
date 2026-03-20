@@ -1,13 +1,35 @@
 import { describe, expect, it } from "bun:test";
 
+import { core } from "../index.js";
+import { cardinality } from "../modules/core/cardinality/index.js";
+import { colorTypeModule } from "../modules/core/color/index.js";
+import { dateTypeModule } from "../modules/core/date/index.js";
+import { emailTypeModule } from "../modules/core/email/index.js";
+import { enumType } from "../modules/core/enum/index.js";
+import {
+  graphIconSeeds,
+  icon,
+  iconReferenceField,
+  resolvePredicateDefinitionIconId,
+  resolveTypeDefinitionIconId,
+} from "../modules/core/icon/index.js";
+import { jsonTypeModule } from "../modules/core/json/index.js";
+import { markdownTypeModule } from "../modules/core/markdown/index.js";
+import { node } from "../modules/core/node/index.js";
+import { predicate } from "../modules/core/predicate/index.js";
+import { secretHandle } from "../modules/core/secret/index.js";
+import { stringTypeModule } from "../modules/core/string/index.js";
+import { svgTypeModule } from "../modules/core/svg/index.js";
+import { tag } from "../modules/core/tag/index.js";
+import { coreType } from "../modules/core/type/index.js";
+import { urlTypeModule } from "../modules/core/url/index.js";
 import {
   probeContractGraph,
   probeContractItem,
   probeContractObjectView,
   probeContractWorkflow,
   probeSaveContractItemCommand,
-} from "../graph/contracts.probe.js";
-import { core } from "../graph/index.js";
+} from "../runtime/contracts.probe.js";
 import { app as canonicalApp } from "./app.js";
 import {
   envVar,
@@ -18,28 +40,6 @@ import {
 } from "./app/env-vars/index.js";
 import { topic, topicKind, topicSchema } from "./app/topic/index.js";
 import { core as canonicalCore } from "./core.js";
-import { cardinality } from "./core/cardinality/index.js";
-import { colorTypeModule } from "./core/color/index.js";
-import { dateTypeModule } from "./core/date/index.js";
-import { emailTypeModule } from "./core/email/index.js";
-import { enumType } from "./core/enum/index.js";
-import {
-  graphIconSeeds,
-  icon,
-  iconReferenceField,
-  resolvePredicateDefinitionIconId,
-  resolveTypeDefinitionIconId,
-} from "./core/icon/index.js";
-import { jsonTypeModule } from "./core/json/index.js";
-import { markdownTypeModule } from "./core/markdown/index.js";
-import { node } from "./core/node/index.js";
-import { predicate } from "./core/predicate/index.js";
-import { secretHandle } from "./core/secret/index.js";
-import { stringTypeModule } from "./core/string/index.js";
-import { svgTypeModule } from "./core/svg/index.js";
-import { tag } from "./core/tag/index.js";
-import { coreType } from "./core/type/index.js";
-import { urlTypeModule } from "./core/url/index.js";
 import * as schemaExports from "./index.js";
 
 function resolvedTypeId(typeDef: { values: { key: string } }): string {
