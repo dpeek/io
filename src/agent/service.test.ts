@@ -368,7 +368,7 @@ test("pickCandidateIssues uses Linear manual order for dependency-free sibling t
   expect(selected.map((issue) => issue.identifier)).toEqual(["OS-1"]);
 });
 
-test("pickCandidateIssues keeps feature execution to one task per parent feature", () => {
+test("pickCandidateIssues keeps feature execution to one task per parent feature in Linear manual order", () => {
   const selected = pickCandidateIssues(
     [
       createTaskIssue({
@@ -407,7 +407,7 @@ test("pickCandidateIssues keeps feature execution to one task per parent feature
     ],
     3,
   );
-  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-4"]);
+  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-4", "OS-3"]);
 });
 
 test("pickCandidateIssues allows parallel tasks from different features in the same stream", () => {
@@ -509,7 +509,7 @@ test("pickCandidateIssues leaves release gating to the scheduler", () => {
   ]);
 });
 
-test("pickCandidateIssues prefers the locally active issue within an occupied stream", () => {
+test("pickCandidateIssues uses Linear manual order across runnable feature tasks", () => {
   const selected = pickCandidateIssues(
     [
       createTaskIssue({
@@ -517,7 +517,7 @@ test("pickCandidateIssues prefers the locally active issue within an occupied st
         identifier: "OS-2",
         parentIssueId: "feature-1",
         parentIssueIdentifier: "OS-1",
-        sortOrder: 100,
+        sortOrder: 200,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 2,
@@ -526,9 +526,9 @@ test("pickCandidateIssues prefers the locally active issue within an occupied st
       createTaskIssue({
         id: "task-3",
         identifier: "OS-3",
-        parentIssueId: "feature-1",
-        parentIssueIdentifier: "OS-1",
-        sortOrder: 200,
+        parentIssueId: "feature-2",
+        parentIssueIdentifier: "OS-2F",
+        sortOrder: 100,
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
         priority: 1,
@@ -537,18 +537,18 @@ test("pickCandidateIssues prefers the locally active issue within an occupied st
       createTaskIssue({
         id: "task-4",
         identifier: "OS-4",
-        parentIssueId: "feature-2",
-        parentIssueIdentifier: "OS-4F",
+        parentIssueId: "feature-3",
+        parentIssueIdentifier: "OS-3F",
         streamIssueId: "stream-1",
         streamIssueIdentifier: "OS-0",
+        sortOrder: 150,
         priority: 1,
         updatedAt: "2024-01-03T00:00:00.000Z",
       }),
     ],
     3,
-    new Map([["os-1", "OS-3"]]),
   );
-  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-4"]);
+  expect(selected.map((issue) => issue.identifier)).toEqual(["OS-3", "OS-4", "OS-2"]);
 });
 
 test("AgentService does not auto-run task issues while the parent stream is not In Progress", async () => {

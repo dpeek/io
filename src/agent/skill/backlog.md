@@ -105,6 +105,7 @@ Supervisor contract:
 - the stream is `In Progress`
 - the feature is `In Progress`
 - the task is `Todo`
+- when multiple feature tasks are runnable, pick at most one task per feature and follow Linear manual order
 - successful task execution moves the task to `Done` and lands the task commit onto the feature branch
 - non-task leaves are not auto-runnable; each feature should own explicit task children
 
