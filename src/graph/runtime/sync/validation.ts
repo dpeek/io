@@ -860,8 +860,7 @@ export function prepareIncrementalSyncResultForApply(
     };
   }
 
-  const validationStore = createStore();
-  validationStore.replace(store.snapshot());
+  const validationStore = createStore(store.snapshot());
 
   for (const transaction of materialized.transactions) {
     const candidateSnapshot = materializeGraphWriteTransactionSnapshot(
@@ -919,8 +918,7 @@ export function validateAuthoritativeTotalSyncPayload<
   if (!prepared.ok) return prepared.result;
 
   const materialized = prepared.value;
-  const validationStore = createStore();
-  validationStore.replace(materialized.snapshot);
+  const validationStore = createStore(materialized.snapshot);
   return exposeTotalSyncValidationResult(
     withValidationValue(validateGraphStore(validationStore, namespace), materialized),
   );
@@ -953,8 +951,7 @@ export function validateAuthoritativeGraphWriteTransaction<
     );
   }
 
-  const validationStore = createStore();
-  validationStore.replace(materialized.value);
+  const validationStore = createStore(materialized.value);
   return exposeGraphWriteValidationResult(
     withValidationValue(validateGraphStore(validationStore, namespace), prepared.value),
   );
@@ -982,8 +979,7 @@ export function validateAuthoritativeGraphWriteResult<
     );
   }
 
-  const validationStore = createStore();
-  validationStore.replace(materialized.value);
+  const validationStore = createStore(materialized.value);
   return exposeGraphWriteResultValidationResult(
     withValidationValue(validateGraphStore(validationStore, namespace), prepared.value),
   );

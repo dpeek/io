@@ -27,18 +27,10 @@ import {
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 
-import { testNamespace } from "./test-graph.js";
+import { createTestGraph, createTestStore, testNamespace } from "./test-graph.js";
 
 function createServerGraph() {
-  const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, testNamespace);
-
-  return {
-    coreGraph: createTypeClient(store, core),
-    store,
-    graph: createTypeClient(store, testNamespace),
-  };
+  return createTestGraph();
 }
 
 function createCompanyTagSet(coreGraph: ReturnType<typeof createServerGraph>["coreGraph"]) {
@@ -1040,9 +1032,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const clientStore = createStore();
-    bootstrap(clientStore, core);
-    bootstrap(clientStore, testNamespace);
+    const clientStore = createTestStore();
 
     const payload = createDataOnlyTotalSyncPayload(server.store, {
       cursor: "server:data-only:1",
@@ -1473,9 +1463,7 @@ describe("total sync", () => {
     }
     server.store.assert(acmeId, edgeId(testNamespace.company.fields.name), "   ");
 
-    const clientStore = createStore();
-    bootstrap(clientStore, core);
-    bootstrap(clientStore, testNamespace);
+    const clientStore = createTestStore();
     const payload = createDataOnlyTotalSyncPayload(server.store, {
       cursor: "server:data-only:invalid-name",
     });
@@ -1503,9 +1491,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const clientStore = createStore();
-    bootstrap(clientStore, core);
-    bootstrap(clientStore, testNamespace);
+    const clientStore = createTestStore();
 
     const result = validateAuthoritativeTotalSyncPayload(
       createDataOnlyTotalSyncPayload(server.store, { cursor: "server:data-only:1" }),
@@ -1652,9 +1638,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const clientStore = createStore();
-    bootstrap(clientStore, core);
-    bootstrap(clientStore, testNamespace);
+    const clientStore = createTestStore();
     const clientGraph = createTypeClient(clientStore, testNamespace);
     const sync = createTotalSyncController(clientStore, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
@@ -1811,9 +1795,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const clientStore = createStore();
-    bootstrap(clientStore, core);
-    bootstrap(clientStore, testNamespace);
+    const clientStore = createTestStore();
     const clientGraph = createTypeClient(clientStore, testNamespace);
     const session = createTotalSyncSession(clientStore, {
       validate: createAuthoritativeTotalSyncValidator(testNamespace),
@@ -1880,9 +1862,7 @@ describe("total sync", () => {
       cursorPrefix: "server:",
     });
 
-    const clientStore = createStore();
-    bootstrap(clientStore, core);
-    bootstrap(clientStore, testNamespace);
+    const clientStore = createTestStore();
     const clientGraph = createTypeClient(clientStore, testNamespace);
     const session = createTotalSyncSession(clientStore, {
       validate: createAuthoritativeTotalSyncValidator(testNamespace),
@@ -1972,9 +1952,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const clientStore = createStore();
-    bootstrap(clientStore, core);
-    bootstrap(clientStore, testNamespace);
+    const clientStore = createTestStore();
     const preserveSnapshot = clientStore.snapshot();
     const clientGraph = createTypeClient(clientStore, testNamespace);
     const session = createTotalSyncSession(clientStore, {

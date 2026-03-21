@@ -50,10 +50,23 @@ export interface Store {
   version(): number;
 }
 
-export function createStore(): Store {
+export function cloneStoreSnapshot(snapshot: StoreSnapshot): StoreSnapshot {
+  return {
+    edges: snapshot.edges.map((edge) => ({ ...edge })),
+    retracted: [...snapshot.retracted],
+  };
+}
+
+export function createStore(initialSnapshot?: StoreSnapshot): Store {
   const edges = new Map<Id, Edge>();
   const retracted = new Set<Id>();
   const usedIds = new Set<Id>();
+  const edgesBySubject = new Map<Id, Set<Id>>();
+  const edgesByPredicate = new Map<Id, Set<Id>>();
+  const edgesByObject = new Map<Id, Set<Id>>();
+  const edgesBySubjectPredicate = new Map<string, Set<Id>>();
+  const edgesBySubjectObject = new Map<string, Set<Id>>();
+  const edgesByPredicateObject = new Map<string, Set<Id>>();
   const predicateSlotListeners = new Map<string, Set<PredicateSlotListener>>();
   const pendingPredicateSlots = new Map<string, { s: Id; p: Id; before: Scalar[] }>();
   let batchDepth = 0;
@@ -69,6 +82,41 @@ export function createStore(): Store {
 
   function predicateSlotKey(s: Id, p: Id): string {
     return `${s}\0${p}`;
+  }
+
+  function pairKey(left: Id, right: Id): string {
+    return `${left}\0${right}`;
+  }
+
+  function addEdgeId(
+    index: Map<string, Set<Id>> | Map<Id, Set<Id>>,
+    key: string,
+    edgeId: Id,
+  ): void {
+    let edgeIds = index.get(key);
+    if (!edgeIds) {
+      edgeIds = new Set<Id>();
+      index.set(key, edgeIds);
+    }
+    edgeIds.add(edgeId);
+  }
+
+  function indexEdge(edge: Edge): void {
+    addEdgeId(edgesBySubject, edge.s, edge.id);
+    addEdgeId(edgesByPredicate, edge.p, edge.id);
+    addEdgeId(edgesByObject, edge.o, edge.id);
+    addEdgeId(edgesBySubjectPredicate, pairKey(edge.s, edge.p), edge.id);
+    addEdgeId(edgesBySubjectObject, pairKey(edge.s, edge.o), edge.id);
+    addEdgeId(edgesByPredicateObject, pairKey(edge.p, edge.o), edge.id);
+  }
+
+  function pickBetterCandidate(
+    current: Set<Id> | undefined,
+    next: Set<Id> | undefined,
+  ): Set<Id> | undefined {
+    if (!next) return current;
+    if (!current || next.size < current.size) return next;
+    return current;
   }
 
   function snapshotPredicateSlot(s: Id, p: Id): Scalar[] {
@@ -119,6 +167,7 @@ export function createStore(): Store {
     beginPredicateSlotMutation(edge.s, edge.p);
     const cloned = { ...edge };
     edges.set(cloned.id, cloned);
+    indexEdge(cloned);
     version += 1;
     flushPredicateSlotNotifications();
     return cloned;
@@ -138,15 +187,40 @@ export function createStore(): Store {
     flushPredicateSlotNotifications();
   }
 
-  function find(s?: Id, p?: Id, o?: Id): Edge[] {
+  function collectMatchingEdges(edgeIds: Iterable<Id>, s?: Id, p?: Id, o?: Id): Edge[] {
     const results: Edge[] = [];
-    for (const edge of edges.values()) {
+    for (const edgeId of edgeIds) {
+      const edge = edges.get(edgeId);
+      if (!edge) continue;
       if (s !== undefined && edge.s !== s) continue;
       if (p !== undefined && edge.p !== p) continue;
       if (o !== undefined && edge.o !== o) continue;
       results.push(edge);
     }
     return results;
+  }
+
+  function find(s?: Id, p?: Id, o?: Id): Edge[] {
+    if (s === undefined && p === undefined && o === undefined) {
+      return [...edges.values()];
+    }
+
+    let candidates: Set<Id> | undefined;
+    if (s !== undefined) candidates = pickBetterCandidate(candidates, edgesBySubject.get(s));
+    if (p !== undefined) candidates = pickBetterCandidate(candidates, edgesByPredicate.get(p));
+    if (o !== undefined) candidates = pickBetterCandidate(candidates, edgesByObject.get(o));
+    if (s !== undefined && p !== undefined) {
+      candidates = pickBetterCandidate(candidates, edgesBySubjectPredicate.get(pairKey(s, p)));
+    }
+    if (s !== undefined && o !== undefined) {
+      candidates = pickBetterCandidate(candidates, edgesBySubjectObject.get(pairKey(s, o)));
+    }
+    if (p !== undefined && o !== undefined) {
+      candidates = pickBetterCandidate(candidates, edgesByPredicateObject.get(pairKey(p, o)));
+    }
+
+    if (!candidates) return [];
+    return collectMatchingEdges(candidates, s, p, o);
   }
 
   function facts(s?: Id, p?: Id, o?: Id): Edge[] {
@@ -185,20 +259,27 @@ export function createStore(): Store {
   }
 
   function snapshot(): StoreSnapshot {
-    return {
-      edges: [...edges.values()].map((edge) => ({ ...edge })),
+    return cloneStoreSnapshot({
+      edges: [...edges.values()],
       retracted: [...retracted.values()],
-    };
+    });
   }
 
   function loadSnapshot(snapshot: StoreSnapshot): void {
     edges.clear();
     retracted.clear();
     usedIds.clear();
+    edgesBySubject.clear();
+    edgesByPredicate.clear();
+    edgesByObject.clear();
+    edgesBySubjectPredicate.clear();
+    edgesBySubjectObject.clear();
+    edgesByPredicateObject.clear();
 
     for (const edge of snapshot.edges) {
       const cloned = { ...edge };
       edges.set(cloned.id, cloned);
+      indexEdge(cloned);
       usedIds.add(cloned.id);
       usedIds.add(cloned.s);
       usedIds.add(cloned.p);
@@ -222,6 +303,8 @@ export function createStore(): Store {
     version += 1;
     flushPredicateSlotNotifications();
   }
+
+  if (initialSnapshot) loadSnapshot(initialSnapshot);
 
   return {
     newNode: () => nextId(),

@@ -1,4 +1,4 @@
-import { bootstrap } from "../bootstrap";
+import { createBootstrappedSnapshot } from "../bootstrap";
 import {
   GraphValidationError,
   createTypeClient,
@@ -309,13 +309,10 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
     createTxId?: () => string;
   },
 ): SyncedTypeClient<T> {
-  const store = createStore();
-  bootstrap(store);
-  bootstrap(store, namespace);
-  const authoritativeStore = createStore();
-  bootstrap(authoritativeStore);
-  bootstrap(authoritativeStore, namespace);
-  const preserveSnapshot = authoritativeStore.snapshot();
+  const schemaSnapshot = createBootstrappedSnapshot(namespace);
+  const store = createStore(schemaSnapshot);
+  const authoritativeStore = createStore(schemaSnapshot);
+  const preserveSnapshot = schemaSnapshot;
   const rawGraph = createTypeClient(store, { ...core, ...namespace }) as NamespaceClient<
     typeof core & T
   >;
@@ -400,8 +397,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
   }
 
   function materializeLocalSnapshot(): StoreSnapshot {
-    const replayStore = createStore();
-    replayStore.replace(authoritativeStore.snapshot());
+    const replayStore = createStore(authoritativeStore.snapshot());
     for (const transaction of pendingTransactions) {
       applyGraphWriteTransaction(replayStore, transaction);
     }

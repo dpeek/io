@@ -1,4 +1,4 @@
-import { bootstrap, createStore, createTypeClient } from "@io/core/graph";
+import { createBootstrappedSnapshot, createStore, createTypeClient } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 
 import { kitchenSink } from "./testing/kitchen-sink.js";
@@ -6,10 +6,12 @@ import { kitchenSink } from "./testing/kitchen-sink.js";
 export const testNamespace = kitchenSink;
 export const testDefs = { ...core, ...testNamespace };
 
+export function createTestStore() {
+  return createStore(createBootstrappedSnapshot(testNamespace));
+}
+
 export function createTestGraph() {
-  const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, testNamespace);
+  const store = createTestStore();
 
   return {
     store,

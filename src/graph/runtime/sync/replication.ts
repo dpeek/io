@@ -186,8 +186,7 @@ export function validateAuthoritativeFieldWritePolicies(
   writeScope: AuthoritativeWriteScope,
 ) {
   const policiesByTypeId = createFieldAuthorityPolicyIndex(namespace);
-  const validationStore = createStore();
-  validationStore.replace(snapshot);
+  const validationStore = createStore(snapshot);
   const edgeById = createEdgeIndex(snapshot);
   const issues = [];
 

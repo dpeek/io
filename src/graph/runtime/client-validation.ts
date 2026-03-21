@@ -810,9 +810,7 @@ function prepareMutationInput<T extends TypeOutput>(
 }
 
 function cloneStoreForValidation(store: Store): Store {
-  const validationStore = createStore();
-  validationStore.replace(store.snapshot());
-  return validationStore;
+  return createStore(store.snapshot());
 }
 
 function collectionItemPassesValidation(

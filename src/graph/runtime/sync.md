@@ -87,6 +87,7 @@ The persisted authority helper layers restart hydration, per-transaction durable
 ## Current Behavior
 
 - schema is bootstrapped locally before authoritative data arrives
+- synced clients hydrate both local and authoritative stores from a cached bootstrapped schema snapshot
 - preserved bootstrap schema facts are layered back in at authoritative total apply
 - incoming total payloads are validated before replace
 - incoming write results and incremental batches are validated before apply

@@ -14,6 +14,7 @@ This document is the entry point for agents working on schema authoring, stable 
 - `assert(...)` appends a new edge
 - `assertEdge(...)` preserves pre-authored edge ids for replay/sync
 - `retract(...)` tombstones an edge without removing history
+- internal subject/predicate/object indexes accelerate common `find(...)` and `facts(...)` patterns
 - `snapshot()` and `replace(...)` support full-state transport
 - `batch(...)` coalesces predicate-slot notifications
 - `subscribePredicateSlot(s, p, listener)` is the reactive leaf boundary
@@ -52,6 +53,8 @@ The current implementation keeps ids stable per key and treats rename as an expl
 - bootstrap-owned typed entities pin `createdAt` and `updatedAt` to the canonical
   `2000-01-01T00:00:00.000Z` timestamp so independently bootstrapped stores converge on the same
   logical schema facts during sync and preserve-snapshot merges
+- `createBootstrappedSnapshot(types?)` caches fully bootstrapped schema snapshots by namespace
+  object identity so fixture-heavy flows can clone schema state instead of rebuilding it
 - `core:type.icon` and `core:predicate.icon` track definition-level icons, with inferred defaults
   for enum types (`tag.svg`) and entity-reference predicates (`edge.svg`) before falling back to
   `unknown.svg`
@@ -81,7 +84,7 @@ The current implementation keeps ids stable per key and treats rename as an expl
 - Storage stays opaque and string-based; scalar decode/encode lives above it.
 - Field trees preserve authoring shape, but runtime linking uses resolved ids.
 - Reference fields should be authored through `defineReferenceField(...)` or helpers layered on top of it.
-- The store does not currently advertise secondary indexes.
+- Store indexes remain an internal implementation detail; the public surface is still pattern lookups.
 - The package owns the persisted-authority contract and JSON adapter, but consumers still choose storage paths, bootstrap order, seed data, and process lifecycle, including the web package's SQLite Durable Object adapter.
 - Transport is still outside the runtime core; persisted authority helpers only produce and consume graph sync/session primitives.
 
@@ -89,7 +92,6 @@ The current implementation keeps ids stable per key and treats rename as an expl
 
 - add persistence backends beyond the current JSON snapshot-plus-history adapter
 - decide whether internal serialization helpers should become supported exports
-- improve indexing and query planning if current store scans become a bottleneck
 - add stronger schema-evolution guidance beyond the current id-map workflow
 
 ## Future Work Suggestions
@@ -98,4 +100,4 @@ The current implementation keeps ids stable per key and treats rename as an expl
 2. Document when `rangeOf(...)` is preferred over passing raw strings directly.
 3. Clarify whether `serialize.ts` is intended to remain internal or graduate to public API.
 4. Add a short schema-evolution section covering safe rename and orphan-pruning workflows.
-5. Document expected index strategy once performance work starts in earnest.
+5. Document which lookup patterns should stay covered by the current in-store indexes before a real query planner exists.

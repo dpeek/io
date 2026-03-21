@@ -68,7 +68,7 @@ authority surfaces, but they do not own new durable namespace buckets.
 
 - Additional persistence backends beyond the current JSON file adapter
 - Query-scoped partial sync and query-aware completeness
-- A separate query planner or index subsystem beyond the current store traversal paths
+- A separate query planner or index subsystem beyond the current in-store indexes and traversal paths
 - ACL, secret storage, or server action/runtime layers
 - A built-in HTTP or live transport layer inside `graph`
 - A full web or TUI renderer stack inside `graph`
