@@ -6,6 +6,7 @@ import {
   getPredicateEditorPlaceholder,
   performValidatedMutation,
   usePredicateField,
+  type PredicateFieldViewCapability,
 } from "../../../runtime/react/index.js";
 import {
   normalizeTextValue,
@@ -15,6 +16,22 @@ import {
   type AnyFieldProps,
 } from "./shared.js";
 import { SvgPreview } from "./svg-preview.js";
+
+function SvgFieldView({ predicate }: AnyFieldProps) {
+  const { value } = usePredicateField(predicate);
+  const content = normalizeTextValue(value);
+
+  return (
+    <div data-web-field-kind="svg">
+      <SvgPreview content={content} />
+    </div>
+  );
+}
+
+export const svgFieldViewCapability = {
+  kind: "svg",
+  Component: SvgFieldView,
+} satisfies PredicateFieldViewCapability<any, any>;
 
 export function SvgFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
   const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });

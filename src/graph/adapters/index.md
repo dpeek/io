@@ -28,8 +28,9 @@ graph package's React and host-specific adapter surfaces.
   `../../src/graph/adapters/react-dom/filter.tsx`,
   `../../src/graph/adapters/react-dom/filter-editors.tsx`,
   `../../src/graph/adapters/react-dom/icon.tsx`,
-  `../../src/graph/adapters/react-dom/resolver.tsx`: DOM adapter exports
-- `../../src/graph/adapters/react-dom/editor/`: DOM editor modules and shared
-  preview helpers
+  `../../src/graph/adapters/react-dom/resolver.tsx`: DOM adapter exports and
+  capability registries
+- `../../src/graph/adapters/react-dom/editor/`: DOM field-family view/editor
+  modules and shared preview helpers
 - `../../src/graph/adapters/react-opentui/index.ts`: terminal adapter entry
   file

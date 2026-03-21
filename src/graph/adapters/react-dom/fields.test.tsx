@@ -11,7 +11,12 @@ function createRecordFields() {
   const store = createStore();
   bootstrap(store, core);
   bootstrap(store, kitchenSink);
-  const graph = createTypeClient(store, kitchenSink);
+  const graph = createTypeClient(store, { ...core, ...kitchenSink });
+  const platformTagId = graph.tag.create({
+    color: "#2563eb",
+    key: "platform",
+    name: "Platform",
+  });
   const recordId = graph.record.create({
     name: "Kitchen sink fixture",
     headline: "KS-1",
@@ -42,13 +47,21 @@ function createRecordFields() {
       min: { amount: 10, unit: "kg" },
       max: { amount: 25, unit: "kg" },
     },
+    tags: [platformTagId],
     budgetBand: {
       kind: "money",
       min: { amount: 1500, currency: defaultMoneyCurrencyKey },
       max: { amount: 3000, currency: defaultMoneyCurrencyKey },
     },
+    details: "# Kitchen sink\n\nThis is **markdown**.",
   });
   const recordRef = graph.record.ref(recordId);
+  const iconId = graph.icon.create({
+    key: "kitchen-sink",
+    name: "Kitchen Sink",
+    svg: '<svg viewBox="0 0 24 24"><path d="M4 12h16" /></svg>',
+  });
+  const iconRef = graph.icon.ref(iconId);
 
   return {
     budget: recordRef.fields.budget,
@@ -56,8 +69,12 @@ function createRecordFields() {
     burnRate: recordRef.fields.burnRate,
     completion: recordRef.fields.completion,
     completionBand: recordRef.fields.completionBand,
+    details: recordRef.fields.details,
     estimate: recordRef.fields.estimate,
+    iconSvg: iconRef.fields.svg,
     quantity: recordRef.fields.quantity,
+    tags: recordRef.fields.tags,
+    tagId: platformTagId,
   };
 }
 
@@ -79,6 +96,12 @@ describe("generic react-dom field coverage", () => {
     const percentRangeEditor = defaultWebFieldResolver.resolveEditor(fields.completionBand);
     const budgetRangeView = defaultWebFieldResolver.resolveView(fields.budgetBand);
     const budgetRangeEditor = defaultWebFieldResolver.resolveEditor(fields.budgetBand);
+    const markdownView = defaultWebFieldResolver.resolveView(fields.details);
+    const markdownEditor = defaultWebFieldResolver.resolveEditor(fields.details);
+    const svgView = defaultWebFieldResolver.resolveView(fields.iconSvg);
+    const svgEditor = defaultWebFieldResolver.resolveEditor(fields.iconSvg);
+    const tagsView = defaultWebFieldResolver.resolveView(fields.tags);
+    const tagsEditor = defaultWebFieldResolver.resolveEditor(fields.tags);
 
     expect(moneyView.status).toBe("resolved");
     expect(moneyEditor.status).toBe("resolved");
@@ -94,6 +117,12 @@ describe("generic react-dom field coverage", () => {
     expect(percentRangeEditor.status).toBe("resolved");
     expect(budgetRangeView.status).toBe("resolved");
     expect(budgetRangeEditor.status).toBe("resolved");
+    expect(markdownView.status).toBe("resolved");
+    expect(markdownEditor.status).toBe("resolved");
+    expect(svgView.status).toBe("resolved");
+    expect(svgEditor.status).toBe("resolved");
+    expect(tagsView.status).toBe("resolved");
+    expect(tagsEditor.status).toBe("resolved");
 
     if (moneyView.status === "resolved") {
       expect(moneyView.capability.kind).toBe("money/amount");
@@ -136,6 +165,24 @@ describe("generic react-dom field coverage", () => {
     }
     if (budgetRangeEditor.status === "resolved") {
       expect(budgetRangeEditor.capability.kind).toBe("number/range");
+    }
+    if (markdownView.status === "resolved") {
+      expect(markdownView.capability.kind).toBe("markdown");
+    }
+    if (markdownEditor.status === "resolved") {
+      expect(markdownEditor.capability.kind).toBe("markdown");
+    }
+    if (svgView.status === "resolved") {
+      expect(svgView.capability.kind).toBe("svg");
+    }
+    if (svgEditor.status === "resolved") {
+      expect(svgEditor.capability.kind).toBe("svg");
+    }
+    if (tagsView.status === "resolved") {
+      expect(tagsView.capability.kind).toBe("entity-reference-list");
+    }
+    if (tagsEditor.status === "resolved") {
+      expect(tagsEditor.capability.kind).toBe("entity-reference-combobox");
     }
   });
 
@@ -180,6 +227,18 @@ describe("generic react-dom field coverage", () => {
     const budgetRangeEditorMarkup = renderToStaticMarkup(
       <PredicateFieldEditor predicate={fields.budgetBand} />,
     );
+    const markdownViewMarkup = renderToStaticMarkup(
+      <PredicateFieldView predicate={fields.details} />,
+    );
+    const markdownEditorMarkup = renderToStaticMarkup(
+      <PredicateFieldEditor predicate={fields.details} />,
+    );
+    const svgViewMarkup = renderToStaticMarkup(<PredicateFieldView predicate={fields.iconSvg} />);
+    const svgEditorMarkup = renderToStaticMarkup(
+      <PredicateFieldEditor predicate={fields.iconSvg} />,
+    );
+    const tagsViewMarkup = renderToStaticMarkup(<PredicateFieldView predicate={fields.tags} />);
+    const tagsEditorMarkup = renderToStaticMarkup(<PredicateFieldEditor predicate={fields.tags} />);
 
     expect(moneyViewMarkup).toContain('data-web-field-kind="money/amount"');
     expect(moneyViewMarkup).toContain("1250 USD");
@@ -212,5 +271,20 @@ describe("generic react-dom field coverage", () => {
     expect(budgetRangeEditorMarkup).toContain('data-web-field-kind="number/range"');
     expect(budgetRangeEditorMarkup).toContain('value="1500"');
     expect(budgetRangeEditorMarkup).toContain('value="3000"');
+    expect(markdownViewMarkup).toContain('data-web-field-kind="markdown"');
+    expect(markdownViewMarkup).toContain("<strong>markdown</strong>");
+    expect(markdownEditorMarkup).toContain('data-web-field-kind="markdown"');
+    expect(markdownEditorMarkup).toContain('data-web-markdown-source="textarea"');
+    expect(svgViewMarkup).toContain('data-web-field-kind="svg"');
+    expect(svgViewMarkup).toContain('data-web-svg-preview="ready"');
+    expect(svgEditorMarkup).toContain('data-web-field-kind="svg"');
+    expect(svgEditorMarkup).toContain('data-web-svg-preview="ready"');
+    expect(tagsViewMarkup).toContain('data-web-field-kind="entity-reference-list"');
+    expect(tagsViewMarkup).toContain(`data-web-reference-id="${fields.tagId}"`);
+    expect(tagsViewMarkup).toContain("Platform");
+    expect(tagsViewMarkup).toContain(`<code>${fields.tagId}</code>`);
+    expect(tagsEditorMarkup).toContain('data-web-field-kind="entity-reference-combobox"');
+    expect(tagsEditorMarkup).toContain(`data-web-reference-selected-id="${fields.tagId}"`);
+    expect(tagsEditorMarkup).toContain("Platform");
   });
 });

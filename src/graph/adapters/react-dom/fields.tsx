@@ -1,15 +1,18 @@
-import { MarkdownRenderer } from "@io/web/markdown";
-
 import {
   formatPredicateValue,
-  getPredicateEntityReferenceSelection,
   usePredicateField,
   type PredicateFieldProps,
   type PredicateFieldViewCapability,
 } from "../../runtime/react/index.js";
-import { normalizeTextValue } from "./editor/shared.js";
-import { SvgPreview } from "./editor/svg-preview.js";
-import { EntityReferenceSummary } from "./entity-reference-ui.js";
+import { durationFieldViewCapability } from "./editor/duration.js";
+import { markdownFieldViewCapability } from "./editor/markdown.js";
+import { moneyFieldViewCapability } from "./editor/money.js";
+import { percentFieldViewCapability } from "./editor/percent.js";
+import { quantityFieldViewCapability } from "./editor/quantity.js";
+import { rangeFieldViewCapability } from "./editor/range.js";
+import { rateFieldViewCapability } from "./editor/rate.js";
+import { entityReferenceListViewCapability } from "./editor/reference.js";
+import { svgFieldViewCapability } from "./editor/svg.js";
 
 type AnyFieldProps = PredicateFieldProps<any, any>;
 
@@ -37,65 +40,9 @@ function TextFieldView({ predicate }: AnyFieldProps) {
   return <span data-web-field-kind="text">{formatPredicateValue(predicate, value)}</span>;
 }
 
-function MarkdownFieldView({ predicate }: AnyFieldProps) {
-  const { value } = usePredicateField(predicate);
-  const content = normalizeTextValue(value);
-
-  return (
-    <div data-web-field-kind="markdown">
-      <MarkdownRenderer className="topic-markdown" content={content} />
-    </div>
-  );
-}
-
-function SvgFieldView({ predicate }: AnyFieldProps) {
-  const { value } = usePredicateField(predicate);
-  const content = normalizeTextValue(value);
-
-  return (
-    <div data-web-field-kind="svg">
-      <SvgPreview content={content} />
-    </div>
-  );
-}
-
 function NumberFieldView({ predicate }: AnyFieldProps) {
   const { value } = usePredicateField(predicate);
   return <span data-web-field-kind="number">{formatPredicateValue(predicate, value)}</span>;
-}
-
-function DurationFieldView({ predicate }: AnyFieldProps) {
-  const { value } = usePredicateField(predicate);
-  return (
-    <span data-web-field-kind="number/duration">{formatPredicateValue(predicate, value)}</span>
-  );
-}
-
-function PercentFieldView({ predicate }: AnyFieldProps) {
-  const { value } = usePredicateField(predicate);
-  return <span data-web-field-kind="number/percent">{formatPredicateValue(predicate, value)}</span>;
-}
-
-function QuantityFieldView({ predicate }: AnyFieldProps) {
-  const { value } = usePredicateField(predicate);
-  return (
-    <span data-web-field-kind="number/quantity">{formatPredicateValue(predicate, value)}</span>
-  );
-}
-
-function RangeFieldView({ predicate }: AnyFieldProps) {
-  const { value } = usePredicateField(predicate);
-  return <span data-web-field-kind="number/range">{formatPredicateValue(predicate, value)}</span>;
-}
-
-function RateFieldView({ predicate }: AnyFieldProps) {
-  const { value } = usePredicateField(predicate);
-  return <span data-web-field-kind="number/rate">{formatPredicateValue(predicate, value)}</span>;
-}
-
-function MoneyFieldView({ predicate }: AnyFieldProps) {
-  const { value } = usePredicateField(predicate);
-  return <span data-web-field-kind="money/amount">{formatPredicateValue(predicate, value)}</span>;
 }
 
 function DateFieldView({ predicate }: AnyFieldProps) {
@@ -147,38 +94,23 @@ function BadgeFieldView({ predicate }: AnyFieldProps) {
   return <span data-web-field-kind="badge">{formatPredicateValue(predicate, value)}</span>;
 }
 
-function EntityReferenceListView({ predicate }: AnyFieldProps) {
-  const { value } = usePredicateField(predicate);
-  const references = getPredicateEntityReferenceSelection(predicate, value);
-
-  return (
-    <ul data-web-field-kind="entity-reference-list">
-      {references.map(({ entity, id }) => (
-        <li data-web-reference-id={id} key={id}>
-          <EntityReferenceSummary entity={entity} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export const genericWebFieldViewCapabilities = [
   { kind: "boolean", Component: BooleanFieldView },
   { kind: "text", Component: TextFieldView },
-  { kind: "markdown", Component: MarkdownFieldView },
-  { kind: "svg", Component: SvgFieldView },
+  markdownFieldViewCapability,
+  svgFieldViewCapability,
   { kind: "date", Component: DateFieldView },
   { kind: "number", Component: NumberFieldView },
-  { kind: "number/duration", Component: DurationFieldView },
-  { kind: "number/percent", Component: PercentFieldView },
-  { kind: "number/quantity", Component: QuantityFieldView },
-  { kind: "number/range", Component: RangeFieldView },
-  { kind: "number/rate", Component: RateFieldView },
-  { kind: "money/amount", Component: MoneyFieldView },
+  durationFieldViewCapability,
+  percentFieldViewCapability,
+  quantityFieldViewCapability,
+  rangeFieldViewCapability,
+  rateFieldViewCapability,
+  moneyFieldViewCapability,
   { kind: "link", Component: LinkFieldView },
   { kind: "external-link", Component: ExternalLinkFieldView },
   { kind: "badge", Component: BadgeFieldView },
-  { kind: "entity-reference-list", Component: EntityReferenceListView },
+  entityReferenceListViewCapability,
 ] satisfies readonly PredicateFieldViewCapability<any, any>[];
 
 export { genericWebFieldEditorCapabilities } from "./editor/index.js";

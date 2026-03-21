@@ -11,6 +11,7 @@ import {
   getPredicateEditorPlaceholder,
   performValidatedMutation,
   usePredicateField,
+  type PredicateFieldViewCapability,
 } from "../../../runtime/react/index.js";
 import {
   normalizeTextValue,
@@ -19,6 +20,22 @@ import {
   validatePredicateValue,
   type AnyFieldProps,
 } from "./shared.js";
+
+function MarkdownFieldView({ predicate }: AnyFieldProps) {
+  const { value } = usePredicateField(predicate);
+  const content = normalizeTextValue(value);
+
+  return (
+    <div data-web-field-kind="markdown">
+      <MarkdownRenderer className="topic-markdown" content={content} />
+    </div>
+  );
+}
+
+export const markdownFieldViewCapability = {
+  kind: "markdown",
+  Component: MarkdownFieldView,
+} satisfies PredicateFieldViewCapability<any, any>;
 
 export function MarkdownFieldEditor({
   onMutationError,

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { normalizeRateInput, type RateValue } from "../../../modules/core/rate/index.js";
 import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
+  createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,
   setPredicateValue,
   useFieldMutationCallbacks,
@@ -24,6 +25,8 @@ function normalizeCommittedRate(value: unknown): RateValue | undefined {
     return undefined;
   }
 }
+
+export const rateFieldViewCapability = createFormattedFieldViewCapability("number/rate");
 
 export function RateFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
   const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });

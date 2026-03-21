@@ -10,6 +10,7 @@ import {
 } from "../../../modules/core/money/index.js";
 import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
+  createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,
   setPredicateValue,
   useFieldMutationCallbacks,
@@ -41,6 +42,8 @@ function parseDraftAmount(raw: string): number | undefined {
   const value = Number(raw);
   return Number.isFinite(value) ? value : undefined;
 }
+
+export const moneyFieldViewCapability = createFormattedFieldViewCapability("money/amount");
 
 export function MoneyFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
   const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });

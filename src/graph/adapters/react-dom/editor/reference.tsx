@@ -7,14 +7,16 @@ import {
   performValidatedMutation,
   useOptionalMutationRuntime,
   usePredicateField,
+  type PredicateFieldViewCapability,
 } from "../../../runtime/react/index.js";
+import { OptionComboboxEditor } from "./option-combobox.js";
 import {
   createTagKey,
   EntityReferenceOptionContent,
+  EntityReferenceSummary,
   getEntityReferenceLabel,
   type EntityReferenceEntity,
-} from "../entity-reference-ui.js";
-import { OptionComboboxEditor } from "./option-combobox.js";
+} from "./reference-ui.js";
 import {
   addPredicateItem,
   clearPredicateValue,
@@ -46,6 +48,26 @@ type EntityReferenceComboboxRuntime = {
 };
 
 const tagColorPalette = ["#2563eb", "#0f766e", "#d97706", "#be123c", "#7c3aed", "#0891b2"] as const;
+
+function EntityReferenceListView({ predicate }: AnyFieldProps) {
+  const { value } = usePredicateField(predicate);
+  const references = getPredicateEntityReferenceSelection(predicate, value);
+
+  return (
+    <ul data-web-field-kind="entity-reference-list">
+      {references.map(({ entity, id }) => (
+        <li data-web-reference-id={id} key={id}>
+          <EntityReferenceSummary entity={entity} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export const entityReferenceListViewCapability = {
+  kind: "entity-reference-list",
+  Component: EntityReferenceListView,
+} satisfies PredicateFieldViewCapability<any, any>;
 
 export function EntityReferenceComboboxEditor({
   onMutationError,

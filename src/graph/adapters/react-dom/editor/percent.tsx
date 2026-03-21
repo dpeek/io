@@ -8,12 +8,15 @@ import {
   usePredicateField,
 } from "../../../runtime/react/index.js";
 import {
+  createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,
   setPredicateValue,
   useFieldMutationCallbacks,
   validatePredicateValue,
   type AnyFieldProps,
 } from "./shared.js";
+
+export const percentFieldViewCapability = createFormattedFieldViewCapability("number/percent");
 
 export function PercentFieldEditor({
   onMutationError,

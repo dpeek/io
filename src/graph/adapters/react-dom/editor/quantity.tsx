@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { QuantityValue } from "../../../modules/core/quantity/index.js";
 import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
+  createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,
   setPredicateValue,
   useFieldMutationCallbacks,
@@ -28,6 +29,8 @@ function parseDraftAmount(raw: string): number | undefined {
   const value = Number(raw);
   return Number.isFinite(value) ? value : undefined;
 }
+
+export const quantityFieldViewCapability = createFormattedFieldViewCapability("number/quantity");
 
 export function QuantityFieldEditor({
   onMutationError,

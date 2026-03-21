@@ -4,11 +4,14 @@ import {
   type PredicateRef,
 } from "../../../index.js";
 import {
+  formatPredicateValue,
   performValidatedMutation,
   usePersistedMutationCallbacks,
+  usePredicateField,
   type MutationCallbacks,
   type MutationValidation,
   type PredicateFieldProps,
+  type PredicateFieldViewCapability,
 } from "../../../runtime/react/index.js";
 
 export type AnyPredicate = PredicateRef<any, any>;
@@ -152,4 +155,15 @@ export function getPredicateFieldLabel(predicate: AnyPredicate): string {
       }
     ).meta?.label ?? "Reference"
   );
+}
+
+export function createFormattedFieldViewCapability(
+  kind: string,
+): PredicateFieldViewCapability<any, any> {
+  function FormattedFieldView({ predicate }: AnyFieldProps) {
+    const { value } = usePredicateField(predicate);
+    return <span data-web-field-kind={kind}>{formatPredicateValue(predicate, value)}</span>;
+  }
+
+  return { kind, Component: FormattedFieldView };
 }

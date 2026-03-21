@@ -12,6 +12,7 @@ import {
 } from "../../../modules/core/duration/index.js";
 import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
+  createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,
   setPredicateValue,
   useFieldMutationCallbacks,
@@ -34,6 +35,8 @@ function parseDraftAmount(raw: string): number | undefined {
   const value = Number(raw);
   return Number.isFinite(value) ? value : undefined;
 }
+
+export const durationFieldViewCapability = createFormattedFieldViewCapability("number/duration");
 
 export function DurationFieldEditor({
   onMutationError,

@@ -9,6 +9,7 @@ import {
 } from "../../../modules/core/structured-value.js";
 import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
+  createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,
   setPredicateValue,
   useFieldMutationCallbacks,
@@ -31,6 +32,8 @@ function normalizeCommittedRange(value: unknown): RangeValue | undefined {
     return undefined;
   }
 }
+
+export const rangeFieldViewCapability = createFormattedFieldViewCapability("number/range");
 
 export function RangeFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
   const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });

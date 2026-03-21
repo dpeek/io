@@ -1,5 +1,5 @@
-import { core } from "../../modules/index.js";
-import { GraphIcon } from "./icon.js";
+import { core } from "../../../modules/index.js";
+import { GraphIcon } from "../icon.js";
 
 export type EntityReferenceEntity = {
   id: string;
