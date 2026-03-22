@@ -7,54 +7,33 @@ The goal is to let multiple agents build the product in parallel without hiding
 the real contract dependencies. Parallel work is only real when one branch can
 make progress behind stable or explicitly provisional interfaces.
 
-## Branches
+## Branch Specs
+
+Each branch now lives in one canonical document. The former overview brief is
+merged into the front of each file so the delivery summary and implementation
+contract stay together.
 
 1. [`01-graph-kernel-and-authority.md`](./01-graph-kernel-and-authority.md):
-   stable facts, ids, schema, authoritative transactions, persistence, and the
-   single-graph authority runtime
+   stable facts, ids, schema, authoritative transactions, persistence, sync,
+   and secret handling
 2. [`02-identity-policy-and-sharing.md`](./02-identity-policy-and-sharing.md):
-   principal model, auth boundary, predicate-level policy, capability grants,
+   principal model, auth projection, predicate-level policy, capability grants,
    and sharing contracts
 3. [`03-sync-query-and-projections.md`](./03-sync-query-and-projections.md):
-   scope-based sync, query planning rules, materialized indexes, and live scope
+   scope-based sync, bounded queries, materialized indexes, and live scope
    registration
 4. [`04-module-runtime-and-installation.md`](./04-module-runtime-and-installation.md):
    installable modules, manifests, migrations, permissions, and runtime
    registration
-5. [`05-blob-ingestion-and-media.md`](./05-blob-ingestion-and-media.md): R2
-   blobs, queue-backed ingestion, extraction, provenance, and media or document
-   module families
+5. [`05-blob-ingestion-and-media.md`](./05-blob-ingestion-and-media.md):
+   blob metadata, upload and finalize flow, queue-backed ingestion,
+   derivatives, provenance, and file or media module families
 6. [`06-workflow-and-agent-runtime.md`](./06-workflow-and-agent-runtime.md):
-   graph-native workflow, agent memory, context retrieval, runs, sessions, and
-   artifacts
-7. [`07-web-and-operator-surfaces.md`](./07-web-and-operator-surfaces.md): web
-   shell, module host, capability-aware UX, graph devtools, and operator
-   surfaces
-
-## Canonical Specs
-
-- [`01-graph-kernel-and-authority-canonical.md`](./01-graph-kernel-and-authority-canonical.md):
-  implementation contract for Branch 1 covering ids, facts, authoritative
-  writes, persistence, sync, and secret handling
-- [`02-identity-policy-and-sharing-canonical.md`](./02-identity-policy-and-sharing-canonical.md):
-  implementation contract for Branch 2 covering principals, auth projection,
-  predicate policy, grants, and sharing
-- [`03-sync-query-and-projections-canonical.md`](./03-sync-query-and-projections-canonical.md):
-  implementation contract for Branch 3 covering scopes, bounded reads,
-  projections, invalidation, and live registrations
-- [`04-module-runtime-and-installation-canonical.md`](./04-module-runtime-and-installation-canonical.md):
-  implementation contract for Branch 4 covering installable modules,
-  manifests, migrations, permissions, and runtime registration
-- [`05-blob-ingestion-and-media-canonical.md`](./05-blob-ingestion-and-media-canonical.md):
-  implementation contract for Branch 5 covering blob metadata, upload and
-  finalize flow, queue-backed ingestion, derivatives, provenance, and module
-  registration
-- [`06-workflow-and-agent-runtime-canonical.md`](./06-workflow-and-agent-runtime-canonical.md):
-  implementation contract for Branch 6 covering graph-native workflow, runs,
-  sessions, artifacts, context bundles, and the agent runtime
-- [`07-web-and-operator-surfaces-canonical.md`](./07-web-and-operator-surfaces-canonical.md):
-  implementation contract for Branch 7 covering browser bootstrap, module
-  hosting, capability-aware UX, and operator surfaces
+   graph-native workflow, context retrieval, runs, sessions, artifacts, and
+   the agent runtime
+7. [`07-web-and-operator-surfaces.md`](./07-web-and-operator-surfaces.md):
+   browser bootstrap, module hosting, capability-aware UX, graph devtools, and
+   operator surfaces
 
 ## Critical Path
 

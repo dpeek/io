@@ -44,19 +44,19 @@ canonical; these files reorganize them into reviewable slices.
 - [`branch/README.md`](./branch/README.md): platform branches as parallel
   workstreams with dependencies, critical-path guidance, and canonical branch
   specs where available
-- [`branch/01-graph-kernel-and-authority-canonical.md`](./branch/01-graph-kernel-and-authority-canonical.md):
+- [`branch/01-graph-kernel-and-authority.md`](./branch/01-graph-kernel-and-authority.md):
   canonical contract for Branch 1 graph kernel and authority work
-- [`branch/02-identity-policy-and-sharing-canonical.md`](./branch/02-identity-policy-and-sharing-canonical.md):
+- [`branch/02-identity-policy-and-sharing.md`](./branch/02-identity-policy-and-sharing.md):
   canonical contract for Branch 2 identity, policy, and sharing work
-- [`branch/03-sync-query-and-projections-canonical.md`](./branch/03-sync-query-and-projections-canonical.md):
+- [`branch/03-sync-query-and-projections.md`](./branch/03-sync-query-and-projections.md):
   canonical contract for Branch 3 sync, query, and projection work
-- [`branch/04-module-runtime-and-installation-canonical.md`](./branch/04-module-runtime-and-installation-canonical.md):
+- [`branch/04-module-runtime-and-installation.md`](./branch/04-module-runtime-and-installation.md):
   canonical contract for Branch 4 module runtime and installation work
-- [`branch/05-blob-ingestion-and-media-canonical.md`](./branch/05-blob-ingestion-and-media-canonical.md):
+- [`branch/05-blob-ingestion-and-media.md`](./branch/05-blob-ingestion-and-media.md):
   canonical contract for Branch 5 blob, ingestion, provenance, and media work
-- [`branch/06-workflow-and-agent-runtime-canonical.md`](./branch/06-workflow-and-agent-runtime-canonical.md):
+- [`branch/06-workflow-and-agent-runtime.md`](./branch/06-workflow-and-agent-runtime.md):
   canonical contract for Branch 6 workflow and agent runtime work
-- [`branch/07-web-and-operator-surfaces-canonical.md`](./branch/07-web-and-operator-surfaces-canonical.md):
+- [`branch/07-web-and-operator-surfaces.md`](./branch/07-web-and-operator-surfaces.md):
   canonical contract for Branch 7 web and operator surface work
 
 ## Source Mapping

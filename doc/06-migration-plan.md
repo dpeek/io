@@ -93,7 +93,7 @@ The roadmap recommends this order because each step unlocks the next:
   recovery, and cursor fallback
 - document and tighten the SQL row contracts around `io_graph_meta`,
   `io_graph_tx`, `io_graph_tx_op`, `io_graph_edge`, and `io_secret_value`
-- keep non-Durable-Object test backends minimal and clearly non-canonical
+- keep non-Durable-Object test backends minimal and clearly non
 
 ### Days 31-60
 
