@@ -21,8 +21,8 @@ It then refines that into eight platform primitives:
 5. Indexes and projections: rebuildable derived read models
 6. Modules: installable slices bundling schema, UI, commands, workflows,
    indexes, ingest, and migrations
-7. Workflow runtime state: graph-native streams, features, tasks, runs,
-   sessions, artifacts, and decisions
+7. Workflow runtime state: graph-native projects, branches, commits, sessions,
+   artifacts, and decisions
 8. Blob and ingest substrate: R2-backed objects plus queue-driven extraction and
    normalization
 
@@ -42,8 +42,8 @@ Recommended layers:
   slices
 
 For the platform itself, graph-native workflow adds first-class types such as
-stream, feature, task, run, session, artifact, decision, context document,
-repository, module, and environment.
+project, repository, branch, commit, session, artifact, decision, context
+document, module, and environment.
 
 ## Data Flow
 

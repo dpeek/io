@@ -57,8 +57,8 @@ Wave 1:
 - Branch 2 can start immediately on principal and policy contracts
 - Branch 4 can start on manifest shape and built-in module install flow using a
   provisional permission model
-- Branch 6 can start on graph-native workflow types and Linear mirroring using
-  current graph primitives
+- Branch 6 can start on graph-native project, branch, commit, and session
+  workflow using current graph primitives plus local git inspection
 - Branch 7 can keep improving the shell and devtools against the current
   single-graph proof
 

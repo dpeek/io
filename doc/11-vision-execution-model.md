@@ -93,7 +93,8 @@ The vision calls out these major risks for deep research and execution:
 
 ### Phase 3: replace external workflow dependencies
 
-- model streams, features, tasks, runs, and artifacts directly in the graph
+- model projects, branches, commits, sessions, and artifacts directly in the
+  graph
 - let the agent runtime operate on those graph-native workflows
 - use the system to build itself
 

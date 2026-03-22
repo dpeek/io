@@ -142,25 +142,25 @@ The out-of-the-box product should likely include installable families for:
 - people and communication: contacts, organizations, email accounts, emails,
   threads, attachments
 - time: calendars, events, tasks, reminders
-- work: projects, streams, features, tasks, runs, artifacts
+- work: projects, repositories, branches, commits, sessions, artifacts
 - integrations: env vars, API credentials, sync connectors, importers
 
 ## Agent-Native Workflow
 
 The current issue-driven Linear integration is treated as a bootstrap, not the
-final model.
+final model. The preferred replacement is a git-native workflow model rather
+than a tracker clone.
 
 The long-term workflow types likely include:
 
-- stream
-- feature
-- task
-- run
+- project
+- repository
+- branch
+- commit
 - session
 - artifact
 - decision
 - context document
-- repository
 - module
 - environment
 

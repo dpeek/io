@@ -4,77 +4,98 @@
 
 ### Mission
 
-Move work, runs, sessions, artifacts, and context retrieval into the graph so
-the system can operate on its own native workflow model.
+Move branch backlog, commit planning, sessions, artifacts, and context
+retrieval into the graph so one TUI can manage both backlog and in-flight work
+for a real project.
 
 ### Why This Is A Separate Branch
 
-The repo already has a useful agent runtime, but it is still tied to
-issue-driven automation. This branch is about productizing workflow and agent
-memory as first-class graph capabilities.
+The repo already has a useful agent runtime, but it is still organized around
+Linear issues and a `stream -> feature -> task` taxonomy. The next product step
+is different: the operator wants to see actual project branches, keep the
+backlog filled inside the same surface, and launch Codex directly in the
+context of one branch.
+
+This branch therefore treats git-backed workflow as a first-class product
+capability rather than an adapter around an external tracker.
 
 ### In Scope
 
-- graph-native workflow taxonomy
-- run, session, artifact, and decision records
-- context-bundle retrieval model
-- retained execution history
-- Linear mirroring or dual-write during migration
-- agent runtime changes needed to consume graph-native workflow state
+- graph-native `project -> branch -> commit -> session[]` workflow taxonomy
+- git-backed branch inventory for one current project root
+- branch end-state document reference and summary fields
+- commit queue and commit-level finalization records
+- branch-scoped and commit-scoped Codex session launch from the TUI
+- retained session, artifact, decision, and context-bundle history
+- TUI-first backlog and in-flight operator loop
+- agent runtime changes needed to consume graph-native branch and commit state
 
 ### Out Of Scope
 
-- full replacement of all external tools on day one
-- final polished operator UI for every workflow surface
-- every future planning heuristic
+- compatibility layers, mirroring, or dual-write with Linear
+- rich Markdown editing for large planning documents
+- generalized multi-project planning heuristics
+- stacked-branch orchestration beyond one active commit per branch in the first
+  milestone
+- replacement of git itself, local worktrees, or repo-local command execution
 
 ### Durable Contracts Owned
 
-- workflow entity model
-- run and session lifecycle model
-- artifact and decision record model
-- agent context-bundle shape
+- workflow project, branch, and commit entity model
+- branch-scoped session lifecycle model
+- artifact and decision provenance model
+- context-bundle shape for branch or commit execution
+- git reconciliation boundary between graph state and local repo state
 
 ### Likely Repo Boundaries
 
 - `src/agent/`
 - future workflow-engine and context-retrieval packages
 - graph-native workflow modules
+- TUI branch and session surfaces
 
 ### Dependencies
 
 - Branch 1 for graph persistence and writes
-- Branch 4 for workflow and command descriptors as installable module features
 - Branch 2 for principal-aware permissions
-- Branch 3 for scoped retrieval of work queues and context bundles
+- Branch 3 for scoped retrieval of project, branch, and session views
+- Branch 4 for workflow descriptors as installable module features
 
 ### Downstream Consumers
 
 - Branch 7 needs workflow and operator surfaces
-- Branch 5 can attach ingest review tasks and artifacts to the workflow model
+- future module workflows can schedule branch or commit work onto this runtime
 
 ### First Shippable Milestone
 
-Mirror the current Linear-backed task flow into graph-native workflow entities
-and let the agent runtime read context and write artifacts through the graph.
+Run one real project end to end in the TUI: inspect backlog branches and
+active branches beside the current git branch inventory, inspect the commit
+queue for a selected branch, launch Codex in branch context, and write session
+history, artifacts, and decisions through the graph.
 
 ### Done Means
 
-- one real task flow exists in graph-native records
-- the agent can retrieve a task-specific context bundle from the graph
-- the agent writes run, session, and artifact records back to the graph
-- Linear remains only as an adapter, not the only source of truth for that flow
+- one real workflow loop exists only in graph-native project, branch, and
+  commit records plus actual git refs
+- the TUI shows backlog, in-flight work, and current project branches together
+- an operator can start a Codex session in the context of a selected branch
+- the agent can retrieve a branch-specific or commit-specific context bundle
+- the agent writes session, artifact, and decision records back to the graph
+- no external tracker is required for planning or execution
 
 ### First Demo
 
-Start a task, inspect the graph-native task and context bundle, run the agent,
-and view the resulting artifact and session history in the graph.
+Open the TUI, view one project's backlog branches plus local git branches,
+select a branch, inspect its end-state summary and commit queue, launch Codex
+against that branch, and inspect the resulting session history and artifacts in
+the graph after restart.
 
 ### What This Unlocks
 
-- self-hosted workflow proving ground
-- durable agent memory
-- workflow-native operator surfaces in Branch 7
+- one operator surface for backlog and in-flight work
+- graph-native planning without a tracker dependency
+- durable branch memory and commit history
+- branch-aware web and TUI operator surfaces in Branch 7
 
 ### Source Anchors
 
@@ -87,64 +108,73 @@ and view the resulting artifact and session history in the graph.
 
 ## 1. Purpose
 
-This branch owns the graph-native workflow model and the agent runtime contract
-that operates on it.
+This branch owns the graph-native workflow model and agent runtime contract for
+git-backed project work.
 
-It exists as a separate branch because the repo already proves useful
-automation, but that automation is still organized around repo-local workflow
-files, Linear issues, filesystem runtime state, and retained logs under
-`src/agent/`. The platform direction in `vision.md`,
-`doc/10-vision-product-model.md`, and `doc/11-vision-execution-model.md` is
-stricter: workflow, run history, context retrieval, and durable agent memory
-must become first-class graph capabilities rather than incidental runtime
-byproducts.
+The key product pressure is simple: the operator does not want four tools open
+just to keep work moving. They want one place to:
 
-Platform outcomes this branch must deliver:
+- see backlog work
+- see in-flight branches
+- inspect the current project's real git branches
+- launch an interactive Codex session in the context of one branch
+- manage the commit queue that will land on that branch
 
-- one canonical graph entity model for streams, features, tasks, runs,
-  sessions, artifacts, decisions, and context bundles
-- one authoritative runtime contract for starting work, recording execution,
-  and finalizing results
-- one retrieval contract for task-specific context bundles
-- one migration path where Linear becomes an adapter or mirror, not the sole
-  source of truth
-- one retained execution history that Branch 7 and future MCP or operator
-  surfaces can inspect without reading local runtime files
+That pushes the workflow model toward actual git objects and away from external
+tracker semantics. The first stable model should therefore not attempt to
+recreate Linear inside the graph. It should model the work in the units the
+operator already uses:
+
+- a project
+- a long-running branch with one desired end-state
+- a queue of commit-sized execution slices inside that branch
+- one or more agent sessions that help plan or execute those slices
+
+Important naming note:
+
+- the docs under `doc/branch/` use "branch" to mean a delivery workstream
+- this Branch 6 spec uses `WorkflowBranch` to mean a git-backed work branch
+
+Those are different concepts. This spec intentionally picks the git-backed
+meaning because that is the operator-facing workflow the TUI must show.
 
 Stability target for this branch:
 
-- `stable`: workflow lineage model, run lifecycle, session event envelope,
-  artifact and decision provenance, context-bundle shape, external-mirror rule
-  that graph state wins
-- `provisional`: scheduling heuristics, context ranking heuristics, live work
-  queue projections, large transcript storage strategy, and operator summary
-  read models
-- `future`: graph-native planning heuristics, multi-agent coordination beyond
-  one active task per feature, and cross-graph workflow or delegation
+- `stable`: workflow project, branch, and commit lineage; session envelope;
+  artifact and decision provenance; context-bundle shape; branch lock and
+  worktree reservation model
+- `provisional`: backlog ordering heuristics, git health summaries, branch-doc
+  storage strategy, commit ranking, and operator summary projections
+- `future`: multi-project scheduling, stacked commit branches, automatic branch
+  splitting or merging heuristics, and cross-repo delegation
 
 ## 2. Scope
 
 ### In scope
 
-- graph-native work item taxonomy for stream, feature, and task
-- graph-native run, session, artifact, decision, and context-bundle records
-- authoritative run start, progress, and completion transitions
+- graph-native workflow taxonomy for project, branch, and commit
+- graph-native branch records backed by real git branch names
+- branch document references or summaries for desired end-state planning
+- commit queue records and commit-level finalization metadata
+- branch-scoped or commit-scoped session, artifact, decision, and
+  context-bundle records
 - retained execution history usable after process restart
-- the contract boundary between local execution substrate and graph-owned state
-- migration adapters that mirror or dual-write current Linear-backed flows
+- the contract boundary between local git execution substrate and graph-owned
+  workflow state
+- a TUI read model for backlog branches, in-flight branches, commit queues, and
+  current project branch inventory
 - agent runtime changes needed so `src/agent/service.ts`,
   `src/agent/context.ts`, `src/agent/workspace.ts`, and `src/agent/tui/*` can
-  consume graph-native workflow state
+  consume graph-native branch and commit state
 
 ### Out of scope
 
-- replacement of git worktrees, local branches, or repo-local command
-  execution
-- a final generalized planner for every future workflow family
-- a final polished browser UI for all workflow surfaces
-- replacement of Better Auth, capability enforcement, or scoped sync planning
-- arbitrary distributed queue scans across sharded authorities
-- full replacement of all external tools on day one
+- replacement of git refs, worktrees, or repo-local command execution
+- full branch-document editing in the TUI
+- a generalized planner for every future workflow family
+- browser-first operator flows before the TUI loop works
+- tracker compatibility layers, mirroring, or dual-write
+- arbitrary distributed queue scans across many projects in the first milestone
 
 ### Upstream assumptions
 
@@ -152,202 +182,203 @@ Stability target for this branch:
   ordering, and durable persistence
 - Branch 2 owns principal identity, predicate visibility, capability checks,
   and secret access boundaries
-- Branch 3 owns work-queue scopes, context-bundle scopes, collection indexes,
-  and live invalidation routing
+- Branch 3 owns project, branch, and session scope reads plus live invalidation
 - Branch 4 owns workflow descriptors as installable module features
-- Branch 5 owns blob records and ingest jobs for large artifacts or extracted
-  context inputs
 
 ## 3. Core Model
 
 ### Canonical module boundary
 
-Inference: until a broader installable `work` foundation module exists, the
-first built-in schema slice for this branch should ship as one `ops/workflow`
-module. That matches the repo's current `ops:` namespace convention and keeps
-platform workflow separate from future domain-specific task modules.
+Inference: the first built-in schema slice for this branch should still ship as
+one `ops/workflow` module. The taxonomy changes, but the install boundary does
+not. Workflow stays a platform capability rather than a repo-local convention.
+
+### Design choice: no separate `Run` in the first milestone
+
+The existing runtime uses a `run` concept because work is claim-based and
+issue-oriented. The proposed git-native model does not need that extra layer to
+start.
+
+Milestone-one rule:
+
+- the authoritative execution record is `AgentSession`
+- a session targets either a branch or a commit
+- if the operator wants another attempt, start another session
+
+Only add a separate `WorkflowRun` later if retry semantics, detached
+finalization, or noninteractive batch execution make it necessary. Starting
+without it keeps the first graph schema closer to the workflow the operator
+actually thinks in.
 
 ### Owned entities
 
-`WorkflowStream`
+`WorkflowProject`
 
-- long-lived workstream for one subsystem, package, or product slice
-- top-level release boundary for planning and final integration
-- parent of zero or more `WorkflowFeature` records
+- one repo root and operator working context
+- anchors backlog, branch inventory, and session history for one project
+- stores base branch defaults and repo identity
 
-`WorkflowFeature`
+`WorkflowBranch`
 
-- integration-sized branch owner inside a stream
-- scheduling boundary for execution concurrency
-- parent of zero or more `WorkflowTask` records
+- long-running git-backed stream of work inside one project
+- represented by one canonical git branch name
+- owns one desired end-state summary and optional document reference
+- parent of zero or more `WorkflowCommit` records
 
-`WorkflowTask`
+`WorkflowCommit`
 
-- smallest schedulable execution unit
-- the unit a supervisor can claim for one run attempt
-- may represent implementation, backlog editing, review, ingest review, or
-  other narrow execution work, but each task still belongs to exactly one
-  feature
-
-`WorkflowRun`
-
-- one authoritative execution attempt against one workflow subject
-- anchors context, sessions, artifacts, decisions, and finalization outcome
-- replaces the current split between ephemeral runtime files and retained logs
+- smallest execution and finalization unit inside a branch
+- represents one intended git commit, not a tracker issue
+- may reserve a worktree while active
+- carries resulting git commit metadata after finalization
 
 `AgentSession`
 
-- one execution sub-session inside a run
-- directly models the current `AgentSessionRef` tree used by the TUI:
-  `supervisor`, `worker`, and `child`
-- carries runtime state and workflow references used by operator tooling
+- one LLM session
+- may target the branch as a whole for planning or the active commit for
+  execution
+- authoritative retained record for what happened during that interaction
 
 `AgentSessionEvent`
 
 - append-only ordered event envelope for session lifecycle changes, status
   lines, raw output lines, and Codex notifications
-- durable event history replaces the current file-only replay path
+- durable event history replaces file-only replay
 
 `WorkflowArtifact`
 
-- durable output produced by a run, including text summaries, patches, docs,
-  screenshots, exported files, command transcripts, or blob-backed outputs
-- always points back to the producing run and session
+- durable output produced by a session, including branch plans, patch
+  summaries, commit notes, docs, screenshots, exported files, or transcript
+  fragments
 
 `WorkflowDecision`
 
-- durable decision or blockage record written during or after a run
-- captures operator-visible reasoning that should outlive the terminal session
+- durable decision or blocker record written during or after a session
+- captures operator-visible reasoning that should outlive the terminal
 
 `ContextBundle`
 
-- immutable task-specific bundle of references and rendered inputs chosen for
-  one run attempt
-- the retrieval unit the agent consumes before execution
+- immutable branch-specific or commit-specific context bundle chosen for one
+  session
+- the retrieval unit Codex consumes before execution
 
 `ContextBundleEntry`
 
 - ordered member of a `ContextBundle`
 - preserves source, order, and inclusion reason for one retrieved item
 
-`TrackerMirror`
-
-- optional mapping from graph-native workflow records to external tracker
-  records such as Linear issue ids and identifiers
-- exists only to support migration or interoperability
-- never becomes the authoritative workflow state
-
 ### Canonical identifiers
 
 - every entity above uses a graph node id owned by Branch 1
-- every work item also has a human-readable `workflowKey` that is stable inside
-  one graph, for example `stream:graph-sync`,
-  `feature:sync-scope-bootstrap`, or `task:branch6-doc`
-- tracker-backed items additionally keep `externalRef` values such as
-  `{ system: "linear", issueId, identifier }`
-- `WorkflowRun.runKey` is unique per task attempt and must remain stable across
-  retries of transport or persistence
-- `AgentSession.sessionKey` is stable within a run and reuses the current
-  session tree shape from `src/agent/tui/session-events.ts`
-- `ContextBundle.bundleKey` is unique per run and immutable after creation
+- each project, branch, commit, and session also has a human-readable stable
+  key inside one graph, for example:
+  - `project:io`
+  - `branch:workflow-graph-native`
+  - `commit:branch-runtime-view`
+  - `session:branch-runtime-view-plan-01`
+- `WorkflowBranch.branchKey` remains stable even if the display title changes
+- `WorkflowCommit.commitKey` remains stable across replanning of the same
+  commit-sized slice
+- `AgentSession.sessionKey` is stable within one project
+- `ContextBundle.bundleKey` is unique per session and immutable after creation
 
 ### Canonical interfaces
 
 ```ts
-type WorkflowNodeKind = "stream" | "feature" | "task";
+type WorkflowBranchState = "backlog" | "ready" | "active" | "blocked" | "done" | "archived";
 
-type WorkflowState = "backlog" | "todo" | "in-progress" | "blocked" | "done" | "cancelled";
+type WorkflowCommitState = "planned" | "ready" | "active" | "blocked" | "committed" | "dropped";
 
-type WorkflowReleaseState = "held" | "released";
-
-interface WorkflowWorkItem {
+interface WorkflowProject {
   id: string;
-  workflowKey: string;
-  kind: WorkflowNodeKind;
+  projectKey: string;
   title: string;
-  description?: string;
-  state: WorkflowState;
-  releaseState?: WorkflowReleaseState;
-  parentId?: string;
-  streamId: string;
-  featureId?: string;
-  moduleIds?: readonly string[];
-  tracker?: {
-    system: "linear";
-    issueId: string;
-    identifier: string;
-    mirroredAt?: string;
-    mirrorMode: "mirror" | "dual-write";
-  };
-  activeRunId?: string;
-  latestRunId?: string;
+  repoRoot: string;
+  defaultBaseBranch: string;
+  mainRemoteName?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-type WorkflowRunState =
-  | "queued"
-  | "running"
-  | "awaiting-user-input"
-  | "blocked"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "finalized";
-
-interface WorkflowRun {
+interface WorkflowBranch {
   id: string;
-  runKey: string;
-  workItemId: string;
-  attempt: number;
-  actorId: string;
-  mode: "backlog" | "execute" | "review" | "ingest";
-  state: WorkflowRunState;
-  contextBundleId?: string;
-  rootSessionId?: string;
-  workerId?: string;
-  workspace?: {
-    branchName?: string;
-    baseBranchName?: string;
+  projectId: string;
+  branchKey: string;
+  title: string;
+  state: WorkflowBranchState;
+  queueRank?: number;
+  goalSummary: string;
+  goalDocumentPath?: string;
+  goalDocumentBlobId?: string;
+  git: {
+    branchName: string;
+    baseBranchName: string;
+    upstreamName?: string;
+    headSha?: string;
     worktreePath?: string;
-    outputPath?: string;
+    latestReconciledAt?: string;
   };
-  startedAt: string;
-  finishedAt?: string;
-  finalization?: {
-    state: "pending" | "finalized";
-    commitSha?: string;
-    landedAt?: string;
-    trackerState?: string;
-  };
+  activeCommitId?: string;
+  latestSessionId?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-type AgentSessionKind = "supervisor" | "worker" | "child";
+interface WorkflowCommit {
+  id: string;
+  branchId: string;
+  commitKey: string;
+  title: string;
+  description?: string;
+  state: WorkflowCommitState;
+  order: number;
+  parentCommitId?: string;
+  worktree?: {
+    path?: string;
+    branchName?: string;
+    leaseState: "unassigned" | "reserved" | "attached" | "released";
+  };
+  resultingCommit?: {
+    sha: string;
+    title?: string;
+    committedAt: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+type AgentSessionSubject =
+  | {
+      kind: "branch";
+      branchId: string;
+    }
+  | {
+      kind: "commit";
+      branchId: string;
+      commitId: string;
+    };
+
+type AgentSessionKind = "planning" | "execution" | "review";
 
 type AgentSessionRuntimeState =
   | "running"
+  | "awaiting-user-input"
   | "blocked"
-  | "interrupted"
-  | "pending-finalization"
-  | "finalized";
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 interface AgentSessionRecord {
   id: string;
-  runId: string;
+  projectId: string;
   sessionKey: string;
   kind: AgentSessionKind;
-  title: string;
-  parentSessionId?: string;
-  rootSessionId: string;
+  subject: AgentSessionSubject;
   workerId: string;
-  runtimeState?: AgentSessionRuntimeState;
-  workflow: {
-    stream?: string;
-    feature?: string;
-    task?: string;
-  };
   threadId?: string;
   turnId?: string;
+  runtimeState: AgentSessionRuntimeState;
+  contextBundleId?: string;
   startedAt: string;
   endedAt?: string;
 }
@@ -366,10 +397,12 @@ type AgentSessionEvent =
       code:
         | "ready"
         | "idle"
-        | "workflow-diagnostic"
-        | "issue-assigned"
-        | "issue-blocked"
-        | "issue-committed"
+        | "branch-selected"
+        | "commit-selected"
+        | "branch-blocked"
+        | "commit-blocked"
+        | "commit-created"
+        | "commit-finalized"
         | "thread-started"
         | "turn-started"
         | "turn-completed"
@@ -412,9 +445,20 @@ type AgentSessionEvent =
 
 interface WorkflowArtifact {
   id: string;
-  runId: string;
-  sessionId?: string;
-  kind: "patch" | "doc" | "summary" | "command-log" | "screenshot" | "file" | "transcript";
+  projectId: string;
+  branchId: string;
+  commitId?: string;
+  sessionId: string;
+  kind:
+    | "branch-plan"
+    | "commit-plan"
+    | "patch"
+    | "doc"
+    | "summary"
+    | "command-log"
+    | "screenshot"
+    | "file"
+    | "transcript";
   title: string;
   mimeType?: string;
   bodyText?: string;
@@ -424,8 +468,10 @@ interface WorkflowArtifact {
 
 interface WorkflowDecision {
   id: string;
-  runId: string;
-  sessionId?: string;
+  projectId: string;
+  branchId: string;
+  commitId?: string;
+  sessionId: string;
   kind: "plan" | "question" | "assumption" | "blocker" | "resolution";
   summary: string;
   details?: string;
@@ -435,9 +481,8 @@ interface WorkflowDecision {
 interface ContextBundle {
   id: string;
   bundleKey: string;
-  workItemId: string;
-  runId: string;
-  scopeId: string;
+  sessionId: string;
+  subject: AgentSessionSubject;
   renderedPrompt?: string;
   sourceHash: string;
   createdAt: string;
@@ -466,110 +511,137 @@ interface ContextBundleEntry {
 
 ### Lifecycle states
 
-Work items:
+Projects:
 
-1. created in `backlog` or `todo`
-2. optionally `released`
-3. claimed by one active run and moved to `in-progress`
-4. either `blocked`, `done`, or returned to `todo`
-5. optionally mirrored to an external tracker
+1. registered with repo root and default base branch
+2. reconciled against local git state
+3. used as the operator context for backlog and session launch
 
-Runs:
+Branches:
 
-1. created as `queued`
-2. assigned a context bundle
-3. moved to `running`
-4. may enter `awaiting-user-input` or `blocked`
-5. ends as `succeeded`, `failed`, or `cancelled`
-6. may move to `finalized` after commit, landing, or tracker reconciliation
+1. created in `backlog` or `ready`
+2. linked to one canonical git branch name
+3. moved to `active` when the operator is working it
+4. may enter `blocked`
+5. ends as `done` or `archived`
+
+Commits:
+
+1. created in `planned` or `ready`
+2. ordered inside one branch
+3. one commit at a time moves to `active` in the first milestone
+4. may enter `blocked`
+5. ends as `committed` or `dropped`
 
 Sessions:
 
-1. `scheduled`
-2. `started`
+1. created against a branch or commit
+2. assigned an immutable context bundle
 3. emit ordered event records
-4. end as `completed`, `failed`, or `stopped`
+4. end as `completed`, `failed`, or `cancelled`
 
 Artifacts and decisions:
 
-1. created during a run
+1. created during a session
 2. never mutated in place except for safe metadata corrections
-3. remain attached to the run even if the work item is retried later
+3. remain attached to the branch or commit even if later sessions continue the
+   work
 
 Context bundles:
 
 1. assembled before execution
-2. frozen for one run attempt
+2. frozen for one session
 3. never retroactively edited
-4. replaced by a new bundle on rerun if inputs change
+4. replaced by a new bundle on a new session if inputs change
 
 ### Relationships
 
-- each `WorkflowFeature` belongs to exactly one `WorkflowStream`
-- each `WorkflowTask` belongs to exactly one `WorkflowFeature` and one stream
-- each `WorkflowRun` belongs to exactly one task, feature, or stream work item,
-  but the first milestone only needs task runs
-- each `AgentSession` belongs to exactly one run
+- each `WorkflowBranch` belongs to exactly one `WorkflowProject`
+- each `WorkflowCommit` belongs to exactly one `WorkflowBranch`
+- each `AgentSession` belongs to exactly one `WorkflowProject` and targets
+  exactly one branch or one commit
+- each commit-targeted session also belongs to the commit's parent branch
 - each `AgentSessionEvent`, `WorkflowArtifact`, and `WorkflowDecision` belongs
-  to exactly one run and may additionally point at one session
-- each `ContextBundle` belongs to exactly one run and exactly one work item
-- each `TrackerMirror` points from one graph-native entity to one external
-  record
+  to exactly one session
+- each `ContextBundle` belongs to exactly one session
 
 ## 4. Public Contract Surface
 
 ### Surface summary
 
-| Name                   | Purpose                                                             | Caller                                                    | Callee                                             | Inputs                                          | Outputs                                            | Failure shape                                                             | Stability                                               |
-| ---------------------- | ------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `WorkflowGraphSchema`  | Defines the canonical graph types and predicates for workflow state | Branch 4 module installer, Branch 1 bootstrap, web, agent | built-in `ops/workflow` module                     | schema package and migrations                   | stable type and predicate ids                      | schema conflict, incompatible migration                                   | `stable`                                                |
-| `WorkflowQueueScope`   | Returns runnable or inspectable work items                          | supervisor, Branch 7 operator UI, MCP                     | Branch 3 scope planner and projections             | principal, scope kind, filters, cursor          | ordered work-item rows plus completeness           | policy denied, scope changed, projection unavailable                      | `provisional`                                           |
-| `ContextBundleRequest` | Resolves the immutable task-specific context bundle for one run     | agent runtime                                             | context retrieval engine plus Branch 3 scope reads | work item id, run id, retrieval profile, budget | `ContextBundle` and ordered `ContextBundleEntry[]` | missing inputs, policy denied, incomplete scope, over-budget              | `stable`                                                |
-| `WorkflowRunCommand`   | Starts, heartbeats, completes, blocks, cancels, or finalizes a run  | supervisor, worker, operator tooling                      | authoritative workflow runtime                     | run transition command                          | updated `WorkflowRun` summary and cursor           | lease conflict, invalid state transition, policy denied                   | `stable`                                                |
-| `AgentSessionAppend`   | Creates sessions and appends ordered session events                 | worker runtime, Codex runner bridge                       | authoritative workflow runtime                     | session metadata or event envelopes             | accepted record ids, optional summaries            | missing run, bad parent session, non-monotonic sequence, payload rejected | `stable` for envelope, `provisional` for storage layout |
-| `ArtifactWrite`        | Persists text or blob-backed artifacts for a run                    | worker runtime, Branch 5 ingest jobs                      | artifact writer                                    | run id, artifact metadata, body or blob ref     | `WorkflowArtifact` record                          | missing run, blob missing, policy denied                                  | `stable`                                                |
-| `DecisionWrite`        | Persists durable decisions and blockers                             | worker runtime, operator UI                               | decision writer                                    | run id, session id, decision payload            | `WorkflowDecision` record                          | missing run, policy denied                                                | `stable`                                                |
-| `TrackerMirrorAdapter` | Mirrors graph-native state to Linear during migration               | background mirror worker or finalizer                     | external tracker adapter                           | graph entity ref plus mirror intent             | mirror acknowledgement and status                  | external API failure, rate limit, mapping mismatch                        | `provisional`                                           |
-| `WorkflowRuntimeView`  | Returns summaries for Branch 7 and retained TUI playback            | web UI, TUI, MCP                                          | projection and read layer                          | work item ids, run ids, scope ids               | run/session/artifact summaries                     | scope stale, projection lag                                               | `provisional`                                           |
+| Name                      | Purpose                                                                                     | Caller                                                    | Callee                                             | Inputs                                                       | Outputs                                            | Failure shape                                                | Stability                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------- |
+| `WorkflowGraphSchema`     | Defines canonical graph types and predicates for project, branch, commit, and session state | Branch 4 module installer, Branch 1 bootstrap, web, agent | built-in `ops/workflow` module                     | schema package and migrations                                | stable type and predicate ids                      | schema conflict, incompatible migration                      | `stable`                                                |
+| `ProjectBranchScope`      | Returns backlog, in-flight, and git-observed branch rows for one project                    | TUI, Branch 7 operator UI, MCP                            | Branch 3 scope planner and projections             | project id, filters, cursor                                  | ordered branch rows and git summaries              | policy denied, scope changed, projection unavailable         | `stable` for shape, `provisional` for ranking           |
+| `CommitQueueScope`        | Returns the ordered commit queue for one branch                                             | TUI, session launcher                                     | Branch 3 scope planner and projections             | branch id, cursor                                            | ordered commit rows                                | branch missing, projection lag                               | `stable`                                                |
+| `ContextBundleRequest`    | Resolves the immutable branch-specific or commit-specific context bundle for one session    | agent runtime                                             | context retrieval engine plus Branch 3 scope reads | subject, session id, retrieval mode, budget                  | `ContextBundle` and ordered `ContextBundleEntry[]` | missing inputs, policy denied, incomplete scope, over-budget | `stable`                                                |
+| `WorkflowMutationCommand` | Creates and transitions projects, branches, and commits                                     | operator tooling, session launcher, worker runtime        | authoritative workflow runtime                     | create, reorder, activate, block, complete, archive commands | updated summary rows and cursor                    | lock conflict, invalid transition, policy denied             | `stable`                                                |
+| `CodexSessionLaunch`      | Starts a branch-scoped or commit-scoped interactive Codex session                           | TUI, future web operator surface                          | session launcher plus workspace manager            | project id, subject, actor, mode                             | session summary and launch metadata                | subject locked, workspace missing, git mismatch              | `stable`                                                |
+| `AgentSessionAppend`      | Creates sessions and appends ordered session events                                         | worker runtime, Codex runner bridge                       | authoritative workflow runtime                     | session metadata or event envelopes                          | accepted record ids, optional summaries            | missing subject, bad sequence, payload rejected              | `stable` for envelope, `provisional` for storage layout |
+| `ArtifactWrite`           | Persists text or blob-backed artifacts for a session                                        | worker runtime, future ingest jobs                        | artifact writer                                    | session id, metadata, body or blob ref                       | `WorkflowArtifact` record                          | missing session, blob missing, policy denied                 | `stable`                                                |
+| `DecisionWrite`           | Persists durable decisions and blockers                                                     | worker runtime, operator UI                               | decision writer                                    | session id, decision payload                                 | `WorkflowDecision` record                          | missing session, policy denied                               | `stable`                                                |
+| `GitReconcileView`        | Reconciles local git branch and worktree observations into project-facing summaries         | local supervisor, TUI attach flow                         | git inspection layer plus derived write path       | repo root, branch filters                                    | observed branch rows and drift summaries           | repo missing, git command failure, stale observation         | `provisional`                                           |
 
-### `WorkflowGraphSchema`
+### `ProjectBranchScope`
 
-- purpose: define the durable workflow and agent memory entity model
-- caller: schema bootstrap, module installation, typed clients
-- callee: built-in workflow module packaged on top of Branch 1 graph contracts
+- purpose: give the operator one surface that shows backlog branches,
+  in-flight branches, and local git branch inventory together
+- caller: TUI branch board, Branch 7 operator UI, future MCP views
+- callee: Branch 3 scope and projection layer
 - inputs:
-  - workflow type definitions
-  - predicate metadata including visibility and write rules
-  - migrations for future schema evolution
+  - `projectId`
+  - filters such as `state`, `hasActiveCommit`, or `showUnmanagedGitBranches`
+  - optional cursor
 - outputs:
-  - graph ids for work items, runs, sessions, artifacts, decisions, and
-    context bundles
-  - typed refs and reusable `WorkflowSpec` or `GraphCommandSpec` descriptors
+  - ordered managed branch rows
+  - unmanaged git branch summaries for the current project
+  - freshness metadata for the last git reconciliation
 - failure shape:
-  - migration incompatibility
-  - duplicate workflow keys
-  - illegal predicate policy metadata
-- stability: `stable` for core lineage and execution types; `provisional` for
-  repository, environment, and planner-specific extensions
+  - `project-not-found`
+  - `policy-denied`
+  - `projection-stale`
+- stability: `stable` for row shape; ordering and rank heuristics remain
+  `provisional`
+
+### `CommitQueueScope`
+
+- purpose: expose the commit queue for a selected branch inside the same TUI
+  loop
+- caller: TUI branch detail panel and session launcher
+- callee: Branch 3 scope and projection layer
+- inputs:
+  - `branchId`
+  - optional cursor
+- outputs:
+  - ordered commit rows
+  - current active commit if one exists
+- failure shape:
+  - `branch-not-found`
+  - `policy-denied`
+  - `projection-stale`
+- stability: `stable`
 
 ### `ContextBundleRequest`
 
-- purpose: replace today's repo-local prompt assembly in
-  `src/agent/context.ts` with a graph-backed retrieval contract
+- purpose: replace today's issue-centric prompt assembly in
+  `src/agent/context.ts` with a graph-backed branch or commit retrieval
+  contract
 - caller: `src/agent/service.ts` or its graph-native successor
 - callee: workflow context retrieval engine using Branch 3 scope reads
 - inputs:
-  - `workItemId`
-  - `runId`
+  - `projectId`
+  - `subject`
+  - `sessionId`
   - caller principal
-  - retrieval profile or mode such as `backlog` or `execute`
+  - retrieval profile such as `plan-branch`, `execute-commit`, or
+    `review-branch`
   - optional token, size, or document-count budget
 - outputs:
   - one immutable `ContextBundle`
   - ordered `ContextBundleEntry[]`
-  - optional rendered prompt body for the specific run
+  - optional rendered prompt body for the specific session
 - failure shape:
-  - `work-item-not-found`
+  - `subject-not-found`
   - `policy-denied`
   - `incomplete-scope`
   - `source-missing`
@@ -577,26 +649,51 @@ Context bundles:
 - stability: `stable` for shape and immutability rules; retrieval heuristics
   remain `provisional`
 
-### `WorkflowRunCommand`
+### `WorkflowMutationCommand`
 
-- purpose: create and transition authoritative run state
-- caller: supervisor, worker, future operator UI
+- purpose: create and transition authoritative project, branch, and commit
+  state
+- caller: operator actions, session launcher, worker runtime
 - callee: authoritative workflow command runtime
 - inputs:
-  - `startRun`
-  - `heartbeatRun`
-  - `blockRun`
-  - `completeRun`
-  - `cancelRun`
-  - `finalizeRun`
+  - `createProject`
+  - `createBranch`
+  - `updateBranch`
+  - `reorderBranch`
+  - `setBranchState`
+  - `createCommit`
+  - `reorderCommit`
+  - `setCommitState`
+  - `attachCommitResult`
 - outputs:
-  - updated `WorkflowRun`
+  - updated branch or commit summary
   - authoritative cursor from Branch 1
-  - optional work-item state mutation
 - failure shape:
-  - `run-conflict`
+  - `branch-lock-conflict`
+  - `commit-lock-conflict`
   - `invalid-transition`
-  - `work-item-not-runnable`
+  - `subject-not-found`
+  - `policy-denied`
+- stability: `stable`
+
+### `CodexSessionLaunch`
+
+- purpose: start an interactive Codex session in branch or commit context from
+  the TUI
+- caller: TUI branch detail view, future web operator view
+- callee: session launcher plus workspace manager
+- inputs:
+  - `projectId`
+  - `subject`
+  - actor principal
+  - session kind such as `planning`, `execution`, or `review`
+- outputs:
+  - persisted `AgentSession`
+  - launch metadata including branch name and worktree path if assigned
+- failure shape:
+  - `subject-locked`
+  - `workspace-unavailable`
+  - `git-branch-missing`
   - `policy-denied`
 - stability: `stable`
 
@@ -611,32 +708,12 @@ Context bundles:
   - append-only `AgentSessionEvent` envelopes with per-session sequence numbers
 - outputs:
   - persisted session ids and event acknowledgements
-  - optional summary state for current session diagnostics
+  - optional summary state for current diagnostics
 - failure shape:
-  - `run-missing`
-  - `session-parent-missing`
+  - `subject-missing`
   - `sequence-conflict`
   - `event-too-large`
 - stability: envelope is `stable`; storage materialization is `provisional`
-
-### `TrackerMirrorAdapter`
-
-- purpose: keep Linear usable during migration without letting it own the
-  workflow model
-- caller: workflow runtime or background mirror worker
-- callee: `src/agent/tracker/linear.ts` or successor adapter
-- inputs:
-  - graph-native work item or run transition
-  - current tracker mapping
-  - desired mirrored state
-- outputs:
-  - mirror success or retry status
-  - updated mapping timestamp
-- failure shape:
-  - external API failure
-  - rate limit
-  - stale mapping
-- stability: `provisional`
 
 ## 5. Runtime Architecture
 
@@ -644,80 +721,80 @@ Context bundles:
 
 `Workflow authority runtime`
 
-- authoritative command surface for work item transitions, run lifecycle,
-  session append, artifact writes, and mirror intent records
-- lives on top of Branch 1's authoritative write path
+- authoritative command surface for project, branch, and commit mutations
+- authoritative write surface for sessions, artifacts, decisions, and context
+  bundles
+- lives on top of Branch 1's write path
 
-`Supervisor`
+`Git reconciler`
 
-- current equivalent is `src/agent/service.ts`
-- reads runnable work from graph-backed queue scopes instead of polling Linear
-- claims work by creating or transitioning `WorkflowRun` records
+- inspects the current project root for local branches, worktrees, and head
+  commits
+- writes or refreshes derived branch observations
+- never becomes the authoritative source of managed workflow state, but does
+  make git reality visible in the operator surface
 
 `Context retrieval engine`
 
 - current equivalent is `src/agent/context.ts` plus repo-local doc resolution
-- new responsibility is to resolve graph-backed context bundles and freeze them
-  per run
+- new responsibility is to resolve graph-backed branch or commit context bundles
+  and freeze them per session
 
-`Execution runner`
+`Codex session launcher`
 
-- current equivalent is `src/agent/runner/codex.ts`
-- consumes a context bundle, emits session events, and writes artifacts and
-  decisions back through the authoritative runtime
+- current equivalents are `src/agent/service.ts` and
+  `src/agent/runner/codex.ts`
+- launches interactive sessions against the selected branch or active commit
+- records retained session history through the authoritative runtime
 
 `Workspace manager`
 
 - current equivalent is `src/agent/workspace.ts`
 - remains local process and filesystem machinery
-- graph stores references and outcomes, but local worktree state is not the
-  authoritative product model
-
-`Tracker mirror`
-
-- current equivalent is `src/agent/tracker/linear.ts`
-- becomes a migration adapter triggered by graph-native transitions
+- manages worktree reservation for active commit execution
 
 `Operator surfaces`
 
 - current equivalents are `src/agent/tui/*` and future Branch 7 web surfaces
-- consume workflow views and retained session history from graph-backed reads
+- consume branch, commit, and session views from graph-backed reads
 
 ### Process boundaries
 
-- authoritative state lives in the Worker or Durable Object authority runtime
+- authoritative workflow state lives in the Worker or Durable Object authority
+  runtime
 - supervisor and worker execution may run in a separate long-lived local
   process
-- local git branches, worktrees, stdout files, and command execution remain
-  local runtime concerns
-- Linear remains a remote external system reached through an adapter
-- web or MCP consumers read summarized workflow state through Branch 3
-  projections or scopes rather than by tailing local files
+- git refs, worktrees, command execution, and live PTYs remain local runtime
+  concerns
+- the graph stores desired workflow state, retained history, and reconciled git
+  summaries
+- no external tracker participates in the first milestone
 
 ### Authoritative versus derived state
 
 Authoritative:
 
-- work item current state and lineage
-- run summaries and finalization state
+- project registry and repo-root attachment
+- branch state, goal summary, and queue rank
+- commit queue, active commit pointer, and finalization metadata
 - session identity and ordered event envelopes
 - artifact and decision metadata
 - context bundles and their ordered membership
-- external tracker mappings and mirror status
 
 Derived:
 
-- runnable queue ordering
-- workflow diagnostic counts
+- local git branch inventory
+- ahead or behind counts
+- dirty-worktree summaries
+- suggested backlog ranking
 - TUI playback summaries
 - dashboard aggregates
-- search or retrieval indexes over artifacts and decisions
 
 Local-only:
 
 - active process handles
 - live PTY state
-- transient worktree dirtiness
+- transient worktree dirtiness not yet summarized
 - temporary output files before they are summarized or attached
 
 ## 6. Storage Model
@@ -725,16 +802,15 @@ Local-only:
 This branch does not own a separate durable database outside the graph.
 
 Authoritative persistence for Branch 6 records is provided by Branch 1's
-authoritative graph storage. Branch 6 owns the workflow entity families stored
-inside that graph.
+graph storage. Branch 6 owns the workflow entity families stored inside that
+graph.
 
 ### Canonical records
 
 - current state records:
-  - `WorkflowStream`
-  - `WorkflowFeature`
-  - `WorkflowTask`
-  - `WorkflowRun`
+  - `WorkflowProject`
+  - `WorkflowBranch`
+  - `WorkflowCommit`
   - `AgentSession`
 - immutable retained history:
   - `AgentSessionEvent`
@@ -742,44 +818,34 @@ inside that graph.
   - `WorkflowDecision`
   - `ContextBundle`
   - `ContextBundleEntry`
-  - mirror attempts or mirror status events
 
 ### Retained history versus current state
 
-- work items and runs expose current summary fields for scheduler decisions and
-  UI rendering
+- projects, branches, and commits expose current summary fields for operator
+  decisions and session launch
 - session events, artifacts, decisions, and context bundles are retained
   immutable records
 - current summary fields may be projected from immutable records for read
-  efficiency, but the underlying event or artifact records remain the durable
-  audit trail
+  efficiency, but the underlying retained records remain the durable audit
+  trail
 
 ### Derived versus authoritative
 
-- Branch 3 projections may materialize work queues, recent run lists, artifact
-  search indexes, and context retrieval indexes
-- those projections are rebuildable from graph records owned by this branch
+- Branch 3 projections may materialize branch boards, commit queues, recent
+  session lists, artifact search indexes, and git health summaries
+- those projections are rebuildable from graph records plus fresh git
+  inspection
 - no projection may become the only copy of workflow history
 
 ### Rebuild rules
 
-- queue views and diagnostic summaries must rebuild from work items plus run
-  summaries
-- session playback must rebuild from `AgentSession` plus ordered
+- branch boards rebuild from project, branch, and commit summaries
+- session playback rebuilds from `AgentSession` plus ordered
   `AgentSessionEvent` records
-- context retrieval indexes must rebuild from `ContextBundleEntry`,
+- context retrieval indexes rebuild from `ContextBundleEntry`,
   `WorkflowDecision`, `WorkflowArtifact`, and linked repo metadata
-- if large transcript fragments spill to Branch 5 blob records, the graph still
+- if large transcript fragments spill to blob records later, the graph still
   retains ordering, provenance, and blob references needed for rebuild
-
-### Migration expectations
-
-- first milestone supports Linear mirroring or dual-write for one real task
-  flow
-- imported Linear records become graph-native work items with persistent
-  `externalRef` mappings
-- once a flow is graph-native, Linear state is advisory mirror state only
-- deletion or archival in Linear must not delete graph-native execution history
 
 ## 7. Integration Points
 
@@ -796,18 +862,19 @@ inside that graph.
 - stable before safe implementation:
   - transaction idempotency
   - cursor continuity
-  - secret-handle pattern for hidden run data
+  - secret-handle pattern for hidden session data
 
 ### Branch 2: Identity, Policy, And Sharing
 
 - dependency direction: Branch 6 depends on Branch 2
 - imported contracts:
-  - principal ids for runs and decisions
-  - capability checks for artifact visibility and task mutation
+  - principal ids for sessions and decisions
+  - capability checks for branch mutation and transcript visibility
   - hidden versus replicated predicate rules
 - exported contracts:
-  - workflow-specific capabilities such as `workflow.run.start`,
-    `workflow.artifact.read`, or `workflow.decision.write`
+  - workflow-specific capabilities such as `workflow.branch.write`,
+    `workflow.commit.write`, `workflow.session.read`, or
+    `workflow.artifact.read`
 - mockable or provisional:
   - single-user mode can stub broad access while contracts are still moving
 - must stabilize before multi-user implementation:
@@ -817,17 +884,17 @@ inside that graph.
 
 - dependency direction: Branch 6 depends on Branch 3
 - imported contracts:
-  - `work-queue` scopes
-  - `context-bundle` scopes
-  - collection indexes for runs, sessions, and artifacts
+  - `project-branch-board` scopes
+  - `branch-commit-queue` scopes
+  - collection indexes for sessions, artifacts, and decisions
   - live invalidation for operator surfaces
 - exported contracts:
-  - projection specs for queue ordering, run history, and retrieval indexes
+  - projection specs for branch boards, commit queues, and retrieval indexes
 - mockable or provisional:
-  - work queue reads may start as whole-graph or bounded local reads
-  - context retrieval may start with one narrow scope
+  - project and branch reads may start as bounded local reads
+  - git observations may start as local refresh-on-open behavior
 - must stabilize before large-scale implementation:
-  - scope completeness and invalidation behavior for queue views
+  - scope completeness and invalidation behavior for branch boards
 
 ### Branch 4: Module Runtime And Installation
 
@@ -840,130 +907,133 @@ inside that graph.
   - graph-native workflow records that module workflows operate on
   - context-bundle hooks used by modules
 - provisional:
-  - final manifest field names for context providers and workflow registration
-
-### Branch 5: Blob, Ingestion, And Media
-
-- dependency direction: Branch 6 depends on Branch 5 for large artifacts and
-  ingest-triggered work
-- imported contracts:
-  - blob metadata records
-  - queue-backed ingest jobs
-  - provenance links from extracted content
-- exported contracts:
-  - review tasks created from ingest results
-  - artifact references attached to runs
-- stable before safe implementation:
-  - blob id and provenance contracts
+  - final manifest field names for workflow registration and context providers
 
 ### Branch 7: Web And Operator Surfaces
 
 - dependency direction: Branch 7 depends on Branch 6
 - imported by Branch 7:
-  - queue summaries
-  - run/session/artifact inspection views
+  - branch board summaries
+  - commit queue summaries
+  - session, artifact, and decision inspection views
   - retained context and decision history
 - exported back to Branch 6:
-  - operator actions such as rerun, cancel, or acknowledge blocker
+  - operator actions such as launch session, block branch, reorder commit, or
+    archive branch
 - provisional:
   - exact UI route shapes and live UX behavior
 
 ## 8. Main Flows
 
-### 1. Mirror one external task flow into graph-native work items
+### 1. Register a project and reconcile its branch inventory
 
-1. initiator: migration worker or operator action
-2. components involved: `TrackerMirrorAdapter`, workflow authority runtime,
-   Branch 1 persistence
+1. initiator: operator action or TUI attach
+2. components involved: workflow authority runtime, git reconciler, Branch 1
+   persistence
 3. contract boundaries crossed:
-   - external tracker read
-   - authoritative graph write
+   - local git inspection
+   - authoritative graph write for project metadata
+   - derived git observation refresh
 4. authoritative write point:
-   - create or update `WorkflowStream`, `WorkflowFeature`, `WorkflowTask`, and
-     `TrackerMirror`
+   - create or update `WorkflowProject`
+   - optionally create managed `WorkflowBranch` records for adopted branches
 5. failure or fallback behavior:
-   - if the external read fails, no partial graph work item is created
-   - if graph write fails, the external tracker remains unchanged
-   - if mirror metadata is stale, keep graph state and mark mirror for retry
+   - if git inspection fails, preserve current graph records and mark branch
+     observations stale
+   - if graph write fails, do not pretend the project is registered
 
-### 2. Select runnable work and claim it
+### 2. Create or adopt a branch from backlog
 
-1. initiator: supervisor loop
-2. components involved: `WorkflowQueueScope`, workflow authority runtime,
-   Branch 3 projection or bounded read
+1. initiator: operator action or planning session
+2. components involved: `WorkflowMutationCommand`, workspace manager
 3. contract boundaries crossed:
-   - read runnable tasks
-   - authoritative run-start command
+   - authoritative branch write
+   - optional local git branch creation
 4. authoritative write point:
-   - create `WorkflowRun`
-   - set `WorkflowTask.activeRunId`
-   - transition task to `in-progress`
+   - create `WorkflowBranch`
+   - set branch state, goal summary, and git branch metadata
 5. failure or fallback behavior:
-   - if queue view is stale, refresh scope and retry
-   - if another actor already claimed the task, reject with `run-conflict`
-   - do not start local execution until claim succeeds
+   - if git branch creation fails, keep the branch record in `backlog` and mark
+     it not yet materialized
+   - do not mark the branch `active` until the git ref exists
 
-### 3. Resolve the task-specific context bundle
+### 3. Plan the next commit inside a branch
 
-1. initiator: worker after run claim
-2. components involved: context retrieval engine, Branch 3 context scope,
-   repo metadata, prior run history
+1. initiator: operator action or branch-scoped planning session
+2. components involved: `CommitQueueScope`, `WorkflowMutationCommand`
 3. contract boundaries crossed:
-   - authorized scope reads
-   - authoritative bundle write
+   - read current branch detail and commit queue
+   - authoritative commit write
 4. authoritative write point:
-   - create immutable `ContextBundle` and ordered `ContextBundleEntry` records
-   - attach bundle id to `WorkflowRun`
+   - create or reorder `WorkflowCommit`
+   - optionally set `WorkflowBranch.activeCommitId`
 5. failure or fallback behavior:
-   - if required sources are missing or policy-filtered, fail the run before
-     execution
-   - if retrieval is incomplete, mark run `blocked` rather than executing with
-     an unknown bundle
+   - if the branch is locked by another active session, reject with
+     `branch-lock-conflict`
+   - if queue order is stale, refresh and retry
 
-### 4. Execute a run and record sessions, events, artifacts, and decisions
+### 4. Launch Codex in branch or commit context
+
+1. initiator: operator action from the TUI
+2. components involved: `CodexSessionLaunch`, context retrieval engine,
+   workspace manager
+3. contract boundaries crossed:
+   - authoritative session create
+   - context-bundle read and write
+   - local workspace reservation
+4. authoritative write point:
+   - create `AgentSession`
+   - create immutable `ContextBundle` and `ContextBundleEntry` records
+5. failure or fallback behavior:
+   - if required sources are missing or policy-filtered, fail the launch before
+     starting Codex
+   - if the branch or commit is already locked, do not start a second editing
+     session
+
+### 5. Record session progress, artifacts, and decisions
 
 1. initiator: worker process
-2. components involved: execution runner, workspace manager, authoritative
-   workflow runtime
+2. components involved: execution runner, authoritative workflow runtime
 3. contract boundaries crossed:
    - local command execution
-   - session creation and event append
+   - session event append
    - artifact and decision writes
 4. authoritative write point:
    - `AgentSession`
    - ordered `AgentSessionEvent`
    - `WorkflowArtifact`
    - `WorkflowDecision`
-   - final `WorkflowRun` completion transition
 5. failure or fallback behavior:
-   - local execution failure records `failed` run state and retained output
+   - local execution failure records `failed` session state and retained output
    - persistence failure must not silently discard already-emitted events;
-     retry append or fail the run explicitly
+     retry append or fail the session explicitly
 
-### 5. Finalize the result and mirror it back out
+### 6. Finalize a commit and advance the branch
 
-1. initiator: worker completion or separate finalizer
-2. components involved: workspace manager, workflow authority runtime,
-   `TrackerMirrorAdapter`
+1. initiator: execution session completion or explicit operator action
+2. components involved: workspace manager, `WorkflowMutationCommand`,
+   git reconciler
 3. contract boundaries crossed:
-   - local git landing or cleanup
+   - local git commit or branch update
    - authoritative finalization write
-   - external tracker write
 4. authoritative write point:
-   - set `WorkflowRun.finalization`
-   - transition work item to `done`, `blocked`, or back to `todo`
+   - set `WorkflowCommit.resultingCommit`
+   - transition commit to `committed`, `blocked`, or `dropped`
+   - update branch state and `activeCommitId`
 5. failure or fallback behavior:
-   - if git finalization fails, preserve run and branch state, mark
-     `pending-finalization`, and do not lie to the tracker
-   - if tracker mirror fails, keep graph state and retry out-of-band
+   - if git finalization fails, preserve session history and worktree
+     reservation, and leave the commit `blocked` or `active`
+   - if graph write fails after a successful git commit, reconcile from git and
+     require an explicit repair path rather than fabricating state
 
-### 6. Inspect retained history after restart
+### 7. Inspect retained history after restart
 
 1. initiator: TUI attach, web operator view, or MCP client
 2. components involved: Branch 3 workflow view projections, retained graph
-   records
+   records, git reconciler
 3. contract boundaries crossed:
-   - scope read for one run or task history
+   - scope read for one branch or session history
+   - optional git refresh
 4. authoritative write point:
    - none; read-only flow
 5. failure or fallback behavior:
@@ -975,55 +1045,71 @@ inside that graph.
 
 ### Invariants
 
-- every task belongs to exactly one feature and one stream
-- a run belongs to exactly one work item
-- only one active execute run may exist for one feature at a time
-  - this preserves the current repo rule that features may run in parallel, but
-    tasks inside one feature do not
-- `WorkflowTask.activeRunId` may point to at most one non-terminal run
-- context bundles are immutable once attached to a run
+- every branch belongs to exactly one project
+- every commit belongs to exactly one branch
+- the graph may track unmanaged local git branches, but only managed
+  `WorkflowBranch` records participate in backlog and session launch
+- only one active commit may exist for one branch in the first milestone
+- only one editing session may hold the branch lock at a time in the first
+  milestone
+- context bundles are immutable once attached to a session
 - session event sequence is strictly monotonic within one session
-- artifacts and decisions preserve provenance to run and session
-- external tracker state never overwrites newer graph-native state
+- artifacts and decisions preserve provenance to branch, optional commit, and
+  session
+- git refs remain the source of truth for actual commit SHAs and branch heads
 - operator summaries are derived views, not the source of truth
 
 ### Failure modes
 
-`Run claim conflict`
+`Git reconcile drift`
 
-- what fails: two supervisors try to start work on the same task or feature
-- what must not corrupt: current task state and active run pointer
-- retry or fallback: loser refreshes queue scope and does not start execution
-- observability needed: run-conflict count and affected work item ids
+- what fails: local git branch inventory no longer matches last observed graph
+  summaries
+- what must not corrupt: managed branch lineage and retained session history
+- retry or fallback: refresh git observations and mark stale rows until
+  reconciled
+- observability needed: reconcile duration, stale branch count, command errors
+
+`Branch lock conflict`
+
+- what fails: two operators or workers try to launch editing sessions for the
+  same branch
+- what must not corrupt: branch state, active commit pointer, and existing
+  session history
+- retry or fallback: loser refreshes branch detail and does not start execution
+- observability needed: lock-conflict count and affected branch ids
 
 `Context retrieval failure`
 
 - what fails: required docs, artifacts, or prior decisions cannot be resolved
-- what must not corrupt: work item lineage and any prior run history
-- retry or fallback: mark run `blocked`; operator may rerun after fixing inputs
+- what must not corrupt: branch lineage, commit queue, or any prior session
+  history
+- retry or fallback: fail the launch or mark the commit `blocked`; operator may
+  rerun after fixing inputs
 - observability needed: missing-source reason, policy-denied counts, bundle
   assembly latency
 
 `Worker crash after partial event emission`
 
-- what fails: local process dies mid-run
+- what fails: local process dies mid-session
 - what must not corrupt: already accepted session events and artifact records
-- retry or fallback: next supervisor cycle may mark run failed or interrupted
-  after lease timeout; session history stays readable
-- observability needed: heartbeat age, interrupted runs, orphaned sessions
+- retry or fallback: next supervisor cycle may mark the session failed or
+  interrupted after timeout; retained history stays readable
+- observability needed: heartbeat age, interrupted sessions, orphaned worktree
+  leases
 
-`Finalization failure`
+`Commit finalization failure`
 
-- what fails: commit landing, branch cleanup, or tracker sync
-- what must not corrupt: successful run result and retained artifacts
-- retry or fallback: keep run `pending-finalization`; preserve branch metadata
-  and mirror retry state
-- observability needed: pending-finalization age, mirror retry backlog
+- what fails: git commit creation, worktree cleanup, or branch update
+- what must not corrupt: successful session history and retained artifacts
+- retry or fallback: keep the commit active or blocked with preserved worktree
+  metadata until the operator resolves it
+- observability needed: blocked commit age, retained worktree count
 
 `Projection or queue lag`
 
 - what fails: Branch 3 read model falls behind
-- what must not corrupt: authoritative run or task state
+- what must not corrupt: authoritative branch, commit, or session state
 - retry or fallback: refresh from direct bounded reads or rebuild projection
 - observability needed: projection lag, fallback count, scope freshness
 
@@ -1031,7 +1117,7 @@ inside that graph.
 
 - prompts, session transcripts, raw command output, and some artifacts may
   contain secrets or policy-restricted data
-- the graph-visible run summary must separate safe replicated fields from
+- the graph-visible branch board must separate safe replicated fields from
   authority-only content
 - browser or MCP consumers should receive safe summaries by default; raw
   transcript access requires explicit capability
@@ -1040,91 +1126,95 @@ inside that graph.
   rules
 - agent runtimes execute as an explicit principal or service actor, not as an
   unscoped system backdoor
-- tracker mirrors must never leak hidden fields to external systems
-- local filesystem paths are sensitive runtime hints and should be treated as
-  operator-visible metadata, not broadly replicated user content
+- local filesystem paths and worktree paths are sensitive runtime hints and
+  should be treated as operator-visible metadata, not broadly replicated
 
 ## 11. Implementation Slices
 
-### Slice 1: Graph-native workflow schema and Linear mirror
+### Slice 1: Project registry and branch board
 
-- goal: define `WorkflowStream`, `WorkflowFeature`, `WorkflowTask`,
-  `WorkflowRun`, `AgentSession`, `WorkflowArtifact`, `WorkflowDecision`, and
-  `ContextBundle`
+- goal: define `WorkflowProject` and `WorkflowBranch`, reconcile one repo's git
+  branches, and render backlog plus in-flight branches beside local branch
+  inventory in the TUI
 - prerequisite contracts:
   - Branch 1 write and persistence contracts
-  - provisional Branch 4 built-in module registration
+  - provisional Branch 3 project and branch scope reads
 - what it proves:
-  - one real Linear-backed flow can exist in graph-native records
-  - graph becomes the durable source of truth for that flow
+  - one project can use the graph as the workflow source of truth without
+    Linear
+  - the operator can see real branch state inside the TUI
 - what it postpones:
-  - full queue scopes
-  - polished operator UI
+  - commit queue editing
+  - branch-scoped Codex launch
 
-### Slice 2: Run claim and context-bundle retrieval
+### Slice 2: Commit queue and branch detail
 
-- goal: let the supervisor read one runnable task from the graph, claim it, and
-  resolve a graph-backed context bundle
+- goal: define `WorkflowCommit`, expose the ordered commit queue for one
+  branch, and show branch goal summary plus next commit in the TUI
 - prerequisite contracts:
-  - Slice 1 schema
-  - narrow Branch 3 work-queue and context-bundle reads
+  - Slice 1 project and branch records
 - what it proves:
-  - the agent no longer depends on repo-local prompt assembly as the source of
-    truth
+  - backlog planning can happen at the branch and commit level inside the same
+    model
+  - one active commit per branch is enough to start
 - what it postpones:
-  - advanced retrieval scoring
-  - live push updates
+  - rich branch-document editing
+  - stacked commit branches
 
-### Slice 3: Session, artifact, and decision writeback
+### Slice 3: Branch-scoped Codex launch and retained history
 
-- goal: replace retained runtime files as the primary history surface with
-  graph-native run records
+- goal: launch Codex from the TUI against a selected branch or commit and write
+  retained session, artifact, and decision history to the graph
 - prerequisite contracts:
-  - Slice 2 run start and context bundle
+  - Slice 2 commit queue
+  - context bundle retrieval for one narrow profile
 - what it proves:
-  - TUI and future web surfaces can inspect run history from the graph
+  - the operator can move from branch selection to interactive work without
+    leaving the TUI
+  - retained session history can replace filesystem-only replay
 - what it postpones:
   - transcript search
-  - blob spillover optimization for very large event bodies
+  - blob spillover optimization for very large session bodies
 
-### Slice 4: Finalization and operator inspection
+### Slice 4: Commit finalization and resume loop
 
-- goal: finalize successful runs, expose pending-finalization states, and
-  render workflow history in Branch 7 surfaces
+- goal: finalize commit records with git SHAs, preserve blocked worktree state,
+  and resume interrupted branch work after restart
 - prerequisite contracts:
-  - Slice 3 retained run history
-  - provisional Branch 7 read views
+  - Slice 3 retained session history
 - what it proves:
-  - the graph can power the system's own operator loop end to end
+  - the graph can manage the full branch lifecycle from backlog to landed
+    commit-sized work
 - what it postpones:
-  - generalized multi-user operations
-  - future planning heuristics
+  - multi-project scheduling
+  - automatic branch splitting or merge planning
 
 ## 12. Open Questions
 
-- Should raw `AgentSessionEvent` payloads always stay inline in graph records,
-  or should large transcript fragments spill to Branch 5 blob records after a
-  size threshold?
-- Should `ContextBundle` be fully materialized before every run, or can some
-  entries remain lazy references with a frozen definition hash?
-- What is the exact capability model for reading prompts, raw transcripts, and
-  command output in multi-user graphs?
-- How much of current queue ordering should be authoritative branch logic
-  versus Branch 3 projection behavior?
-- When the same work item is mirrored to Linear, which transition points should
-  happen synchronously versus through retryable background mirror jobs?
+- Does the product ever need a separate `WorkflowRun`, or is `AgentSession`
+  sufficient until background batch execution arrives?
+- Should active commit execution happen directly on the branch worktree, or
+  should the first implementation reserve an ephemeral child branch while still
+  presenting one logical parent branch in the UI?
+- Should the branch end-state document start as a repo-path reference, a blob
+  reference, or an inline summary plus optional document ref?
+- How much git health data should be stored durably versus recomputed on every
+  TUI attach?
+- When branch planning gets more sophisticated, should backlog ranking stay a
+  derived projection or become an explicit operator-managed ordering contract?
 
 ## 13. Recommended First Code Targets
 
 - `src/graph/modules/ops/workflow/`: add the first built-in graph-native
-  workflow module with type definitions and contract tests
-- `src/agent/service.ts`: replace Linear-first task selection with graph-backed
-  run claim and completion writes
-- `src/agent/context.ts`: split current repo-local bundle assembly into a
-  graph-native `ContextBundleRequest` path plus a fallback adapter
-- `src/agent/tui/session-events.ts`: treat the existing event envelope as the
-  retained session history contract and move persistence behind it
-- `src/agent/tracker/linear.ts`: demote to mirror adapter and mapping resolver
-- `src/agent/workspace.ts`: keep local execution mechanics, but write final
-  outcomes through graph-native run finalization rather than filesystem-only
-  state
+  workflow module for project, branch, commit, session, artifact, decision, and
+  context-bundle types
+- `src/agent/service.ts`: replace Linear-first task selection with
+  project-backed branch selection and session launch
+- `src/agent/context.ts`: replace issue-centric prompt assembly with
+  branch-specific and commit-specific `ContextBundleRequest` paths
+- `src/agent/tui/session-events.ts`: keep the existing event envelope and move
+  persistence behind it as the retained session history contract
+- `src/agent/workspace.ts`: keep local execution mechanics, but drive worktree
+  reservation and commit finalization from graph-native branch and commit state
+- `src/agent/tui/*`: add a branch board, branch detail pane, and session launch
+  actions for one current project

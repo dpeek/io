@@ -38,9 +38,9 @@ backed extraction, and import and export workflows.
 
 ### Phase 4: Move workflow into the graph
 
-Model streams, features, tasks, runs, sessions, artifacts, and decisions in the
-graph. Keep Linear as a temporary adapter or mirror until operator confidence is
-high.
+Model projects, branches, commits, sessions, artifacts, and decisions in the
+graph. Make the graph and git the only authoritative workflow loop rather than
+adding a temporary tracker adapter.
 
 ### Phase 5: Add scoped sync and materialized indexes
 
@@ -76,8 +76,8 @@ The roadmap recommends this order because each step unlocks the next:
 
 - SQLite authority hardening: keep the persisted-authority boundary small and a
   simple test backend available while the SQL path hardens
-- workflow migration friction: dual-write or mirror from Linear-backed tasks
-  into graph-native task types until operator tooling is credible
+- workflow migration friction: prefer a clean break onto graph-native project,
+  branch, and commit types rather than dual-write once the TUI loop is credible
 - scoped sync correctness: promote only materialized scopes first and keep ad
   hoc query views pull-only
 - sharding complexity: keep a single-shard-per-graph deployment option for
@@ -106,9 +106,9 @@ The roadmap recommends this order because each step unlocks the next:
 
 ### Days 61-90
 
-- define graph-native workflow types such as stream, feature, task, run,
-  artifact, decision, and session
-- mirror current Linear-backed task flows into graph-native workflow records
+- define graph-native workflow types such as project, branch, commit, artifact,
+  decision, and session
+- build one TUI-first project workflow loop without a tracker dependency
 - design and implement the first scoped sync contract for one narrow scope class
 - build one materialized collection index and one live scope registration proof
 - end the period with one end-to-end demo:
