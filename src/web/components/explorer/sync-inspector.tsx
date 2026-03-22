@@ -2,6 +2,7 @@ import type { ExplorerSync } from "./model.js";
 import {
   describeSyncError,
   formatPendingTransactionSummary,
+  formatScopedTransactionLabel,
   formatStreamActivityDetail,
   formatStreamActivityTitle,
   streamActivityClass,
@@ -129,19 +130,34 @@ export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
 
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {activity.kind === "incremental"
-                      ? activity.txIds.map((txId) => (
-                          <Badge
-                            className="border-cyan-500/20 bg-cyan-500/5 tracking-normal text-cyan-100 normal-case"
-                            data={{ "data-explorer-stream-activity-tx": txId }}
-                            key={txId}
-                          >
-                            {txId}
-                          </Badge>
-                        ))
+                      ? activity.txIds.map((txId, index) => {
+                          const writeScope = activity.writeScopes[index];
+
+                          return (
+                            <Badge
+                              className="border-cyan-500/20 bg-cyan-500/5 tracking-normal text-cyan-100 normal-case"
+                              data={{
+                                "data-explorer-stream-activity-tx": txId,
+                                ...(writeScope
+                                  ? { "data-explorer-stream-activity-write-scope": writeScope }
+                                  : {}),
+                              }}
+                              key={txId}
+                            >
+                              {writeScope ? formatScopedTransactionLabel(txId, writeScope) : txId}
+                            </Badge>
+                          );
+                        })
                       : null}
                     {activity.kind === "write" ? (
-                      <Badge className="border-emerald-500/20 bg-emerald-500/5 tracking-normal text-emerald-100 normal-case">
-                        {activity.txId}
+                      <Badge
+                        className="border-emerald-500/20 bg-emerald-500/5 tracking-normal text-emerald-100 normal-case"
+                        data={{
+                          "data-explorer-stream-activity-tx": activity.txId,
+                          "data-explorer-stream-activity-write-scope": activity.writeScope,
+                        }}
+                      >
+                        {formatScopedTransactionLabel(activity.txId, activity.writeScope)}
                       </Badge>
                     ) : null}
                     {activity.kind === "fallback" ? (

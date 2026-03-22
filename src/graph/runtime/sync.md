@@ -69,6 +69,14 @@ The persisted authority helper layers restart hydration, per-transaction durable
 - `getState()`
 - `subscribe(listener)`
 
+`SyncState.recentActivities` is the shared runtime-diagnostics surface for
+authoritative sync events:
+
+- `write` entries include the acknowledged `writeScope`
+- `incremental` entries include `txIds` plus aligned `writeScopes` so callers
+  can tell which pulled transactions came from `client-tx` versus
+  `server-command` without re-parsing raw transactions
+
 ### Typed synced client
 
 - `createSyncedTypeClient(namespace, { pull, push?, createTxId? })`

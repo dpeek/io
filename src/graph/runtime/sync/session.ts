@@ -149,6 +149,7 @@ export function createTotalSyncSession(
       freshness: prepared.value.freshness,
       transactionCount: prepared.value.transactions.length,
       txIds: prepared.value.transactions.map((transaction) => transaction.txId),
+      writeScopes: prepared.value.transactions.map((transaction) => transaction.writeScope),
       at: syncedAt,
     });
     publish({
@@ -199,6 +200,7 @@ export function createTotalSyncSession(
       cursor: materialized.cursor,
       freshness: "current",
       replayed: materialized.replayed,
+      writeScope: materialized.writeScope,
       at: syncedAt,
     });
     publish({

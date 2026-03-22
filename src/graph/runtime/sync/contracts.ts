@@ -20,6 +20,7 @@ export type SyncActivity =
       readonly freshness: SyncFreshness;
       readonly transactionCount: number;
       readonly txIds: readonly string[];
+      readonly writeScopes: readonly AuthoritativeWriteScope[];
       readonly at: Date;
     }
   | {
@@ -36,6 +37,7 @@ export type SyncActivity =
       readonly cursor: string;
       readonly freshness: SyncFreshness;
       readonly replayed: boolean;
+      readonly writeScope: AuthoritativeWriteScope;
       readonly at: Date;
     };
 
@@ -98,11 +100,23 @@ export type GraphWriteTransaction = {
 };
 
 export type AuthoritativeWriteScope = GraphFieldWritePolicy;
+const authoritativeWriteScopes = [
+  "client-tx",
+  "server-command",
+  "authority-only",
+] as const satisfies readonly AuthoritativeWriteScope[];
+
+export function isAuthoritativeWriteScope(value: unknown): value is AuthoritativeWriteScope {
+  return (
+    typeof value === "string" && (authoritativeWriteScopes as readonly string[]).includes(value)
+  );
+}
 
 export type AuthoritativeGraphWriteResult = {
   readonly txId: string;
   readonly cursor: string;
   readonly replayed: boolean;
+  readonly writeScope: AuthoritativeWriteScope;
   readonly transaction: GraphWriteTransaction;
 };
 
@@ -292,6 +306,7 @@ export function cloneSyncActivity(activity: SyncActivity): SyncActivity {
     return {
       ...activity,
       txIds: [...activity.txIds],
+      writeScopes: [...activity.writeScopes],
       at: new Date(activity.at.getTime()),
     };
   }
@@ -310,7 +325,11 @@ export function sameSyncActivity(left: SyncActivity, right: SyncActivity): boole
 
   if (left.kind === "total" && right.kind === "total") return true;
   if (left.kind === "write" && right.kind === "write") {
-    return left.txId === right.txId && left.replayed === right.replayed;
+    return (
+      left.txId === right.txId &&
+      left.replayed === right.replayed &&
+      left.writeScope === right.writeScope
+    );
   }
   if (left.kind === "fallback" && right.kind === "fallback") {
     return left.after === right.after && left.reason === right.reason;
@@ -319,13 +338,15 @@ export function sameSyncActivity(left: SyncActivity, right: SyncActivity): boole
     if (
       left.after !== right.after ||
       left.transactionCount !== right.transactionCount ||
-      left.txIds.length !== right.txIds.length
+      left.txIds.length !== right.txIds.length ||
+      left.writeScopes.length !== right.writeScopes.length
     ) {
       return false;
     }
 
     for (let index = 0; index < left.txIds.length; index += 1) {
       if (left.txIds[index] !== right.txIds[index]) return false;
+      if (left.writeScopes[index] !== right.writeScopes[index]) return false;
     }
     return true;
   }

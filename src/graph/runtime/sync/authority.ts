@@ -287,6 +287,7 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
       txId: prepared.value.id,
       cursor: formatAuthoritativeGraphCursor(cursorPrefix, sequence),
       replayed: false,
+      writeScope: options.writeScope ?? "client-tx",
       transaction: prepared.value,
     };
     txRecords.set(prepared.value.id, {

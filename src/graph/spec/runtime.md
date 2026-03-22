@@ -69,8 +69,10 @@ The current implementation keeps ids stable per key and treats rename as an expl
 - `createJsonPersistedAuthoritativeGraph(store, namespace, { path, seed?, createCursorPrefix? })` composes that file-backed adapter with the persisted authority runtime
 - `createPersistedAuthoritativeGraph(store, namespace, { storage, seed?, createCursorPrefix? })` composes seeding, reload, incremental commit, explicit snapshot persistence, and authoritative write replay
 - `../../src/web/lib/graph-authority-do.ts` is the current SQLite-backed Durable Object consumer of that storage contract; it bootstraps SQL tables in the constructor, hydrates rows during authority init, and commits graph plus secret side-storage writes inside one Durable Object storage transaction
+- `AuthoritativeGraphWriteResult` now retains `writeScope`, so persisted-authority storage keeps accepted `client-tx` versus `server-command` origin alongside cursor and transaction data
 - file-backed persisted state stores a validated `snapshot` plus retained `writeHistory`, while the web Durable Object path reconstructs that same in-memory shape from `io_graph_meta`, `io_graph_tx`, `io_graph_tx_op`, `io_graph_edge`, and `io_secret_value`
 - legacy snapshot-only files are rewritten into the current versioned state shape
+- legacy versioned write histories that predate `writeScope` are normalized to `client-tx` on load and rewritten through the shared persistence path
 - failed durable commits or snapshot persists roll back the accepted in-memory authority state so it does not diverge from disk
 - retained history can be bounded by transaction count; when the retained window no longer covers an older or broken cursor, authorities fall back to total-sync recovery instead of serving stale incremental state
 

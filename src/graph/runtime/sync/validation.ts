@@ -10,6 +10,7 @@ import {
   cloneAuthoritativeGraphWriteResult,
   cloneGraphWriteTransaction,
   graphSyncScope,
+  isAuthoritativeWriteScope,
   isObjectRecord,
   type AuthoritativeGraphWriteResult,
   type AuthoritativeGraphWriteResultValidator,
@@ -172,6 +173,21 @@ export function prepareAuthoritativeGraphWriteResult(result: AuthoritativeGraphW
     );
   }
 
+  let writeScope: AuthoritativeWriteScope = "client-tx";
+  if (candidate.writeScope !== undefined) {
+    if (!isAuthoritativeWriteScope(candidate.writeScope)) {
+      issues.push(
+        createGraphWriteResultValidationIssue(
+          ["writeScope"],
+          "sync.txResult.writeScope",
+          'Field "writeScope" must be "client-tx", "server-command", or "authority-only".',
+        ),
+      );
+    } else {
+      writeScope = candidate.writeScope;
+    }
+  }
+
   const transaction = cloneGraphWriteTransaction(
     isObjectRecord(candidate.transaction)
       ? (candidate.transaction as GraphWriteTransaction)
@@ -199,6 +215,7 @@ export function prepareAuthoritativeGraphWriteResult(result: AuthoritativeGraphW
     txId: typeof candidate.txId === "string" ? candidate.txId : "",
     cursor: typeof candidate.cursor === "string" ? candidate.cursor : "",
     replayed: typeof candidate.replayed === "boolean" ? candidate.replayed : false,
+    writeScope,
     transaction,
   });
 
@@ -536,6 +553,7 @@ function validateIncrementalSyncPayloadShape(
                 txId: "",
                 cursor: "",
                 replayed: false,
+                writeScope: "client-tx",
                 transaction: {
                   id: "",
                   ops: [],

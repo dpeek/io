@@ -3,21 +3,49 @@ import { describe, expect, it } from "bun:test";
 
 import {
   bootstrap,
+  createIdMap,
+  createPersistedAuthoritativeGraph,
   createStore,
   createTypeClient,
+  defineNamespace,
+  defineType,
   edgeId,
   type GraphWriteTransaction,
   type NamespaceClient,
+  type PersistedAuthoritativeGraphStorage,
   type StoreSnapshot,
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 
+import type { WebAppAuthority, WebAppAuthorityStorage } from "./authority.js";
 import { WebGraphAuthorityDurableObject } from "./graph-authority-do.js";
 
 const productGraph = { ...core, ...pkm, ...ops } as const;
 const envVarSecretPredicateId = edgeId(ops.envVar.fields.secret);
+const hiddenCursorProbe = defineType({
+  values: { key: "test:hiddenCursorProbe", name: "Hidden Cursor Probe" },
+  fields: {
+    ...core.node.fields,
+    hiddenState: {
+      ...core.node.fields.description,
+      key: "test:hiddenCursorProbe:hiddenState",
+      authority: {
+        visibility: "authority-only",
+        write: "authority-only",
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Hidden state",
+      },
+    },
+  },
+});
+const hiddenCursorProbeNamespace = defineNamespace(createIdMap({ hiddenCursorProbe }).map, {
+  hiddenCursorProbe,
+});
+const hiddenCursorGraph = { ...core, ...hiddenCursorProbeNamespace } as const;
 
 type SqliteMasterRow = {
   name: string;
@@ -28,6 +56,7 @@ type GraphTxRow = {
   cursor: string;
   seq: number;
   tx_id: string;
+  write_scope: "authority-only" | "client-tx" | "server-command";
 };
 
 type GraphTxOpRow = {
@@ -55,6 +84,8 @@ type SecretValueRow = {
 };
 
 type SyncPayload = {
+  readonly mode: "incremental" | "total";
+  readonly after?: string;
   readonly cursor: string;
   readonly fallback?: "gap" | "reset" | "unknown-cursor";
   readonly snapshot?: StoreSnapshot;
@@ -62,6 +93,7 @@ type SyncPayload = {
     readonly cursor: string;
     readonly replayed: boolean;
     readonly txId: string;
+    readonly writeScope: "authority-only" | "client-tx" | "server-command";
   }[];
 };
 
@@ -213,6 +245,76 @@ function buildTransactionFromSnapshot<TResult>(
   };
 }
 
+function createPersistedStorageAdapter(
+  storage: WebAppAuthorityStorage,
+): PersistedAuthoritativeGraphStorage {
+  return {
+    load() {
+      return storage.load();
+    },
+    commit(input) {
+      return storage.commit(input);
+    },
+    persist(input) {
+      return storage.persist(input);
+    },
+  };
+}
+
+function createHiddenCursorAdvanceAuthorityFactory(ref: { entityId: string | null }) {
+  let cursorEpoch = 0;
+
+  return async (
+    storage: WebAppAuthorityStorage,
+    options: { readonly maxRetainedTransactions?: number },
+  ): Promise<WebAppAuthority> => {
+    const store = createStore();
+    bootstrap(store, core);
+    bootstrap(store, hiddenCursorProbeNamespace);
+
+    const authority = await createPersistedAuthoritativeGraph(store, hiddenCursorGraph, {
+      storage: createPersistedStorageAdapter(storage),
+      seed(graph) {
+        ref.entityId = graph.hiddenCursorProbe.create({
+          name: "Hidden Cursor Probe",
+        });
+      },
+      // Fresh prefixes keep baseline rewrites classifiable as "reset" instead of "unknown-cursor".
+      createCursorPrefix: () => `web-hidden:${++cursorEpoch}:`,
+      maxRetainedTransactions: options.maxRetainedTransactions,
+    });
+
+    return Object.assign(authority, {
+      async writeSecretField() {
+        throw new Error("Secret-field writes are not supported in the hidden cursor test.");
+      },
+    }) as unknown as WebAppAuthority;
+  };
+}
+
+function buildHiddenCursorAdvanceTransaction(
+  snapshot: StoreSnapshot,
+  entityId: string,
+  txId: string,
+  hiddenState = `hidden:${txId}`,
+): GraphWriteTransaction {
+  const mutationStore = createStore();
+  bootstrap(mutationStore, core);
+  bootstrap(mutationStore, hiddenCursorProbeNamespace);
+  mutationStore.replace(snapshot);
+  const before = mutationStore.snapshot();
+  const hiddenStatePredicateId = edgeId(hiddenCursorProbe.fields.hiddenState);
+
+  mutationStore.batch(() => {
+    for (const edge of mutationStore.facts(entityId, hiddenStatePredicateId)) {
+      mutationStore.retract(edge.id);
+    }
+    mutationStore.assert(entityId, hiddenStatePredicateId, hiddenState);
+  });
+
+  return buildGraphWriteTransaction(before, mutationStore.snapshot(), txId);
+}
+
 async function readSyncPayload(
   durableObject: WebGraphAuthorityDurableObject,
   after?: string,
@@ -270,15 +372,19 @@ async function getDurableAuthority(durableObject: WebGraphAuthorityDurableObject
   store: {
     snapshot(): StoreSnapshot;
   };
-}> {
+}>;
+async function getDurableAuthority<T>(durableObject: WebGraphAuthorityDurableObject): Promise<T>;
+async function getDurableAuthority<
+  T = {
+    persist(): Promise<void>;
+    store: {
+      snapshot(): StoreSnapshot;
+    };
+  },
+>(durableObject: WebGraphAuthorityDurableObject): Promise<T> {
   return (
     durableObject as unknown as {
-      getAuthority(): Promise<{
-        persist(): Promise<void>;
-        store: {
-          snapshot(): StoreSnapshot;
-        };
-      }>;
+      getAuthority(): Promise<T>;
     }
   ).getAuthority();
 }
@@ -324,6 +430,329 @@ describe("web graph authority durable object", () => {
     expect(getBlockConcurrencyWhileCount()).toBe(1);
   });
 
+  it("preserves hidden-only cursor advances through SQL-backed incremental sync after restart", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const hiddenProbe = { entityId: null as string | null };
+    const durableObject = new WebGraphAuthorityDurableObject(
+      state,
+      {},
+      {
+        createAuthority: createHiddenCursorAdvanceAuthorityFactory(hiddenProbe),
+      },
+    );
+    const initialSync = await readSyncPayload(durableObject);
+    const authority = await getDurableAuthority<{
+      applyTransaction(
+        transaction: GraphWriteTransaction,
+        options?: {
+          writeScope?: "authority-only" | "client-tx" | "server-command";
+        },
+      ): Promise<{
+        cursor: string;
+        replayed: boolean;
+        txId: string;
+        writeScope: "authority-only" | "client-tx" | "server-command";
+      }>;
+      store: {
+        snapshot(): StoreSnapshot;
+      };
+    }>(durableObject);
+
+    if (!hiddenProbe.entityId) {
+      throw new Error("Expected the hidden cursor probe to be seeded.");
+    }
+
+    const hiddenResult = await authority.applyTransaction(
+      buildHiddenCursorAdvanceTransaction(
+        authority.store.snapshot(),
+        hiddenProbe.entityId,
+        "tx:hidden:1",
+      ),
+      {
+        writeScope: "authority-only",
+      },
+    );
+    const txRows = queryAll<GraphTxRow>(
+      db,
+      `SELECT seq, tx_id, cursor, write_scope
+      FROM io_graph_tx
+      ORDER BY seq ASC`,
+    );
+    const restarted = new WebGraphAuthorityDurableObject(
+      state,
+      {},
+      {
+        createAuthority: createHiddenCursorAdvanceAuthorityFactory(hiddenProbe),
+      },
+    );
+    const incremental = await readSyncPayload(restarted, initialSync.cursor);
+
+    expect(hiddenResult.writeScope).toBe("authority-only");
+    expect(txRows).toEqual([
+      {
+        seq: 1,
+        tx_id: "tx:hidden:1",
+        cursor: hiddenResult.cursor,
+        write_scope: "authority-only",
+      },
+    ]);
+    expect(incremental.mode).toBe("incremental");
+    expect(incremental.after).toBe(initialSync.cursor);
+    expect(incremental.after).not.toBe(incremental.cursor);
+    expect(incremental.cursor).toBe(hiddenResult.cursor);
+    expect(incremental.transactions).toEqual([]);
+  });
+
+  it("falls back with gap when pruned hidden-only cursor advances fall behind retained history", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const hiddenProbe = { entityId: null as string | null };
+    const durableObject = new WebGraphAuthorityDurableObject(
+      state,
+      {
+        GRAPH_AUTHORITY_MAX_RETAINED_TRANSACTIONS: 2,
+      },
+      {
+        createAuthority: createHiddenCursorAdvanceAuthorityFactory(hiddenProbe),
+      },
+    );
+    const initialSync = await readSyncPayload(durableObject);
+    const authority = await getDurableAuthority<{
+      applyTransaction(
+        transaction: GraphWriteTransaction,
+        options?: {
+          writeScope?: "authority-only" | "client-tx" | "server-command";
+        },
+      ): Promise<{
+        cursor: string;
+        replayed: boolean;
+        txId: string;
+        writeScope: "authority-only" | "client-tx" | "server-command";
+      }>;
+      store: {
+        snapshot(): StoreSnapshot;
+      };
+    }>(durableObject);
+
+    if (!hiddenProbe.entityId) {
+      throw new Error("Expected the hidden cursor probe to be seeded.");
+    }
+
+    const firstHidden = await authority.applyTransaction(
+      buildHiddenCursorAdvanceTransaction(
+        authority.store.snapshot(),
+        hiddenProbe.entityId,
+        "tx:hidden:1",
+      ),
+      {
+        writeScope: "authority-only",
+      },
+    );
+    const secondHidden = await authority.applyTransaction(
+      buildHiddenCursorAdvanceTransaction(
+        authority.store.snapshot(),
+        hiddenProbe.entityId,
+        "tx:hidden:2",
+      ),
+      {
+        writeScope: "authority-only",
+      },
+    );
+    const thirdHidden = await authority.applyTransaction(
+      buildHiddenCursorAdvanceTransaction(
+        authority.store.snapshot(),
+        hiddenProbe.entityId,
+        "tx:hidden:3",
+      ),
+      {
+        writeScope: "authority-only",
+      },
+    );
+    const txRows = queryAll<GraphTxRow>(
+      db,
+      `SELECT seq, tx_id, cursor, write_scope
+      FROM io_graph_tx
+      ORDER BY seq ASC`,
+    );
+    const metaRows = queryAll<{
+      cursor_prefix: string;
+      head_cursor: string;
+      head_seq: number;
+      history_retained_from_seq: number;
+    }>(
+      db,
+      `SELECT cursor_prefix, head_seq, head_cursor, history_retained_from_seq
+      FROM io_graph_meta
+      WHERE id = 1`,
+    );
+    const gap = await readSyncPayload(durableObject, initialSync.cursor);
+    const retained = await readSyncPayload(durableObject, firstHidden.cursor);
+    const restarted = new WebGraphAuthorityDurableObject(
+      state,
+      {
+        GRAPH_AUTHORITY_MAX_RETAINED_TRANSACTIONS: 2,
+      },
+      {
+        createAuthority: createHiddenCursorAdvanceAuthorityFactory(hiddenProbe),
+      },
+    );
+    const restartedGap = await readSyncPayload(restarted, initialSync.cursor);
+    const restartedRetained = await readSyncPayload(restarted, firstHidden.cursor);
+
+    expect(firstHidden.writeScope).toBe("authority-only");
+    expect(secondHidden.writeScope).toBe("authority-only");
+    expect(thirdHidden.writeScope).toBe("authority-only");
+    expect(txRows).toEqual([
+      {
+        seq: 2,
+        tx_id: "tx:hidden:2",
+        cursor: secondHidden.cursor,
+        write_scope: "authority-only",
+      },
+      {
+        seq: 3,
+        tx_id: "tx:hidden:3",
+        cursor: thirdHidden.cursor,
+        write_scope: "authority-only",
+      },
+    ]);
+    expect(metaRows).toEqual([
+      {
+        cursor_prefix: metaRows[0]?.cursor_prefix ?? "",
+        head_seq: 3,
+        head_cursor: thirdHidden.cursor,
+        history_retained_from_seq: 1,
+      },
+    ]);
+    expect(gap).toMatchObject({
+      mode: "incremental",
+      after: initialSync.cursor,
+      fallback: "gap",
+      cursor: thirdHidden.cursor,
+      transactions: [],
+    });
+    expect(retained).toMatchObject({
+      mode: "incremental",
+      after: firstHidden.cursor,
+      cursor: thirdHidden.cursor,
+      transactions: [],
+    });
+    expect(retained.fallback).toBeUndefined();
+    expect(gap.cursor).not.toBe(gap.after);
+    expect(retained.cursor).not.toBe(retained.after);
+    expect(restartedGap).toMatchObject({
+      mode: "incremental",
+      after: initialSync.cursor,
+      fallback: "gap",
+      cursor: thirdHidden.cursor,
+      transactions: [],
+    });
+    expect(restartedRetained).toMatchObject({
+      mode: "incremental",
+      after: firstHidden.cursor,
+      cursor: thirdHidden.cursor,
+      transactions: [],
+    });
+    expect(restartedRetained.fallback).toBeUndefined();
+  });
+
+  it("falls back with reset when a hidden-only baseline rewrite drops retained history", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const hiddenProbe = { entityId: null as string | null };
+    const durableObject = new WebGraphAuthorityDurableObject(
+      state,
+      {},
+      {
+        createAuthority: createHiddenCursorAdvanceAuthorityFactory(hiddenProbe),
+      },
+    );
+    const initialSync = await readSyncPayload(durableObject);
+    const authority = await getDurableAuthority<{
+      applyTransaction(
+        transaction: GraphWriteTransaction,
+        options?: {
+          writeScope?: "authority-only" | "client-tx" | "server-command";
+        },
+      ): Promise<{
+        cursor: string;
+        replayed: boolean;
+        txId: string;
+        writeScope: "authority-only" | "client-tx" | "server-command";
+      }>;
+      persist(): Promise<void>;
+      store: {
+        snapshot(): StoreSnapshot;
+      };
+    }>(durableObject);
+
+    if (!hiddenProbe.entityId) {
+      throw new Error("Expected the hidden cursor probe to be seeded.");
+    }
+
+    const hiddenResult = await authority.applyTransaction(
+      buildHiddenCursorAdvanceTransaction(
+        authority.store.snapshot(),
+        hiddenProbe.entityId,
+        "tx:hidden:reset:1",
+      ),
+      {
+        writeScope: "authority-only",
+      },
+    );
+    const retained = await readSyncPayload(durableObject, initialSync.cursor);
+
+    await authority.persist();
+
+    const txCount = queryAll<{ count: number }>(db, `SELECT COUNT(*) AS count FROM io_graph_tx`);
+    const metaRows = queryAll<{
+      cursor_prefix: string;
+      head_cursor: string;
+      head_seq: number;
+      history_retained_from_seq: number;
+    }>(
+      db,
+      `SELECT cursor_prefix, head_seq, head_cursor, history_retained_from_seq
+      FROM io_graph_meta
+      WHERE id = 1`,
+    );
+    const restarted = new WebGraphAuthorityDurableObject(
+      state,
+      {},
+      {
+        createAuthority: createHiddenCursorAdvanceAuthorityFactory(hiddenProbe),
+      },
+    );
+    const restartedSync = await readSyncPayload(restarted);
+    const reset = await readSyncPayload(restarted, initialSync.cursor);
+    const metaRow = metaRows[0];
+
+    if (!metaRow) {
+      throw new Error("Expected durable graph metadata after the baseline rewrite.");
+    }
+
+    expect(hiddenResult.writeScope).toBe("authority-only");
+    expect(retained).toMatchObject({
+      mode: "incremental",
+      after: initialSync.cursor,
+      cursor: hiddenResult.cursor,
+      transactions: [],
+    });
+    expect(retained.fallback).toBeUndefined();
+    expect(txCount).toEqual([{ count: 0 }]);
+    expect(metaRows).toHaveLength(1);
+    expect(metaRow.head_seq).toBe(0);
+    expect(metaRow.history_retained_from_seq).toBe(0);
+    expect(restartedSync.cursor).toBe(metaRow.head_cursor);
+    expect(restartedSync.cursor).not.toBe(hiddenResult.cursor);
+    expect(reset).toMatchObject({
+      mode: "incremental",
+      after: initialSync.cursor,
+      fallback: "reset",
+      cursor: restartedSync.cursor,
+      transactions: [],
+    });
+    expect(reset.cursor).not.toBe(reset.after);
+  });
+
   it("persists accepted graph transactions as ordered rows and hydrates from SQL after restart", async () => {
     const { db, state } = createSqliteDurableObjectState();
     const durableObject = new WebGraphAuthorityDurableObject(state);
@@ -341,7 +770,7 @@ describe("web graph authority durable object", () => {
     const replayedTx = await postTransaction(durableObject, envVarWrite.transaction);
     const afterCreateRows = queryAll<GraphTxRow>(
       db,
-      `SELECT seq, tx_id, cursor
+      `SELECT seq, tx_id, cursor, write_scope
       FROM io_graph_tx
       ORDER BY seq ASC`,
     );
@@ -352,7 +781,7 @@ describe("web graph authority durable object", () => {
     });
     const txRows = queryAll<GraphTxRow>(
       db,
-      `SELECT seq, tx_id, cursor
+      `SELECT seq, tx_id, cursor, write_scope
       FROM io_graph_tx
       ORDER BY seq ASC`,
     );
@@ -413,10 +842,12 @@ describe("web graph authority durable object", () => {
       seq: 1,
       tx_id: "tx:create-env-var",
       cursor: createdTx.cursor,
+      write_scope: "client-tx",
     });
     expect(
       latestTx.tx_id.startsWith(`secret-field:${envVarWrite.result}:${envVarSecretPredicateId}:`),
     ).toBe(true);
+    expect(latestTx.write_scope).toBe("server-command");
     expect(txOpRows.filter((row) => row.tx_seq === 1).map((row) => row.op_index)).toEqual([
       ...txOpRows.filter((row) => row.tx_seq === 1).keys(),
     ]);
@@ -456,9 +887,15 @@ describe("web graph authority durable object", () => {
     ]);
     expect(restartedSync.cursor).toBe(latestTx.cursor);
     expect(JSON.stringify(restartedSync)).not.toContain("sk-live-first");
-    expect(incremental.transactions?.map((transaction) => transaction.txId)).toEqual([
-      "tx:create-env-var",
-      latestTx.tx_id,
+    expect(incremental.transactions).toEqual([
+      expect.objectContaining({
+        txId: "tx:create-env-var",
+        writeScope: "client-tx",
+      }),
+      expect.objectContaining({
+        txId: latestTx.tx_id,
+        writeScope: "server-command",
+      }),
     ]);
   });
 
@@ -829,7 +1266,7 @@ describe("web graph authority durable object", () => {
     const latestTx = await postTransaction(durableObject, secondUpdate.transaction);
     const txRows = queryAll<GraphTxRow>(
       db,
-      `SELECT seq, tx_id, cursor
+      `SELECT seq, tx_id, cursor, write_scope
       FROM io_graph_tx
       ORDER BY seq ASC`,
     );
@@ -860,8 +1297,18 @@ describe("web graph authority durable object", () => {
     const restartedRetained = await readSyncPayload(restarted, createdTx.cursor);
 
     expect(txRows).toEqual([
-      { seq: 2, tx_id: "tx:update-env-var:1", cursor: updatedTx.cursor },
-      { seq: 3, tx_id: "tx:update-env-var:2", cursor: latestTx.cursor },
+      {
+        seq: 2,
+        tx_id: "tx:update-env-var:1",
+        cursor: updatedTx.cursor,
+        write_scope: "client-tx",
+      },
+      {
+        seq: 3,
+        tx_id: "tx:update-env-var:2",
+        cursor: latestTx.cursor,
+        write_scope: "client-tx",
+      },
     ]);
     expect(txOpSequences).toEqual([{ tx_seq: 2 }, { tx_seq: 3 }]);
     expect(metaRows).toEqual([

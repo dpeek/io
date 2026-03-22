@@ -63,11 +63,13 @@ Current behavior:
 - accepted graph transactions commit through one Durable Object storage
   transaction that writes `io_graph_tx`, `io_graph_tx_op`, `io_graph_edge`, and
   `io_secret_value`
-
-Still deferred:
-
-- persisting transaction write scope explicitly; the current persisted-authority
-  boundary does not carry it yet
+- accepted authoritative results now carry `writeScope`, so durable state keeps
+  `client-tx` versus `server-command` origin across commit, restart, and
+  baseline rewrites
+- additive compatibility is explicit: older `io_graph_tx` tables gain a
+  `write_scope` column with a `client-tx` default, and legacy JSON write
+  histories without `writeScope` are normalized and rewritten through the
+  shared persisted-authority path
 
 ### Constructor Implication
 
@@ -175,6 +177,7 @@ Columns:
 - `tx_id TEXT NOT NULL UNIQUE`
 - `cursor TEXT NOT NULL UNIQUE`
 - `committed_at TEXT NOT NULL`
+- `write_scope TEXT NOT NULL CHECK (write_scope IN ('client-tx', 'server-command', 'authority-only'))`
 
 Purpose:
 
@@ -182,9 +185,12 @@ Purpose:
 - cursor lookup for incremental sync
 - duplicate transaction detection
 - sync retention window management
+- authoritative origin retention for audit and restart-safe replay semantics
 
-The current adapter does not persist `write_scope` yet because the
-persisted-authority storage commit contract does not currently provide it.
+Compatibility note:
+
+- older rows are backfilled as `client-tx` when the additive `write_scope`
+  column is installed
 
 #### `io_graph_tx_op`
 
@@ -459,6 +465,9 @@ Important point:
 - `commit(...)` is the primary durable write path
 - `persist(...)` is reserved for explicit snapshot baselines and hydration
   rewrites, not the normal mutation path
+- `AuthoritativeGraphWriteResult.writeScope` is the storage-boundary field that
+  lets adapters durably retain `client-tx` versus `server-command` origin
+  without inventing a second source of truth
 
 The web authority can then layer secret side-data writes on top of that graph
 commit.
@@ -470,26 +479,27 @@ Done in the current web Durable Object path:
 - the Durable Object constructor bootstraps tables and indexes synchronously
 - `graph` exposes the `load(...)`, `commit(...)`, and `persist(...)`
   persistence boundary consumed by the adapter
-- accepted writes append `io_graph_tx` and `io_graph_tx_op`, materialize
-  `io_graph_edge`, and upsert `io_secret_value` inside one Durable Object
-  storage transaction
+- accepted writes append `io_graph_tx` including `write_scope`, append
+  `io_graph_tx_op`, materialize `io_graph_edge`, and upsert `io_secret_value`
+  inside one Durable Object storage transaction
 - startup hydrates snapshot rows and retained transaction rows from SQL, and
   rewrites reset baselines when retained history no longer matches the hydrated
   head
 - retained history is bounded by transaction count, `history_retained_from_seq`
   advances with pruning, and old or unknown cursors fall back to total sync
+- file-backed persisted authorities normalize legacy write histories that lack
+  `writeScope` to `client-tx` and rewrite them through the same shared
+  persistence contract
 - coverage in `../../src/web/lib/graph-authority-do.test.ts` exercises
   constructor bootstrap, restart hydration, retained-history pruning, reset
   baselines, rollback on SQL failure, secret side-storage behavior, and
-  retraction fidelity
+  retraction fidelity, including persisted write-scope recovery
 - the web Durable Object authority path in
   `../../src/web/lib/graph-authority-do.ts` no longer uses
   `state.storage.get/put(...)` whole-blob persistence
 
 Still deferred:
 
-- persisting transaction `writeScope` explicitly; the current
-  persisted-authority storage contract does not carry it yet
 - optional checkpoint and projection tables only if read or recovery paths
   justify them
 

@@ -199,6 +199,68 @@ describe("persisted authoritative graph", () => {
     expect(restarted.createSyncPayload().cursor).toBe(authority.createSyncPayload().cursor);
   });
 
+  it("rewrites legacy persisted write history entries to include client-tx write scope", async () => {
+    const snapshotPath = await createTempSnapshotPath();
+    const store = createStore();
+    bootstrap(store, core);
+    bootstrap(store, testGraph);
+    const graph = createTypeClient(store, testGraph);
+    const itemId = graph.item.create({ name: "Legacy Scoped Item" });
+    const writes = createAuthoritativeGraphWriteSession(store, testGraph, {
+      cursorPrefix: "persisted:legacy-scope:",
+    });
+    const scopedResult = writes.apply(
+      createItemNameWriteTransaction(store, itemId, "Legacy Scoped Item Updated", "tx:legacy:1"),
+    );
+
+    await writeFile(
+      snapshotPath,
+      JSON.stringify(
+        {
+          version: 1,
+          snapshot: store.snapshot(),
+          writeHistory: {
+            cursorPrefix: "persisted:legacy-scope:",
+            baseSequence: 0,
+            results: [
+              {
+                txId: scopedResult.txId,
+                cursor: scopedResult.cursor,
+                replayed: scopedResult.replayed,
+                transaction: scopedResult.transaction,
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+
+    const authority = await createJsonAuthority(snapshotPath);
+    const rewrittenState = await readPersistedAuthorityState(snapshotPath);
+
+    expect(rewrittenState.writeHistory.results).toEqual([
+      expect.objectContaining({
+        txId: "tx:legacy:1",
+        cursor: "persisted:legacy-scope:1",
+        replayed: false,
+        writeScope: "client-tx",
+      }),
+    ]);
+    expect(authority.getChangesAfter()).toEqual({
+      kind: "changes",
+      cursor: "persisted:legacy-scope:1",
+      changes: [
+        expect.objectContaining({
+          txId: "tx:legacy:1",
+          writeScope: "client-tx",
+        }),
+      ],
+    });
+  });
+
   it("persists accepted transactions in order and resumes cursor progression after restart", async () => {
     const snapshotPath = await createTempSnapshotPath();
     const authority = await createJsonAuthority(snapshotPath, { seedName: "Durable Item" });
@@ -219,6 +281,7 @@ describe("persisted authoritative graph", () => {
     expect(first).toMatchObject({
       txId: "tx:1",
       replayed: false,
+      writeScope: "client-tx",
       cursor: `${persistedState.writeHistory.cursorPrefix}1`,
     });
     expect(authority.getChangesAfter(initialCursor)).toEqual({
@@ -245,6 +308,7 @@ describe("persisted authoritative graph", () => {
     expect(second).toMatchObject({
       txId: "tx:2",
       replayed: false,
+      writeScope: "client-tx",
       cursor: `${persistedState.writeHistory.cursorPrefix}2`,
     });
     expect(restarted.getChangesAfter(first.cursor)).toEqual({
@@ -408,6 +472,7 @@ describe("persisted authoritative graph", () => {
       txId: "tx:1",
       cursor: "persisted:broken:2",
       replayed: false,
+      writeScope: "client-tx",
       transaction: createItemNameWriteTransaction(store, itemId, "Broken History Item Two", "tx:1"),
     };
 
@@ -510,6 +575,7 @@ describe("persisted authoritative graph", () => {
           txId: "tx:hidden",
           cursor: "server:hidden:1",
           replayed: false,
+          writeScope: "client-tx",
           transaction: hiddenWrite,
         },
       ],
@@ -558,12 +624,14 @@ describe("persisted authoritative graph", () => {
           txId: "tx:hidden",
           cursor: "server:mixed:1",
           replayed: false,
+          writeScope: "client-tx",
           transaction: hiddenWrite,
         },
         {
           txId: "tx:visible",
           cursor: "server:mixed:2",
           replayed: false,
+          writeScope: "client-tx",
           transaction: visibleWrite,
         },
       ],

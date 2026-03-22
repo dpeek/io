@@ -1,4 +1,5 @@
 import type {
+  AuthoritativeWriteScope,
   PersistedAuthoritativeGraphStorageCommitInput as DurableAuthorityCommitInput,
   PersistedAuthoritativeGraphStorageLoadResult as DurableAuthorityLoadResult,
   PersistedAuthoritativeGraphStoragePersistInput as DurableAuthorityPersistInput,
@@ -6,6 +7,7 @@ import type {
 
 import type {
   WebAppAuthority,
+  WebAppAuthorityOptions,
   WebAppAuthoritySecretRecord,
   WebAppAuthoritySecretWrite,
   WebAppAuthorityStorage,
@@ -57,6 +59,7 @@ type GraphTxRow = {
   cursor: string;
   seq: number;
   tx_id: string;
+  write_scope: AuthoritativeWriteScope;
 };
 
 type GraphTxOpRow = {
@@ -91,6 +94,11 @@ type SecretValueRow = {
 
 const durableObjectAuthoritySchemaVersion = 1;
 const defaultMaxRetainedTransactions = 128;
+
+type WebGraphAuthorityFactory = (
+  storage: WebAppAuthorityStorage,
+  options: WebAppAuthorityOptions,
+) => Promise<WebAppAuthority>;
 
 function formatCursor(cursorPrefix: string, sequence: number): string {
   return `${cursorPrefix}${sequence}`;
@@ -148,6 +156,13 @@ function requireString(value: unknown, label: string): string {
     throw new Error(`Expected "${label}" to be a string.`);
   }
   return value;
+}
+
+function requireWriteScope(value: unknown, label: string): AuthoritativeWriteScope {
+  if (value === "client-tx" || value === "server-command" || value === "authority-only") {
+    return value;
+  }
+  throw new Error(`Expected "${label}" to be a supported authoritative write scope.`);
 }
 
 function requireNullableString(value: unknown, label: string): string | null {
@@ -257,7 +272,7 @@ function buildWriteHistoryFromSql(
 } {
   const transactions = readAllRows<GraphTxRow>(
     sql.exec(
-      `SELECT seq, tx_id, cursor, committed_at
+      `SELECT seq, tx_id, cursor, committed_at, write_scope
       FROM io_graph_tx
       ORDER BY seq ASC`,
     ),
@@ -306,6 +321,7 @@ function buildWriteHistoryFromSql(
       txId: requireString(row.tx_id, "io_graph_tx.tx_id"),
       cursor,
       replayed: false,
+      writeScope: requireWriteScope(row.write_scope, "io_graph_tx.write_scope"),
       transaction: {
         id: requireString(row.tx_id, "io_graph_tx.tx_id"),
         ops: (opsBySequence.get(seq) ?? []).map((op) => {
@@ -425,12 +441,13 @@ function insertTransactionHistoryRows(
   writeHistory.results.forEach((result, index) => {
     const seq = writeHistory.baseSequence + index + 1;
     sql.exec(
-      `INSERT INTO io_graph_tx (seq, tx_id, cursor, committed_at)
-      VALUES (?, ?, ?, ?)`,
+      `INSERT INTO io_graph_tx (seq, tx_id, cursor, committed_at, write_scope)
+      VALUES (?, ?, ?, ?, ?)`,
       seq,
       result.txId,
       result.cursor,
       committedAt,
+      result.writeScope,
     );
 
     result.transaction.ops.forEach((op, opIndex) => {
@@ -598,12 +615,13 @@ function applyCommittedTransaction(
   const sequence = headSequence(input.writeHistory);
 
   sql.exec(
-    `INSERT INTO io_graph_tx (seq, tx_id, cursor, committed_at)
-    VALUES (?, ?, ?, ?)`,
+    `INSERT INTO io_graph_tx (seq, tx_id, cursor, committed_at, write_scope)
+    VALUES (?, ?, ?, ?, ?)`,
     sequence,
     input.result.txId,
     input.result.cursor,
     now,
+    input.result.writeScope,
   );
 
   input.transaction.ops.forEach((op, opIndex) => {
@@ -747,9 +765,23 @@ function bootstrapDurableObjectAuthoritySchema(storage: DurableObjectStorageLike
       seq INTEGER PRIMARY KEY,
       tx_id TEXT NOT NULL UNIQUE,
       cursor TEXT NOT NULL UNIQUE,
-      committed_at TEXT NOT NULL
+      committed_at TEXT NOT NULL,
+      write_scope TEXT NOT NULL DEFAULT 'client-tx'
+        CHECK (write_scope IN ('client-tx', 'server-command', 'authority-only'))
     )`,
   );
+  const graphTxColumns = new Set(
+    readAllRows<{ name: string }>(storage.sql.exec("PRAGMA table_info(io_graph_tx)")).map((row) =>
+      requireString(row.name, "PRAGMA table_info(io_graph_tx).name"),
+    ),
+  );
+  if (!graphTxColumns.has("write_scope")) {
+    storage.sql.exec(
+      `ALTER TABLE io_graph_tx
+      ADD COLUMN write_scope TEXT NOT NULL DEFAULT 'client-tx'
+        CHECK (write_scope IN ('client-tx', 'server-command', 'authority-only'))`,
+    );
+  }
   storage.sql.exec(
     `CREATE TABLE IF NOT EXISTS io_graph_tx_op (
       tx_seq INTEGER NOT NULL,
@@ -809,11 +841,19 @@ function bootstrapDurableObjectAuthoritySchema(storage: DurableObjectStorageLike
 export class WebGraphAuthorityDurableObject {
   private readonly state: DurableObjectStateLike;
   private readonly maxRetainedTransactions: number;
+  private readonly createAuthority: WebGraphAuthorityFactory;
   private authorityPromise: Promise<WebAppAuthority> | null = null;
 
-  constructor(state: DurableObjectStateLike, env: DurableObjectEnvLike = {}) {
+  constructor(
+    state: DurableObjectStateLike,
+    env: DurableObjectEnvLike = {},
+    options: {
+      createAuthority?: WebGraphAuthorityFactory;
+    } = {},
+  ) {
     this.state = state;
     this.maxRetainedTransactions = readMaxRetainedTransactions(env);
+    this.createAuthority = options.createAuthority ?? createWebAppAuthority;
     bootstrapDurableObjectAuthoritySchema(this.state.storage);
   }
 
@@ -822,7 +862,7 @@ export class WebGraphAuthorityDurableObject {
 
     const pending = this.state
       .blockConcurrencyWhile(() =>
-        createWebAppAuthority(createSqliteDurableObjectAuthorityStorage(this.state), {
+        this.createAuthority(createSqliteDurableObjectAuthorityStorage(this.state), {
           maxRetainedTransactions: this.maxRetainedTransactions,
         }),
       )

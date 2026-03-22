@@ -2,7 +2,11 @@ import {
   type AuthoritativeGraphWriteResult,
   type AuthoritativeWriteScope,
   bootstrap,
+  createGraphWriteTransactionFromSnapshots,
+  createIdMap,
   createAuthoritativeGraphWriteSession,
+  defineNamespace,
+  defineType,
   createSyncedTypeClient,
   createStore,
   createTotalSyncPayload,
@@ -19,30 +23,69 @@ import { pkm } from "@io/core/graph/modules/pkm";
 
 import { seedExampleGraph } from "./example-data.js";
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
+const hiddenCursorProbe = defineType({
+  values: { key: "test:hiddenCursorProbe", name: "Hidden Cursor Probe" },
+  fields: {
+    name: core.node.fields.name,
+    hiddenState: {
+      ...core.node.fields.description,
+      authority: {
+        visibility: "authority-only",
+        write: "authority-only",
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Hidden state",
+      },
+    },
+  },
+});
 
-function createExampleAuthorityGraph() {
+const hiddenCursorProbeNamespace = defineNamespace(createIdMap({ hiddenCursorProbe }).map, {
+  hiddenCursorProbe,
+});
+
+const productGraph = { ...core, ...pkm, ...ops } as const;
+const exampleGraph = { ...productGraph, ...hiddenCursorProbeNamespace } as const;
+
+function createExampleStore() {
   const store = createStore();
   bootstrap(store, core);
   bootstrap(store, pkm);
   bootstrap(store, ops);
+  bootstrap(store, hiddenCursorProbeNamespace);
+  return store;
+}
 
-  const graph = createTypeClient(store, productGraph);
+function createExampleAuthorityGraph() {
+  const store = createExampleStore();
+  const graph = createTypeClient(store, exampleGraph);
   const ids = seedExampleGraph(createTypeClient(store, productGraph));
+  const hiddenCursorProbeId = graph.hiddenCursorProbe.create({
+    name: "Hidden Cursor Probe",
+  });
 
   return {
     store,
     graph,
-    ids,
+    ids: {
+      ...ids,
+      hiddenCursorProbe: hiddenCursorProbeId,
+    },
   };
 }
 
-export type ExampleSyncedClient = SyncedTypeClient<typeof productGraph>;
+export type ExampleSyncedClient = SyncedTypeClient<typeof exampleGraph>;
 
-export function createExampleRuntime() {
+export function createExampleRuntime(
+  options: {
+    maxRetainedTransactions?: number;
+  } = {},
+) {
   const authority = createExampleAuthorityGraph();
-  let writes = createAuthoritativeGraphWriteSession(authority.store, productGraph, {
+  let writes = createAuthoritativeGraphWriteSession(authority.store, exampleGraph, {
     cursorPrefix: "example:",
+    maxRetainedResults: options.maxRetainedTransactions,
   });
   const clients = new Set<ExampleSyncedClient>();
   const pendingTxIds = new WeakMap<ExampleSyncedClient, string[]>();
@@ -73,16 +116,44 @@ export function createExampleRuntime() {
   }
 
   function resetAuthorityStream(cursorPrefix = "reset:"): string {
-    writes = createAuthoritativeGraphWriteSession(authority.store, productGraph, {
+    writes = createAuthoritativeGraphWriteSession(authority.store, exampleGraph, {
       cursorPrefix,
+      maxRetainedResults: options.maxRetainedTransactions,
     });
     return writes.getBaseCursor();
+  }
+
+  function applyHiddenOnlyCursorAdvance(
+    txId: string,
+    hiddenState = `hidden:${txId}`,
+  ): AuthoritativeGraphWriteResult {
+    const before = authority.store.snapshot();
+    const mutationStore = createExampleStore();
+    mutationStore.replace(before);
+    const mutationGraph = createTypeClient(mutationStore, exampleGraph);
+
+    mutationGraph.hiddenCursorProbe.update(authority.ids.hiddenCursorProbe, {
+      hiddenState,
+    });
+
+    const transaction = createGraphWriteTransactionFromSnapshots(
+      before,
+      mutationStore.snapshot(),
+      txId,
+    );
+    if (transaction.ops.length === 0) {
+      throw new Error(`Hidden-only mutation for "${txId}" did not change the graph.`);
+    }
+
+    return applyTransaction(transaction, {
+      writeScope: "authority-only",
+    });
   }
 
   function createClient(): ExampleSyncedClient {
     let client: ExampleSyncedClient;
     const queuedTxIds: string[] = [];
-    client = createSyncedTypeClient(productGraph, {
+    client = createSyncedTypeClient(exampleGraph, {
       pull: (state) =>
         state.cursor ? getIncrementalSyncResult(state.cursor) : createSyncPayload(),
       createTxId() {
@@ -140,6 +211,7 @@ export function createExampleRuntime() {
     authority: {
       ...authority,
       applyTransaction,
+      applyHiddenOnlyCursorAdvance,
       createSyncPayload,
       getIncrementalSyncResult,
       resetAuthorityStream,

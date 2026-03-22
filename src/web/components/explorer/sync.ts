@@ -5,6 +5,9 @@ import type { ExplorerSync, ExplorerSyncSnapshot } from "./model.js";
 
 export const ExplorerSyncContext = createContext<ExplorerSync | null>(null);
 
+type ExplorerStreamActivity = ExplorerSyncSnapshot["state"]["recentActivities"][number];
+type ExplorerWriteScope = Extract<ExplorerStreamActivity, { kind: "write" }>["writeScope"];
+
 export function useExplorerSyncSnapshot(sync: ExplorerSync): ExplorerSyncSnapshot {
   const [snapshot, setSnapshot] = useState<ExplorerSyncSnapshot>(() => ({
     pendingTransactions: sync.getPendingTransactions(),
@@ -63,32 +66,53 @@ export function formatPendingTransactionSummary(
   return parts.join(", ") || "0 ops";
 }
 
-export function formatStreamActivityTitle(
-  activity: ExplorerSyncSnapshot["state"]["recentActivities"][number],
-): string {
+export function formatStreamActivityTitle(activity: ExplorerStreamActivity): string {
   if (activity.kind === "total") return "Total snapshot applied";
   if (activity.kind === "incremental") {
-    return activity.transactionCount > 0
-      ? `Incremental batch applied (${activity.transactionCount})`
-      : "Incremental poll confirmed head cursor";
+    if (activity.transactionCount > 0) {
+      return `Incremental batch applied (${activity.transactionCount})`;
+    }
+    return activity.after === activity.cursor
+      ? "Incremental poll confirmed head cursor"
+      : "Incremental cursor advanced without replicated writes";
   }
   if (activity.kind === "write") return `Authoritative write applied (${activity.txId})`;
   return `Snapshot recovery required (${activity.reason})`;
 }
 
-export function formatStreamActivityDetail(
-  activity: ExplorerSyncSnapshot["state"]["recentActivities"][number],
-): string {
+export function formatStreamActivityDetail(activity: ExplorerStreamActivity): string {
   if (activity.kind === "total") {
     return `cursor ${activity.cursor}`;
   }
   if (activity.kind === "incremental") {
-    return `after ${activity.after} -> ${activity.cursor}`;
+    const scopeSummary = formatWriteScopeSummary(activity.writeScopes);
+    return scopeSummary
+      ? `after ${activity.after} -> ${activity.cursor}; ${scopeSummary}`
+      : `after ${activity.after} -> ${activity.cursor}`;
   }
   if (activity.kind === "write") {
-    return activity.replayed ? `replayed at ${activity.cursor}` : `cursor ${activity.cursor}`;
+    return activity.replayed
+      ? `scope ${activity.writeScope}; replayed at ${activity.cursor}`
+      : `scope ${activity.writeScope}; cursor ${activity.cursor}`;
   }
   return `after ${activity.after} -> ${activity.cursor}`;
+}
+
+export function formatScopedTransactionLabel(txId: string, writeScope: ExplorerWriteScope): string {
+  return `${txId} (${writeScope})`;
+}
+
+export function formatWriteScopeSummary(writeScopes: readonly ExplorerWriteScope[]): string | null {
+  const uniqueScopes: ExplorerWriteScope[] = [];
+
+  for (const scope of writeScopes) {
+    if (uniqueScopes.includes(scope)) continue;
+    uniqueScopes.push(scope);
+  }
+
+  if (uniqueScopes.length === 0) return null;
+  if (uniqueScopes.length === 1) return `scope ${uniqueScopes[0]}`;
+  return `mixed scopes: ${uniqueScopes.join(", ")}`;
 }
 
 export function describeSyncError(error: unknown): string | null {

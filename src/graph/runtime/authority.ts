@@ -53,22 +53,41 @@ function validatePersistedSnapshot(
   throw new Error(`Invalid persisted authority snapshot in "${source}": ${messages.join(" | ")}`);
 }
 
-function readPersistedWriteHistory(
-  rawHistory: unknown,
-): AuthoritativeGraphWriteHistory | undefined {
-  if (!isObjectRecord(rawHistory)) return undefined;
+function readPersistedWriteHistory(rawHistory: unknown): {
+  readonly writeHistory?: AuthoritativeGraphWriteHistory;
+  readonly needsPersistence: boolean;
+} {
+  if (!isObjectRecord(rawHistory)) {
+    return {
+      needsPersistence: false,
+    };
+  }
   const cursorPrefix = rawHistory.cursorPrefix;
   const baseSequence = rawHistory.baseSequence;
   const results = rawHistory.results;
-  if (typeof cursorPrefix !== "string") return undefined;
-  if (typeof baseSequence !== "number" || !Number.isInteger(baseSequence) || baseSequence < 0) {
-    return undefined;
+  if (typeof cursorPrefix !== "string") {
+    return {
+      needsPersistence: false,
+    };
   }
-  if (!Array.isArray(results)) return undefined;
+  if (typeof baseSequence !== "number" || !Number.isInteger(baseSequence) || baseSequence < 0) {
+    return {
+      needsPersistence: false,
+    };
+  }
+  if (!Array.isArray(results)) {
+    return {
+      needsPersistence: false,
+    };
+  }
+
   return {
-    cursorPrefix,
-    baseSequence,
-    results: results as AuthoritativeGraphWriteResult[],
+    writeHistory: {
+      cursorPrefix,
+      baseSequence,
+      results: results as AuthoritativeGraphWriteResult[],
+    },
+    needsPersistence: results.some((result) => isObjectRecord(result) && !("writeScope" in result)),
   };
 }
 
@@ -90,11 +109,13 @@ export function createJsonPersistedAuthoritativeGraphStorage<
           path,
           namespace,
         );
-        const writeHistory = readPersistedWriteHistory(parsed.writeHistory);
+        const persistedWriteHistory = readPersistedWriteHistory(parsed.writeHistory);
         return {
           snapshot,
-          writeHistory,
-          needsPersistence: writeHistory === undefined,
+          writeHistory: persistedWriteHistory.writeHistory,
+          needsPersistence:
+            persistedWriteHistory.writeHistory === undefined ||
+            persistedWriteHistory.needsPersistence,
         };
       }
 

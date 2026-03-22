@@ -54,7 +54,10 @@ chrome comes from `@io/web`.
   inspector shell, draft-backed generic create bindings, field editors, and the
   sync inspector
 - `../../src/web/components/sync-page.tsx`: top-level sync monitor for
-  authority cursor, pending writes, and recent authoritative activity
+  authority cursor, pending writes, recent authoritative activity, and
+  surfaced write-scope diagnostics for acknowledged and pulled writes, plus
+  cursor-advance diagnostics when incremental replication filters out all
+  browser-visible transactions
 - `../../src/web/components/topic-browser-page.tsx`: topic browsing, metadata
   editing, shared Base UI entity-reference combobox editing with inline chips
   and icon-aware option rows, tag create-on-enter flows on top of that shared

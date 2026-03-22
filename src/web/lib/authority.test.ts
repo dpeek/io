@@ -65,6 +65,13 @@ describe("web authority", () => {
     expect(created.secretVersion).toBe(1);
     expect(JSON.stringify(authority.createSyncPayload())).not.toContain("sk-live-first");
     expect(storage.read()?.secrets?.[createdSecretId]?.value).toBe("sk-live-first");
+    expect(
+      storage
+        .read()
+        ?.writeHistory.results.at(-1)
+        ?.txId.startsWith(`secret-field:${envVarId}:${envVarSecretPredicateId}:`),
+    ).toBe(true);
+    expect(storage.read()?.writeHistory.results.at(-1)?.writeScope).toBe("server-command");
 
     const rotated = await authority.writeSecretField({
       entityId: envVarId,

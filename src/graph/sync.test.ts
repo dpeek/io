@@ -698,6 +698,7 @@ describe("total sync", () => {
       txId: "tx:1",
       cursor: "server:1",
       replayed: false,
+      writeScope: "client-tx",
     });
     expect(client.graph.company.get(acmeId)).toMatchObject({
       id: acmeId,
@@ -711,6 +712,18 @@ describe("total sync", () => {
       freshness: "current",
       cursor: "server:1",
     });
+    expect(client.sync.getState().recentActivities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "write",
+          txId: "tx:1",
+          cursor: "server:1",
+          replayed: false,
+          writeScope: "client-tx",
+          freshness: "current",
+        }),
+      ]),
+    );
     expect(nameNotifications).toBe(1);
     expect(websiteNotifications).toBe(0);
 
@@ -1348,6 +1361,7 @@ describe("total sync", () => {
       txId: "tx:invalid",
       cursor: "server:2",
       replayed: false,
+      writeScope: "client-tx" as const,
       transaction: createCompanyNameWriteTransaction(server.store, acmeId, "   ", "tx:invalid"),
     };
 
@@ -1880,6 +1894,9 @@ describe("total sync", () => {
     );
     const second = authority.apply(
       createCompanyNameWriteTransaction(server.store, acmeId, "Acme Incremental Two", "tx:2"),
+      {
+        writeScope: "server-command",
+      },
     );
     const incremental = authority.getIncrementalSyncResult(authority.getBaseCursor());
     const applied = session.apply(incremental);
@@ -1896,6 +1913,19 @@ describe("total sync", () => {
       completeness: "complete",
       freshness: "current",
     });
+    expect(session.getState().recentActivities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "incremental",
+          after: authority.getBaseCursor(),
+          cursor: second.cursor,
+          transactionCount: 2,
+          txIds: [first.txId, second.txId],
+          writeScopes: [first.writeScope, second.writeScope],
+          freshness: "current",
+        }),
+      ]),
+    );
 
     const gapAuthority = createAuthoritativeGraphWriteSession(server.store, testNamespace, {
       cursorPrefix: "server:",
@@ -2392,6 +2422,7 @@ describe("authoritative graph writes", () => {
         txId: "",
         cursor: "",
         replayed: false,
+        writeScope: "client-tx",
         transaction,
       },
       server.store,
