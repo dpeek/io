@@ -1,5 +1,9 @@
 import { defineIoConfig, env, linearTracker } from "@io/core/lib/config";
 
+const reviewPlanningEnabled = !["0", "false"].includes(
+  (process.env.IO_REVIEW_PLANNING ?? "").trim().toLowerCase(),
+);
+
 export default defineIoConfig({
   agent: {
     maxConcurrentAgents: 3,
@@ -125,15 +129,19 @@ export default defineIoConfig({
     defaultAgent: "execute",
     defaultProfile: "execute",
     routing: [
-      {
-        if: {
-          hasChildren: false,
-          hasParent: true,
-          stateIn: ["In Review"],
-        },
-        agent: "review",
-        profile: "review",
-      },
+      ...(reviewPlanningEnabled
+        ? [
+            {
+              if: {
+                hasChildren: false,
+                hasParent: true,
+                stateIn: ["In Review"],
+              },
+              agent: "review" as const,
+              profile: "review",
+            },
+          ]
+        : []),
       {
         if: {
           labelsAny: ["backlog", "planning"],
@@ -144,7 +152,7 @@ export default defineIoConfig({
     ],
   },
   tracker: linearTracker({
-    activeStates: ["Todo", "In Progress", "In Review"],
+    activeStates: ["Todo", "In Progress", ...(reviewPlanningEnabled ? ["In Review"] : [])],
     apiKey: env.secret("LINEAR_API_KEY"),
     projectSlug: env.string("LINEAR_PROJECT_SLUG"),
   }),

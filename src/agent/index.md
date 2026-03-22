@@ -29,7 +29,8 @@ The preferred workflow is three levels: streams are maintained interactively,
 features own integration-sized branches under a stream, and the supervisor
 auto-runs released leaf tasks. Current code already gates task execution on the
 right parent states, rebases and merges successful task work onto the feature
-branch during the execution path, moves successful tasks into `In Review`, and
+branch during the execution path, and moves successful tasks into `In Review`.
+When `IO_REVIEW_PLANNING` is not set to `0` or `false`, the supervisor also
 auto-runs a review pass that creates the next issue before the current task
 closes. Features still stay human-controlled: when a feature finally moves to
 `Done`, the engine squashes it back onto the stream branch while preserving
