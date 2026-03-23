@@ -42,6 +42,7 @@ import type {
 import { pkm } from "@io/core/graph/modules/pkm";
 
 import { seedExampleGraph } from "./example-data.js";
+import { planRecordedMutation } from "./mutation-planning.js";
 import {
   buildSecretHandleName,
   secretFieldEntityIdRequiredMessage,
@@ -71,6 +72,12 @@ type CompiledFieldDefinition = {
   readonly ownerTypeIds: ReadonlySet<string>;
   readonly pathLabel: string;
   readonly policy: PredicatePolicyDescriptor;
+};
+type CompiledGraphArtifacts = {
+  readonly bootstrappedSnapshot: StoreSnapshot;
+  readonly compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>;
+  readonly scalarByKey: ReturnType<typeof collectScalarCodecs>;
+  readonly typeByKey: ReturnType<typeof collectTypeIndex>;
 };
 
 export type WebAppAuthoritySecretRecord = {
@@ -108,6 +115,8 @@ type WebAppAuthorityCommandResultMap = {
 export type WebAppAuthorityCommandResult<
   Kind extends WebAppAuthorityCommand["kind"] = WebAppAuthorityCommand["kind"],
 > = WebAppAuthorityCommandResultMap[Kind];
+
+const compiledGraphArtifactsCache = new WeakMap<WebAppAuthorityGraph, CompiledGraphArtifacts>();
 
 /**
  * Consumer-owned `/api/commands` proof envelope.
@@ -210,6 +219,7 @@ export type WebAppAuthority = Omit<
 export type WebAppAuthorityOptions = {
   readonly graph?: WebAppAuthorityGraph;
   readonly maxRetainedTransactions?: number;
+  readonly seedExampleGraph?: boolean;
 };
 
 const typePredicateId = edgeId(core.node.fields.type);
@@ -380,6 +390,23 @@ function buildCompiledFieldIndex(
   return entries;
 }
 
+function getCompiledGraphArtifacts(graph: WebAppAuthorityGraph): CompiledGraphArtifacts {
+  const cached = compiledGraphArtifactsCache.get(graph);
+  if (cached) return cached;
+
+  const bootstrappedStore = createStore();
+  bootstrap(bootstrappedStore, graph);
+  const compiled = {
+    bootstrappedSnapshot: bootstrappedStore.snapshot(),
+    compiledFieldIndex: buildCompiledFieldIndex(graph),
+    scalarByKey: collectScalarCodecs(graph),
+    typeByKey: collectTypeIndex(graph),
+  };
+
+  compiledGraphArtifactsCache.set(graph, compiled);
+  return compiled;
+}
+
 function buildTransactionValidationError(
   transaction: GraphWriteTransaction,
   issues: ReadonlyArray<{
@@ -500,38 +527,7 @@ function planAuthorityMutation<TResult>(
   readonly result: TResult;
   readonly transaction: GraphWriteTransaction;
 } {
-  const mutationStore = createStore();
-  bootstrap(mutationStore, core);
-  bootstrap(mutationStore, pkm);
-  bootstrap(mutationStore, ops);
-  mutationStore.replace(snapshot);
-
-  const mutationGraph = createTypeClient(mutationStore, webAppGraph);
-  const before = mutationStore.snapshot();
-  const result = mutate(mutationGraph, mutationStore);
-  const after = mutationStore.snapshot();
-  const previousEdgeIds = new Set(before.edges.map((edge) => edge.id));
-  const previousRetractedIds = new Set(before.retracted);
-  const writeOps: GraphWriteTransaction["ops"] = [
-    ...after.retracted
-      .filter((edgeId) => !previousRetractedIds.has(edgeId))
-      .map((edgeId) => ({ op: "retract" as const, edgeId })),
-    ...after.edges
-      .filter((edge) => !previousEdgeIds.has(edge.id))
-      .map((edge) => ({
-        op: "assert" as const,
-        edge: { ...edge },
-      })),
-  ];
-
-  return {
-    changed: writeOps.length > 0,
-    result,
-    transaction: {
-      id: txId,
-      ops: writeOps,
-    },
-  };
+  return planRecordedMutation(snapshot, webAppGraph, txId, mutate);
 }
 
 function createTransactionEdgeIndex(
@@ -843,11 +839,9 @@ export async function createWebAppAuthority(
   options: WebAppAuthorityOptions = {},
 ): Promise<WebAppAuthority> {
   const graph = options.graph ?? webAppGraph;
-  const scalarByKey = collectScalarCodecs(graph);
-  const typeByKey = collectTypeIndex(graph);
-  const compiledFieldIndex = buildCompiledFieldIndex(graph);
-  const store = createStore();
-  bootstrap(store, graph);
+  const { bootstrappedSnapshot, compiledFieldIndex, scalarByKey, typeByKey } =
+    getCompiledGraphArtifacts(graph);
+  const store = createStore(bootstrappedSnapshot);
 
   const persistedSecrets = await storage.loadSecrets();
   const secretValuesRef = {
@@ -861,7 +855,9 @@ export async function createWebAppAuthority(
   const authority = await createPersistedAuthoritativeGraph(store, graph, {
     storage: createAuthorityStorage(storage, pendingSecretWriteRef),
     seed() {
-      seedExampleGraph(createTypeClient(store, webAppGraph));
+      if (options.seedExampleGraph !== false) {
+        seedExampleGraph(createTypeClient(store, webAppGraph));
+      }
     },
     createCursorPrefix: createAuthorityCursorPrefix,
     maxRetainedTransactions: options.maxRetainedTransactions,

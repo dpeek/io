@@ -366,6 +366,16 @@ export interface AuthoritativeGraphWriteSession {
       writeScope?: AuthoritativeWriteScope;
     },
   ): AuthoritativeGraphWriteResult;
+  applyWithSnapshot(
+    transaction: GraphWriteTransaction,
+    options?: {
+      writeScope?: AuthoritativeWriteScope;
+      sourceSnapshot?: StoreSnapshot;
+    },
+  ): {
+    result: AuthoritativeGraphWriteResult;
+    snapshot: StoreSnapshot;
+  };
   getCursor(): string | undefined;
   getBaseCursor(): string;
   getChangesAfter(cursor?: string): AuthoritativeGraphChangesAfterResult;

@@ -336,6 +336,7 @@ export function materializeGraphWriteTransactionSnapshot(
   transaction: GraphWriteTransaction,
   options: {
     allowExistingAssertEdgeIds?: boolean;
+    sourceSnapshot?: StoreSnapshot;
   } = {},
 ):
   | {
@@ -346,7 +347,7 @@ export function materializeGraphWriteTransactionSnapshot(
       ok: false;
       result: Extract<GraphValidationResult<GraphWriteTransaction>, { ok: false }>;
     } {
-  const snapshot = store.snapshot();
+  const snapshot = options.sourceSnapshot ?? store.snapshot();
   const edges = snapshot.edges.map((edge) => ({ ...edge }));
   const edgeById = new Map(edges.map((edge) => [edge.id, edge]));
   const retracted = new Set(snapshot.retracted);

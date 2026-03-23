@@ -24,6 +24,7 @@ setDefaultTimeout(20_000);
 import { pkm } from "@io/core/graph/modules/pkm";
 
 import { createAnonymousAuthorizationContext } from "./auth-bridge.js";
+import { createTestWebAppAuthority } from "./authority-test-helpers.js";
 import {
   createWebAppAuthority,
   type WebAppAuthority,
@@ -176,6 +177,9 @@ type DurableObjectSqlCursor<T extends Record<string, unknown>> = Iterable<T> & {
 };
 
 type SqlExecHook = (query: string, bindings: readonly unknown[]) => void;
+type TestDurableObjectOptions = NonNullable<
+  ConstructorParameters<typeof WebGraphAuthorityDurableObject>[2]
+>;
 
 const testAuthorization = createAnonymousAuthorizationContext({
   graphId: "graph:test",
@@ -289,6 +293,25 @@ function createSqliteDurableObjectState(): {
   };
 }
 
+function createTestDurableObject(
+  state: ConstructorParameters<typeof WebGraphAuthorityDurableObject>[0],
+  env: ConstructorParameters<typeof WebGraphAuthorityDurableObject>[1] = {},
+  options: TestDurableObjectOptions = {},
+): WebGraphAuthorityDurableObject {
+  const { createAuthority, ...restOptions } = options;
+
+  return new WebGraphAuthorityDurableObject(state, env, {
+    ...restOptions,
+    createAuthority: createAuthority
+      ? (storage, authorityOptions) =>
+          createAuthority(storage, {
+            ...authorityOptions,
+            seedExampleGraph: false,
+          })
+      : (storage, authorityOptions) => createTestWebAppAuthority(storage, authorityOptions),
+  });
+}
+
 function queryAll<T extends Record<string, unknown>>(
   db: Database,
   query: string,
@@ -342,9 +365,7 @@ function buildTransactionFromGraphSnapshot<TGraph extends Record<string, AnyType
   readonly result: TResult;
   readonly transaction: GraphWriteTransaction;
 } {
-  const mutationStore = createStore();
-  bootstrap(mutationStore, graph);
-  mutationStore.replace(snapshot);
+  const mutationStore = createStore(snapshot);
   const mutationGraph = createTypeClient(mutationStore, graph);
   const before = mutationStore.snapshot();
   const result = mutate(mutationGraph);
@@ -408,10 +429,7 @@ function buildHiddenCursorAdvanceTransaction(
   txId: string,
   hiddenState = `hidden:${txId}`,
 ): GraphWriteTransaction {
-  const mutationStore = createStore();
-  bootstrap(mutationStore, core);
-  bootstrap(mutationStore, hiddenCursorProbeNamespace);
-  mutationStore.replace(snapshot);
+  const mutationStore = createStore(snapshot);
   const before = mutationStore.snapshot();
   const hiddenStatePredicateId = edgeId(hiddenCursorProbe.fields.hiddenState);
 
@@ -531,7 +549,7 @@ async function getDurableAuthority<
 describe("web graph authority durable object", () => {
   it("requires an explicit request authorization context for API requests", async () => {
     const { state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const response = await durableObject.fetch(
       new Request("https://graph-authority.local/api/sync"),
     );
@@ -545,7 +563,7 @@ describe("web graph authority durable object", () => {
   it("passes the request authorization context through the durable authority boundary", async () => {
     const { state } = createSqliteDurableObjectState();
     const captured: AuthorizationContext[] = [];
-    const durableObject = new WebGraphAuthorityDurableObject(
+    const durableObject = createTestDurableObject(
       state,
       {},
       {
@@ -576,7 +594,7 @@ describe("web graph authority durable object", () => {
 
   it("fails closed on stale policy versions when serving sync reads", async () => {
     const { state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const response = await durableObject.fetch(
       createAuthorizedRequest(
         "https://graph-authority.local/api/sync",
@@ -596,7 +614,7 @@ describe("web graph authority durable object", () => {
 
   it("proves two principals receive different sync payloads and direct-read outcomes for the same entity", async () => {
     const { state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(
+    const durableObject = createTestDurableObject(
       state,
       {},
       {
@@ -724,7 +742,7 @@ describe("web graph authority durable object", () => {
   it("bootstraps the graph tables and indexes in the constructor", () => {
     const { db, state } = createSqliteDurableObjectState();
 
-    new WebGraphAuthorityDurableObject(state);
+    createTestDurableObject(state);
 
     const entries = queryAll<SqliteMasterRow>(
       db,
@@ -750,7 +768,7 @@ describe("web graph authority durable object", () => {
 
   it("keeps constructor setup synchronous and defers async hydration until the first request", async () => {
     const { getBlockConcurrencyWhileCount, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
 
     expect(getBlockConcurrencyWhileCount()).toBe(0);
 
@@ -763,7 +781,7 @@ describe("web graph authority durable object", () => {
 
   it("accepts secret-field command envelopes over /api/commands", async () => {
     const { db, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -790,7 +808,7 @@ describe("web graph authority durable object", () => {
       FROM io_graph_tx
       ORDER BY seq ASC`,
     );
-    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restarted = createTestDurableObject(state);
     const incremental = await readSyncPayload(restarted, initialSync.cursor);
     const commandRow = txRows.at(-1);
 
@@ -840,7 +858,7 @@ describe("web graph authority durable object", () => {
 
   it("surfaces stable deny vocabulary for unauthorized transaction requests", async () => {
     const { state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -874,7 +892,7 @@ describe("web graph authority durable object", () => {
 
   it("surfaces stable deny vocabulary for unauthorized command requests", async () => {
     const { state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -918,7 +936,7 @@ describe("web graph authority durable object", () => {
 
   it("returns 404 for the removed /api/secret-fields route", async () => {
     const { state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
 
     const response = await durableObject.fetch(
       new Request("https://graph-authority.local/api/secret-fields", {
@@ -939,7 +957,7 @@ describe("web graph authority durable object", () => {
 
   it("normalizes legacy SQL rows without write_scope to client-tx on restart", async () => {
     const { db, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -986,7 +1004,7 @@ describe("web graph authority durable object", () => {
     ).run();
     db.query(`DROP TABLE io_graph_tx_with_scope`).run();
 
-    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restarted = createTestDurableObject(state);
     const graphTxColumns = queryAll<{ name: string }>(db, `PRAGMA table_info(io_graph_tx)`);
     const legacyRows = queryAll<GraphTxRow>(
       db,
@@ -1022,7 +1040,7 @@ describe("web graph authority durable object", () => {
   it("preserves hidden-only cursor advances through SQL-backed incremental sync after restart", async () => {
     const { db, state } = createSqliteDurableObjectState();
     const hiddenProbe = { entityId: null as string | null };
-    const durableObject = new WebGraphAuthorityDurableObject(
+    const durableObject = createTestDurableObject(
       state,
       {},
       {
@@ -1067,7 +1085,7 @@ describe("web graph authority durable object", () => {
       FROM io_graph_tx
       ORDER BY seq ASC`,
     );
-    const restarted = new WebGraphAuthorityDurableObject(
+    const restarted = createTestDurableObject(
       state,
       {},
       {
@@ -1095,7 +1113,7 @@ describe("web graph authority durable object", () => {
   it("falls back with gap when pruned hidden-only cursor advances fall behind retained history", async () => {
     const { db, state } = createSqliteDurableObjectState();
     const hiddenProbe = { entityId: null as string | null };
-    const durableObject = new WebGraphAuthorityDurableObject(
+    const durableObject = createTestDurableObject(
       state,
       {
         GRAPH_AUTHORITY_MAX_RETAINED_TRANSACTIONS: 2,
@@ -1175,7 +1193,7 @@ describe("web graph authority durable object", () => {
     );
     const gap = await readSyncPayload(durableObject, initialSync.cursor);
     const retained = await readSyncPayload(durableObject, firstHidden.cursor);
-    const restarted = new WebGraphAuthorityDurableObject(
+    const restarted = createTestDurableObject(
       state,
       {
         GRAPH_AUTHORITY_MAX_RETAINED_TRANSACTIONS: 2,
@@ -1247,7 +1265,7 @@ describe("web graph authority durable object", () => {
   it("falls back with reset when a hidden-only baseline rewrite drops retained history", async () => {
     const { db, state } = createSqliteDurableObjectState();
     const hiddenProbe = { entityId: null as string | null };
-    const durableObject = new WebGraphAuthorityDurableObject(
+    const durableObject = createTestDurableObject(
       state,
       {},
       {
@@ -1303,7 +1321,7 @@ describe("web graph authority durable object", () => {
       FROM io_graph_meta
       WHERE id = 1`,
     );
-    const restarted = new WebGraphAuthorityDurableObject(
+    const restarted = createTestDurableObject(
       state,
       {},
       {
@@ -1344,7 +1362,7 @@ describe("web graph authority durable object", () => {
 
   it("persists accepted graph transactions as ordered rows and hydrates from SQL after restart", async () => {
     const { db, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const envVarWrite = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -1407,7 +1425,7 @@ describe("web graph authority durable object", () => {
     const latestTx = txRows[1];
     const secretEdgeRow = secretEdge[0];
     const metaRow = metaRows[0];
-    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restarted = createTestDurableObject(state);
     const restartedSync = await readSyncPayload(restarted);
     const incremental = await readSyncPayload(restarted, initialSync.cursor);
 
@@ -1490,7 +1508,7 @@ describe("web graph authority durable object", () => {
 
   it("preserves secret side-table rows across graph-only commits and baseline persists", async () => {
     const { db, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -1562,7 +1580,7 @@ describe("web graph authority durable object", () => {
 
   it("rolls back graph and secret rows together when the secret side-table write fails", async () => {
     const { db, setExecHook, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -1626,7 +1644,7 @@ describe("web graph authority durable object", () => {
 
   it("rolls back graph rows when a SQL commit fails after graph inserts begin", async () => {
     const { db, setExecHook, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -1674,7 +1692,7 @@ describe("web graph authority durable object", () => {
 
   it("hydrates retracted edge order from SQL rows after restart", async () => {
     const { state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -1704,7 +1722,7 @@ describe("web graph authority durable object", () => {
     const snapshotBeforeRestart = authority.readSnapshot({
       authorization: testAuthorityAuthorization,
     });
-    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restarted = createTestDurableObject(state);
     const restartedSync = await readSyncPayload(restarted);
 
     expect(snapshotBeforeRestart.retracted.length).toBeGreaterThan(1);
@@ -1713,7 +1731,7 @@ describe("web graph authority durable object", () => {
 
   it("preserves retracted snapshot edges when a baseline rewrite drops retained history", async () => {
     const { db, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -1755,7 +1773,7 @@ describe("web graph authority durable object", () => {
       WHERE retracted_tx_seq IS NOT NULL
       ORDER BY retracted_tx_seq ASC, rowid ASC`,
     );
-    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restarted = createTestDurableObject(state);
     const restartedSync = await readSyncPayload(restarted);
     const reset = await readSyncPayload(restarted, updatedTx.cursor);
 
@@ -1770,7 +1788,7 @@ describe("web graph authority durable object", () => {
 
   it("rewrites a reset baseline when retained transaction rows no longer reach the hydrated snapshot", async () => {
     const { db, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
     const createdEnvVar = buildTransactionFromSnapshot(
       initialSync.snapshot ?? { edges: [], retracted: [] },
@@ -1792,7 +1810,7 @@ describe("web graph authority durable object", () => {
     db.query(`DELETE FROM io_graph_tx_op WHERE tx_seq = 2`).run();
     db.query(`DELETE FROM io_graph_tx WHERE seq = 2`).run();
 
-    const restarted = new WebGraphAuthorityDurableObject(state);
+    const restarted = createTestDurableObject(state);
     const restartedSync = await readSyncPayload(restarted);
     const reset = await readSyncPayload(restarted, createdTx.cursor);
     const txCount = queryAll<{ count: number }>(db, `SELECT COUNT(*) AS count FROM io_graph_tx`);
@@ -1823,7 +1841,7 @@ describe("web graph authority durable object", () => {
 
   it("prunes retained transaction rows and falls back for old or unknown cursors", async () => {
     const { db, state } = createSqliteDurableObjectState();
-    const durableObject = new WebGraphAuthorityDurableObject(state, {
+    const durableObject = createTestDurableObject(state, {
       GRAPH_AUTHORITY_MAX_RETAINED_TRANSACTIONS: 2,
     });
     const initialSync = await readSyncPayload(durableObject);
@@ -1883,7 +1901,7 @@ describe("web graph authority durable object", () => {
     const gap = await readSyncPayload(durableObject, initialSync.cursor);
     const retained = await readSyncPayload(durableObject, createdTx.cursor);
     const unknown = await readSyncPayload(durableObject, "web-authority:unknown");
-    const restarted = new WebGraphAuthorityDurableObject(state, {
+    const restarted = createTestDurableObject(state, {
       GRAPH_AUTHORITY_MAX_RETAINED_TRANSACTIONS: 2,
     });
     const restartedGap = await readSyncPayload(restarted, initialSync.cursor);

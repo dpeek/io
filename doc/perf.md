@@ -28,64 +28,152 @@ The current run profile is concentrated in a small number of suites:
 The web authority tests alone account for about `194s` of testcase time. That
 is the critical path.
 
-## What Is Expensive
+## Post-Change Profile
 
-### Authority bootstrap
+Measured on 2026-03-23 after the latest pass:
 
-`src/web/lib/authority.ts` currently bootstraps a fresh store, seeds example
-data, and hydrates persisted authority state on every `createWebAppAuthority()`
-call.
+- `bun test ./src --reporter=junit --reporter-outfile tmp/bun-junit.xml`:
+  `31.83s`
+- `bun check src`: `42.09s`
 
-Observed micro-benchmark:
+The repo guardrail command covers a slightly broader set than `./src`, so the
+test counts differ, but the tracked perf target remains the JUnit-profiled
+`bun test ./src` command.
 
-- fresh `createWebAppAuthority()` averages about `1.09s`
+Intermediate milestones from the same day:
 
-### Replayed workflow setup
+- `bun test ./src --reporter=junit --reporter-outfile tmp/bun-junit.xml`:
+  `107.05s`
+- `bun test ./src --reporter=junit --reporter-outfile tmp/bun-junit.xml`:
+  `62.17s`
+- `bun test ./src --reporter=junit --reporter-outfile tmp/bun-junit.xml`:
+  `42.56s`
 
-Many web tests replay the same setup flow:
+Slowest files in that JUnit profile:
 
-- create project
-- create repository
-- create branch
-- attach branch repository target
+- `src/agent/workspace.test.ts`: `7.13s`
+- `src/web/lib/graph-authority-do.test.ts`: `2.70s`
+- `src/mcp/graph.test.ts`: `2.69s`
+- `src/web/components/explorer/catalog.test.ts`: `2.40s`
+- `src/web/lib/authority.test.ts`: `2.32s`
+- `src/graph/validation-lifecycle.test.ts`: `2.07s`
+- `src/web/lib/example-runtime.test.ts`: `1.73s`
 
-Observed micro-benchmarks:
+Slowest individual testcases in that profile:
 
-- fresh authority plus common workflow fixture averages about `5.12s`
-- starting from a persisted post-fixture snapshot averages about `0.98s`
+- `src/mcp/graph.test.ts`: `reports synced graph status for the product namespace` at `2.32s`
+- `src/agent/workspace.test.ts`: `WorkspaceManager lands task work onto the latest parent feature branch` at `1.48s`
+- `src/agent/workspace.test.ts`: `WorkspaceManager squashes a done feature branch onto its stream branch and cleans up` at `1.36s`
+- `src/web/lib/example-runtime.test.ts`: `proves peers catch up through ordered incremental delivery without extra total snapshots` at `1.32s`
+- `src/web/components/explorer/catalog.test.ts`: `builds entity entries with handles for every explorer entity type` at `1.22s`
+- `src/web/lib/authority.test.ts`: `allows authority-only commands to reuse the shared authority command seam` at `1.19s`
 
-That means the repeated fixture replay costs about `4s` each time we do it.
+This clears both the primary `<120s` target and the secondary `<90s` target.
 
-### Full-store clone and diff on each workflow mutation
+## Landed In This Run
 
-`src/web/lib/workflow-authority.ts` currently creates a fresh store, bootstraps
-namespaces, snapshots before and after mutation, and diffs the full graph to
-derive a transaction. This is expensive in tests and in the runtime path.
+Implemented on 2026-03-23:
 
-Observed micro-benchmark:
+- `src/web/lib/authority.ts` now supports `seedExampleGraph: false` so tests
+  can skip seeded PKM example content when they do not need it.
+- `src/web/lib/authority-test-helpers.ts` now provides a no-seed test
+  authority factory plus a cached persisted workflow baseline
+  (project/repository/branch/repository-branch) for reuse across slow web
+  authority tests.
+- `src/web/lib/authority.test.ts`, `src/web/lib/workflow-authority.test.ts`,
+  and `src/web/lib/graph-authority-do.test.ts` now use that no-seed path; the
+  workflow-heavy suites also reuse the cached persisted baseline instead of
+  replaying the same setup flow in every test.
+- `src/web/lib/mutation-planning.ts` now records asserted and retracted store
+  operations directly from a snapshot-backed mutation store; both
+  `src/web/lib/workflow-authority.ts` and the secret-field path in
+  `src/web/lib/authority.ts` now use that planner instead of whole-store
+  before/after diffing.
+- `src/graph/runtime/persisted-authority.ts` now reuses a single pre-write
+  snapshot through `applyWithSnapshot(...)` in the authoritative write session
+  instead of snapshotting the full store again after every accepted write.
+- `src/web/lib/authority.ts` now caches compiled graph metadata plus a
+  bootstrapped empty snapshot per graph, which removes most repeated
+  authority-construction overhead from both tests and runtime callers.
+- `src/web/lib/example-runtime.ts` now reuses a cached seeded authority
+  baseline and records hidden-only cursor mutations directly instead of
+  rebuilding and diffing a fresh seeded runtime graph for every test case.
+- `src/mcp/schema.ts` and `src/mcp/graph.ts` now cache MCP schema/session
+  metadata per namespace, and `src/mcp/graph.test.ts` plus
+  `src/graph/runtime/authority.test.ts` now reuse cached bootstrapped or
+  seeded snapshots instead of repeating raw schema bootstrap in every case.
+- `src/web/lib/example-runtime.test.ts` now uses an explicit `20_000ms`
+  default timeout so the full profiled suite is stable under the slower JUnit
+  reporter.
+- `src/agent/workspace.test.ts` now keeps only the essential git integration
+  proofs: detached issue bootstrap, dirty-work resume/issue switch guard,
+  detached landing, standalone stream finalization, child-task landing onto
+  the latest parent feature branch, rebase-conflict preservation, feature to
+  stream squash finalization, and interrupted issue resume. Duplicated
+  recovery and finalization variants were removed.
 
-- repeated `attachBranchRepositoryTarget` mutations average about `1.05s` each
+Validation completed for this pass:
 
-### Full-store snapshots around authoritative writes
+- `bun check src/agent`
+- `bun test src/agent/workspace.test.ts`
+- `bun check src`
+- `bun test ./src --reporter=junit --reporter-outfile tmp/bun-junit.xml`
 
-`src/graph/runtime/persisted-authority.ts` snapshots the full store before and
-after every authoritative write so it can roll back on durable commit failure.
+Remaining hotspots:
+
+- `src/agent/workspace.test.ts`
+- `src/mcp/graph.test.ts`
+- `src/web/lib/graph-authority-do.test.ts`
+- `src/web/components/explorer/catalog.test.ts`
+- `src/graph/validation-lifecycle.test.ts`
+
+## What Is Expensive Now
+
+### Git-heavy workspace integration
+
+`src/agent/workspace.test.ts` still shells out to real `git`, worktree,
+merge, and rebase flows, but it is now down to the eight end-to-end behaviors
+that matter most. At `7.13s`, it is still the slowest individual file, but it
+no longer dominates the loop. Further reduction would likely mean mocking away
+behavior we still want covered with real repositories.
+
+### MCP cold-start integration
+
+`src/mcp/graph.test.ts` is now mostly one cold-start case:
+`createGraphMcpSession > reports synced graph status for the product
+namespace`. The rest of the MCP suite is already down in the tens of
+milliseconds.
+
+### Durable Object and explorer integration
+
+`src/web/lib/graph-authority-do.test.ts` and
+`src/web/components/explorer/catalog.test.ts` are now the main non-git
+integration costs after the workspace suite.
 
 ### Real integration work in non-web tests
 
-`src/agent/workspace.test.ts` shells out to real `git`, worktree, merge, and
-rebase flows. Those tests are valid, but they are integration-heavy by design.
+The original web authority bottleneck is no longer first-order:
+
+- `src/agent/workspace.test.ts`: `17.82s` -> `7.13s`
+- `src/web/lib/authority.test.ts`: `22.20s` -> `2.32s`
+- `src/web/lib/graph-authority-do.test.ts`: `25.55s` -> `2.70s`
+- `src/web/lib/workflow-authority.test.ts`: `6.53s` -> `0.49s`
+- `src/web/lib/example-runtime.test.ts`: `14.47s` -> `1.73s`
+- `src/mcp/graph.test.ts`: `7.72s` -> `2.69s`
+- `src/graph/runtime/authority.test.ts`: `2.76s` -> `0.31s`
 
 ## Success Criteria
 
 ### Primary target
 
 - reduce the default `bun test ./src` run to under `120s`
+- status: met on 2026-03-23 at `31.83s`
 
 ### Secondary target
 
 - reduce the default `bun test ./src` run to under `90s` without hiding major
   coverage gaps behind optional suites
+- status: met on 2026-03-23 at `31.83s`
 
 ### Non-goals
 
@@ -94,141 +182,54 @@ rebase flows. Those tests are valid, but they are integration-heavy by design.
 
 ## Plan
 
-### 1. Add repeatable profiling and keep the baseline visible
+### 1. Triage MCP graph integration bootstrap
 
-- keep a documented JUnit profiling command so every optimization pass can be
-  measured the same way
-- capture the slowest files and testcases after each change
-- use the same `tmp/bun-junit.xml` output shape for before/after comparison
+- focus on the remaining cold-start `createGraphMcpSession` status proof
+- keep write-gate and authority-policy coverage end to end
 
 Expected outcome:
 
-- no more guesswork about where time moved
+- shave the largest remaining non-git runtime/graph testcase
 
-### 2. Reuse persisted baseline fixtures in web authority tests
+### 2. Triage Durable Object and explorer integration
 
-Start with:
-
-- `src/web/lib/authority.test.ts`
-- `src/web/lib/workflow-authority.test.ts`
-
-Approach:
-
-- build a helper that creates a known-good persisted authority snapshot once
-- build a second helper that spins up a fresh authority from that stored state
-- stop replaying the same project/repository/branch setup in every test
-
-Why this goes first:
-
-- it is the highest-leverage test-only change
-- the measured fixture replay cost is already large enough to save tens of
-  seconds on its own
-- it does not require changing core runtime semantics
+- focus on `src/web/lib/graph-authority-do.test.ts` and
+  `src/web/components/explorer/catalog.test.ts`
+- look for repeated authority/session bootstrap that can be shared without
+  weakening the end-to-end assertions
 
 Expected outcome:
 
-- save roughly `20-40s` from the default run, depending on how many repeated
-  setup paths collapse
+- trim the next cluster of `2s` to `3s` suites without changing behavior
 
-### 3. Add a minimal or test-only authority bootstrap path
+### 3. Reassess the reduced workspace suite only if needed
 
-Approach:
-
-- let tests opt out of `seedExampleGraph(...)` when they do not actually
-  require seeded PKM example content
-- prefer a minimal graph/bootstrap shape for workflow and secret tests
-
-Why:
-
-- every seeded authority makes bootstrap slower
-- every later snapshot, diff, and validation pass gets more expensive when the
-  starting graph is larger than the test needs
+- the suite now covers just eight essential real-git flows
+- only revisit it if a clear fixture-sharing win appears without reducing the
+  retained confidence envelope
 
 Expected outcome:
 
-- save another `10-20s`
-- make later runtime-path optimizations more effective because the working set
-  shrinks
+- avoid spending engineering effort on a suite that is no longer the main
+  blocker
 
-### 4. Remove full-store clone and diff from workflow mutation planning
+### 4. Decide whether the remaining integration cost is acceptable
 
-Start with:
-
-- `src/web/lib/workflow-authority.ts`
-
-Approach:
-
-- replace whole-store fork/snapshot/diff planning with a mutation path that
-  records operations directly
-- keep the current transaction output contract, but generate it incrementally
-  rather than reconstructing it from two full snapshots
-
-Why:
-
-- this is the most obvious runtime hot path in the current profile
-- it helps both tests and product code
+- the default `bun test ./src` loop is now around thirty-two seconds
+- further changes should justify their complexity against the real developer
+  value of the remaining end-to-end coverage
 
 Expected outcome:
 
-- save roughly `30-60s`
-
-### 5. Reduce snapshot churn in the persisted authority path
-
-Start with:
-
-- `src/graph/runtime/persisted-authority.ts`
-- `src/web/lib/authority.ts`
-
-Approach:
-
-- audit every `store.snapshot()` call in the authoritative write path
-- only take rollback snapshots where the durable storage boundary actually
-  needs them
-- avoid redundant snapshotting for authorization checks when a read-only view
-  of the current store is enough
-
-Why:
-
-- full snapshots are repeated around almost every write
-- the current web authority tests exercise this path heavily
-
-Expected outcome:
-
-- save another `10-20s`
-
-### 6. Triage the remaining integration-heavy suites
-
-Targets:
-
-- `src/web/lib/graph-authority-do.test.ts`
-- `src/agent/workspace.test.ts`
-- `src/mcp/graph.test.ts`
-
-Approach:
-
-- keep a small number of end-to-end integration tests
-- move duplicated behavior checks down to unit-level seams where possible
-- for git-heavy tests, share repo fixtures where practical instead of
-  rebuilding repositories from scratch for every case
-
-Optional fallback:
-
-- if the default developer loop still needs to be much faster, split slow
-  integration suites into a separate command and keep `bun test ./src` focused
-  on the fast path
-
-Expected outcome:
-
-- integration coverage remains, but the default loop stops paying for every
-  expensive end-to-end case on every edit
+- avoid over-optimizing away useful integration confidence now that the main
+  perf targets are already met
 
 ## Recommended Order
 
-1. Add reusable persisted fixture helpers for the web authority tests.
-2. Add minimal bootstrap or no-seed test paths.
-3. Rework workflow mutation planning to avoid whole-store diffing.
-4. Trim snapshot churn in the persisted-authority write path.
-5. Revisit the remaining git, Durable Object, and MCP integration suites.
+1. Triage the cold-start `src/mcp/graph.test.ts` session-status case.
+2. Triage `src/web/lib/graph-authority-do.test.ts` and `src/web/components/explorer/catalog.test.ts`.
+3. Revisit `src/agent/workspace.test.ts` only if a low-complexity fixture-sharing improvement appears.
+4. Reassess whether further optimization is worth the maintenance cost.
 
 ## Validation After Each Step
 

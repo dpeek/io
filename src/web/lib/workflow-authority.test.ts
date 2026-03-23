@@ -1,22 +1,17 @@
 import { describe, expect, it } from "bun:test";
 
-import {
-  bootstrap,
-  createStore,
-  createTypeClient,
-  type AuthorizationContext,
-} from "@io/core/graph";
+import { createStore, createTypeClient, type AuthorizationContext } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
-import type {
-  WorkflowMutationAction,
-  WorkflowMutationResult,
-} from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
 
 import { createAnonymousAuthorizationContext } from "./auth-bridge.js";
-import { createInMemoryTestWebAppAuthorityStorage } from "./authority-test-storage.js";
-import { type WebAppAuthority, createWebAppAuthority } from "./authority.js";
+import {
+  createTestWebAppAuthority,
+  createTestWebAppAuthorityWithWorkflowFixture,
+  executeTestWorkflowMutation as executeWorkflowMutation,
+} from "./authority-test-helpers.js";
+import { type WebAppAuthority } from "./authority.js";
 
 const workflowAuthorityTimeout = 20_000;
 const productGraph = { ...core, ...pkm, ...ops } as const;
@@ -37,68 +32,8 @@ function createTestAuthorizationContext(
   };
 }
 
-async function executeWorkflowMutation(
-  authority: WebAppAuthority,
-  authorization: AuthorizationContext,
-  input: WorkflowMutationAction,
-): Promise<WorkflowMutationResult> {
-  return (await authority.executeCommand(
-    {
-      kind: "workflow-mutation",
-      input,
-    },
-    { authorization },
-  )) as WorkflowMutationResult;
-}
-
-async function createWorkflowFixture(
-  authority: WebAppAuthority,
-  authorization: AuthorizationContext,
-) {
-  const project = await executeWorkflowMutation(authority, authorization, {
-    action: "createProject",
-    title: "IO",
-    projectKey: "project:io",
-  });
-  const repository = await executeWorkflowMutation(authority, authorization, {
-    action: "createRepository",
-    projectId: project.summary.id,
-    title: "io",
-    repositoryKey: "repo:io",
-    repoRoot: "/tmp/io",
-    defaultBaseBranch: "main",
-  });
-  const branch = await executeWorkflowMutation(authority, authorization, {
-    action: "createBranch",
-    projectId: project.summary.id,
-    title: "Workflow authority",
-    branchKey: "branch:workflow-authority",
-    goalSummary: "Implement workflow authority commands",
-    state: "ready",
-  });
-  const repositoryBranch = await executeWorkflowMutation(authority, authorization, {
-    action: "attachBranchRepositoryTarget",
-    branchId: branch.summary.id,
-    repositoryId: repository.summary.id,
-    branchName: "workflow-authority",
-    baseBranchName: "main",
-  });
-
-  return {
-    branchId: branch.summary.id,
-    projectId: project.summary.id,
-    repositoryBranchId: repositoryBranch.summary.id,
-    repositoryId: repository.summary.id,
-  };
-}
-
 function readProductGraph(authority: WebAppAuthority, authorization: AuthorizationContext) {
-  const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, pkm);
-  bootstrap(store, ops);
-  store.replace(authority.readSnapshot({ authorization }));
-
+  const store = createStore(authority.readSnapshot({ authorization }));
   return createTypeClient(store, productGraph);
 }
 
@@ -107,9 +42,7 @@ describe("workflow authority", () => {
     "requires a managed repository target before marking a branch active",
     async () => {
       const authorization = createTestAuthorizationContext();
-      const authority = await createWebAppAuthority(
-        createInMemoryTestWebAppAuthorityStorage().storage,
-      );
+      const authority = await createTestWebAppAuthority();
       const project = await executeWorkflowMutation(authority, authorization, {
         action: "createProject",
         title: "IO",
@@ -150,9 +83,7 @@ describe("workflow authority", () => {
     "attaches and updates a managed repository branch target in place",
     async () => {
       const authorization = createTestAuthorizationContext();
-      const authority = await createWebAppAuthority(
-        createInMemoryTestWebAppAuthorityStorage().storage,
-      );
+      const authority = await createTestWebAppAuthority();
       const project = await executeWorkflowMutation(authority, authorization, {
         action: "createProject",
         title: "IO",
@@ -252,10 +183,8 @@ describe("workflow authority", () => {
     "rejects reusing a managed repository branch target across workflow branches",
     async () => {
       const authorization = createTestAuthorizationContext();
-      const authority = await createWebAppAuthority(
-        createInMemoryTestWebAppAuthorityStorage().storage,
-      );
-      const fixture = await createWorkflowFixture(authority, authorization);
+      const { authority, fixture } =
+        await createTestWebAppAuthorityWithWorkflowFixture(authorization);
       const branch = await executeWorkflowMutation(authority, authorization, {
         action: "createBranch",
         projectId: fixture.projectId,
@@ -286,10 +215,8 @@ describe("workflow authority", () => {
     "rejects marking an active branch done while open commits remain",
     async () => {
       const authorization = createTestAuthorizationContext();
-      const authority = await createWebAppAuthority(
-        createInMemoryTestWebAppAuthorityStorage().storage,
-      );
-      const fixture = await createWorkflowFixture(authority, authorization);
+      const { authority, fixture } =
+        await createTestWebAppAuthorityWithWorkflowFixture(authorization);
       await executeWorkflowMutation(authority, authorization, {
         action: "createCommit",
         branchId: fixture.branchId,
@@ -326,10 +253,8 @@ describe("workflow authority", () => {
     "reconciles branch state and active commit through commit lifecycle transitions",
     async () => {
       const authorization = createTestAuthorizationContext();
-      const authority = await createWebAppAuthority(
-        createInMemoryTestWebAppAuthorityStorage().storage,
-      );
-      const fixture = await createWorkflowFixture(authority, authorization);
+      const { authority, fixture } =
+        await createTestWebAppAuthorityWithWorkflowFixture(authorization);
       const commit = await executeWorkflowMutation(authority, authorization, {
         action: "createCommit",
         branchId: fixture.branchId,
@@ -407,10 +332,8 @@ describe("workflow authority", () => {
     "requires a committed repository result before marking a workflow commit committed",
     async () => {
       const authorization = createTestAuthorizationContext();
-      const authority = await createWebAppAuthority(
-        createInMemoryTestWebAppAuthorityStorage().storage,
-      );
-      const fixture = await createWorkflowFixture(authority, authorization);
+      const { authority, fixture } =
+        await createTestWebAppAuthorityWithWorkflowFixture(authorization);
       const commit = await executeWorkflowMutation(authority, authorization, {
         action: "createCommit",
         branchId: fixture.branchId,

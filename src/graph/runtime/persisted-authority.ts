@@ -185,15 +185,17 @@ export async function createPersistedAuthoritativeGraph<
   ): Promise<AuthoritativeGraphWriteResult> {
     const previousSnapshot = store.snapshot();
     const previousHistory = writes.getHistory();
-    const result = writes.apply(transaction, applyOptions);
-    const currentSnapshot = store.snapshot();
+    const applied = writes.applyWithSnapshot(transaction, {
+      ...applyOptions,
+      sourceSnapshot: previousSnapshot,
+    });
     const currentHistory = writes.getHistory();
 
     try {
       await options.storage.commit({
-        snapshot: currentSnapshot,
-        transaction: result.transaction,
-        result,
+        snapshot: applied.snapshot,
+        transaction: applied.result.transaction,
+        result: applied.result,
         writeHistory: currentHistory,
       });
     } catch (error) {
@@ -202,7 +204,7 @@ export async function createPersistedAuthoritativeGraph<
       throw error;
     }
 
-    return result;
+    return applied.result;
   }
 
   const persistedState = await options.storage.load();

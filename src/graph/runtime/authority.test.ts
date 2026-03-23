@@ -12,7 +12,7 @@ import {
   type PersistedAuthoritativeGraphStorageLoadResult,
 } from "./authority";
 import { authorizeRead } from "./authorization";
-import { bootstrap } from "./bootstrap";
+import { createBootstrappedSnapshot } from "./bootstrap";
 import { createTypeClient } from "./client";
 import type { AuthorizationContext } from "./contracts";
 import { core } from "./core";
@@ -149,15 +149,25 @@ function createItemNameWriteTransaction(
   };
 }
 
+function createTestGraphStore() {
+  return createStore(createBootstrappedSnapshot(testGraph));
+}
+
+function createKitchenSinkStore() {
+  return createStore(createBootstrappedSnapshot(kitchenSink));
+}
+
+function createVisibilityStore() {
+  return createStore(createBootstrappedSnapshot(visibilityGraph));
+}
+
 async function createJsonAuthority(
   snapshotPath: string,
   options: {
     seedName?: string;
   } = {},
 ) {
-  const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, testGraph);
+  const store = createTestGraphStore();
 
   return createJsonPersistedAuthoritativeGraph(store, testGraph, {
     path: snapshotPath,
@@ -265,9 +275,7 @@ describe("persisted authoritative graph", () => {
 
   it("loads a legacy snapshot file, rewrites the persisted format, and preserves snapshot data", async () => {
     const snapshotPath = await createTempSnapshotPath();
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, testGraph);
+    const store = createTestGraphStore();
     const graph = createTypeClient(store, testGraph);
 
     graph.item.create({ name: "Persisted Only Item" });
@@ -287,9 +295,7 @@ describe("persisted authoritative graph", () => {
 
   it("normalizes legacy persisted write history entries to client-tx before rewrite", async () => {
     const snapshotPath = await createTempSnapshotPath();
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, testGraph);
+    const store = createTestGraphStore();
     const graph = createTypeClient(store, testGraph);
     const itemId = graph.item.create({ name: "Legacy Scoped Item" });
     const writes = createAuthoritativeGraphWriteSession(store, testGraph, {
@@ -408,9 +414,7 @@ describe("persisted authoritative graph", () => {
   it("prunes retained history and falls back for cursors older than the retained window", async () => {
     const retainedStorage = createMemoryStorage();
     const createRetainedAuthority = async () => {
-      const store = createStore();
-      bootstrap(store, core);
-      bootstrap(store, testGraph);
+      const store = createTestGraphStore();
 
       return createPersistedAuthoritativeGraph(store, testGraph, {
         storage: retainedStorage.storage,
@@ -489,9 +493,7 @@ describe("persisted authoritative graph", () => {
     let committedTxId: string | null = null;
     let current: PersistedAuthoritativeGraphState | null = null;
 
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, testGraph);
+    const store = createTestGraphStore();
     const authority = await createPersistedAuthoritativeGraph(store, testGraph, {
       storage: {
         async load() {
@@ -548,9 +550,7 @@ describe("persisted authoritative graph", () => {
 
   it("falls back to a reset when persisted write history cannot be replayed", async () => {
     const snapshotPath = await createTempSnapshotPath();
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, testGraph);
+    const store = createTestGraphStore();
     const graph = createTypeClient(store, testGraph);
 
     const itemId = graph.item.create({ name: "Broken History Item" });
@@ -598,9 +598,7 @@ describe("persisted authoritative graph", () => {
   });
 
   it("filters authority-only predicates from total sync snapshots", () => {
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, kitchenSink);
+    const store = createKitchenSinkStore();
     const graph = createTypeClient(store, kitchenSink);
 
     const secretId = graph.secret.create({
@@ -638,9 +636,7 @@ describe("persisted authoritative graph", () => {
   });
 
   it("omits hidden-only incremental writes while still advancing the cursor", () => {
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, kitchenSink);
+    const store = createKitchenSinkStore();
     const graph = createTypeClient(store, kitchenSink);
 
     const secretId = graph.secret.create({
@@ -675,9 +671,7 @@ describe("persisted authoritative graph", () => {
   });
 
   it("keeps visible incremental writes even when hidden writes are skipped", () => {
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, kitchenSink);
+    const store = createKitchenSinkStore();
     const graph = createTypeClient(store, kitchenSink);
 
     const secretId = graph.secret.create({
@@ -741,9 +735,7 @@ describe("persisted authoritative graph", () => {
 
   it("applies authorizeRead filters to total and incremental sync replication", async () => {
     const storage = createMemoryStorage();
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, visibilityGraph);
+    const store = createVisibilityStore();
     const authority = await createPersistedAuthoritativeGraph(store, visibilityGraph, {
       storage: storage.storage,
       createCursorPrefix: createTestCursorPrefix,
@@ -768,10 +760,7 @@ describe("persisted authoritative graph", () => {
       outsiderTotal.snapshot.edges.some((edge) => edge.p === visibilityProbeMemberNotePredicateId),
     ).toBe(false);
 
-    const mutationStore = createStore();
-    bootstrap(mutationStore, core);
-    bootstrap(mutationStore, visibilityGraph);
-    mutationStore.replace(authority.store.snapshot());
+    const mutationStore = createStore(authority.store.snapshot());
     const mutationGraph = createTypeClient(mutationStore, visibilityGraph);
     const before = mutationStore.snapshot();
     const probeId = mutationGraph.visibilityProbe.create({
@@ -826,9 +815,7 @@ describe("persisted authoritative graph", () => {
 
   it("rolls back the in-memory authority when persisting an accepted transaction fails", async () => {
     const storage = createMemoryStorage();
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, testGraph);
+    const store = createTestGraphStore();
     const authority = await createPersistedAuthoritativeGraph(store, testGraph, {
       storage: storage.storage,
       seed(graph) {
@@ -861,9 +848,7 @@ describe("persisted authoritative graph", () => {
 
   it("rolls back the reset cursor change when snapshot persistence fails", async () => {
     const storage = createMemoryStorage();
-    const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, testGraph);
+    const store = createTestGraphStore();
     const authority = await createPersistedAuthoritativeGraph(store, testGraph, {
       storage: storage.storage,
       seed(graph) {

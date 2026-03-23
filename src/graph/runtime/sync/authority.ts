@@ -1,6 +1,6 @@
 import { GraphValidationError, type GraphValidationResult } from "../client";
 import type { AnyTypeOutput } from "../schema";
-import type { Store } from "../store";
+import type { Store, StoreSnapshot } from "../store";
 import {
   cloneAuthoritativeGraphWriteResult,
   type AuthoritativeGraphChangesAfterResult,
@@ -237,6 +237,19 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
       writeScope?: AuthoritativeWriteScope;
     } = {},
   ): AuthoritativeGraphWriteResult {
+    return applyWithSnapshot(transaction, options).result;
+  }
+
+  function applyWithSnapshot(
+    transaction: GraphWriteTransaction,
+    options: {
+      writeScope?: AuthoritativeWriteScope;
+      sourceSnapshot?: StoreSnapshot;
+    } = {},
+  ): {
+    result: AuthoritativeGraphWriteResult;
+    snapshot: StoreSnapshot;
+  } {
     const prepared = prepareGraphWriteTransaction(transaction);
     if (!prepared.ok) throw new GraphValidationError(prepared.result);
 
@@ -254,11 +267,18 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
         );
       }
 
-      if (existing.ok) return buildAuthoritativeGraphWriteReplayResult(existing.result);
+      if (existing.ok) {
+        return {
+          result: buildAuthoritativeGraphWriteReplayResult(existing.result),
+          snapshot: options.sourceSnapshot ?? store.snapshot(),
+        };
+      }
       throw new GraphValidationError(existing.result);
     }
 
-    const materialized = materializeGraphWriteTransactionSnapshot(store, prepared.value);
+    const materialized = materializeGraphWriteTransactionSnapshot(store, prepared.value, {
+      sourceSnapshot: options.sourceSnapshot,
+    });
     if (!materialized.ok) {
       txRecords.set(prepared.value.id, {
         ok: false,
@@ -302,11 +322,15 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
     acceptedResults.push(storedResult);
     rebuildRetainedCursorIndex();
     enforceRetentionWindow();
-    return cloneAuthoritativeGraphWriteResult(storedResult);
+    return {
+      result: cloneAuthoritativeGraphWriteResult(storedResult),
+      snapshot: materialized.value,
+    };
   }
 
   return {
     apply,
+    applyWithSnapshot,
     getBaseCursor: baseCursor,
     getChangesAfter,
     getIncrementalSyncResult,

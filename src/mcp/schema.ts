@@ -95,6 +95,8 @@ export type GraphMcpSchema = {
   readonly typeByRef: ReadonlyMap<string, AnyTypeOutput>;
 };
 
+const graphMcpSchemaCache = new WeakMap<GraphMcpNamespace, GraphMcpSchema>();
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object") return false;
   return Object.getPrototypeOf(value) === Object.prototype;
@@ -535,6 +537,9 @@ export function buildSelectionFromPaths(
 }
 
 export function createGraphMcpSchema(namespace: GraphMcpNamespace): GraphMcpSchema {
+  const cached = graphMcpSchemaCache.get(namespace);
+  if (cached) return cached;
+
   const combinedEntries = collectCombinedTypeEntries(namespace);
   const typeByRef = createTypeIndex(combinedEntries);
   const publicTypeKeys = collectPublicTypeKeys(namespace, typeByRef);
@@ -559,10 +564,13 @@ export function createGraphMcpSchema(namespace: GraphMcpNamespace): GraphMcpSche
     ];
   });
 
-  return {
+  const schema = {
     publicEntityTypes,
     publicEntityTypesByKey: new Map(publicEntityTypes.map((entry) => [entry.typeKey, entry])),
     publicTypeSummaries: publicEntries.map((entry) => summarizeType(entry, typeByRef)),
     typeByRef,
   };
+
+  graphMcpSchemaCache.set(namespace, schema);
+  return schema;
 }

@@ -1,7 +1,6 @@
 import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
 import {
-  bootstrap,
   createStore,
   createTypeClient,
   edgeId,
@@ -11,18 +10,18 @@ import {
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
-import type {
-  WorkflowMutationAction,
-  WorkflowMutationResult,
-} from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
 
 import { createAnonymousAuthorizationContext } from "./auth-bridge.js";
+import {
+  createTestWebAppAuthority,
+  createTestWebAppAuthorityWithWorkflowFixture,
+  executeTestWorkflowMutation as executeWorkflowMutation,
+} from "./authority-test-helpers.js";
 import { createInMemoryTestWebAppAuthorityStorage } from "./authority-test-storage.js";
 import {
   applyStagedWebAuthorityMutation,
   type WebAppAuthority,
-  createWebAppAuthority,
   type WebAuthorityCommand,
   type WebAppAuthorityStorage,
   type WebAppAuthoritySyncOptions,
@@ -103,12 +102,7 @@ function buildGraphWriteTransaction(
 }
 
 function createProductMutationStore(snapshot: StoreSnapshot) {
-  const mutationStore = createStore();
-  bootstrap(mutationStore, core);
-  bootstrap(mutationStore, pkm);
-  bootstrap(mutationStore, ops);
-  mutationStore.replace(snapshot);
-
+  const mutationStore = createStore(snapshot);
   return {
     mutationGraph: createTypeClient(mutationStore, productGraph),
     mutationStore,
@@ -164,61 +158,6 @@ function readNumberPredicateValue(
 function readProductGraph(authority: WebAppAuthority, authorization: AuthorizationContext) {
   return createProductMutationStore(authority.readSnapshot({ authorization })).mutationGraph;
 }
-
-async function executeWorkflowMutation(
-  authority: WebAppAuthority,
-  authorization: AuthorizationContext,
-  input: WorkflowMutationAction,
-): Promise<WorkflowMutationResult> {
-  return (await authority.executeCommand(
-    {
-      kind: "workflow-mutation",
-      input,
-    },
-    { authorization },
-  )) as WorkflowMutationResult;
-}
-
-async function createWorkflowFixture(
-  authority: WebAppAuthority,
-  authorization: AuthorizationContext,
-) {
-  const project = await executeWorkflowMutation(authority, authorization, {
-    action: "createProject",
-    title: "IO",
-    projectKey: "project:io",
-  });
-  const repository = await executeWorkflowMutation(authority, authorization, {
-    action: "createRepository",
-    projectId: project.summary.id,
-    title: "io",
-    repositoryKey: "repo:io",
-    repoRoot: "/tmp/io",
-    defaultBaseBranch: "main",
-  });
-  const branch = await executeWorkflowMutation(authority, authorization, {
-    action: "createBranch",
-    projectId: project.summary.id,
-    title: "Workflow authority",
-    branchKey: "branch:workflow-authority",
-    goalSummary: "Implement workflow authority commands",
-    state: "ready",
-  });
-  const repositoryBranch = await executeWorkflowMutation(authority, authorization, {
-    action: "attachBranchRepositoryTarget",
-    branchId: branch.summary.id,
-    repositoryId: repository.summary.id,
-    branchName: "workflow-authority",
-    baseBranchName: "main",
-  });
-
-  return {
-    branchId: branch.summary.id,
-    projectId: project.summary.id,
-    repositoryBranchId: repositoryBranch.summary.id,
-    repositoryId: repository.summary.id,
-  };
-}
 describe("web authority", () => {
   it("rolls back staged side effects when staging fails before commit", async () => {
     const secretValuesRef = {
@@ -271,7 +210,7 @@ describe("web authority", () => {
   it("allows authority-only commands to reuse the shared authority command seam", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const envVarId = await createEnvVar(
       authority,
       authorization,
@@ -320,7 +259,7 @@ describe("web authority", () => {
   it("stores secret plaintext outside sync and reloads it across restart", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const envVarId = await createEnvVar(
       authority,
       authorization,
@@ -370,7 +309,7 @@ describe("web authority", () => {
       },
       { authorization },
     );
-    const restarted = await createWebAppAuthority(storage.storage);
+    const restarted = await createTestWebAppAuthority(storage.storage);
     const restartedSecretId = readStringPredicateValue(
       restarted,
       authorization,
@@ -416,7 +355,7 @@ describe("web authority", () => {
   it("rejects ordinary transactions that directly rewrite secret-backed refs", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
 
     const primaryEnvVarId = await createEnvVar(
       authority,
@@ -521,7 +460,7 @@ describe("web authority", () => {
         return backingStorage.storage.persist(input);
       },
     } satisfies WebAppAuthorityStorage;
-    const authority = await createWebAppAuthority(storage);
+    const authority = await createTestWebAppAuthority(storage);
     const envVarId = await createEnvVar(
       authority,
       authorization,
@@ -601,7 +540,7 @@ describe("web authority", () => {
   it("routes generic secret-field writes through the web server helper", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const envVarId = await createEnvVar(
       authority,
       authorization,
@@ -641,7 +580,7 @@ describe("web authority", () => {
   it("rejects unsupported command kinds before mutating the web authority", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const before = authority.readSnapshot({ authorization });
 
     await expect(
@@ -659,7 +598,7 @@ describe("web authority", () => {
   it("routes shared authority commands through the web server helper", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const envVarId = await createEnvVar(
       authority,
       authorization,
@@ -718,7 +657,7 @@ describe("web authority", () => {
     const authorityAuthorization = createAuthorityAuthorizationContext();
     const humanAuthorization = createHumanAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const { mutationGraph, mutationStore } = createProductMutationStore(
       authority.readSnapshot({ authorization: authorityAuthorization }),
     );
@@ -782,7 +721,7 @@ describe("web authority", () => {
   it("denies direct transactions without authority access by default", async () => {
     const authorization = createHumanAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const { mutationGraph, mutationStore } = createProductMutationStore(
       authority.readSnapshot({ authorization }),
     );
@@ -815,7 +754,7 @@ describe("web authority", () => {
   it("denies authority commands without authority access and surfaces stable vocabulary", async () => {
     const authorization = createHumanAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const envVarId = await createEnvVar(
       authority,
       createAuthorityAuthorizationContext(),
@@ -852,7 +791,7 @@ describe("web authority", () => {
       policyVersion: 1,
     });
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const { mutationGraph, mutationStore } = createProductMutationStore(
       authority.readSnapshot({
         authorization: createAuthorityAuthorizationContext(),
@@ -887,7 +826,7 @@ describe("web authority", () => {
   it("creates workflow entities through the shared workflow mutation command", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
 
     const project = await executeWorkflowMutation(authority, authorization, {
       action: "createProject",
@@ -944,7 +883,7 @@ describe("web authority", () => {
 
   it("enforces the v1 inferred-project and attached-repository limits", async () => {
     const authorization = createAuthorityAuthorizationContext();
-    const authority = await createWebAppAuthority(
+    const authority = await createTestWebAppAuthority(
       createInMemoryTestWebAppAuthorityStorage().storage,
     );
     const project = await executeWorkflowMutation(authority, authorization, {
@@ -991,7 +930,7 @@ describe("web authority", () => {
 
   it("rejects commit activation when the branch has no repository mapping", async () => {
     const authorization = createAuthorityAuthorizationContext();
-    const authority = await createWebAppAuthority(
+    const authority = await createTestWebAppAuthority(
       createInMemoryTestWebAppAuthorityStorage().storage,
     );
     const project = await executeWorkflowMutation(authority, authorization, {
@@ -1038,10 +977,8 @@ describe("web authority", () => {
 
   it("rejects a second active commit on the same branch", async () => {
     const authorization = createAuthorityAuthorizationContext();
-    const authority = await createWebAppAuthority(
-      createInMemoryTestWebAppAuthorityStorage().storage,
-    );
-    const fixture = await createWorkflowFixture(authority, authorization);
+    const { authority, fixture } =
+      await createTestWebAppAuthorityWithWorkflowFixture(authorization);
     const firstCommit = await executeWorkflowMutation(authority, authorization, {
       action: "createCommit",
       branchId: fixture.branchId,
@@ -1079,10 +1016,8 @@ describe("web authority", () => {
 
   it("finalizes repository commits and advances the branch", async () => {
     const authorization = createAuthorityAuthorizationContext();
-    const authority = await createWebAppAuthority(
-      createInMemoryTestWebAppAuthorityStorage().storage,
-    );
-    const fixture = await createWorkflowFixture(authority, authorization);
+    const { authority, fixture } =
+      await createTestWebAppAuthorityWithWorkflowFixture(authorization);
     const commit = await executeWorkflowMutation(authority, authorization, {
       action: "createCommit",
       branchId: fixture.branchId,
@@ -1145,7 +1080,7 @@ describe("web authority", () => {
 
   it("returns workflow failure codes through the command route", async () => {
     const authorization = createAuthorityAuthorizationContext();
-    const authority = await createWebAppAuthority(
+    const authority = await createTestWebAppAuthority(
       createInMemoryTestWebAppAuthorityStorage().storage,
     );
     const project = await executeWorkflowMutation(authority, authorization, {
@@ -1266,7 +1201,7 @@ describe("web authority", () => {
   it("rejects unsupported /api/commands payloads before dispatching the web proof", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
-    const authority = await createWebAppAuthority(storage.storage);
+    const authority = await createTestWebAppAuthority(storage.storage);
     const before = authority.readSnapshot({ authorization });
 
     const response = await handleWebCommandRequest(

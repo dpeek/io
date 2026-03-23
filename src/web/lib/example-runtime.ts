@@ -1,10 +1,9 @@
 import {
   type AuthoritativeGraphWriteResult,
   type AuthoritativeWriteScope,
-  bootstrap,
-  createGraphWriteTransactionFromSnapshots,
   createIdMap,
   createAuthoritativeGraphWriteSession,
+  createBootstrappedSnapshot,
   defineNamespace,
   defineType,
   createSyncedTypeClient,
@@ -22,6 +21,7 @@ import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 
 import { seedExampleGraph } from "./example-data.js";
+import { planRecordedMutation } from "./mutation-planning.js";
 
 const hiddenCursorProbe = defineType({
   values: { key: "test:hiddenCursorProbe", name: "Hidden Cursor Probe" },
@@ -47,17 +47,22 @@ const hiddenCursorProbeNamespace = defineNamespace(createIdMap({ hiddenCursorPro
 
 const productGraph = { ...core, ...pkm, ...ops } as const;
 const exampleGraph = { ...productGraph, ...hiddenCursorProbeNamespace } as const;
+type ExampleAuthorityBaseline = {
+  readonly ids: ReturnType<typeof seedExampleGraph> & {
+    readonly hiddenCursorProbe: string;
+  };
+  readonly snapshot: ReturnType<ReturnType<typeof createStore>["snapshot"]>;
+};
+
+let exampleAuthorityBaseline: ExampleAuthorityBaseline | null = null;
 
 function createExampleStore() {
-  const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, pkm);
-  bootstrap(store, ops);
-  bootstrap(store, hiddenCursorProbeNamespace);
-  return store;
+  return createStore(createBootstrappedSnapshot(exampleGraph));
 }
 
-function createExampleAuthorityGraph() {
+function getExampleAuthorityBaseline(): ExampleAuthorityBaseline {
+  if (exampleAuthorityBaseline) return exampleAuthorityBaseline;
+
   const store = createExampleStore();
   const graph = createTypeClient(store, exampleGraph);
   const ids = seedExampleGraph(createTypeClient(store, productGraph));
@@ -65,12 +70,26 @@ function createExampleAuthorityGraph() {
     name: "Hidden Cursor Probe",
   });
 
+  exampleAuthorityBaseline = {
+    ids: {
+      ...ids,
+      hiddenCursorProbe: hiddenCursorProbeId,
+    },
+    snapshot: store.snapshot(),
+  };
+  return exampleAuthorityBaseline;
+}
+
+function createExampleAuthorityGraph() {
+  const baseline = getExampleAuthorityBaseline();
+  const store = createStore(baseline.snapshot);
+  const graph = createTypeClient(store, exampleGraph);
+
   return {
     store,
     graph,
     ids: {
-      ...ids,
-      hiddenCursorProbe: hiddenCursorProbeId,
+      ...baseline.ids,
     },
   };
 }
@@ -127,25 +146,21 @@ export function createExampleRuntime(
     txId: string,
     hiddenState = `hidden:${txId}`,
   ): AuthoritativeGraphWriteResult {
-    const before = authority.store.snapshot();
-    const mutationStore = createExampleStore();
-    mutationStore.replace(before);
-    const mutationGraph = createTypeClient(mutationStore, exampleGraph);
-
-    mutationGraph.hiddenCursorProbe.update(authority.ids.hiddenCursorProbe, {
-      hiddenState,
-    });
-
-    const transaction = createGraphWriteTransactionFromSnapshots(
-      before,
-      mutationStore.snapshot(),
+    const planned = planRecordedMutation(
+      authority.store.snapshot(),
+      exampleGraph,
       txId,
+      (mutationGraph) => {
+        mutationGraph.hiddenCursorProbe.update(authority.ids.hiddenCursorProbe, {
+          hiddenState,
+        });
+      },
     );
-    if (transaction.ops.length === 0) {
+    if (!planned.changed) {
       throw new Error(`Hidden-only mutation for "${txId}" did not change the graph.`);
     }
 
-    return applyTransaction(transaction, {
+    return applyTransaction(planned.transaction, {
       writeScope: "authority-only",
     });
   }

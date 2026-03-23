@@ -61,6 +61,10 @@ type StatusEntityTypeEntry = {
   readonly name: string;
   readonly type: Extract<AnyTypeOutput, { kind: "entity" }>;
 };
+type GraphMcpSessionMetadata = {
+  readonly entityTypeEntries: readonly StatusEntityTypeEntry[];
+  readonly schema: GraphMcpSchema;
+};
 
 const recordInputSchema = z.record(z.string(), z.unknown());
 
@@ -96,6 +100,8 @@ const deleteEntityInputSchema = {
   id: z.string().min(1),
   type: z.string().min(1),
 };
+
+const graphMcpSessionMetadataCache = new WeakMap<GraphMcpNamespace, GraphMcpSessionMetadata>();
 
 export type GraphEntityTypeCount = {
   readonly count: number;
@@ -136,6 +142,21 @@ export type GraphMcpSession = {
 };
 
 const graphNamespace = { ...pkm, ...ops } as const;
+
+function getGraphMcpSessionMetadata(namespace: GraphMcpNamespace): GraphMcpSessionMetadata {
+  const cached = graphMcpSessionMetadataCache.get(namespace);
+  if (cached) return cached;
+
+  const metadata = {
+    entityTypeEntries: Object.entries(namespace)
+      .flatMap(([name, type]) => (isEntityType(type) ? [{ name, type }] : []))
+      .sort((left, right) => left.type.values.key.localeCompare(right.type.values.key)),
+    schema: createGraphMcpSchema(namespace),
+  };
+
+  graphMcpSessionMetadataCache.set(namespace, metadata);
+  return metadata;
+}
 
 function toValidationErrorMessage(error: GraphValidationError<unknown>): string {
   return error.result.issues[0]?.message ?? error.message;
@@ -421,10 +442,7 @@ export async function createGraphMcpSession(
   const namespace = options.namespace ?? graphNamespace;
   const baseUrl = normalizeGraphMcpUrl(options.url ?? defaultHttpGraphUrl);
   const allowWrites = options.allowWrites ?? false;
-  const entityTypeEntries = Object.entries(namespace)
-    .flatMap(([name, type]) => (isEntityType(type) ? [{ name, type }] : []))
-    .sort((left, right) => left.type.values.key.localeCompare(right.type.values.key));
-  const schema = createGraphMcpSchema(namespace);
+  const { entityTypeEntries, schema } = getGraphMcpSessionMetadata(namespace);
   const createClient = async () =>
     (await createHttpGraphClient(namespace, {
       fetch: options.fetch,

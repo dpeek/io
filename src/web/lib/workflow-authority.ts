@@ -1,7 +1,4 @@
 import {
-  bootstrap,
-  createStore,
-  createTypeClient,
   edgeId,
   type AuthoritativeGraphWriteResult,
   type GraphWriteTransaction,
@@ -31,6 +28,7 @@ import type {
   WebAppAuthorityCommandOptions,
   WebAppAuthorityTransactionOptions,
 } from "./authority.js";
+import { planRecordedMutation } from "./mutation-planning.js";
 
 const productGraph = { ...core, ...pkm, ...ops } as const;
 
@@ -234,38 +232,7 @@ function planWorkflowMutation<TResult>(
   readonly result: TResult;
   readonly transaction: GraphWriteTransaction;
 } {
-  const mutationStore = createStore();
-  bootstrap(mutationStore, core);
-  bootstrap(mutationStore, pkm);
-  bootstrap(mutationStore, ops);
-  mutationStore.replace(snapshot);
-
-  const mutationGraph = createTypeClient(mutationStore, productGraph);
-  const before = mutationStore.snapshot();
-  const result = mutate(mutationGraph, mutationStore);
-  const after = mutationStore.snapshot();
-  const previousEdgeIds = new Set(before.edges.map((edge) => edge.id));
-  const previousRetractedIds = new Set(before.retracted);
-  const writeOps: GraphWriteTransaction["ops"] = [
-    ...after.retracted
-      .filter((edgeId) => !previousRetractedIds.has(edgeId))
-      .map((edgeId) => ({ op: "retract" as const, edgeId })),
-    ...after.edges
-      .filter((edge) => !previousEdgeIds.has(edge.id))
-      .map((edge) => ({
-        op: "assert" as const,
-        edge: { ...edge },
-      })),
-  ];
-
-  return {
-    changed: writeOps.length > 0,
-    result,
-    transaction: {
-      id: txId,
-      ops: writeOps,
-    },
-  };
+  return planRecordedMutation(snapshot, productGraph, txId, mutate);
 }
 
 function decodeWorkflowBranchState(value: string): WorkflowBranchStateValue {

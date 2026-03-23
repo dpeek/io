@@ -4,8 +4,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import {
-  bootstrap,
   createAuthoritativeGraphWriteSession,
+  createBootstrappedSnapshot,
   createStore,
   createTotalSyncPayload,
   createTypeClient,
@@ -14,6 +14,7 @@ import {
   type FetchImpl,
   type GraphWriteTransaction,
   type NamespaceClient,
+  type StoreSnapshot,
   type SyncPayload,
 } from "../graph/index.js";
 import { core } from "../graph/modules/index.js";
@@ -36,6 +37,9 @@ type MockAuthority = {
   };
 };
 
+let productAuthoritySnapshot: StoreSnapshot | null = null;
+let kitchenSinkAuthoritySnapshot: StoreSnapshot | null = null;
+
 function resolvedEnumValue(value: { key: string; id?: string }): string {
   return value.id ?? value.key;
 }
@@ -44,9 +48,7 @@ function createAuthority<const T extends GraphNamespace>(
   namespace: T,
   seed: (graph: NamespaceClient<typeof core & T>) => void,
 ) {
-  const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, namespace);
+  const store = createStore(createBootstrappedSnapshot(namespace));
   const graph = createTypeClient(store, { ...core, ...namespace }) as NamespaceClient<
     typeof core & T
   >;
@@ -62,80 +64,107 @@ function createAuthority<const T extends GraphNamespace>(
   return { graph, store, writes };
 }
 
+function createAuthorityFromSnapshot<const T extends GraphNamespace>(
+  namespace: T,
+  snapshot: StoreSnapshot,
+) {
+  const store = createStore(snapshot);
+  const graph = createTypeClient(store, { ...core, ...namespace }) as NamespaceClient<
+    typeof core & T
+  >;
+  const writes = createAuthoritativeGraphWriteSession(
+    store,
+    { ...core, ...namespace },
+    {
+      cursorPrefix: "server:",
+    },
+  );
+
+  return { graph, store, writes };
+}
+
 function createProductAuthority() {
-  return createAuthority(productGraph, (graph) => {
-    graph.envVar.create({ name: "OPENAI_API_KEY" });
-    graph.topic.create({
-      content: "Seeded topic",
-      isArchived: false,
-      kind: resolvedEnumValue(topicKind.values.module),
-      name: "Graph MCP",
-      order: 1,
-    });
-  });
+  if (!productAuthoritySnapshot) {
+    productAuthoritySnapshot = createAuthority(productGraph, (graph) => {
+      graph.envVar.create({ name: "OPENAI_API_KEY" });
+      graph.topic.create({
+        content: "Seeded topic",
+        isArchived: false,
+        kind: resolvedEnumValue(topicKind.values.module),
+        name: "Graph MCP",
+        order: 1,
+      });
+    }).store.snapshot();
+  }
+
+  return createAuthorityFromSnapshot(productGraph, productAuthoritySnapshot);
 }
 
 function createKitchenSinkAuthority() {
-  return createAuthority(kitchenSink, (graph) => {
-    const tagId = graph.tag.create({
-      color: "#1d4ed8",
-      key: "platform",
-      name: "Platform",
-    });
-    const companyId = graph.company.create({
-      foundedYear: 2020,
-      name: "Acme",
-      status: resolvedEnumValue(kitchenSink.status.values.approved),
-      website: new URL("https://acme.example"),
-    });
-    const managerId = graph.person.create({
-      confidentialNotes: "manager-only",
-      email: "manager@example.com",
-      name: "Manager",
-      status: resolvedEnumValue(kitchenSink.status.values.approved),
-      worksAt: [companyId],
-    });
-    const reviewerId = graph.person.create({
-      email: "reviewer@example.com",
-      name: "Reviewer",
-      status: resolvedEnumValue(kitchenSink.status.values.approved),
-      worksAt: [companyId],
-    });
-    const ownerId = graph.person.create({
-      confidentialNotes: "owner-only",
-      email: "owner@example.com",
-      manager: managerId,
-      name: "Owner",
-      peers: [reviewerId],
-      status: resolvedEnumValue(kitchenSink.status.values.inReview),
-      worksAt: [companyId],
-    });
-    const secretId = graph.secret.create({
-      fingerprint: "hidden-fingerprint",
-      name: "Primary secret",
-      version: 3,
-    });
+  if (!kitchenSinkAuthoritySnapshot) {
+    kitchenSinkAuthoritySnapshot = createAuthority(kitchenSink, (graph) => {
+      const tagId = graph.tag.create({
+        color: "#1d4ed8",
+        key: "platform",
+        name: "Platform",
+      });
+      const companyId = graph.company.create({
+        foundedYear: 2020,
+        name: "Acme",
+        status: resolvedEnumValue(kitchenSink.status.values.approved),
+        website: new URL("https://acme.example"),
+      });
+      const managerId = graph.person.create({
+        confidentialNotes: "manager-only",
+        email: "manager@example.com",
+        name: "Manager",
+        status: resolvedEnumValue(kitchenSink.status.values.approved),
+        worksAt: [companyId],
+      });
+      const reviewerId = graph.person.create({
+        email: "reviewer@example.com",
+        name: "Reviewer",
+        status: resolvedEnumValue(kitchenSink.status.values.approved),
+        worksAt: [companyId],
+      });
+      const ownerId = graph.person.create({
+        confidentialNotes: "owner-only",
+        email: "owner@example.com",
+        manager: managerId,
+        name: "Owner",
+        peers: [reviewerId],
+        status: resolvedEnumValue(kitchenSink.status.values.inReview),
+        worksAt: [companyId],
+      });
+      const secretId = graph.secret.create({
+        fingerprint: "hidden-fingerprint",
+        name: "Primary secret",
+        version: 3,
+      });
 
-    graph.record.create({
-      contact: {
-        email: "support@example.com",
-      },
-      details: "Seeded record details",
-      headline: "KS-PRIMARY",
-      name: "Primary record",
-      owner: ownerId,
-      reviewers: [reviewerId],
-      review: {
-        notes: "LGTM",
-        reviewer: reviewerId,
-      },
-      score: 42,
-      secret: secretId,
-      severity: resolvedEnumValue(kitchenSink.severity.values.high),
-      status: resolvedEnumValue(kitchenSink.status.values.inReview),
-      tags: [tagId],
-    });
-  });
+      graph.record.create({
+        contact: {
+          email: "support@example.com",
+        },
+        details: "Seeded record details",
+        headline: "KS-PRIMARY",
+        name: "Primary record",
+        owner: ownerId,
+        reviewers: [reviewerId],
+        review: {
+          notes: "LGTM",
+          reviewer: reviewerId,
+        },
+        score: 42,
+        secret: secretId,
+        severity: resolvedEnumValue(kitchenSink.severity.values.high),
+        status: resolvedEnumValue(kitchenSink.status.values.inReview),
+        tags: [tagId],
+      });
+    }).store.snapshot();
+  }
+
+  return createAuthorityFromSnapshot(kitchenSink, kitchenSinkAuthoritySnapshot);
 }
 
 function createMockFetch(authority: MockAuthority): FetchImpl {

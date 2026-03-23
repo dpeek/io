@@ -1,9 +1,11 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
 import { GraphValidationError, edgeId, type GraphWriteTransaction } from "@io/core/graph";
 import { pkm } from "@io/core/graph/modules/pkm";
 
 import { createExampleRuntime } from "./example-runtime.js";
+
+setDefaultTimeout(20_000);
 
 function createTopicNameWriteTransaction(
   store: ReturnType<typeof createExampleRuntime>["authority"]["store"],

@@ -89,7 +89,18 @@ generic shared command transport.
   explicit protected predicate reads with stable `policy.read.forbidden`
   errors, explicit `policyVersion` fail-closed checks for authority-owned read,
   `/api/sync`, `/api/tx`, and `/api/commands` paths, and the storage
-  abstraction consumed by both tests and the Durable Object adapter
+  abstraction consumed by both tests and the Durable Object adapter, including
+  an opt-out seeded-example bootstrap path used by web authority tests plus a
+  cached graph-metadata/bootstrap path for repeated authority construction
+- `../../src/web/lib/authority-test-helpers.ts`: no-seed test authority
+  factory plus cached persisted workflow baseline helpers for the slow web
+  authority and Durable Object suites
+- `../../src/web/lib/mutation-planning.ts`: shared snapshot-backed mutation
+  planner that records asserted and retracted store operations directly instead
+  of diffing whole-store before/after snapshots
+- `../../src/web/lib/example-runtime.ts`: seeded sync-proof runtime fixture
+  that now reuses a cached seeded authority baseline and direct recorded
+  mutation planning for hidden-only cursor tests
 - `../../src/web/lib/`: worker-backed graph authority, generic secret-field
   mutation contracts, seeded example data/runtime fixtures, and HTTP route
   helpers
