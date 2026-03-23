@@ -1442,7 +1442,7 @@ export class AgentService {
       issueIdentifier: issue.identifier,
       workspace: workspace.path,
     });
-    await tracker.setIssueState(issue.id, "In Review");
+    await tracker.setIssueState(issue.id, "Done");
     await workspaceManager.reconcileTerminalIssues(tracker, workflow.tracker.terminalStates);
     const finalizedIssueState = await readIssueRuntimeState(
       workflow.workspace.root,

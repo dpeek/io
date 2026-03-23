@@ -1,8 +1,6 @@
 import { defineIoConfig, env, linearTracker } from "@io/core/lib/config";
 
-const reviewPlanningEnabled = !["0", "false"].includes(
-  (process.env.IO_REVIEW_PLANNING ?? "").trim().toLowerCase(),
-);
+const reviewPlanningEnabled = false;
 
 export default defineIoConfig({
   agent: {
