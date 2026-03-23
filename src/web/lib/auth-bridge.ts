@@ -11,6 +11,25 @@ function cloneStringList(values: readonly string[] | undefined): readonly string
   return values ? [...values] : [];
 }
 
+function readNonEmptyStringField(value: unknown, label: "session.id" | "user.id"): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new BetterAuthSessionReductionError(
+      `Better Auth session payload must include a non-empty "${label}" string.`,
+    );
+  }
+
+  return value;
+}
+
+export type BetterAuthSessionResult = {
+  readonly session: {
+    readonly id: string;
+  };
+  readonly user: {
+    readonly id: string;
+  };
+};
+
 /**
  * Stable request-time lookup key for session-to-principal projection. The auth
  * subject tuple, not provider-specific session internals, chooses the graph
@@ -48,6 +67,23 @@ export type ProjectSessionToPrincipalInput = {
   ) => MaybePromise<SessionPrincipalProjection | null>;
 };
 
+export type CreateWorkerAuthorizationContextInput = Omit<
+  ProjectSessionToPrincipalInput,
+  "session"
+> & {
+  readonly betterAuthSession: BetterAuthSessionResult | null;
+};
+
+export class BetterAuthSessionReductionError extends Error {
+  readonly code = "auth.session_invalid" as const;
+  readonly status = 503;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "BetterAuthSessionReductionError";
+  }
+}
+
 export class SessionPrincipalProjectionError extends Error {
   readonly code = "auth.principal_missing" as const;
   readonly graphId: string;
@@ -76,6 +112,27 @@ export function createAnonymousAuthorizationContext(input: {
     capabilityGrantIds: [],
     capabilityVersion: 0,
     policyVersion: input.policyVersion,
+  };
+}
+
+export function reduceBetterAuthSession(
+  session: BetterAuthSessionResult | null,
+): AuthenticatedSession | null {
+  if (!session) {
+    return null;
+  }
+
+  const sessionId = readNonEmptyStringField(session.session?.id, "session.id");
+  const userId = readNonEmptyStringField(session.user?.id, "user.id");
+
+  return {
+    sessionId,
+    subject: {
+      issuer: "better-auth",
+      provider: "user",
+      providerAccountId: userId,
+      authUserId: userId,
+    },
   };
 }
 
@@ -109,4 +166,15 @@ export async function projectSessionToPrincipal(
     capabilityVersion: projection.capabilityVersion ?? 0,
     policyVersion: input.policyVersion,
   };
+}
+
+export function createWorkerAuthorizationContext(
+  input: CreateWorkerAuthorizationContextInput,
+): Promise<AuthorizationContext> {
+  return projectSessionToPrincipal({
+    graphId: input.graphId,
+    policyVersion: input.policyVersion,
+    session: reduceBetterAuthSession(input.betterAuthSession),
+    lookupPrincipal: input.lookupPrincipal,
+  });
 }

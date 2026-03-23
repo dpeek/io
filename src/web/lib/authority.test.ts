@@ -3,12 +3,14 @@ import { describe, expect, it, setDefaultTimeout } from "bun:test";
 import {
   createIdMap,
   createStore,
+  createSyncedTypeClient,
   createTypeClient,
   defineNamespace,
   defineSecretField,
   defineType,
   edgeId,
   type AnyTypeOutput,
+  type AuthSubjectRef,
   type AuthorizationContext,
   type GraphWriteTransaction,
   type StoreSnapshot,
@@ -17,7 +19,10 @@ import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 
-import { createAnonymousAuthorizationContext } from "./auth-bridge.js";
+import {
+  createAnonymousAuthorizationContext,
+  type SessionPrincipalLookupInput,
+} from "./auth-bridge.js";
 import {
   createTestWebAppAuthority,
   createTestWebAppAuthorityWithWorkflowFixture,
@@ -39,6 +44,7 @@ import {
 } from "./server-routes.js";
 
 const productGraph = { ...core, ...pkm, ...ops } as const;
+const browserGraph = { ...pkm, ...ops } as const;
 const envVarDescriptionPredicateId = edgeId(ops.envVar.fields.description);
 const envVarSecretPredicateId = edgeId(ops.envVar.fields.secret);
 const principalHomeGraphIdPredicateId = edgeId(core.principal.fields.homeGraphId);
@@ -233,6 +239,24 @@ function readNumberPredicateValue(
 
 function readProductGraph(authority: WebAppAuthority, authorization: AuthorizationContext) {
   return createProductMutationStore(authority.readSnapshot({ authorization })).mutationGraph;
+}
+
+function createSessionPrincipalLookupInput(
+  overrides: {
+    readonly graphId?: string;
+    readonly subject?: Partial<AuthSubjectRef>;
+  } = {},
+): SessionPrincipalLookupInput {
+  return {
+    graphId: overrides.graphId ?? "graph:test",
+    subject: {
+      issuer: "better-auth",
+      provider: "user",
+      providerAccountId: "user-1",
+      authUserId: "auth-user-1",
+      ...overrides.subject,
+    },
+  };
 }
 describe("web authority", () => {
   it("rolls back staged side effects when staging fails before commit", async () => {
@@ -879,7 +903,7 @@ describe("web authority", () => {
     );
   });
 
-  it("omits protected predicates from snapshot reads and rejects explicit direct reads", async () => {
+  it("keeps graph-owned identity entities out of non-authority snapshot reads", async () => {
     const authorityAuthorization = createAuthorityAuthorizationContext();
     const humanAuthorization = createHumanAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
@@ -916,11 +940,7 @@ describe("web authority", () => {
           edge.o === "graph:global",
       ),
     ).toBe(true);
-    expect(
-      humanSnapshot.edges.some(
-        (edge) => edge.s === principalId && edge.p === principalHomeGraphIdPredicateId,
-      ),
-    ).toBe(false);
+    expect(humanSnapshot.edges.some((edge) => edge.s === principalId)).toBe(false);
     expect(
       readStringPredicateValue(
         authority,
@@ -942,6 +962,50 @@ describe("web authority", () => {
         status: 403,
       });
     }
+  });
+
+  it("keeps first-use auth identity records out of signed-in browser sync bootstrap", async () => {
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput();
+    const projection = await authority.lookupSessionPrincipal(lookupInput);
+    const signedInAuthorization = createTestAuthorizationContext({
+      graphId: lookupInput.graphId,
+      principalId: projection.principalId,
+      principalKind: projection.principalKind,
+      sessionId: "session:browser",
+      roleKeys: [...(projection.roleKeys ?? [])],
+      capabilityGrantIds: [...(projection.capabilityGrantIds ?? [])],
+      capabilityVersion: projection.capabilityVersion,
+    });
+
+    const total = authority.createSyncPayload({
+      authorization: signedInAuthorization,
+    });
+    const runtime = createSyncedTypeClient(browserGraph, {
+      pull(state) {
+        return Promise.resolve(
+          state.cursor
+            ? authority.getIncrementalSyncResult(state.cursor, {
+                authorization: signedInAuthorization,
+              })
+            : authority.createSyncPayload({
+                authorization: signedInAuthorization,
+              }),
+        );
+      },
+    });
+
+    expect(total.snapshot.edges.some((edge) => edge.s === projection.principalId)).toBe(false);
+
+    const applied = await runtime.sync.sync();
+
+    expect(applied.mode).toBe("total");
+    expect(runtime.sync.getState()).toMatchObject({
+      status: "ready",
+      completeness: "complete",
+      freshness: "current",
+    });
   });
 
   it("denies direct transactions without authority access by default", async () => {
@@ -1470,6 +1534,306 @@ describe("web authority", () => {
       error: `Workflow branch "${branch.summary.id}" does not have a managed repository branch target.`,
     });
   });
+
+  it("repairs persisted principals missing homeGraphId during bootstrap", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const { mutationGraph, mutationStore } = createProductMutationStore(
+      authority.readSnapshot({ authorization }),
+    );
+    const before = mutationStore.snapshot();
+    const principalId = mutationGraph.principal.create({
+      homeGraphId: "graph:global",
+      kind: core.principalKind.values.human.id,
+      name: "Legacy Principal",
+      status: core.principalStatus.values.active.id,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(before, mutationStore.snapshot(), "tx:create-legacy-principal"),
+      {
+        authorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const persisted = storage.read();
+    if (!persisted) {
+      throw new Error("Expected a persisted authority snapshot.");
+    }
+
+    const legacyState = {
+      ...structuredClone(persisted),
+      snapshot: {
+        ...persisted.snapshot,
+        edges: persisted.snapshot.edges.filter(
+          (edge) => !(edge.s === principalId && edge.p === principalHomeGraphIdPredicateId),
+        ),
+      },
+    };
+
+    const legacyStorage = createInMemoryTestWebAppAuthorityStorage(legacyState);
+    const repaired = await createTestWebAppAuthority(legacyStorage.storage);
+    const repairedPrincipal = readProductGraph(repaired, authorization).principal.get(principalId);
+    const repairedHomeGraphEdges =
+      legacyStorage
+        .read()
+        ?.snapshot.edges.filter(
+          (edge) => edge.s === principalId && edge.p === principalHomeGraphIdPredicateId,
+        ) ?? [];
+
+    expect(repairedPrincipal).toMatchObject({
+      homeGraphId: "graph:global",
+      kind: core.principalKind.values.human.id,
+      status: core.principalStatus.values.active.id,
+    });
+    expect(repairedHomeGraphEdges).toHaveLength(1);
+    expect(repairedHomeGraphEdges[0]?.o).toBe("graph:global");
+    expect(legacyStorage.read()?.writeHistory.results.at(-1)?.writeScope).toBe("authority-only");
+    expect(
+      legacyStorage
+        .read()
+        ?.writeHistory.results.at(-1)
+        ?.txId.startsWith("repair:principal-home-graph-id:"),
+    ).toBe(true);
+  });
+
+  it("resolves graph-owned auth subject projections to principals and active role bindings", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput();
+    const { mutationGraph, mutationStore } = createProductMutationStore(
+      authority.readSnapshot({ authorization }),
+    );
+    const before = mutationStore.snapshot();
+    const principalId = mutationGraph.principal.create({
+      homeGraphId: lookupInput.graphId,
+      kind: core.principalKind.values.human.id,
+      name: "Lookup Principal",
+      status: core.principalStatus.values.active.id,
+    });
+
+    mutationGraph.authSubjectProjection.create({
+      authUserId: lookupInput.subject.authUserId,
+      issuer: lookupInput.subject.issuer,
+      mirroredAt: new Date("2026-03-24T00:00:00.000Z"),
+      name: "Lookup Subject",
+      principal: principalId,
+      provider: lookupInput.subject.provider,
+      providerAccountId: lookupInput.subject.providerAccountId,
+      status: core.authSubjectStatus.values.active.id,
+    });
+    mutationGraph.principalRoleBinding.create({
+      name: "Graph Member",
+      principal: principalId,
+      roleKey: "graph:member",
+      status: core.principalRoleBindingStatus.values.active.id,
+    });
+    mutationGraph.principalRoleBinding.create({
+      name: "Revoked Authority",
+      principal: principalId,
+      roleKey: "graph:authority",
+      status: core.principalRoleBindingStatus.values.revoked.id,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(before, mutationStore.snapshot(), "tx:create-session-principal"),
+      {
+        authorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    expect(await authority.lookupSessionPrincipal(lookupInput)).toEqual({
+      principalId,
+      principalKind: "human",
+      roleKeys: ["graph:member"],
+      capabilityGrantIds: [],
+      capabilityVersion: 0,
+    });
+  });
+
+  it("creates missing principals and subject projections idempotently on first authenticated use", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput();
+
+    const first = await authority.lookupSessionPrincipal(lookupInput);
+    const second = await authority.lookupSessionPrincipal(lookupInput);
+    const productGraphClient = readProductGraph(authority, authorization);
+    const projections = productGraphClient.authSubjectProjection.list();
+
+    expect(first).toEqual(second);
+    expect(first).toMatchObject({
+      principalKind: "human",
+      roleKeys: [],
+      capabilityGrantIds: [],
+      capabilityVersion: 0,
+    });
+    expect(productGraphClient.principal.list()).toHaveLength(1);
+    expect(projections).toHaveLength(1);
+    expect(productGraphClient.principal.get(first.principalId)).toMatchObject({
+      homeGraphId: lookupInput.graphId,
+      kind: core.principalKind.values.human.id,
+      status: core.principalStatus.values.active.id,
+    });
+    expect(projections[0]).toMatchObject({
+      authUserId: lookupInput.subject.authUserId,
+      issuer: lookupInput.subject.issuer,
+      principal: first.principalId,
+      provider: lookupInput.subject.provider,
+      providerAccountId: lookupInput.subject.providerAccountId,
+      status: core.authSubjectStatus.values.active.id,
+    });
+  });
+
+  it("repairs missing exact subject projections by linking them to the existing auth-user principal", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const existingInput = createSessionPrincipalLookupInput({
+      subject: {
+        providerAccountId: "user-1:github",
+      },
+    });
+    const repairedInput = createSessionPrincipalLookupInput();
+    const { mutationGraph, mutationStore } = createProductMutationStore(
+      authority.readSnapshot({ authorization }),
+    );
+    const before = mutationStore.snapshot();
+    const principalId = mutationGraph.principal.create({
+      homeGraphId: existingInput.graphId,
+      kind: core.principalKind.values.human.id,
+      name: "Existing Principal",
+      status: core.principalStatus.values.active.id,
+    });
+
+    mutationGraph.authSubjectProjection.create({
+      authUserId: existingInput.subject.authUserId,
+      issuer: existingInput.subject.issuer,
+      mirroredAt: new Date("2026-03-24T00:00:00.000Z"),
+      name: "Existing Subject",
+      principal: principalId,
+      provider: existingInput.subject.provider,
+      providerAccountId: existingInput.subject.providerAccountId,
+      status: core.authSubjectStatus.values.active.id,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        before,
+        mutationStore.snapshot(),
+        "tx:create-existing-auth-user-principal",
+      ),
+      {
+        authorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const repaired = await authority.lookupSessionPrincipal(repairedInput);
+    const repairedProjection = readProductGraph(authority, authorization)
+      .authSubjectProjection.list()
+      .find(
+        (projection) =>
+          projection.providerAccountId === repairedInput.subject.providerAccountId &&
+          projection.authUserId === repairedInput.subject.authUserId,
+      );
+
+    expect(repaired.principalId).toBe(principalId);
+    expect(repairedProjection).toMatchObject({
+      principal: principalId,
+      providerAccountId: repairedInput.subject.providerAccountId,
+      status: core.authSubjectStatus.values.active.id,
+    });
+  });
+
+  it("fails closed when the same auth user is linked to multiple active principals", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput({
+      subject: {
+        providerAccountId: "user-1:slack",
+      },
+    });
+    const { mutationGraph, mutationStore } = createProductMutationStore(
+      authority.readSnapshot({ authorization }),
+    );
+    const before = mutationStore.snapshot();
+    const firstPrincipalId = mutationGraph.principal.create({
+      homeGraphId: lookupInput.graphId,
+      kind: core.principalKind.values.human.id,
+      name: "First Principal",
+      status: core.principalStatus.values.active.id,
+    });
+    const secondPrincipalId = mutationGraph.principal.create({
+      homeGraphId: lookupInput.graphId,
+      kind: core.principalKind.values.human.id,
+      name: "Second Principal",
+      status: core.principalStatus.values.active.id,
+    });
+
+    mutationGraph.authSubjectProjection.create({
+      authUserId: lookupInput.subject.authUserId,
+      issuer: lookupInput.subject.issuer,
+      mirroredAt: new Date("2026-03-24T00:00:00.000Z"),
+      name: "First Subject",
+      principal: firstPrincipalId,
+      provider: lookupInput.subject.provider,
+      providerAccountId: "user-1:first",
+      status: core.authSubjectStatus.values.active.id,
+    });
+    mutationGraph.authSubjectProjection.create({
+      authUserId: lookupInput.subject.authUserId,
+      issuer: lookupInput.subject.issuer,
+      mirroredAt: new Date("2026-03-24T00:00:00.000Z"),
+      name: "Second Subject",
+      principal: secondPrincipalId,
+      provider: lookupInput.subject.provider,
+      providerAccountId: "user-1:second",
+      status: core.authSubjectStatus.values.active.id,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        before,
+        mutationStore.snapshot(),
+        "tx:create-conflicting-auth-user-principals",
+      ),
+      {
+        authorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    await expect(authority.lookupSessionPrincipal(lookupInput)).rejects.toMatchObject({
+      name: "WebAppAuthoritySessionPrincipalLookupError",
+      code: "auth.principal_missing",
+      reason: "conflict",
+      status: 409,
+    });
+  });
+
+  it("returns an explicit missing-principal error when repair is disabled", async () => {
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+
+    await expect(
+      authority.lookupSessionPrincipal(createSessionPrincipalLookupInput(), {
+        allowRepair: false,
+      }),
+    ).rejects.toMatchObject({
+      name: "WebAppAuthoritySessionPrincipalLookupError",
+      code: "auth.principal_missing",
+      reason: "missing",
+      status: 404,
+    });
+  });
+
   it("passes explicit authorization context through sync and transaction helpers", async () => {
     const authorization = createTestAuthorizationContext({
       principalId: "principal-1",

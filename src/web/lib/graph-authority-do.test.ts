@@ -11,6 +11,7 @@ import {
   defineSecretField,
   defineType,
   edgeId,
+  type AuthSubjectRef,
   type AnyTypeOutput,
   type AuthorizationContext,
   type GraphWriteTransaction,
@@ -20,22 +21,28 @@ import {
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
-
-setDefaultTimeout(20_000);
 import { pkm } from "@io/core/graph/modules/pkm";
 
-import { createAnonymousAuthorizationContext } from "./auth-bridge.js";
+import {
+  createAnonymousAuthorizationContext,
+  type SessionPrincipalLookupInput,
+} from "./auth-bridge.js";
 import { createTestWebAppAuthority, createTestWorkflowFixture } from "./authority-test-helpers.js";
 import {
   createWebAppAuthority,
   type WebAppAuthority,
   type WebAppAuthorityStorage,
 } from "./authority.js";
-import { WebGraphAuthorityDurableObject } from "./graph-authority-do.js";
+import {
+  WebGraphAuthorityDurableObject,
+  webGraphAuthoritySessionPrincipalLookupPath,
+} from "./graph-authority-do.js";
 import {
   encodeRequestAuthorizationContext,
   webAppAuthorizationContextHeader,
 } from "./server-routes.js";
+
+setDefaultTimeout(20_000);
 
 const productGraph = { ...core, ...pkm, ...ops } as const;
 const envVarSecretPredicateId = edgeId(ops.envVar.fields.secret);
@@ -277,6 +284,45 @@ function createAuthorizedRequest(
 
   headers.set(webAppAuthorizationContextHeader, encodeRequestAuthorizationContext(authorization));
   return new Request(request, { headers });
+}
+
+function createSessionPrincipalLookupInput(
+  overrides: {
+    readonly graphId?: string;
+    readonly subject?: Partial<AuthSubjectRef>;
+  } = {},
+): SessionPrincipalLookupInput {
+  return {
+    graphId: overrides.graphId ?? "graph:test",
+    subject: {
+      issuer: "better-auth",
+      provider: "user",
+      providerAccountId: "user-1",
+      authUserId: "auth-user-1",
+      ...overrides.subject,
+    },
+  };
+}
+
+function createSessionPrincipalLookupRequest(
+  input: SessionPrincipalLookupInput,
+  init: RequestInit = {},
+): Request {
+  return new Request(
+    `https://graph-authority.local${webGraphAuthoritySessionPrincipalLookupPath}`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(input),
+      ...init,
+    },
+  );
+}
+
+function readProductGraph(authority: WebAppAuthority, authorization: AuthorizationContext) {
+  return createTypeClient(createStore(authority.readSnapshot({ authorization })), productGraph);
 }
 
 function createSqliteDurableObjectState(): {
@@ -668,6 +714,104 @@ describe("web graph authority durable object", () => {
 
     expect(response.status).toBe(200);
     expect(captured).toEqual([authorization]);
+  });
+
+  it("repairs first-use principals through the internal lookup route and reuses them idempotently", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const lookupInput = createSessionPrincipalLookupInput();
+    const firstResponse = await durableObject.fetch(
+      createSessionPrincipalLookupRequest(lookupInput),
+    );
+    const secondResponse = await durableObject.fetch(
+      createSessionPrincipalLookupRequest(lookupInput),
+    );
+    const first = (await firstResponse.json()) as {
+      readonly principalId: string;
+      readonly principalKind: string;
+    };
+    const second = (await secondResponse.json()) as typeof first;
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const persistedGraph = readProductGraph(authority, testAuthorityAuthorization);
+    const repairedProjection = persistedGraph.authSubjectProjection.list()[0];
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(first).toEqual(second);
+    expect(first).toMatchObject({
+      principalKind: "human",
+    });
+    expect(persistedGraph.principal.list()).toHaveLength(1);
+    expect(persistedGraph.authSubjectProjection.list()).toHaveLength(1);
+    expect(repairedProjection).toMatchObject({
+      authUserId: lookupInput.subject.authUserId,
+      principal: first.principalId,
+      providerAccountId: lookupInput.subject.providerAccountId,
+      status: core.authSubjectStatus.values.active.id,
+    });
+  });
+
+  it("returns explicit conflict failures from the internal lookup route", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const lookupInput = createSessionPrincipalLookupInput({
+      subject: {
+        providerAccountId: "user-1:slack",
+      },
+    });
+    const seeded = buildTransactionFromSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      "tx:create-conflicting-auth-user-projections",
+      (graph) => {
+        const firstPrincipalId = graph.principal.create({
+          homeGraphId: lookupInput.graphId,
+          kind: core.principalKind.values.human.id,
+          name: "First Principal",
+          status: core.principalStatus.values.active.id,
+        });
+        const secondPrincipalId = graph.principal.create({
+          homeGraphId: lookupInput.graphId,
+          kind: core.principalKind.values.human.id,
+          name: "Second Principal",
+          status: core.principalStatus.values.active.id,
+        });
+
+        graph.authSubjectProjection.create({
+          authUserId: lookupInput.subject.authUserId,
+          issuer: lookupInput.subject.issuer,
+          mirroredAt: new Date("2026-03-24T00:00:00.000Z"),
+          name: "First Subject",
+          principal: firstPrincipalId,
+          provider: lookupInput.subject.provider,
+          providerAccountId: "user-1:first",
+          status: core.authSubjectStatus.values.active.id,
+        });
+        graph.authSubjectProjection.create({
+          authUserId: lookupInput.subject.authUserId,
+          issuer: lookupInput.subject.issuer,
+          mirroredAt: new Date("2026-03-24T00:00:00.000Z"),
+          name: "Second Subject",
+          principal: secondPrincipalId,
+          provider: lookupInput.subject.provider,
+          providerAccountId: "user-1:second",
+          status: core.authSubjectStatus.values.active.id,
+        });
+      },
+    );
+
+    await authority.applyTransaction(seeded.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const response = await durableObject.fetch(createSessionPrincipalLookupRequest(lookupInput));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      code: "auth.principal_missing",
+      error: expect.stringContaining(`"${lookupInput.subject.authUserId}"`),
+    });
   });
 
   it("fails closed on stale policy versions when serving sync reads", async () => {

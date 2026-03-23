@@ -1,4 +1,5 @@
 import {
+  type AuthSubjectRef,
   type AuthorizationContext,
   type AnyTypeOutput,
   type AuthoritativeWriteScope,
@@ -22,6 +23,7 @@ import {
   isEntityType,
   isSecretBackedField,
   type ModuleSyncScope,
+  type PrincipalKind,
   type Cardinality,
   type GraphWriteTransaction,
   type NamespaceClient,
@@ -47,6 +49,7 @@ import {
 } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
 
+import type { SessionPrincipalLookupInput, SessionPrincipalProjection } from "./auth-bridge.js";
 import { seedExampleGraph } from "./example-data.js";
 import { planRecordedMutation } from "./mutation-planning.js";
 import {
@@ -141,6 +144,10 @@ export type WebAppAuthorityCommandResult<
   Kind extends WebAppAuthorityCommand["kind"] = WebAppAuthorityCommand["kind"],
 > = WebAppAuthorityCommandResultMap[Kind];
 
+export type WebAppAuthoritySessionPrincipalLookupOptions = {
+  readonly allowRepair?: boolean;
+};
+
 const compiledGraphArtifactsCache = new WeakMap<WebAppAuthorityGraph, CompiledGraphArtifacts>();
 
 /**
@@ -220,6 +227,10 @@ export type WebAppAuthority = Omit<
   PersistedWebAppAuthority,
   "applyTransaction" | "createSyncPayload" | "getIncrementalSyncResult" | "graph" | "store"
 > & {
+  lookupSessionPrincipal(
+    input: SessionPrincipalLookupInput,
+    options?: WebAppAuthoritySessionPrincipalLookupOptions,
+  ): Promise<SessionPrincipalProjection>;
   readSnapshot(options: WebAppAuthorityReadOptions): StoreSnapshot;
   readPredicateValue(
     subjectId: string,
@@ -260,9 +271,13 @@ const createdAtPredicateId = edgeId(core.node.fields.createdAt);
 const updatedAtPredicateId = edgeId(core.node.fields.updatedAt);
 const secretHandleVersionPredicateId = edgeId(core.secretHandle.fields.version);
 const secretHandleLastRotatedAtPredicateId = edgeId(core.secretHandle.fields.lastRotatedAt);
+const principalKindPredicateId = edgeId(core.principal.fields.kind);
+const principalStatusPredicateId = edgeId(core.principal.fields.status);
 const graphWriteTransactionValidationKey = "$sync:tx";
 const webAppAuthorityPolicyVersion = 0;
+const webAppGraphId = "graph:global";
 const webAppAuthorityCapabilityKeys: readonly string[] = [];
+const authorityRoleKey = "graph:authority";
 const writeSecretFieldCommandKey = "write-secret-field";
 const writeSecretFieldCommandBasePredicateIds = [
   typePredicateId,
@@ -281,6 +296,40 @@ const workflowModuleEntityTypeIds = new Set(
       return values.id ?? values.key;
     }),
 );
+const principalHomeGraphIdPredicateId = edgeId(core.principal.fields.homeGraphId);
+const authSubjectProjectionPrincipalPredicateId = edgeId(
+  core.authSubjectProjection.fields.principal,
+);
+const authSubjectProjectionIssuerPredicateId = edgeId(core.authSubjectProjection.fields.issuer);
+const authSubjectProjectionProviderPredicateId = edgeId(core.authSubjectProjection.fields.provider);
+const authSubjectProjectionProviderAccountIdPredicateId = edgeId(
+  core.authSubjectProjection.fields.providerAccountId,
+);
+const authSubjectProjectionAuthUserIdPredicateId = edgeId(
+  core.authSubjectProjection.fields.authUserId,
+);
+const authSubjectProjectionStatusPredicateId = edgeId(core.authSubjectProjection.fields.status);
+const principalRoleBindingPrincipalPredicateId = edgeId(core.principalRoleBinding.fields.principal);
+const principalRoleBindingRoleKeyPredicateId = edgeId(core.principalRoleBinding.fields.roleKey);
+const principalRoleBindingStatusPredicateId = edgeId(core.principalRoleBinding.fields.status);
+const principalTypeId = core.principal.values.id;
+const authSubjectProjectionTypeId = core.authSubjectProjection.values.id;
+const principalRoleBindingTypeId = core.principalRoleBinding.values.id;
+const nonAuthorityHiddenIdentityTypeIds = new Set([
+  principalTypeId,
+  authSubjectProjectionTypeId,
+  principalRoleBindingTypeId,
+]);
+const activePrincipalStatusId = core.principalStatus.values.active.id;
+const activeAuthSubjectStatusId = core.authSubjectStatus.values.active.id;
+const activePrincipalRoleBindingStatusId = core.principalRoleBindingStatus.values.active.id;
+const principalKindById = new Map<string, PrincipalKind>([
+  [core.principalKind.values.human.id, "human"],
+  [core.principalKind.values.service.id, "service"],
+  [core.principalKind.values.agent.id, "agent"],
+  [core.principalKind.values.anonymous.id, "anonymous"],
+  [core.principalKind.values.remoteGraph.id, "remoteGraph"],
+]);
 
 let authorityCursorEpoch = 0;
 
@@ -663,7 +712,18 @@ function planSyncScope(
     typeIds: workflowModuleEntityTypeIds,
   };
 }
+export class WebAppAuthoritySessionPrincipalLookupError extends Error {
+  readonly status: number;
+  readonly code = "auth.principal_missing" as const;
+  readonly reason: "conflict" | "missing";
 
+  constructor(status: number, reason: "conflict" | "missing", message: string) {
+    super(message);
+    this.name = "WebAppAuthoritySessionPrincipalLookupError";
+    this.status = status;
+    this.reason = reason;
+  }
+}
 function getFirstObject(store: Store, subjectId: string, predicateId: string): string | undefined {
   return store.facts(subjectId, predicateId)[0]?.o;
 }
@@ -671,6 +731,214 @@ function getFirstObject(store: Store, subjectId: string, predicateId: string): s
 function getEntityLabel(store: Store, id: string): string {
   return (
     getFirstObject(store, id, namePredicateId) ?? getFirstObject(store, id, labelPredicateId) ?? id
+  );
+}
+
+function hasEntityOfType(store: Store, entityId: string, typeId: string): boolean {
+  return store.facts(entityId, typePredicateId, typeId).length > 0;
+}
+
+function uniqueStrings(values: Iterable<string | undefined>): string[] {
+  return [...new Set([...values].filter((value): value is string => typeof value === "string"))];
+}
+
+function matchesAuthSubjectProjection(
+  store: Store,
+  projectionId: string,
+  subject: AuthSubjectRef,
+): boolean {
+  return (
+    getFirstObject(store, projectionId, authSubjectProjectionIssuerPredicateId) ===
+      subject.issuer &&
+    getFirstObject(store, projectionId, authSubjectProjectionProviderPredicateId) ===
+      subject.provider &&
+    getFirstObject(store, projectionId, authSubjectProjectionProviderAccountIdPredicateId) ===
+      subject.providerAccountId &&
+    getFirstObject(store, projectionId, authSubjectProjectionAuthUserIdPredicateId) ===
+      subject.authUserId
+  );
+}
+
+function listActiveAuthSubjectProjectionIds(store: Store, subject: AuthSubjectRef): string[] {
+  return uniqueStrings(
+    store
+      .facts(undefined, authSubjectProjectionIssuerPredicateId, subject.issuer)
+      .map((edge) => edge.s)
+      .filter(
+        (projectionId) =>
+          hasEntityOfType(store, projectionId, authSubjectProjectionTypeId) &&
+          getFirstObject(store, projectionId, authSubjectProjectionStatusPredicateId) ===
+            activeAuthSubjectStatusId &&
+          matchesAuthSubjectProjection(store, projectionId, subject),
+      ),
+  );
+}
+
+function listActiveAuthUserProjectionIds(store: Store, authUserId: string): string[] {
+  return uniqueStrings(
+    store
+      .facts(undefined, authSubjectProjectionAuthUserIdPredicateId, authUserId)
+      .map((edge) => edge.s)
+      .filter(
+        (projectionId) =>
+          hasEntityOfType(store, projectionId, authSubjectProjectionTypeId) &&
+          getFirstObject(store, projectionId, authSubjectProjectionStatusPredicateId) ===
+            activeAuthSubjectStatusId,
+      ),
+  );
+}
+
+function readPrincipalRoleKeys(store: Store, principalId: string): readonly string[] {
+  return uniqueStrings(
+    store
+      .facts(undefined, principalRoleBindingPrincipalPredicateId, principalId)
+      .map((edge) => edge.s)
+      .filter(
+        (bindingId) =>
+          hasEntityOfType(store, bindingId, principalRoleBindingTypeId) &&
+          getFirstObject(store, bindingId, principalRoleBindingStatusPredicateId) ===
+            activePrincipalRoleBindingStatusId,
+      )
+      .map((bindingId) => getFirstObject(store, bindingId, principalRoleBindingRoleKeyPredicateId)),
+  ).sort();
+}
+
+function readSessionPrincipalProjection(
+  store: Store,
+  principalId: string,
+  graphId: string,
+): SessionPrincipalProjection | null {
+  if (!hasEntityOfType(store, principalId, principalTypeId)) return null;
+  if (getFirstObject(store, principalId, principalStatusPredicateId) !== activePrincipalStatusId) {
+    return null;
+  }
+  if (getFirstObject(store, principalId, principalHomeGraphIdPredicateId) !== graphId) {
+    return null;
+  }
+
+  const principalKindId = getFirstObject(store, principalId, principalKindPredicateId);
+  const principalKind = principalKindId ? principalKindById.get(principalKindId) : undefined;
+  if (!principalKind) return null;
+
+  return {
+    principalId,
+    principalKind,
+    roleKeys: readPrincipalRoleKeys(store, principalId),
+    capabilityGrantIds: [],
+    capabilityVersion: 0,
+  };
+}
+
+function readProjectionSessionPrincipalProjection(
+  store: Store,
+  projectionId: string,
+  graphId: string,
+): SessionPrincipalProjection | null {
+  const principalId = getFirstObject(
+    store,
+    projectionId,
+    authSubjectProjectionPrincipalPredicateId,
+  );
+  return principalId ? readSessionPrincipalProjection(store, principalId, graphId) : null;
+}
+
+function readAuthUserPrincipalIds(store: Store, graphId: string, authUserId: string): string[] {
+  return uniqueStrings(
+    listActiveAuthUserProjectionIds(store, authUserId)
+      .map((projectionId) =>
+        getFirstObject(store, projectionId, authSubjectProjectionPrincipalPredicateId),
+      )
+      .filter((principalId): principalId is string => {
+        if (!principalId) return false;
+        return readSessionPrincipalProjection(store, principalId, graphId) !== null;
+      }),
+  );
+}
+
+function principalNeedsHomeGraphRepair(store: Store, principalId: string): boolean {
+  return !store
+    .facts(principalId, principalHomeGraphIdPredicateId)
+    .some((edge) => typeof edge.o === "string" && edge.o.trim().length > 0);
+}
+
+function listPrincipalIdsMissingHomeGraphId(store: Store): string[] {
+  return uniqueStrings(
+    store
+      .facts(undefined, typePredicateId, principalTypeId)
+      .map((edge) => edge.s)
+      .filter((principalId) => principalNeedsHomeGraphRepair(store, principalId)),
+  );
+}
+
+async function repairLegacyPrincipalHomeGraphIds(
+  authority: PersistedWebAppAuthority,
+): Promise<void> {
+  const principalIdsToRepair = listPrincipalIdsMissingHomeGraphId(authority.store);
+  if (principalIdsToRepair.length === 0) return;
+
+  const repaired = planAuthorityMutation(
+    authority.store.snapshot(),
+    `repair:principal-home-graph-id:${Date.now()}`,
+    (_mutationGraph, mutationStore) => {
+      for (const principalId of principalIdsToRepair) {
+        setSingleReferenceField(
+          mutationStore,
+          principalId,
+          principalHomeGraphIdPredicateId,
+          webAppGraphId,
+        );
+      }
+
+      return principalIdsToRepair;
+    },
+  );
+
+  if (!repaired.changed) return;
+
+  await authority.applyTransaction(repaired.transaction, {
+    writeScope: "authority-only",
+  });
+}
+
+function authSubjectLookupLabel(subject: AuthSubjectRef): string {
+  return `${subject.issuer}:${subject.provider}:${subject.providerAccountId}`;
+}
+
+function buildAuthSubjectProjectionName(subject: AuthSubjectRef): string {
+  return `Auth subject ${authSubjectLookupLabel(subject)}`;
+}
+
+function buildPrincipalName(subject: AuthSubjectRef): string {
+  return `Principal ${subject.authUserId}`;
+}
+
+function createMissingSessionPrincipalLookupError(input: SessionPrincipalLookupInput): never {
+  throw new WebAppAuthoritySessionPrincipalLookupError(
+    404,
+    "missing",
+    `No graph principal projection exists for subject "${authSubjectLookupLabel(input.subject)}" in graph "${input.graphId}".`,
+  );
+}
+
+function createConflictingSessionPrincipalLookupError(
+  input: SessionPrincipalLookupInput,
+  principalIds: readonly string[],
+): never {
+  throw new WebAppAuthoritySessionPrincipalLookupError(
+    409,
+    "conflict",
+    `Multiple active graph principals (${principalIds.join(", ")}) are linked to Better Auth user "${input.subject.authUserId}" in graph "${input.graphId}".`,
+  );
+}
+
+function createConflictingAuthSubjectProjectionError(
+  input: SessionPrincipalLookupInput,
+  projectionIds: readonly string[],
+): never {
+  throw new WebAppAuthoritySessionPrincipalLookupError(
+    409,
+    "conflict",
+    `Multiple active auth subject projections (${projectionIds.join(", ")}) exist for subject "${authSubjectLookupLabel(input.subject)}" in graph "${input.graphId}".`,
   );
 }
 
@@ -773,12 +1041,57 @@ function createAuthorizationTarget(
   };
 }
 
+function authorizationHasAuthorityAccess(authorization: AuthorizationContext): boolean {
+  return (
+    authorization.principalKind === "service" ||
+    authorization.principalKind === "agent" ||
+    authorization.roleKeys.includes(authorityRoleKey)
+  );
+}
+
+function subjectIsHiddenIdentityEntity(store: Store, subjectId: string): boolean {
+  return store
+    .facts(subjectId, typePredicateId)
+    .some((edge) => nonAuthorityHiddenIdentityTypeIds.has(edge.o));
+}
+
+function evaluateAuthorityOnlyIdentityRead(
+  authorization: AuthorizationContext,
+  subjectId: string,
+  predicateId: string,
+) {
+  return authorizeRead({
+    authorization,
+    capabilityKeys: webAppAuthorityCapabilityKeys,
+    target: {
+      subjectId,
+      predicateId,
+      policy: {
+        predicateId,
+        transportVisibility: "authority-only",
+        requiredWriteScope: "authority-only",
+        readAudience: "authority",
+        writeAudience: "authority",
+        shareable: false,
+      },
+    },
+  });
+}
+
 function evaluateReadAuthorization(
+  store: Store,
   authorization: AuthorizationContext,
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
   subjectId: string,
   predicateId: string,
 ) {
+  if (
+    !authorizationHasAuthorityAccess(authorization) &&
+    subjectIsHiddenIdentityEntity(store, subjectId)
+  ) {
+    return evaluateAuthorityOnlyIdentityRead(authorization, subjectId, predicateId);
+  }
+
   return authorizeRead({
     authorization,
     capabilityKeys: webAppAuthorityCapabilityKeys,
@@ -787,6 +1100,7 @@ function evaluateReadAuthorization(
 }
 
 function createReadableReplicationAuthorizer(
+  store: Store,
   authorization: AuthorizationContext,
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
 ): ReplicationReadAuthorizer {
@@ -796,15 +1110,18 @@ function createReadableReplicationAuthorizer(
   }
 
   return ({ subjectId, predicateId }) =>
-    evaluateReadAuthorization(authorization, compiledFieldIndex, subjectId, predicateId).allowed;
+    evaluateReadAuthorization(store, authorization, compiledFieldIndex, subjectId, predicateId)
+      .allowed;
 }
 
 function filterReadableSnapshot(
+  store: Store,
   snapshot: StoreSnapshot,
   authorization: AuthorizationContext,
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
 ): StoreSnapshot {
   const authorizeReadablePredicate = createReadableReplicationAuthorizer(
+    store,
     authorization,
     compiledFieldIndex,
   );
@@ -1052,9 +1369,14 @@ export async function createWebAppAuthority(
     createCursorPrefix: createAuthorityCursorPrefix,
     maxRetainedTransactions: options.maxRetainedTransactions,
   });
+  // Early persisted Better Auth rollouts could create graph principals without
+  // `homeGraphId`. Repair them before any sync or direct graph reads materialize
+  // those entities through the typed client.
+  await repairLegacyPrincipalHomeGraphIds(authority);
 
   function readSnapshot(options: WebAppAuthorityReadOptions): StoreSnapshot {
     return filterReadableSnapshot(
+      authority.store,
       authority.store.snapshot(),
       options.authorization,
       compiledFieldIndex,
@@ -1077,6 +1399,7 @@ export async function createWebAppAuthority(
     }
 
     const decision = evaluateReadAuthorization(
+      authority.store,
       options.authorization,
       compiledFieldIndex,
       subjectId,
@@ -1100,6 +1423,7 @@ export async function createWebAppAuthority(
 
   function createSyncPayload(options: WebAppAuthoritySyncOptions) {
     const authorizeRead = createReadableReplicationAuthorizer(
+      authority.store,
       options.authorization,
       compiledFieldIndex,
     );
@@ -1142,6 +1466,7 @@ export async function createWebAppAuthority(
     options: WebAppAuthoritySyncOptions,
   ) {
     const authorizeRead = createReadableReplicationAuthorizer(
+      authority.store,
       options.authorization,
       compiledFieldIndex,
     );
@@ -1225,6 +1550,97 @@ export async function createWebAppAuthority(
       freshness: result.freshness,
       scope: plannedScope.scope,
     });
+  }
+
+  async function lookupSessionPrincipal(
+    input: SessionPrincipalLookupInput,
+    options: WebAppAuthoritySessionPrincipalLookupOptions = {},
+  ): Promise<SessionPrincipalProjection> {
+    const exactProjectionIds = listActiveAuthSubjectProjectionIds(authority.store, input.subject);
+    if (exactProjectionIds.length > 1) {
+      createConflictingAuthSubjectProjectionError(input, exactProjectionIds);
+    }
+
+    const exactProjectionId = exactProjectionIds[0];
+    if (exactProjectionId) {
+      const resolved = readProjectionSessionPrincipalProjection(
+        authority.store,
+        exactProjectionId,
+        input.graphId,
+      );
+      if (resolved) return resolved;
+    }
+
+    const authUserPrincipalIds = readAuthUserPrincipalIds(
+      authority.store,
+      input.graphId,
+      input.subject.authUserId,
+    );
+    if (authUserPrincipalIds.length > 1) {
+      createConflictingSessionPrincipalLookupError(input, authUserPrincipalIds);
+    }
+
+    if (options.allowRepair === false) {
+      createMissingSessionPrincipalLookupError(input);
+    }
+
+    const repaired = planAuthorityMutation(
+      authority.store.snapshot(),
+      `auth-subject-repair:${Date.now()}`,
+      (mutationGraph) => {
+        const principalId =
+          authUserPrincipalIds[0] ??
+          mutationGraph.principal.create({
+            homeGraphId: input.graphId,
+            kind: core.principalKind.values.human.id,
+            name: buildPrincipalName(input.subject),
+            status: activePrincipalStatusId,
+          });
+        const mirroredAt = new Date();
+        const projectionName = buildAuthSubjectProjectionName(input.subject);
+        const projectionId =
+          exactProjectionId ??
+          mutationGraph.authSubjectProjection.create({
+            authUserId: input.subject.authUserId,
+            issuer: input.subject.issuer,
+            mirroredAt,
+            name: projectionName,
+            principal: principalId,
+            provider: input.subject.provider,
+            providerAccountId: input.subject.providerAccountId,
+            status: activeAuthSubjectStatusId,
+          });
+
+        if (exactProjectionId) {
+          mutationGraph.authSubjectProjection.update(exactProjectionId, {
+            mirroredAt,
+            name: projectionName,
+            principal: principalId,
+            status: activeAuthSubjectStatusId,
+          });
+        }
+
+        return {
+          principalId,
+          projectionId,
+        };
+      },
+    );
+
+    if (repaired.changed) {
+      await authority.applyTransaction(repaired.transaction, {
+        writeScope: "authority-only",
+      });
+    }
+
+    const resolved = readProjectionSessionPrincipalProjection(
+      authority.store,
+      repaired.result.projectionId,
+      input.graphId,
+    );
+    if (resolved) return resolved;
+
+    createMissingSessionPrincipalLookupError(input);
   }
 
   async function runWriteSecretFieldCommand(
@@ -1401,6 +1817,7 @@ export async function createWebAppAuthority(
     applyTransaction,
     createSyncPayload,
     getIncrementalSyncResult,
+    lookupSessionPrincipal,
     readPredicateValue,
     readSnapshot,
     writeSecretField,

@@ -26,6 +26,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { GraphAccessGate } from "./auth-shell.js";
 import {
   GraphRuntimeBootstrap,
   useGraphRuntime,
@@ -647,8 +648,13 @@ export function TopicBrowserSurface({ runtime }: { runtime?: GraphRuntime }) {
 
 export function TopicBrowserPage() {
   return (
-    <GraphRuntimeBootstrap>
-      <TopicBrowserSurface />
-    </GraphRuntimeBootstrap>
+    <GraphAccessGate
+      description="Resolve an authenticated Better Auth session before mounting the topic browser against the synced graph runtime."
+      title="Sign in to open the topic browser"
+    >
+      <GraphRuntimeBootstrap>
+        <TopicBrowserSurface />
+      </GraphRuntimeBootstrap>
+    </GraphAccessGate>
   );
 }

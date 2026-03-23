@@ -102,24 +102,45 @@ Repo:
 
 Repo:
 
-- `src/web/worker/index.ts` does not parse any request session at all.
-  `createRequestAuthorizationContext(...)` ignores the request and always
-  returns a hardcoded service principal:
-  - `principalId = "principal:web-operator"`
-  - `principalKind = "service"`
-  - `roleKeys = ["graph:authority"]`
-  - `sessionId = "session:web-operator"`
-- `src/web/lib/auth-bridge.ts` defines the projection seam, but it does not
-  know anything about Better Auth's session shape, cookies, or route handlers.
-- There is no Better Auth dependency in `package.json`.
-- There is no Better Auth Worker route mounted at `/api/auth/*`.
-- There is no Better Auth client in `src/web/*`.
-- There is no D1 binding or other dedicated auth database binding in
-  `wrangler.jsonc`.
-- There is no implemented lookup from `AuthSubjectRef` to
-  `core:authSubjectProjection`.
-- There is no implemented first-use repair or creation flow for missing graph
-  principals or auth subject projections.
+- `src/web/worker/index.ts` now verifies Better Auth session state for
+  `/api/sync`, `/api/tx`, and `/api/commands`, bypasses Better Auth's cookie
+  cache on those graph routes, reduces verified session state into the repo's
+  stable `AuthenticatedSession` contract, and forwards anonymous requests as
+  anonymous instead of defaulting every browser request to the operator
+  principal.
+- `src/web/lib/auth-bridge.ts` now keeps the stable projection seam and also
+  owns the Better Auth-specific reduction helpers that turn Worker session
+  results into `AuthenticatedSession | null` before principal lookup runs.
+- `package.json` now carries pinned `better-auth` runtime and the current
+  Better Auth `auth` CLI migration dependency.
+- `auth.ts` now gives the Better Auth CLI a repo-local config entrypoint for
+  generating committed auth-store SQL migrations.
+- `src/web/lib/better-auth.ts` now owns the shared Better Auth Worker factory
+  and stable `/api/auth` base path, including optional trusted-origin env
+  parsing.
+- `src/web/worker/index.ts` now mounts `/api/auth/*` through that shared
+  Better Auth handler before graph API forwarding and SPA asset handling.
+- `src/web/lib/auth-client.ts` now provides the shared Better Auth SPA client
+  wrapper for same-origin session reads.
+- `src/web/components/auth-shell.tsx` now exposes the minimal signed-in or
+  signed-out shell behavior, including sign-in, sign-out, and a provisional
+  email/password create-account flow for local demos.
+- graph-backed routes now gate `GraphRuntimeBootstrap` behind that client-side
+  session check instead of mounting the full graph proof surface for anonymous
+  browsers by default.
+- `wrangler.jsonc` now declares a dedicated `AUTH_DB` D1 binding with a
+  separate `migrations/auth-store` path and `better_auth_migrations` table.
+- `src/web/lib/graph-authority-do.ts` now exposes a Worker-only internal fetch
+  path that resolves a verified auth subject through the authority before the
+  public graph routes are forwarded.
+- `src/web/lib/authority.ts` now resolves `AuthSubjectRef` through
+  `core:authSubjectProjection`, projects principal kind plus active role
+  bindings into `SessionPrincipalProjection`, and repairs missing exact-subject
+  projections or missing principals idempotently on first authenticated use.
+  Authority bootstrap also repairs legacy persisted `core:principal` rows that
+  are missing the required `homeGraphId`, and non-authority sync/read paths now
+  exclude graph-owned identity entities entirely so required authority-only
+  fields never reach browser replication as partial invalid entities.
 - `capabilityGrantIds` and capability grant lookup are only placeholders today.
 - `policyVersion` is a hardcoded constant (`0`) in both the Worker and the
   authority runtime.
@@ -130,8 +151,9 @@ Repo:
 
 - `doc/branch/02-identity-policy-and-sharing.md` says the auth bridge should be
   able to repair or create missing projections on first authenticated use. The
-  current implementation does not attempt repair; it would only throw
-  `auth.principal_missing` if a real lookup returned `null`.
+  current implementation now does that synchronously in the authority-owned DO
+  path, while still failing closed with explicit missing or conflict errors
+  when repair cannot produce a single principal.
 - `doc/03-target-platform-architecture.md` says session claims may include graph
   principal id plus capability snapshot or version. The current stable contract
   in `src/graph/runtime/contracts.ts` does not trust or require that. The
@@ -142,9 +164,10 @@ Repo:
   - `status`
   - `homeGraphId`
   - `personId`
-- `doc/web/index.md` says the Worker resolves a request-bound
-  `AuthorizationContext` through the auth bridge, but in practice that context
-  is still the hardcoded operator service principal for every browser request.
+- `doc/web/index.md` now matches the current Worker behavior: anonymous graph
+  requests stay anonymous, authenticated requests reduce through the auth
+  bridge, and authenticated requests without a graph principal projection fail
+  closed with `auth.principal_missing`.
 
 ## Ownership Boundary
 
@@ -406,7 +429,7 @@ the single browser-facing host.
 
 ### Better Auth Factory Shape
 
-Recommended new file:
+Current repo file:
 
 - `src/web/lib/better-auth.ts`
 
@@ -421,6 +444,9 @@ export function createBetterAuth(env: Env) {
     basePath: "/api/auth",
     secret: env.BETTER_AUTH_SECRET,
     database: env.AUTH_DB,
+    trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
     // provider config here
   });
 }
@@ -435,7 +461,7 @@ interface Env {
   AUTH_DB: D1Database;
   BETTER_AUTH_URL: string;
   BETTER_AUTH_SECRET: string;
-  BETTER_AUTH_SECRETS?: string;
+  BETTER_AUTH_TRUSTED_ORIGINS?: string;
   // provider-specific env vars, e.g. GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 }
 ```
@@ -955,29 +981,30 @@ This makes:
 
 ### Runtime And Dependency Changes
 
+The repo now includes the runtime foundation described here:
+
 1. `package.json`
-   - add `better-auth`
-   - add any provider packages only if the chosen provider requires them
+   - committed `better-auth` runtime and `auth` CLI migration tooling
 2. `wrangler.jsonc`
-   - add a D1 binding for Better Auth, for example `AUTH_DB`
-   - keep `nodejs_compat`
-   - keep `GRAPH_AUTHORITY` and `ASSETS`
+   - a dedicated `AUTH_DB` D1 binding
+   - a separate `migrations/auth-store` path plus `better_auth_migrations`
+   - the existing `nodejs_compat`, `GRAPH_AUTHORITY`, and `ASSETS` surfaces
 3. auth database migrations
-   - add a committed Better Auth schema migration workflow for D1
-   - do not overload the Durable Object migration block for Better Auth tables
+   - a committed Better Auth SQL migration workflow rooted at `auth.ts`
+   - a dedicated D1 migration path outside the Durable Object migration block
 
 ### File-By-File Change Plan
 
 `src/web/lib/better-auth.ts`
 
-- create the Better Auth instance factory
+- keep the shared Better Auth instance factory
 - configure:
   - `baseURL`
   - `basePath`
-  - `secret` or `secrets`
+  - `secret`
   - `database: env.AUTH_DB`
-  - chosen providers
   - optional `trustedOrigins`
+  - chosen providers as follow-on auth UX work needs them
 
 `src/web/lib/auth-bridge.ts`
 
@@ -989,7 +1016,7 @@ This makes:
 
 `src/web/worker/index.ts`
 
-- mount `/api/auth/*`
+- keep `/api/auth/*` mounted through the shared Better Auth handler
 - replace `createRequestAuthorizationContext(...)` with:
   - Better Auth session verification
   - reduction to `AuthenticatedSession`
@@ -999,19 +1026,21 @@ This makes:
 
 `src/web/lib/graph-authority-do.ts`
 
-- add an internal authority lookup/repair seam callable by the Worker before the
-  public graph request is forwarded
-- recommended shape:
-  - internal DO fetch path not routed publicly by the Worker, or
-  - Durable Object RPC if the repo adopts that style later
+- now exposes an internal authority lookup/repair seam callable by the Worker
+  before the public graph request is forwarded
+- current shape:
+  - an internal DO fetch path not routed publicly by the Worker
+  - still compatible with a future Durable Object RPC migration if the repo
+    adopts that style later
 
 `src/web/lib/authority.ts`
 
-- implement authority-owned helpers to:
+- now implements authority-owned helpers to:
   - resolve a subject projection
   - resolve principal kind
   - resolve active role bindings
   - create missing principal and projection rows transactionally
+  - detect multi-principal conflicts for one auth user and fail closed
   - later resolve capability grants
 - keep final read, write, and command enforcement where it already lives
 
@@ -1077,7 +1106,8 @@ or sharing already exist.
 
 ### Next Slice
 
-1. Add signed-out and sign-in UI in the SPA.
+1. Refine the new minimal signed-out and sign-in SPA shell into a fuller auth
+   product surface.
 2. Add an explicit operator bootstrap or allowlist rule for initial role
    assignment.
 3. Add graph-backed principal summary/bootstrap payload for the app shell.
@@ -1231,13 +1261,15 @@ The repo already has the right long-term contract boundary:
 - the Worker reduces and forwards request auth context
 - the graph authority authorizes
 
-What it does not have yet is the concrete Better Auth runtime wiring. The key
-work is not "add a login page." The key work is:
+What it still does not have yet is the full end-user auth product surface. The
+remaining work is:
 
-- replacing the hardcoded operator context in `src/web/worker/index.ts`
-- adding a dedicated Better Auth store and Worker mount
-- implementing graph-owned subject lookup and repair
-- keeping role assignment graph-owned instead of sign-in-owned
+- refining the minimal Better Auth client shell into a fuller account and auth
+  product surface
+- adding an explicit bootstrap or allowlist rule for initial role assignment
+- adding capability grants and non-zero `capabilityVersion`
 
-That is the path from the current proof surface to a real end-to-end Better
-Auth integration in this repo.
+The repo now has the core runtime path needed for real authenticated principal
+projection: Better Auth verifies the session, the Worker reduces it, and the
+graph authority resolves or repairs graph-owned identity before authorization
+continues.

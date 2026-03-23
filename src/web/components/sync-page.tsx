@@ -12,6 +12,7 @@ import {
   webSyncProofScopeOptions,
   type WebSyncProofScopeKey,
 } from "../lib/sync-scopes.js";
+import { GraphAccessGate } from "./auth-shell.js";
 import { ExplorerSyncInspector } from "./explorer/index.js";
 import { useExplorerSyncSnapshot } from "./explorer/sync.js";
 import {
@@ -177,8 +178,13 @@ export function SyncPage({ scopeKey = "graph" }: { scopeKey?: WebSyncProofScopeK
   const requestedScope = resolveWebSyncProofRequestedScope(scopeKey);
 
   return (
-    <GraphRuntimeBootstrap requestedScope={requestedScope}>
-      <SyncPageSurfaceFromRuntime scopeKey={scopeKey} />
-    </GraphRuntimeBootstrap>
+    <GraphAccessGate
+      description="The sync inspector only mounts after the shell resolves an authenticated Better Auth session."
+      title="Sign in to inspect graph sync"
+    >
+      <GraphRuntimeBootstrap requestedScope={requestedScope}>
+        <SyncPageSurfaceFromRuntime scopeKey={scopeKey} />
+      </GraphRuntimeBootstrap>
+    </GraphAccessGate>
   );
 }

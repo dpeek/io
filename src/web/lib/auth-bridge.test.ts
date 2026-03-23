@@ -2,7 +2,12 @@ import { describe, expect, it } from "bun:test";
 
 import type { AuthSubjectRef, AuthenticatedSession } from "@io/core/graph";
 
-import { createAnonymousAuthorizationContext, projectSessionToPrincipal } from "./auth-bridge.js";
+import {
+  createAnonymousAuthorizationContext,
+  createWorkerAuthorizationContext,
+  projectSessionToPrincipal,
+  reduceBetterAuthSession,
+} from "./auth-bridge.js";
 
 const subject = {
   issuer: "better-auth",
@@ -19,6 +24,32 @@ function createSession(sessionId: string): AuthenticatedSession {
 }
 
 describe("web auth bridge", () => {
+  it("reduces a Better Auth session result into the stable authenticated-session contract", () => {
+    expect(
+      reduceBetterAuthSession({
+        session: { id: "session-better-auth" },
+        user: { id: "user-better-auth" },
+      }),
+    ).toEqual({
+      sessionId: "session-better-auth",
+      subject: {
+        issuer: "better-auth",
+        provider: "user",
+        providerAccountId: "user-better-auth",
+        authUserId: "user-better-auth",
+      },
+    });
+  });
+
+  it("fails closed when Better Auth returns a malformed session payload", () => {
+    expect(() =>
+      reduceBetterAuthSession({
+        session: { id: "" },
+        user: { id: "user-better-auth" },
+      }),
+    ).toThrow('Better Auth session payload must include a non-empty "session.id" string.');
+  });
+
   it("returns an anonymous authorization context when no authenticated session is present", async () => {
     const context = await projectSessionToPrincipal({
       graphId: "graph-1",
@@ -97,6 +128,43 @@ describe("web auth bridge", () => {
       { graphId: "graph-1", subject },
       { graphId: "graph-1", subject },
     ]);
+  });
+
+  it("creates a worker authorization context from Better Auth session state", async () => {
+    const context = await createWorkerAuthorizationContext({
+      graphId: "graph-1",
+      policyVersion: 5,
+      betterAuthSession: {
+        session: { id: "session-better-auth" },
+        user: { id: "user-better-auth" },
+      },
+      lookupPrincipal({ graphId, subject }) {
+        expect(graphId).toBe("graph-1");
+        expect(subject).toEqual({
+          issuer: "better-auth",
+          provider: "user",
+          providerAccountId: "user-better-auth",
+          authUserId: "user-better-auth",
+        });
+
+        return {
+          principalId: "principal-1",
+          principalKind: "human",
+          roleKeys: ["graph:member"],
+        };
+      },
+    });
+
+    expect(context).toEqual({
+      graphId: "graph-1",
+      principalId: "principal-1",
+      principalKind: "human",
+      sessionId: "session-better-auth",
+      roleKeys: ["graph:member"],
+      capabilityGrantIds: [],
+      capabilityVersion: 0,
+      policyVersion: 5,
+    });
   });
 
   it("fails closed when an authenticated subject has no graph principal projection", async () => {

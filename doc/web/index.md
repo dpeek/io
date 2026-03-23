@@ -11,7 +11,13 @@ inspector shell, draft-backed generic create flow for supported entity types,
 and opt-in debug disclosures for raw ids and keys. Its authoritative graph path
 now runs through a raw-SQL SQLite-backed Durable Object adapter that retains a
 bounded transaction window and keeps secret plaintext in authority-only side
-storage.
+storage. The current auth foundation now also reserves a dedicated Better Auth
+D1 store and migration path that stays separate from the graph authority's
+SQLite Durable Object storage. The current shell now also reads Better Auth
+session state client-side, exposes minimal email/password sign-in and sign-out
+controls, and gates graph runtime bootstrap until the browser resolves an
+authenticated session. That create-account path is still a provisional local
+demo surface rather than a finished account-management product.
 
 ## Ownership Boundary
 
@@ -40,6 +46,7 @@ generic shared command transport.
 ## Docs
 
 - `../index.md`
+- `./auth-store.md`
 - `../storage.md`
 - `./explorer.md`
 - `../graph/spec/refs-and-ui.md`
@@ -48,8 +55,17 @@ generic shared command transport.
 
 - `../../src/web/router.tsx`, `../../src/web/routeTree.gen.ts`: router assembly
   and generated route tree for the canonical `/graph` explorer route
+- `../../auth.ts`: Better Auth CLI config entrypoint that keeps schema
+  generation on a dedicated auth-store path without coupling it to the Worker's
+  runtime bindings
 - `../../src/web/routes/`: top-level pages including `topics`, `sync`, and the
   graph explorer routes
+- `../../src/web/components/home-page.tsx`: session-aware landing page that
+  keeps the signed-out auth entry flow and the signed-in bootstrap summary in
+  one place
+- `../../src/web/components/auth-shell.tsx`: Better Auth session hook,
+  sign-in/sign-out chrome, provisional create-account form, and the gate that
+  keeps graph surfaces from booting until session state is known
 - `../../src/web/components/graph-runtime-bootstrap.tsx`: shared synced graph
   runtime bootstrap for browser pages
 - `../../src/web/components/explorer/index.ts`: explorer entrypoint for the
@@ -83,19 +99,32 @@ generic shared command transport.
 - `../../src/web/lib/graph-authority-do.ts`: SQLite-backed Durable Object
   adapter that bootstraps graph tables in the constructor, hydrates retained
   history during authority init, commits graph and secret side-storage changes
-  in one Durable Object storage transaction, and prunes old transaction rows
+  in one Durable Object storage transaction, prunes old transaction rows, and
+  now exposes an internal Worker-only auth-subject lookup-and-repair seam ahead
+  of the public graph routes
+- `../../src/web/lib/better-auth.ts`: shared Better Auth option/factory helper
+  for the dedicated `AUTH_DB` binding, optional trusted-origin wiring, the
+  stable `/api/auth` base path, and the minimal email/password browser demo
+  flow
+- `../../src/web/lib/auth-client.ts`: Better Auth React client helper plus the
+  derived shell session-state projection consumed by the SPA
 - `../../src/web/lib/authority.ts`: shared web authority behavior, secret-field
   mutation flow, the current web-owned `/api/commands` envelope, the shared
   write/command authorization seam, principal-aware sync filtering that omits
-  denied predicates from total and incremental sync payloads, direct-read
-  helpers that omit denied predicates from snapshot-style reads and fail
-  explicit protected predicate reads with stable `policy.read.forbidden`
+  denied predicates from total and incremental sync payloads, excludes
+  graph-owned identity entities from non-authority snapshot and sync surfaces
+  so required authority-only fields never leak partial invalid entities,
+  direct-read helpers that omit denied predicates from snapshot-style reads and
+  fail explicit protected predicate reads with stable `policy.read.forbidden`
   errors, explicit `policyVersion` fail-closed checks for authority-owned read,
-  authority-planned module-scoped sync for the first named
-  `ops/workflow` review scope over `/api/sync`, and the storage
-  abstraction consumed by both tests and the Durable Object adapter, including
-  an opt-out seeded-example bootstrap path used by web authority tests plus a
-  cached graph-metadata/bootstrap path for repeated authority construction
+  `/api/sync`, `/api/tx`, and `/api/commands` paths, authority-planned
+  module-scoped sync for the first named `ops/workflow` review scope over
+  `/api/sync`, authority-owned auth subject resolution with idempotent
+  first-use principal/projection repair plus active role binding lookup, and
+  the storage abstraction consumed by both tests and the Durable Object
+  adapter, including an opt-out seeded-example bootstrap path used by web
+  authority tests plus a cached graph-metadata/bootstrap path for repeated
+  authority construction
 - `../../src/web/lib/authority-test-helpers.ts`: no-seed test authority
   factory plus cached persisted workflow baseline helpers for the slow web
   authority and Durable Object suites
@@ -111,9 +140,15 @@ generic shared command transport.
 - `../../src/web/lib/example-runtime.test.ts`: sync proof coverage for the
   web-owned example runtime fixture
 - `../../src/web/worker/index.ts`: Worker entrypoint for SPA assets and graph
-  APIs. It now resolves a request-bound `AuthorizationContext` through the
-  shared web auth bridge and forwards that stable contract to the Durable
-  Object authority path, while the host-specific request/session parsing and
-  relay details remain provisional. Until Branch 7 supplies non-anonymous
-  browser principals, the write/command path intentionally fails closed for
-  callers that do not meet the current authority policy contract.
+  APIs. It mounts the shared Better Auth handler at `/api/auth/*`, then
+  resolves a request-bound `AuthorizationContext` for graph routes and forwards
+  that stable contract to the Durable Object authority path. The current worker
+  now verifies Better Auth sessions with cookie-cache bypass for graph
+  requests, reduces them into the repo's stable `AuthenticatedSession` shape,
+  forwards anonymous requests as anonymous, resolves authenticated subjects
+  through the Durable Object's internal lookup-and-repair seam, and fails
+  closed when an authenticated session still lacks a graph principal
+  projection.
+- `../../migrations/auth-store/`: committed Better Auth schema migrations for
+  the dedicated D1 auth store, applied separately from Durable Object
+  migrations

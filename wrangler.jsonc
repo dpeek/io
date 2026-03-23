@@ -13,6 +13,16 @@
       },
     ],
   },
+  "d1_databases": [
+    {
+      "binding": "AUTH_DB",
+      "database_name": "io-better-auth",
+      // Populate the environment-specific database ids after provisioning the
+      // dedicated Better Auth store with `wrangler d1 create`.
+      "migrations_table": "better_auth_migrations",
+      "migrations_dir": "./migrations/auth-store",
+    },
+  ],
   "migrations": [
     {
       "tag": "v1",

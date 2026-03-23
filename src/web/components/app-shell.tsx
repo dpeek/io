@@ -17,6 +17,8 @@ import {
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { AppShellAuthStatus } from "./auth-shell.js";
+
 const navigationItems = [
   { to: "/", label: "Home", exact: true },
   { to: "/topics", label: "Topics", exact: false },
@@ -70,6 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="border-border/70 flex h-12 items-center gap-2 border-b px-4">
           <SidebarTrigger />
           <span className="text-sm font-medium">IO</span>
+          <AppShellAuthStatus />
         </header>
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-6">{children}</div>
       </SidebarInset>

@@ -5,6 +5,7 @@ import type {
   PersistedAuthoritativeGraphStoragePersistInput as DurableAuthorityPersistInput,
 } from "@io/core/graph";
 
+import type { SessionPrincipalLookupInput } from "./auth-bridge.js";
 import type {
   WebAppAuthority,
   WebAppAuthorityOptions,
@@ -12,7 +13,7 @@ import type {
   WebAppAuthoritySecretWrite,
   WebAppAuthorityStorage,
 } from "./authority.js";
-import { createWebAppAuthority } from "./authority.js";
+import { createWebAppAuthority, WebAppAuthoritySessionPrincipalLookupError } from "./authority.js";
 import {
   handleWebCommandRequest,
   RequestAuthorizationContextError,
@@ -99,6 +100,7 @@ type SecretValueRow = {
 
 const durableObjectAuthoritySchemaVersion = 1;
 const defaultMaxRetainedTransactions = 128;
+export const webGraphAuthoritySessionPrincipalLookupPath = "/_internal/session-principal";
 
 type WebGraphAuthorityFactory = (
   storage: WebAppAuthorityStorage,
@@ -173,6 +175,68 @@ function requireWriteScope(value: unknown, label: string): AuthoritativeWriteSco
 function requireNullableString(value: unknown, label: string): string | null {
   if (value === null) return null;
   return requireString(value, label);
+}
+
+class SessionPrincipalLookupRequestError extends Error {
+  readonly status = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "SessionPrincipalLookupRequestError";
+  }
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function requireNonEmptyRequestString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new SessionPrincipalLookupRequestError(
+      `Session principal lookup request must include a non-empty "${label}" string.`,
+    );
+  }
+
+  return value;
+}
+
+async function readSessionPrincipalLookupInput(
+  request: Request,
+): Promise<SessionPrincipalLookupInput> {
+  let decoded: unknown;
+  try {
+    decoded = await request.json();
+  } catch {
+    throw new SessionPrincipalLookupRequestError(
+      "Session principal lookup request must be valid JSON.",
+    );
+  }
+
+  if (!isObjectRecord(decoded)) {
+    throw new SessionPrincipalLookupRequestError(
+      "Session principal lookup request must be a JSON object.",
+    );
+  }
+
+  const subject = decoded.subject;
+  if (!isObjectRecord(subject)) {
+    throw new SessionPrincipalLookupRequestError(
+      'Session principal lookup request must include an object "subject".',
+    );
+  }
+
+  return {
+    graphId: requireNonEmptyRequestString(decoded.graphId, "graphId"),
+    subject: {
+      issuer: requireNonEmptyRequestString(subject.issuer, "subject.issuer"),
+      provider: requireNonEmptyRequestString(subject.provider, "subject.provider"),
+      providerAccountId: requireNonEmptyRequestString(
+        subject.providerAccountId,
+        "subject.providerAccountId",
+      ),
+      authUserId: requireNonEmptyRequestString(subject.authUserId, "subject.authUserId"),
+    },
+  };
 }
 
 function readGraphMetaRow(sql: DurableObjectSqlStorageLike): {
@@ -889,8 +953,66 @@ export class WebGraphAuthorityDurableObject {
     return pending;
   }
 
+  private async handleSessionPrincipalLookupRequest(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return new Response("Method Not Allowed", {
+        status: 405,
+        headers: { allow: "POST" },
+      });
+    }
+
+    let input: SessionPrincipalLookupInput;
+    try {
+      input = await readSessionPrincipalLookupInput(request);
+    } catch (error) {
+      if (error instanceof SessionPrincipalLookupRequestError) {
+        return Response.json(
+          { error: error.message },
+          {
+            status: error.status,
+            headers: {
+              "cache-control": "no-store",
+            },
+          },
+        );
+      }
+      throw error;
+    }
+
+    try {
+      const authority = await this.getAuthority();
+      return Response.json(await authority.lookupSessionPrincipal(input), {
+        headers: {
+          "cache-control": "no-store",
+        },
+      });
+    } catch (error) {
+      if (error instanceof WebAppAuthoritySessionPrincipalLookupError) {
+        return Response.json(
+          {
+            error: error.message,
+            code: error.code,
+          },
+          {
+            status: error.status,
+            headers: {
+              "cache-control": "no-store",
+            },
+          },
+        );
+      }
+      throw error;
+    }
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === webGraphAuthoritySessionPrincipalLookupPath) {
+      return this.state.blockConcurrencyWhile(() =>
+        this.handleSessionPrincipalLookupRequest(request),
+      );
+    }
+
     if (
       url.pathname !== "/api/sync" &&
       url.pathname !== "/api/tx" &&
