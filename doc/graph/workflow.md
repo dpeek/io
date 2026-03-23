@@ -12,7 +12,7 @@ commit records that map that logical work onto git reality.
 ## Graph Shape
 
 The canonical workflow slice lives alongside this doc under
-`../../../../src/graph/modules/ops/workflow/`.
+`../../src/graph/modules/ops/workflow/`.
 
 The exported surface is:
 

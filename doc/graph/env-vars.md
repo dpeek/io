@@ -14,7 +14,7 @@ is consumer-owned today rather than a graph-published command surface.
 ## Graph Shape
 
 The canonical ops slice lives alongside this doc under
-`../../../../src/graph/modules/ops/env-var/`. The slice uses the standard
+`../../src/graph/modules/ops/env-var/`. The slice uses the standard
 per-type module shape:
 
 - `type.ts`: defines the env-var type and validation helpers
@@ -22,7 +22,7 @@ per-type module shape:
   `buildSecretHandleName(...)` helper
 
 The referenced secret-handle type lives under
-`../../../../src/graph/modules/core/secret/`.
+`../../src/graph/modules/core/secret/`.
 
 Together, the env-var proof models:
 

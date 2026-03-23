@@ -39,6 +39,11 @@ canonical; these files reorganize them into reviewable slices.
     contract boundaries, major risks, phased plan, research questions, platform
     anchors, and the closing recommendation
 
+## Working Docs
+
+- [`perf.md`](./perf.md): measured test-performance baseline, primary
+  bottlenecks, and the current optimization plan for `bun test ./src`
+
 ## Branch Docs
 
 - [`branch/README.md`](./branch/README.md): platform branches as parallel

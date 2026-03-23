@@ -18,13 +18,11 @@ export default defineIoConfig({
   context: {
     entrypoint: "./io.md",
     docs: {
-      "project.backlog": "./src/agent/skill/backlog.md",
-      "project.goals": "./src/agent/index.md",
-      "project.mcp": "./src/mcp.md",
-      "project.module-stream-workflow-plan": "./src/agent/workflow.md",
-      "project.overview": "./src/index.md",
-      "project.review": "./src/agent/skill/review.md",
-      "project.workflow": "./src/agent/workflow.md",
+      "project.backlog": "./doc/agent/backlog.md",
+      "project.mcp": "./doc/graph/mcp.md",
+      "project.overview": "./doc/index.md",
+      "project.review": "./doc/agent/review.md",
+      "project.workflow": "./doc/agent/workflow.md",
     },
     profiles: {
       backlog: {
@@ -67,28 +65,13 @@ export default defineIoConfig({
   modules: {
     agent: {
       allowedSharedPaths: ["./src"],
-      docs: ["./src/agent/index.md", "./src/agent/workflow.md"],
+      docs: ["./doc/agent/index.md", "./doc/agent/workflow.md"],
       path: "./src/agent",
-    },
-    cli: {
-      allowedSharedPaths: ["./src"],
-      docs: ["./src/cli/index.md"],
-      path: "./src/cli",
-    },
-    config: {
-      allowedSharedPaths: ["./src"],
-      docs: ["./src/lib/index.md"],
-      path: "./src/config",
     },
     graph: {
       allowedSharedPaths: ["./src"],
-      docs: ["./src/graph/index.md", "./src/graph/icon.md", "./src/graph/spec/architecture.md"],
+      docs: ["./doc/graph/index.md", "./doc/graph/icon.md", "./doc/graph/architecture.md"],
       path: "./src/graph",
-    },
-    lib: {
-      allowedSharedPaths: ["./src"],
-      docs: ["./src/lib/index.md"],
-      path: "./src/lib",
     },
   },
   install: {

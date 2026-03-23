@@ -29,26 +29,34 @@ compose shared `@io/web` primitives rather than duplicate browser chrome.
 
 ## Start Here
 
-- `../storage.md`: SQLite-backed Durable Object authority storage and
-  persistence boundaries
-- `./modules/index.md`: built-in namespace ownership and module package
+- [`storage.md`](./storage.md): SQLite-backed Durable Object authority storage
+  and persistence boundaries
+- [`modules.md`](./modules.md): built-in namespace ownership and module package
   subpaths
-- `./adapters/index.md`: host-neutral React versus host-specific adapter
-  ownership
-- `./spec/architecture.md`: durable engine model and package boundaries
-- `./icon.md`: graph-owned SVG/icon types, sanitization, and field behavior
-- `./runtime/authority.md`: authority boundaries, predicate visibility, typed
-  business methods, and secrets
-- `./spec/runtime.md`: schema authoring, id maps, bootstrap, store behavior,
-  and persisted authority helpers
-- `./spec/validation.md`: local and authoritative validation lifecycle plus
-  result surfaces
-- `./runtime/sync.md`: total snapshot bootstrap, retained history recovery,
+- [`adapters.md`](./adapters.md): host-neutral React versus host-specific
+  adapter ownership
+- [`architecture.md`](./architecture.md): durable engine model and package
+  boundaries
+- [`icon.md`](./icon.md): graph-owned SVG/icon types, sanitization, and field
+  behavior
+- [`authority.md`](./authority.md): authority boundaries, predicate
+  visibility, typed business methods, and secrets
+- [`runtime.md`](./runtime.md): schema authoring, id maps, bootstrap, store
+  behavior, and persisted authority helpers
+- [`validation.md`](./validation.md): local and authoritative validation
+  lifecycle plus result surfaces
+- [`sync.md`](./sync.md): total snapshot bootstrap, retained history recovery,
   incremental write reconciliation, and sync state
-- `./runtime/type-module.md`: scalar and enum module contracts, field
-  metadata/filter contracts, and root-safe UI-adjacent specs
-- `./spec/refs-and-ui.md`: typed refs, predicate-slot subscriptions,
-  reference policies, and the React/adapter split
+- [`type-modules.md`](./type-modules.md): scalar and enum module contracts,
+  field metadata/filter contracts, and root-safe UI-adjacent specs
+- [`refs-and-ui.md`](./refs-and-ui.md): typed refs, predicate-slot
+  subscriptions, reference policies, and the React/adapter split
+- [`env-vars.md`](./env-vars.md): env-var schema, secret-handle usage, and the
+  current secret-write command seam
+- [`workflow.md`](./workflow.md): workflow schema, command envelope, and
+  repository-backed execution modeling
+- [`mcp.md`](./mcp.md): stdio MCP surface, opt-in CRUD writes, and the
+  command-oriented roadmap
 
 ## Canonical Package Exports
 
@@ -58,7 +66,8 @@ The graph package publishes these subpaths from `../../package.json`:
   `../../src/graph/runtime/index.ts` plus graph-owned icon helpers from
   `../../src/graph/icon.ts`
 - `@io/core/graph/runtime`: `../../src/graph/runtime/index.ts`; runtime,
-  store, sync, schema, type-module, and reference-policy surface
+  persisted-authority, authorization, store, sync, schema, HTTP client,
+  type-module, and reference-policy surface
 - `@io/core/graph/runtime/react`: `../../src/graph/runtime/react/index.ts`;
   host-neutral React hooks and resolver primitives
 - `@io/core/graph/authority`: `../../src/graph/runtime/authority.ts`;
@@ -82,8 +91,9 @@ subpaths.
 ## Source Layout
 
 - `../../src/graph/runtime/`: runtime kernel, schema authoring contracts, ids,
-  bootstrap, typed client layers, sync, persisted-authority contracts, and
-  the file-backed JSON adapter used outside the web Durable Object path
+  bootstrap, typed client layers, authorization, sync, persisted-authority
+  contracts, HTTP transport helpers, reference-policy helpers, and the
+  file-backed JSON adapter used outside the web Durable Object path
 - `../../src/graph/runtime/react/`: host-neutral React helpers for entity and
   predicate access, mutation validation, persisted mutation state, and resolver
   primitives

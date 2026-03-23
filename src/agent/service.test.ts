@@ -1130,7 +1130,7 @@ test("AgentService does not auto-run released feature leaves without task childr
   }
 });
 
-test("AgentService moves successful task issues into In Review after landing on the feature branch", async () => {
+test("AgentService moves successful task issues into Done after landing on the feature branch", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "agent-service-"));
   const workspacePath = resolve(root, "workspace", "workers", "OPE-58", "repo");
   const transitions: string[] = [];
@@ -1209,7 +1209,7 @@ test("AgentService moves successful task issues into In Review after landing on 
     });
 
     await service.start();
-    expect(transitions).toEqual(["task-1:In Progress", "task-1:In Review"]);
+    expect(transitions).toEqual(["task-1:In Progress", "task-1:Done"]);
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -1679,7 +1679,7 @@ test("AgentService proves the OPE-121 workflow by running only the leaf task", a
     await service.start();
     expect(prepared).toEqual(["OPE-172"]);
     expect(runs).toEqual(["OPE-172"]);
-    expect(transitions).toEqual(["task-1:In Progress", "task-1:In Review"]);
+    expect(transitions).toEqual(["task-1:In Progress", "task-1:Done"]);
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -1998,7 +1998,7 @@ test("AgentService retries timed out runs once per supervisor cycle", async () =
     expect(prompts).toHaveLength(2);
     expect(prompts[0]).toContain("- Attempt: 1");
     expect(prompts[1]).toContain("- Attempt: 2");
-    expect(transitions).toEqual(["1:In Progress", "1:In Review"]);
+    expect(transitions).toEqual(["1:In Progress", "1:Done"]);
     expect(events).toEqual(["before", "after", "before", "after", "complete"]);
   } finally {
     await rm(root, { force: true, recursive: true });

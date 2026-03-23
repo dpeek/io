@@ -56,6 +56,8 @@ dispatcher.
 
 Stable shared surface:
 
+- authorization snapshots plus `authorizeRead(...)`, `authorizeWrite(...)`,
+  and `authorizeCommand(...)`
 - field-authority metadata and write-scope values
 - graph write transactions and authoritative write results
 - sync payloads and persisted-authority APIs

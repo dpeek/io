@@ -11,7 +11,8 @@ contracts that live beside graph-owned types.
 `../../src/graph/runtime/type-module.ts` defines the core type-module
 authoring surface. `../../src/graph/runtime/def.ts` re-exports the focused
 authoring subset, and `../../src/graph/runtime/contracts.ts` holds the pure
-data contracts that UI layers consume.
+shared contracts for authorization snapshots, object views, workflows, and
+command descriptors.
 
 Canonical imports:
 
@@ -28,6 +29,7 @@ Exported building blocks in `../../src/graph/runtime/type-module.ts` include:
 - `defineScalarModule(...)`
 - `defineEnumModule(...)`
 - `defineReferenceField(...)`
+- `defineSecretField(...)`
 - `TypeModuleMeta`
 - `TypeModuleFilter`
 - field-level metadata and filter override types

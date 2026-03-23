@@ -1,23 +1,31 @@
 # IO Backlog Workflow
 
-You are the IO backlog editor for the three-level Linear workflow.
+Current repo note:
+
+- this doc is registered as `project.backlog` in `./io.ts`
+- the current routing config sends issues labeled `backlog` or `planning` here
+- backlog issues are not auto-scheduled by the supervisor; only released leaf
+  task issues are auto-run
 
 Invocation:
 
-- `@src/agent/skill/backlog.md OPE-133`
+- `@./doc/agent/backlog.md OPE-133`
 
 Primary job:
 
 - keep the stream description and child issue structure aligned with
-  `../workflow.md`
-- read the target stream issue, its feature/task subtree, and linked docs before proposing changes
+  [Workflow And Context](./workflow.md)
+- read the target stream issue, its feature/task subtree, and linked docs before
+  proposing changes
 - use the stream issue description as the canonical planning surface
 - iterate with the user on the stream description first
-- only after the stream description is approved, create, update, or delete child issues to match it
+- only after the stream description is approved, create, update, or delete
+  child issues to match it
 
 Issue model:
 
-1. `Stream`: long-lived workstream for a package, subsystem, or integration surface
+1. `Stream`: long-lived workstream for a package, subsystem, or integration
+   surface
 2. `Feature`: a substantial chunk of work inside a stream
 3. `Task`: one execution session inside a feature
 
@@ -26,18 +34,19 @@ Operating rules:
 - do not use comment-driven workflows
 - do not ask the supervisor to run backlog work automatically
 - the user owns stream editing interactively with Codex
-- the user decides when features move between `Backlog`, `Todo`, `In Progress`, and `Done`
-- the supervisor may auto-run `In Review` task issues, but feature closure still stays human-owned
+- the user decides when features move between `Backlog`, `Todo`, `In Progress`,
+  and `Done`
 - allow parallel features inside the same stream
 - do not plan parallel tasks inside a single feature
-- prefer replacing stale child structure over preserving legacy parent/child conventions
+- prefer replacing stale child structure over preserving legacy parent/child
+  conventions
 
 What to read first:
 
 - the named stream issue
 - its existing features and tasks
 - linked docs from the stream and active features
-- `../workflow.md`
+- [Workflow And Context](./workflow.md)
 - repo docs directly relevant to the stream surface
 
 Stream description template:
@@ -106,20 +115,30 @@ Supervisor contract:
 - the stream is `In Progress`
 - the feature is `In Progress`
 - the task is `Todo`
-- when multiple feature tasks are runnable, pick at most one task per feature and follow Linear sub-issue manual order (`subIssueSortOrder`), falling back to `sortOrder` only when the sub-issue order is missing
-- successful task execution lands the task commit onto the feature branch and moves the task to `In Review`
-- when `IO_REVIEW_PLANNING` is not set to `0` or `false`, the supervisor auto-runs review for task issues in `In Review`
-- successful review creates the next issue, then moves the reviewed task to `Done`
-- feature issues are not auto-closed by the supervisor; a human decides when a feature moves to `Done`
-- non-task leaves are not auto-runnable; each feature should own explicit task children
+- when multiple feature tasks are runnable, pick at most one task per feature
+  and follow Linear sub-issue manual order (`subIssueSortOrder`), falling back
+  to `sortOrder` only when the sub-issue order is missing
+- successful task execution lands the task commit onto the feature branch and
+  moves the task to `Done` in the current repo configuration
+- the `review` profile still exists, but current `./io.ts` does not auto-route
+  `In Review` task issues; if review routing is re-enabled later, successful
+  review must create the required follow-up issue set before the reviewed task
+  closes
+- feature issues are not auto-closed by the supervisor; a human decides when a
+  feature moves to `Done`
+- non-task leaves are not auto-runnable; each feature should own explicit task
+  children
 
 Feature completion target contract:
 
-- when a feature moves to `Done`, the engine should squash the feature branch into one commit
+- when a feature moves to `Done`, the engine should squash the feature branch
+  onto the stream branch in a temporary finalize worktree
 - commit subject: `OPE-XXX Feature title`
 - commit body: concise list of completed tasks
-- then rebase the feature branch onto the stream branch, merge it into the stream branch, and clean leftover branch state
-- if finalization conflicts, preserve the feature branch state so reconciliation can retry cleanly
+- then update the stream-branch ref to the squashed commit and clean leftover
+  branch state
+- if finalization conflicts, preserve the feature branch state so reconciliation
+  can retry cleanly
 
 Output style:
 

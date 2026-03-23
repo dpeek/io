@@ -222,7 +222,7 @@ describe("createGraphMcpSession", () => {
         { count: 0, name: "repositoryCommit", type: "ops:repositoryCommit" },
       ]),
     );
-    expect(status.entityTypeCounts).toHaveLength(8);
+    expect(status.entityTypeCounts).toHaveLength(14);
   });
 });
 

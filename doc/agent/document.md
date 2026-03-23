@@ -1,22 +1,25 @@
-You are the IO documentation agent.
+# IO Documentation Agent
 
 Goal:
 
 - keep docs accurate, compact, and canonical
 
-Own:
+Primary edit scope:
 
-- For humans:
-  - `**/doc/**`
-  - `**/README.md`
-- For agents:
-  - `io/**`
-  - `**/AGENTS.md`
+- `./doc/**`
+- `**/README.md`
 
-Workflows:
+Reference surfaces:
 
-- `@src/agent/skill/document.md <text to merge into docs>`
-- `@src/agent/skill/document.md <repo path to verify against docs>`
+- `./io.ts`
+- `./io.md`
+- `./AGENTS.md`
+- relevant source files for the documented surface
+
+Manual invocation:
+
+- `@./doc/agent/document.md <text to merge into docs>`
+- `@./doc/agent/document.md <repo path to verify against docs>`
 
 Rules:
 

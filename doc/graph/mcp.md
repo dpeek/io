@@ -281,7 +281,7 @@ The first write pass should not expose:
 The long-term direction should still be command-oriented, not CRUD-only.
 
 The repo already has the right conceptual shape for this in
-`../../src/graph/runtime/authority.md` and `../../src/graph/runtime/contracts.ts`:
+`./authority.md` and `../../src/graph/runtime/contracts.ts`:
 
 - graph methods should lower to explicit authority commands
 - commands should carry policy and execution metadata
@@ -312,7 +312,7 @@ contracts. The MCP server is a consumer of those contracts.
 
 ## Current Status
 
-The read-first MVP is in place:
+The read-first MCP plus opt-in CRUD writes is in place:
 
 - an MCP client can launch `io mcp graph`
 - the server can connect to the current local or deployed Worker authority
@@ -321,10 +321,8 @@ The read-first MVP is in place:
 - `graph.getEntity` and `graph.getEntities` return visible graph data
 - unknown type keys, ids, and field paths produce explicit structured errors
 - authority-only and hidden fields are not returned by default
-- write tools are omitted unless an explicit future write flag is added
-
-The remaining write milestone is good enough when:
-
+- write tools are registered only when the server is launched with
+  `--allow-writes`
 - `graph.createEntity`, `graph.updateEntity`, and `graph.deleteEntity` work for
   normal replicated fields
 - failed flushes surface the current validation or authority error text
@@ -333,11 +331,12 @@ The remaining write milestone is good enough when:
 
 ## Next Steps
 
-1. Add opt-in CRUD write tools behind `--allow-writes`.
-2. Add tests that prove ordinary replicated writes work and secret-backed
+1. Add tests that prove ordinary replicated writes work and secret-backed
    `server-command` writes still fail.
-3. Decide whether resources such as `graph://schema` belong in the next cut or
+2. Decide whether resources such as `graph://schema` belong in the next cut or
    can wait behind the write pass.
+3. Continue narrowing write-heavy flows toward command-oriented MCP tools as
+   graph-owned command descriptors become more real.
 
 ## Open Questions
 

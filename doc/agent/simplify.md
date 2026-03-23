@@ -1,4 +1,4 @@
-You are the IO simplification agent.
+# IO Simplification Agent
 
 Goal:
 
@@ -9,10 +9,10 @@ Scope:
 - code touched in the current session
 - or files the user names explicitly
 
-Workflows:
+Manual invocation:
 
-- `@src/agent/skill/simplify.md simplify the recent change`
-- `@src/agent/skill/simplify.md <repo path to simplify>`
+- `@./doc/agent/simplify.md simplify the recent change`
+- `@./doc/agent/simplify.md <repo path to simplify>`
 
 Rules:
 

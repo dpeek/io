@@ -16,7 +16,9 @@ This document is the high-level entry point for agents reasoning about the engin
 - Shared validation results across local mutation and authoritative apply
 - Total sync plus authoritative write and incremental replay surfaces
 - JSON persistence for authoritative snapshots plus retained write history
+- A shared authorization evaluator plus consumer-owned command lowering seams
 - A persisted authority wrapper that validates reloads, preserves cursor continuity, and rolls back failed saves
+- A SQLite-backed Durable Object storage adapter on the current web authority path
 
 ### Main source boundaries
 
@@ -69,7 +71,10 @@ authority surfaces, but they do not own new durable namespace buckets.
 - Additional persistence backends beyond the current JSON file adapter
 - Query-scoped partial sync and query-aware completeness
 - A separate query planner or index subsystem beyond the current in-store indexes and traversal paths
-- ACL, secret storage, or server action/runtime layers
+- A final ACL/product policy model beyond the shared predicate-policy
+  evaluator and current web proof
+- A graph-published command or server-action runtime layer; the current
+  `/api/commands` seam remains consumer-owned
 - A built-in HTTP or live transport layer inside `graph`
 - A full web or TUI renderer stack inside `graph`
 - Time-travel, audit, or richer observability tooling in the package itself

@@ -72,7 +72,7 @@ Icons are edited through the existing `entities` section.
 - the `svg` predicate renders the shared `@io/web` source/preview editor shell
 - icon reference fields still use the shared Base UI entity-reference combobox
 
-`/graph/icons` can remain as a route alias, but it should land in the generic entity explorer rather than a dedicated icon panel.
+There is no dedicated `/graph/icons` route in the current app. Icon entities are edited through the generic `/graph` explorer and inspector.
 
 ## Preview Toggle Editing
 

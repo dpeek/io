@@ -10,31 +10,35 @@ the graph-first application direction the rest of the workspace is proving.
 
 - `../io.md`
 - `../vision.md`
-- `./agent/skill/backlog.md`
-- `./agent/skill/review.md`
 - `./agent/index.md`
-- `./agent/tui/index.md`
+- `./agent/workflow.md`
+- `./agent/backlog.md`
+- `./agent/review.md`
+- `./agent/cli.md`
+- `./agent/tui.md`
 - `./graph/index.md`
-- `./mcp.md`
-- `./structure.md`
-- `./structure-plan.md`
-- `./storage.md`
+- `./graph/mcp.md`
+- `./graph/storage.md`
+- `./README.md`
+- `./branch/README.md`
 - `./web/index.md`
 
 ## Layout
 
 - `../io.ts`: repo config, context registry, profiles, modules, routing
 - `../io.md`: repo-local execution guidance included in prompt context
-- `./agent/skill/backlog.md`: stream, feature, and task planning plus backlog-editing contract
-- `./agent/skill/review.md`: post-execution review contract and follow-up issue creation rules
+- `./agent/workflow.md`: workflow loading, issue routing, context assembly, and module-scoped doc selection
+- `./agent/backlog.md`: stream, feature, and task planning plus backlog-editing contract
+- `./agent/review.md`: post-execution review contract and follow-up issue creation rules
+- `./agent/cli.md`: current `io agent ...` and `io mcp ...` command surface
 - `./agent/index.md`: agent runtime overview, scheduler layout, and operator surfaces
-- `./agent/tui/index.md`: operator-facing TUI layout and retained runtime display
+- `./agent/tui.md`: operator-facing TUI layout and retained runtime display
 - `./graph/index.md`: graph package layout including engine, adapters, taxonomies, and focused subdocs
-- `./mcp.md`: current graph MCP read surface, opt-in writes, and the remaining command roadmap
-- `./structure.md`: repo-level structure direction, naming rules, phased migration, and execution model
-- `./structure-plan.md`: phased structure rollout, dependencies, exit criteria, and suggested Linear feature/task breakdown
-- `./storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,
+- `./graph/mcp.md`: current graph MCP read surface, opt-in writes, and the remaining command roadmap
+- `./graph/storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,
   retained-history model, and secret side-storage split
+- `./README.md`: architecture and vision doc map for the numbered roadmap and branch docs
+- `./branch/README.md`: platform branches as parallel workstreams with canonical specs where available
 - `./index.md`: repo map and context entrypoint
 - `../src/agent/`: scheduler, context assembly, tracker integration, retained runtime,
   and the operator TUI

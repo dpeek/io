@@ -16,6 +16,8 @@ Relevant source:
 
 - `../../src/graph/runtime/schema.ts`
 - `../../src/graph/runtime/type-module.ts`
+- `../../src/graph/runtime/client-core.ts`
+- `../../src/graph/runtime/client-validation.ts`
 - `../../src/graph/runtime/client.ts`
 - `../../src/graph/runtime/sync.ts`
 
@@ -68,7 +70,9 @@ That keeps local optimistic mutation and authoritative reconciliation on one iss
 
 ## Current Result Surface
 
-`GraphValidationResult` and `GraphValidationError` in `../../src/graph/runtime/client.ts` are the shared public-facing shape:
+`GraphValidationResult` and `GraphValidationError` are defined in
+`../../src/graph/runtime/client-core.ts` and re-exported through
+`../../src/graph/runtime/client.ts` as the shared public-facing shape:
 
 - `ok`
 - `phase`
