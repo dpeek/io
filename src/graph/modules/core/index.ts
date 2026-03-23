@@ -10,6 +10,7 @@ export * from "./email/index.js";
 export * from "./enum/index.js";
 export * from "./enum-module.js";
 export * from "./icon/index.js";
+export * from "./identity/index.js";
 export * from "./input.js";
 export * from "./json/index.js";
 export * from "./language/index.js";

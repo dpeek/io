@@ -15,8 +15,10 @@ import type {
 import { createWebAppAuthority } from "./authority.js";
 import {
   handleCommandRequest,
+  RequestAuthorizationContextError,
   handleSyncRequest,
   handleTransactionRequest,
+  readRequestAuthorizationContext,
 } from "./server-routes.js";
 
 type SqlRow = Record<string, unknown>;
@@ -879,19 +881,45 @@ export class WebGraphAuthorityDurableObject {
   }
 
   async fetch(request: Request): Promise<Response> {
-    const authority = await this.getAuthority();
     const url = new URL(request.url);
+    if (
+      url.pathname !== "/api/sync" &&
+      url.pathname !== "/api/tx" &&
+      url.pathname !== "/api/commands"
+    ) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    let authorization;
+    try {
+      authorization = readRequestAuthorizationContext(request);
+    } catch (error) {
+      if (error instanceof RequestAuthorizationContextError) {
+        return Response.json(
+          { error: error.message },
+          {
+            status: error.status,
+            headers: {
+              "cache-control": "no-store",
+            },
+          },
+        );
+      }
+      throw error;
+    }
+
+    const authority = await this.getAuthority();
 
     if (url.pathname === "/api/sync") {
-      return handleSyncRequest(request, authority);
+      return handleSyncRequest(request, authority, authorization);
     }
 
     if (url.pathname === "/api/tx") {
-      return handleTransactionRequest(request, authority);
+      return handleTransactionRequest(request, authority, authorization);
     }
 
     if (url.pathname === "/api/commands") {
-      return handleCommandRequest(request, authority);
+      return handleCommandRequest(request, authority, authorization);
     }
 
     return new Response("Not Found", { status: 404 });

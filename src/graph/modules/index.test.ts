@@ -21,6 +21,15 @@ import {
   resolvePredicateDefinitionIconId,
   resolveTypeDefinitionIconId,
 } from "./core/icon/index.js";
+import {
+  authSubjectProjection,
+  authSubjectStatus,
+  principal,
+  principalKind,
+  principalRoleBinding,
+  principalRoleBindingStatus,
+  principalStatus,
+} from "./core/identity/index.js";
 import { jsonTypeModule } from "./core/json/index.js";
 import { markdownTypeModule } from "./core/markdown/index.js";
 import { moneyTypeModule } from "./core/money/index.js";
@@ -98,6 +107,13 @@ describe("module entry surfaces", () => {
     expect(rateTypeModule.type.values.key).toBe("core:rate");
     expect(icon.values.key).toBe("core:icon");
     expect(tag.values.key).toBe("core:tag");
+    expect(principalKind.values.key).toBe("core:principalKind");
+    expect(principalStatus.values.key).toBe("core:principalStatus");
+    expect(authSubjectStatus.values.key).toBe("core:authSubjectStatus");
+    expect(principalRoleBindingStatus.values.key).toBe("core:principalRoleBindingStatus");
+    expect(principal.values.key).toBe("core:principal");
+    expect(authSubjectProjection.values.key).toBe("core:authSubjectProjection");
+    expect(principalRoleBinding.values.key).toBe("core:principalRoleBinding");
     expect(stringTypeModule.type.values.icon).toBe(graphIconSeeds.string);
     expect(resolveTypeDefinitionIconId(cardinality)).toBe(graphIconSeeds.tag.id);
     expect(resolvePredicateDefinitionIconId(node.fields.type, coreType)).toBe(
@@ -121,8 +137,33 @@ describe("module entry surfaces", () => {
     expect(canonicalCore.icon.values.key).toBe(icon.values.key);
     expect(canonicalCore.tag.values.key).toBe(tag.values.key);
     expect(canonicalCore.secretHandle.values.key).toBe(secretHandle.values.key);
+    expect(canonicalCore.principalKind.values.key).toBe(principalKind.values.key);
+    expect(canonicalCore.principalStatus.values.key).toBe(principalStatus.values.key);
+    expect(canonicalCore.authSubjectStatus.values.key).toBe(authSubjectStatus.values.key);
+    expect(canonicalCore.principalRoleBindingStatus.values.key).toBe(
+      principalRoleBindingStatus.values.key,
+    );
+    expect(canonicalCore.principal.values.key).toBe(principal.values.key);
+    expect(canonicalCore.authSubjectProjection.values.key).toBe(authSubjectProjection.values.key);
+    expect(canonicalCore.principalRoleBinding.values.key).toBe(principalRoleBinding.values.key);
     expect(String(canonicalCore.type.fields.icon.range)).toBe(resolvedTypeId(icon));
     expect(String(canonicalCore.predicate.fields.icon.range)).toBe(resolvedTypeId(icon));
+    expect(String(canonicalCore.principal.fields.kind.range)).toBe(resolvedTypeId(principalKind));
+    expect(String(canonicalCore.principal.fields.status.range)).toBe(
+      resolvedTypeId(principalStatus),
+    );
+    expect(String(canonicalCore.authSubjectProjection.fields.principal.range)).toBe(
+      resolvedTypeId(principal),
+    );
+    expect(String(canonicalCore.authSubjectProjection.fields.status.range)).toBe(
+      resolvedTypeId(authSubjectStatus),
+    );
+    expect(String(canonicalCore.principalRoleBinding.fields.principal.range)).toBe(
+      resolvedTypeId(principal),
+    );
+    expect(String(canonicalCore.principalRoleBinding.fields.status.range)).toBe(
+      resolvedTypeId(principalRoleBindingStatus),
+    );
     expect(canonicalPkm.topic.values.key).toBe(topic.values.key);
     expect(canonicalPkm.topicKind.values.key).toBe(topicKind.values.key);
     expect(canonicalOps.envVar.values.key).toBe(envVar.values.key);
@@ -195,6 +236,9 @@ describe("module entry surfaces", () => {
       "iconReferenceField",
       "envVar",
       "secretHandle",
+      "principal",
+      "authSubjectProjection",
+      "principalRoleBinding",
       "topic",
       "topicKind",
       "jsonTypeModule",
@@ -209,12 +253,16 @@ describe("module entry surfaces", () => {
     expect(canonicalCore.icon.values.key).toBe(icon.values.key);
     expect(canonicalCore.tag.values.key).toBe(tag.values.key);
     expect(canonicalCore.secretHandle.values.key).toBe(secretHandle.values.key);
+    expect(canonicalCore.principal.values.key).toBe(principal.values.key);
+    expect(canonicalCore.authSubjectProjection.values.key).toBe(authSubjectProjection.values.key);
+    expect(canonicalCore.principalRoleBinding.values.key).toBe(principalRoleBinding.values.key);
     expect(canonicalOps.envVar.values.key).toBe(envVar.values.key);
     expect(canonicalPkm.topic.values.key).toBe(topic.values.key);
     expect(canonicalPkm.topicKind.values.key).toBe(topicKind.values.key);
     expect(String(canonicalCore.type.fields.icon.range)).toBe(resolvedTypeId(icon));
     expect(String(canonicalCore.predicate.fields.icon.range)).toBe(resolvedTypeId(icon));
     expect(typeof moduleExports.core.node.values.id).toBe("string");
+    expect(typeof moduleExports.core.principal.values.id).toBe("string");
     expect(typeof moduleExports.ops.envVar.values.id).toBe("string");
     expect(typeof moduleExports.pkm.topic.values.id).toBe("string");
     expect(moduleExports.node.values.key).toBe(canonicalCore.node.values.key);
@@ -222,6 +270,13 @@ describe("module entry surfaces", () => {
     expect(moduleExports.iconReferenceField).toBe(iconReferenceField);
     expect(moduleExports.envVar.values.key).toBe(canonicalOps.envVar.values.key);
     expect(moduleExports.secretHandle.values.key).toBe(canonicalCore.secretHandle.values.key);
+    expect(moduleExports.principal.values.key).toBe(canonicalCore.principal.values.key);
+    expect(moduleExports.authSubjectProjection.values.key).toBe(
+      canonicalCore.authSubjectProjection.values.key,
+    );
+    expect(moduleExports.principalRoleBinding.values.key).toBe(
+      canonicalCore.principalRoleBinding.values.key,
+    );
     expect(moduleExports.topic.values.key).toBe(canonicalPkm.topic.values.key);
     expect(moduleExports.topicKind.values.key).toBe(canonicalPkm.topicKind.values.key);
     expect(moduleExports.jsonTypeModule).toBe(jsonTypeModule);

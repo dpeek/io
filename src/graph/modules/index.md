@@ -31,6 +31,9 @@ re-exports the namespaces plus representative built-ins and slice symbols.
   `../../src/graph/modules/pkm.ts`: namespace assembly entrypoints that pair
   `*.json` id maps with slice exports
 - `../../src/graph/modules/core/`: built-in scalar, enum, and helper families
+- `../../src/graph/modules/core/identity/`: Branch 2 identity anchors for
+  `principal`, `authSubjectProjection`, and `principalRoleBinding` plus the
+  enum vocabulary those graph-owned types depend on
 - `../../src/graph/modules/ops/<slice>/schema.ts`,
   `../../src/graph/modules/pkm/<slice>/schema.ts`: exported slice entrypoints
 - type-specific directories keep schema, metadata, filters, and helper enums

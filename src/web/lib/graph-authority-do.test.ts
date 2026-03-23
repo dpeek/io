@@ -10,6 +10,7 @@ import {
   defineNamespace,
   defineType,
   edgeId,
+  type AuthorizationContext,
   type GraphWriteTransaction,
   type NamespaceClient,
   type PersistedAuthoritativeGraphStorage,
@@ -19,8 +20,17 @@ import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 
-import type { WebAppAuthority, WebAppAuthorityStorage } from "./authority.js";
+import { createAnonymousAuthorizationContext } from "./auth-bridge.js";
+import {
+  createWebAppAuthority,
+  type WebAppAuthority,
+  type WebAppAuthorityStorage,
+} from "./authority.js";
 import { WebGraphAuthorityDurableObject } from "./graph-authority-do.js";
+import {
+  encodeRequestAuthorizationContext,
+  webAppAuthorizationContextHeader,
+} from "./server-routes.js";
 
 const productGraph = { ...core, ...pkm, ...ops } as const;
 const envVarSecretPredicateId = edgeId(ops.envVar.fields.secret);
@@ -118,6 +128,11 @@ type DurableObjectSqlCursor<T extends Record<string, unknown>> = Iterable<T> & {
 
 type SqlExecHook = (query: string, bindings: readonly unknown[]) => void;
 
+const testAuthorization = createAnonymousAuthorizationContext({
+  graphId: "graph:test",
+  policyVersion: 0,
+});
+
 function createCursor<T extends Record<string, unknown>>(
   rows: readonly T[],
 ): DurableObjectSqlCursor<T> {
@@ -138,6 +153,18 @@ function createCursor<T extends Record<string, unknown>>(
       yield* rows;
     },
   };
+}
+
+function createAuthorizedRequest(
+  input: string,
+  init: RequestInit = {},
+  authorization: AuthorizationContext = testAuthorization,
+): Request {
+  const request = new Request(input, init);
+  const headers = new Headers(request.headers);
+
+  headers.set(webAppAuthorizationContextHeader, encodeRequestAuthorizationContext(authorization));
+  return new Request(request, { headers });
 }
 
 function createSqliteDurableObjectState(): {
@@ -321,7 +348,7 @@ async function readSyncPayload(
 ): Promise<SyncPayload> {
   const url = new URL("https://graph-authority.local/api/sync");
   if (after) url.searchParams.set("after", after);
-  const response = await durableObject.fetch(new Request(url));
+  const response = await durableObject.fetch(createAuthorizedRequest(url.toString()));
 
   expect(response.status).toBe(200);
   return (await response.json()) as SyncPayload;
@@ -332,7 +359,7 @@ async function postTransaction(
   transaction: GraphWriteTransaction,
 ): Promise<TransactionResponse> {
   const response = await durableObject.fetch(
-    new Request("https://graph-authority.local/api/tx", {
+    createAuthorizedRequest("https://graph-authority.local/api/tx", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -355,7 +382,7 @@ async function postSecretField(
   expectedStatus = 201,
 ): Promise<SecretFieldResponse> {
   const response = await durableObject.fetch(
-    new Request("https://graph-authority.local/api/commands", {
+    createAuthorizedRequest("https://graph-authority.local/api/commands", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -384,7 +411,7 @@ async function postCommand(
   expectedStatus = 201,
 ): Promise<SecretFieldResponse> {
   const response = await durableObject.fetch(
-    new Request("https://graph-authority.local/api/commands", {
+    createAuthorizedRequest("https://graph-authority.local/api/commands", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -420,6 +447,51 @@ async function getDurableAuthority<
 }
 
 describe("web graph authority durable object", () => {
+  it("requires an explicit request authorization context for API requests", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = new WebGraphAuthorityDurableObject(state);
+    const response = await durableObject.fetch(
+      new Request("https://graph-authority.local/api/sync"),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Request authorization context header is required.",
+    });
+  });
+
+  it("passes the request authorization context through the durable authority boundary", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const captured: AuthorizationContext[] = [];
+    const durableObject = new WebGraphAuthorityDurableObject(
+      state,
+      {},
+      {
+        createAuthority: async (storage, options) => {
+          const authority = await createWebAppAuthority(storage, options);
+
+          return {
+            ...authority,
+            createSyncPayload(syncOptions) {
+              captured.push(syncOptions.authorization);
+              return authority.createSyncPayload(syncOptions);
+            },
+          } satisfies WebAppAuthority;
+        },
+      },
+    );
+    const authorization = createAnonymousAuthorizationContext({
+      graphId: "graph:durable",
+      policyVersion: 3,
+    });
+    const response = await durableObject.fetch(
+      createAuthorizedRequest("https://graph-authority.local/api/sync", {}, authorization),
+    );
+
+    expect(response.status).toBe(200);
+    expect(captured).toEqual([authorization]);
+  });
+
   it("bootstraps the graph tables and indexes in the constructor", () => {
     const { db, state } = createSqliteDurableObjectState();
 

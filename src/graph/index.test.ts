@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  probeAuthSubject,
+  probeAuthenticatedSession,
+  probeAuthorizationContext,
   probeContractItem,
   probeContractObjectView,
   probeContractWorkflow,
@@ -203,6 +206,26 @@ describe("@io/core/graph package entry surfaces", () => {
     });
     expect(probeContractWorkflow.steps[1]).toMatchObject({
       command: probeSaveContractItemCommand.key,
+    });
+    expect(probeAuthSubject).toMatchObject({
+      issuer: "better-auth",
+      provider: "github",
+      providerAccountId: "acct-probe-1",
+      authUserId: "auth-user-probe-1",
+    });
+    expect(probeAuthenticatedSession).toMatchObject({
+      sessionId: "session-probe-1",
+      subject: probeAuthSubject,
+    });
+    expect(probeAuthorizationContext).toMatchObject({
+      graphId: "graph:probe",
+      principalId: "principal:probe",
+      principalKind: "human",
+      sessionId: probeAuthenticatedSession.sessionId,
+      roleKeys: ["graph:member"],
+      capabilityGrantIds: ["grant:probe:1"],
+      capabilityVersion: 2,
+      policyVersion: 7,
     });
     expect(probeSaveContractItemCommand).toMatchObject({
       subject: probeContractItem.values.key,

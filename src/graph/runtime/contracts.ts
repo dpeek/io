@@ -1,3 +1,46 @@
+/**
+ * Stable graph-owned principal kinds. These match the canonical
+ * `core:principalKind` options.
+ */
+export type PrincipalKind = "human" | "service" | "agent" | "anonymous" | "remoteGraph";
+
+/**
+ * Stable provider-neutral auth subject tuple mirrored by
+ * `core:authSubjectProjection`. Host-specific request/session parsing remains
+ * provisional.
+ */
+export type AuthSubjectRef = {
+  readonly issuer: string;
+  readonly provider: string;
+  readonly providerAccountId: string;
+  readonly authUserId: string;
+};
+
+/**
+ * Stable minimal authenticated session shape consumed by request-time
+ * projection seams. Better Auth-specific session payload details stay in host
+ * code.
+ */
+export type AuthenticatedSession = {
+  readonly sessionId: string;
+  readonly subject: AuthSubjectRef;
+};
+
+/**
+ * Stable request-bound authorization snapshot consumed by authority, sync,
+ * commands, and future module/runtime policy surfaces.
+ */
+export type AuthorizationContext = {
+  readonly graphId: string;
+  readonly principalId: string | null;
+  readonly principalKind: PrincipalKind | null;
+  readonly sessionId: string | null;
+  readonly roleKeys: readonly string[];
+  readonly capabilityGrantIds: readonly string[];
+  readonly capabilityVersion: number;
+  readonly policyVersion: number;
+};
+
 export type ObjectViewFieldSpec = {
   readonly path: string;
   readonly label?: string;

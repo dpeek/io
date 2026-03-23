@@ -1,9 +1,21 @@
 import type {
+  AuthSubjectRef as AuthSubjectRefFromRoot,
+  AuthenticatedSession as AuthenticatedSessionFromRoot,
+  AuthorizationContext as AuthorizationContextFromRoot,
   GraphCommandSpec as GraphCommandSpecFromRoot,
   ObjectViewSpec as ObjectViewSpecFromRoot,
+  PrincipalKind as PrincipalKindFromRoot,
   WorkflowSpec as WorkflowSpecFromRoot,
 } from "../index.js";
-import type { GraphCommandSpec, ObjectViewSpec, WorkflowSpec } from "./index.js";
+import type {
+  AuthSubjectRef,
+  AuthenticatedSession,
+  AuthorizationContext,
+  GraphCommandSpec,
+  ObjectViewSpec,
+  PrincipalKind,
+  WorkflowSpec,
+} from "./index.js";
 
 const topicSummaryView = {
   key: "pkm:topic:summary",
@@ -73,9 +85,43 @@ const rootWorkflow: WorkflowSpecFromRoot = topicReviewWorkflow;
 const rootCommand: GraphCommandSpecFromRoot<{ title: string }, { topicId: string }> =
   saveTopicCommand;
 
+const authSubject = {
+  issuer: "better-auth",
+  provider: "github",
+  providerAccountId: "acct-1",
+  authUserId: "auth-user-1",
+} satisfies AuthSubjectRef;
+
+const authenticatedSession = {
+  sessionId: "session-1",
+  subject: authSubject,
+} satisfies AuthenticatedSession;
+
+const authorizationContext = {
+  graphId: "graph-1",
+  principalId: "principal-1",
+  principalKind: "remoteGraph",
+  sessionId: authenticatedSession.sessionId,
+  roleKeys: ["graph:member"],
+  capabilityGrantIds: ["grant-1"],
+  capabilityVersion: 3,
+  policyVersion: 5,
+} satisfies AuthorizationContext;
+
+const rootAuthSubject: AuthSubjectRefFromRoot = authSubject;
+const rootAuthenticatedSession: AuthenticatedSessionFromRoot = authenticatedSession;
+const rootAuthorizationContext: AuthorizationContextFromRoot = authorizationContext;
+const rootPrincipalKind: PrincipalKindFromRoot = "remoteGraph";
+const runtimePrincipalKind: PrincipalKind = rootPrincipalKind;
+
 void rootObjectView;
 void rootWorkflow;
 void rootCommand;
+void rootAuthSubject;
+void rootAuthenticatedSession;
+void rootAuthorizationContext;
+void rootPrincipalKind;
+void runtimePrincipalKind;
 
 void ({
   key: "pkm:topic:summary",
@@ -122,3 +168,26 @@ void ({
     topicId: "topic-1",
   },
 } satisfies GraphCommandSpec);
+
+void ({
+  graphId: "graph-1",
+  principalId: "principal-1",
+  // @ts-expect-error principal kinds follow the canonical core enum keys
+  principalKind: "remote-graph",
+  sessionId: "session-1",
+  roleKeys: [],
+  capabilityGrantIds: [],
+  capabilityVersion: 1,
+  policyVersion: 1,
+} satisfies AuthorizationContext);
+
+void ({
+  sessionId: "session-1",
+  subject: {
+    issuer: "better-auth",
+    provider: "github",
+    // @ts-expect-error auth subject ids stay stringly typed at the shared seam
+    providerAccountId: 123,
+    authUserId: "auth-user-1",
+  },
+} satisfies AuthenticatedSession);

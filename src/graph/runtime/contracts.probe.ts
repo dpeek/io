@@ -1,5 +1,12 @@
 import { createIdMap, defineNamespace, defineReferenceField, defineType } from "../index.js";
-import type { GraphCommandSpec, ObjectViewSpec, WorkflowSpec } from "../index.js";
+import type {
+  AuthSubjectRef,
+  AuthenticatedSession,
+  AuthorizationContext,
+  GraphCommandSpec,
+  ObjectViewSpec,
+  WorkflowSpec,
+} from "../index.js";
 import { core, stringTypeModule } from "../modules/index.js";
 
 // Test-only root-safe contract probes that feature work can copy from.
@@ -36,6 +43,29 @@ export const probeContractGraph = defineNamespace(
   createIdMap({ contractItem: probeContractItem }).map,
   { contractItem: probeContractItem },
 );
+
+export const probeAuthSubject = {
+  issuer: "better-auth",
+  provider: "github",
+  providerAccountId: "acct-probe-1",
+  authUserId: "auth-user-probe-1",
+} satisfies AuthSubjectRef;
+
+export const probeAuthenticatedSession = {
+  sessionId: "session-probe-1",
+  subject: probeAuthSubject,
+} satisfies AuthenticatedSession;
+
+export const probeAuthorizationContext = {
+  graphId: "graph:probe",
+  principalId: "principal:probe",
+  principalKind: "human",
+  sessionId: probeAuthenticatedSession.sessionId,
+  roleKeys: ["graph:member"],
+  capabilityGrantIds: ["grant:probe:1"],
+  capabilityVersion: 2,
+  policyVersion: 7,
+} satisfies AuthorizationContext;
 
 export const probeContractObjectView = {
   key: "probe:contractItem:summary",

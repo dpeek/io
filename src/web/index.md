@@ -85,4 +85,7 @@ chrome comes from `@io/web`.
 - `../../src/web/lib/example-runtime.test.ts`: sync proof coverage for the
   web-owned example runtime fixture
 - `../../src/web/worker/index.ts`: Worker entrypoint for SPA assets and graph
-  APIs
+  APIs. It now resolves a request-bound `AuthorizationContext` through the
+  shared web auth bridge and forwards that stable contract to the Durable
+  Object authority path, while the host-specific request/session parsing and
+  relay details remain provisional.

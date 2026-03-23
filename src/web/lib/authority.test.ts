@@ -5,6 +5,7 @@ import {
   createStore,
   createTypeClient,
   edgeId,
+  type AuthorizationContext,
   type GraphWriteTransaction,
   type StoreSnapshot,
 } from "@io/core/graph";
@@ -12,17 +13,37 @@ import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 
+import { createAnonymousAuthorizationContext } from "./auth-bridge.js";
 import { createInMemoryTestWebAppAuthorityStorage } from "./authority-test-storage.js";
 import {
-  createWebAppAuthority,
-  executeAuthorityCommand,
+  type WebAppAuthority,
   type WebAppAuthorityCommand,
   type WebAppAuthorityStorage,
+  type WebAppAuthoritySyncOptions,
+  type WebAppAuthorityTransactionOptions,
+  createWebAppAuthority,
+  executeAuthorityCommand,
 } from "./authority.js";
-import { handleCommandRequest } from "./server-routes.js";
+import {
+  handleCommandRequest,
+  handleSyncRequest,
+  handleTransactionRequest,
+} from "./server-routes.js";
 
 const productGraph = { ...core, ...pkm, ...ops } as const;
 const envVarSecretPredicateId = edgeId(ops.envVar.fields.secret);
+
+function createTestAuthorizationContext(
+  overrides: Partial<AuthorizationContext> = {},
+): AuthorizationContext {
+  return {
+    ...createAnonymousAuthorizationContext({
+      graphId: "graph:test",
+      policyVersion: 0,
+    }),
+    ...overrides,
+  };
+}
 
 function buildGraphWriteTransaction(
   before: StoreSnapshot,
@@ -98,6 +119,7 @@ describe("web authority", () => {
   });
 
   it("allows authority-only commands to reuse the shared authority command seam", async () => {
+    const authorization = createTestAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createWebAppAuthority(storage.storage);
     const envVarId = authority.graph.envVar.create({
@@ -129,7 +151,7 @@ describe("web authority", () => {
       },
       writeScope: "authority-only",
       async commit(writeScope) {
-        await authority.applyTransaction(transaction, { writeScope });
+        await authority.applyTransaction(transaction, { authorization, writeScope });
       },
     });
 
@@ -144,6 +166,7 @@ describe("web authority", () => {
   });
 
   it("stores secret plaintext outside sync and reloads it across restart", async () => {
+    const authorization = createTestAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createWebAppAuthority(storage.storage);
     const envVarId = authority.graph.envVar.create({
@@ -151,18 +174,23 @@ describe("web authority", () => {
       name: "OPENAI_API_KEY",
     });
 
-    const created = await authority.writeSecretField({
-      entityId: envVarId,
-      predicateId: envVarSecretPredicateId,
-      plaintext: "sk-live-first",
-    });
+    const created = await authority.writeSecretField(
+      {
+        entityId: envVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-first",
+      },
+      { authorization },
+    );
     const createdSecretId = authority.graph.envVar.get(envVarId).secret;
     if (!createdSecretId) throw new Error("Expected created env var secret.");
 
     expect(created.created).toBe(true);
     expect(created.rotated).toBe(false);
     expect(created.secretVersion).toBe(1);
-    expect(JSON.stringify(authority.createSyncPayload())).not.toContain("sk-live-first");
+    expect(JSON.stringify(authority.createSyncPayload({ authorization }))).not.toContain(
+      "sk-live-first",
+    );
     expect(storage.read()?.secrets?.[createdSecretId]?.value).toBe("sk-live-first");
     expect(
       storage
@@ -172,11 +200,14 @@ describe("web authority", () => {
     ).toBe(true);
     expect(storage.read()?.writeHistory.results.at(-1)?.writeScope).toBe("server-command");
 
-    const rotated = await authority.writeSecretField({
-      entityId: envVarId,
-      predicateId: envVarSecretPredicateId,
-      plaintext: "sk-live-second",
-    });
+    const rotated = await authority.writeSecretField(
+      {
+        entityId: envVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-second",
+      },
+      { authorization },
+    );
     const restarted = await createWebAppAuthority(storage.storage);
     const restartedSecretId = restarted.graph.envVar.get(envVarId).secret;
     if (!restartedSecretId) throw new Error("Expected restarted env var secret.");
@@ -187,13 +218,18 @@ describe("web authority", () => {
     expect(storage.read()?.secrets?.[createdSecretId]?.value).toBe("sk-live-second");
     expect(restartedSecretId).toBe(createdSecretId);
     expect(restarted.graph.secretHandle.get(restartedSecretId)?.version).toBe(2);
-    expect(JSON.stringify(restarted.createSyncPayload())).not.toContain("sk-live-second");
+    expect(JSON.stringify(restarted.createSyncPayload({ authorization }))).not.toContain(
+      "sk-live-second",
+    );
 
-    const confirmed = await restarted.writeSecretField({
-      entityId: envVarId,
-      predicateId: envVarSecretPredicateId,
-      plaintext: "sk-live-second",
-    });
+    const confirmed = await restarted.writeSecretField(
+      {
+        entityId: envVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-second",
+      },
+      { authorization },
+    );
 
     expect(confirmed).toMatchObject({
       created: false,
@@ -204,6 +240,7 @@ describe("web authority", () => {
   });
 
   it("rejects ordinary transactions that directly rewrite secret-backed refs", async () => {
+    const authorization = createTestAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createWebAppAuthority(storage.storage);
 
@@ -216,16 +253,22 @@ describe("web authority", () => {
       name: "SLACK_BOT_TOKEN",
     });
 
-    await authority.writeSecretField({
-      entityId: primaryEnvVarId,
-      predicateId: envVarSecretPredicateId,
-      plaintext: "sk-live-first",
-    });
-    await authority.writeSecretField({
-      entityId: secondaryEnvVarId,
-      predicateId: envVarSecretPredicateId,
-      plaintext: "xapp-secret",
-    });
+    await authority.writeSecretField(
+      {
+        entityId: primaryEnvVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-first",
+      },
+      { authorization },
+    );
+    await authority.writeSecretField(
+      {
+        entityId: secondaryEnvVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "xapp-secret",
+      },
+      { authorization },
+    );
 
     const primarySecretId = authority.graph.envVar.get(primaryEnvVarId).secret;
     const secondarySecretId = authority.graph.envVar.get(secondaryEnvVarId).secret;
@@ -251,13 +294,14 @@ describe("web authority", () => {
       "tx:direct-secret",
     );
 
-    await expect(authority.applyTransaction(transaction)).rejects.toThrow(
+    await expect(authority.applyTransaction(transaction, { authorization })).rejects.toThrow(
       'Field "ops:envVar:secret" requires "server-command" writes and cannot be changed through an ordinary transaction.',
     );
     expect(authority.graph.envVar.get(primaryEnvVarId).secret).toBe(primarySecretId);
   });
 
   it("rolls back staged secret state when a server-command commit fails", async () => {
+    const authorization = createTestAuthorizationContext();
     const backingStorage = createInMemoryTestWebAppAuthorityStorage();
     let failServerCommandCommit = false;
     const storage = {
@@ -283,20 +327,26 @@ describe("web authority", () => {
       name: "OPENAI_API_KEY",
     });
 
-    const created = await authority.writeSecretField({
-      entityId: envVarId,
-      predicateId: envVarSecretPredicateId,
-      plaintext: "sk-live-first",
-    });
+    const created = await authority.writeSecretField(
+      {
+        entityId: envVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-first",
+      },
+      { authorization },
+    );
 
     failServerCommandCommit = true;
 
     await expect(
-      authority.writeSecretField({
-        entityId: envVarId,
-        predicateId: envVarSecretPredicateId,
-        plaintext: "sk-live-second",
-      }),
+      authority.writeSecretField(
+        {
+          entityId: envVarId,
+          predicateId: envVarSecretPredicateId,
+          plaintext: "sk-live-second",
+        },
+        { authorization },
+      ),
     ).rejects.toThrow("forced server-command commit failure");
 
     expect(backingStorage.read()?.secrets?.[created.secretId]?.value).toBe("sk-live-first");
@@ -304,11 +354,14 @@ describe("web authority", () => {
 
     failServerCommandCommit = false;
 
-    const retried = await authority.writeSecretField({
-      entityId: envVarId,
-      predicateId: envVarSecretPredicateId,
-      plaintext: "sk-live-second",
-    });
+    const retried = await authority.writeSecretField(
+      {
+        entityId: envVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-second",
+      },
+      { authorization },
+    );
 
     expect(created).toMatchObject({
       created: true,
@@ -326,7 +379,8 @@ describe("web authority", () => {
     expect(backingStorage.read()?.writeHistory.results.at(-1)?.writeScope).toBe("server-command");
   });
 
-  it("executes secret-field writes through the shared authority command envelope", async () => {
+  it("routes generic secret-field writes through the web server helper", async () => {
+    const authorization = createTestAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createWebAppAuthority(storage.storage);
     const envVarId = authority.graph.envVar.create({
@@ -342,7 +396,7 @@ describe("web authority", () => {
       },
     } satisfies WebAppAuthorityCommand;
 
-    const result = await authority.executeCommand(command);
+    const result = await authority.executeCommand(command, { authorization });
 
     expect(result).toMatchObject({
       created: true,
@@ -353,10 +407,13 @@ describe("web authority", () => {
     });
     expect(authority.graph.envVar.get(envVarId).secret).toBe(result.secretId);
     expect(storage.read()?.writeHistory.results.at(-1)?.writeScope).toBe("server-command");
-    expect(JSON.stringify(authority.createSyncPayload())).not.toContain("sk-live-command");
+    expect(JSON.stringify(authority.createSyncPayload({ authorization }))).not.toContain(
+      "sk-live-command",
+    );
   });
 
   it("routes shared authority commands through the web server helper", async () => {
+    const authorization = createTestAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createWebAppAuthority(storage.storage);
     const envVarId = authority.graph.envVar.create({
@@ -380,6 +437,7 @@ describe("web authority", () => {
         } satisfies WebAppAuthorityCommand),
       }),
       authority,
+      authorization,
     );
     const payload = (await response.json()) as {
       readonly created: boolean;
@@ -400,6 +458,68 @@ describe("web authority", () => {
     });
     expect(authority.graph.envVar.get(envVarId).secret).toBe(payload.secretId);
     expect(storage.read()?.writeHistory.results.at(-1)?.writeScope).toBe("server-command");
-    expect(JSON.stringify(authority.createSyncPayload())).not.toContain("sk-live-command-route");
+    expect(JSON.stringify(authority.createSyncPayload({ authorization }))).not.toContain(
+      "sk-live-command-route",
+    );
+  });
+
+  it("passes explicit authorization context through sync and transaction helpers", async () => {
+    const authorization = createTestAuthorizationContext({
+      principalId: "principal-1",
+      principalKind: "human",
+      sessionId: "session-1",
+    });
+    const syncAuthorizations: AuthorizationContext[] = [];
+    const transactionAuthorizations: AuthorizationContext[] = [];
+    const authority = {
+      createSyncPayload(options: WebAppAuthoritySyncOptions) {
+        syncAuthorizations.push(options.authorization);
+        return {
+          mode: "total" as const,
+          cursor: "cursor:total",
+          snapshot: {
+            edges: [],
+            retracted: [],
+          },
+        };
+      },
+      async applyTransaction(
+        _transaction: GraphWriteTransaction,
+        options: WebAppAuthorityTransactionOptions,
+      ) {
+        transactionAuthorizations.push(options.authorization);
+        return {
+          cursor: "cursor:tx",
+          replayed: false,
+          txId: "tx:route",
+          writeScope: "client-tx" as const,
+        };
+      },
+    } as unknown as WebAppAuthority;
+
+    const syncResponse = handleSyncRequest(
+      new Request("http://web.local/api/sync"),
+      authority,
+      authorization,
+    );
+    const transactionResponse = await handleTransactionRequest(
+      new Request("http://web.local/api/tx", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          id: "tx:route",
+          ops: [],
+        }),
+      }),
+      authority,
+      authorization,
+    );
+
+    expect(syncResponse.status).toBe(200);
+    expect(transactionResponse.status).toBe(200);
+    expect(syncAuthorizations).toEqual([authorization]);
+    expect(transactionAuthorizations).toEqual([authorization]);
   });
 });

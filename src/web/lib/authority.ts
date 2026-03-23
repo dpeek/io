@@ -1,4 +1,5 @@
 import {
+  type AuthorizationContext,
   type AuthoritativeWriteScope,
   bootstrap,
   createPersistedAuthoritativeGraph,
@@ -36,6 +37,7 @@ import {
 const webAppGraph = { ...core, ...pkm, ...ops } as const;
 
 type WebAppGraph = typeof webAppGraph;
+type PersistedWebAppAuthority = PersistedAuthoritativeGraph<WebAppGraph>;
 type SecretFieldDefinition = {
   readonly field: {
     readonly authority?: GraphFieldAuthority;
@@ -89,9 +91,54 @@ export interface WebAppAuthorityStorage {
   persist(input: PersistedAuthoritativeGraphStoragePersistInput): Promise<void>;
 }
 
-export type WebAppAuthority = PersistedAuthoritativeGraph<WebAppGraph> & {
-  executeCommand(command: WebAppAuthorityCommand): Promise<WebAppAuthorityCommandResult>;
-  writeSecretField(input: WriteSecretFieldInput): Promise<WriteSecretFieldResult>;
+type WebAppAuthoritySyncFreshness = NonNullable<
+  Parameters<PersistedWebAppAuthority["createSyncPayload"]>[0]
+>["freshness"];
+type WebAppAuthorityWriteScope = NonNullable<
+  Parameters<PersistedWebAppAuthority["applyTransaction"]>[1]
+>["writeScope"];
+
+export type WebAppAuthoritySyncOptions = {
+  readonly authorization: AuthorizationContext;
+  readonly freshness?: WebAppAuthoritySyncFreshness;
+};
+
+export type WebAppAuthorityTransactionOptions = {
+  readonly authorization: AuthorizationContext;
+  readonly writeScope?: WebAppAuthorityWriteScope;
+};
+
+export type WebAppAuthoritySecretFieldOptions = {
+  readonly authorization: AuthorizationContext;
+};
+
+export type WebAppAuthorityCommandOptions = {
+  readonly authorization: AuthorizationContext;
+};
+
+export type WebAppAuthority = Omit<
+  PersistedWebAppAuthority,
+  "applyTransaction" | "createSyncPayload" | "getIncrementalSyncResult"
+> & {
+  createSyncPayload(
+    options: WebAppAuthoritySyncOptions,
+  ): ReturnType<PersistedWebAppAuthority["createSyncPayload"]>;
+  applyTransaction(
+    transaction: GraphWriteTransaction,
+    options: WebAppAuthorityTransactionOptions,
+  ): ReturnType<PersistedWebAppAuthority["applyTransaction"]>;
+  getIncrementalSyncResult(
+    after: string | undefined,
+    options: WebAppAuthoritySyncOptions,
+  ): ReturnType<PersistedWebAppAuthority["getIncrementalSyncResult"]>;
+  executeCommand(
+    command: WebAppAuthorityCommand,
+    options: WebAppAuthorityCommandOptions,
+  ): Promise<WebAppAuthorityCommandResult>;
+  writeSecretField(
+    input: WriteSecretFieldInput,
+    options: WebAppAuthoritySecretFieldOptions,
+  ): Promise<WriteSecretFieldResult>;
 };
 
 export type WebAppAuthorityOptions = {
@@ -116,6 +163,10 @@ function clonePersistedValue<T>(value: T): T {
 function trimOptionalString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function consumeAuthorizationContext(authorization: AuthorizationContext): void {
+  void authorization;
 }
 
 class WebAppAuthorityMutationError extends Error {
@@ -386,9 +437,38 @@ export async function createWebAppAuthority(
     maxRetainedTransactions: options.maxRetainedTransactions,
   });
 
+  function createSyncPayload(options: WebAppAuthoritySyncOptions) {
+    consumeAuthorizationContext(options.authorization);
+    return authority.createSyncPayload({
+      freshness: options.freshness,
+    });
+  }
+
+  async function applyTransaction(
+    transaction: GraphWriteTransaction,
+    options: WebAppAuthorityTransactionOptions,
+  ) {
+    consumeAuthorizationContext(options.authorization);
+    return authority.applyTransaction(transaction, {
+      writeScope: options.writeScope,
+    });
+  }
+
+  function getIncrementalSyncResult(
+    after: string | undefined,
+    options: WebAppAuthoritySyncOptions,
+  ) {
+    consumeAuthorizationContext(options.authorization);
+    return authority.getIncrementalSyncResult(after, {
+      freshness: options.freshness,
+    });
+  }
+
   async function runWriteSecretFieldCommand(
     input: WriteSecretFieldInput,
+    options: WebAppAuthoritySecretFieldOptions,
   ): Promise<WriteSecretFieldResult> {
+    consumeAuthorizationContext(options.authorization);
     const entityId = trimOptionalString(input.entityId);
     const predicateId = trimOptionalString(input.predicateId);
     const plaintext = trimOptionalString(input.plaintext);
@@ -484,7 +564,8 @@ export async function createWebAppAuthority(
       result: planned.result,
       writeScope: "server-command",
       async commit(writeScope) {
-        await authority.applyTransaction(planned.transaction, {
+        await applyTransaction(planned.transaction, {
+          authorization: options.authorization,
           writeScope,
         });
       },
@@ -509,24 +590,34 @@ export async function createWebAppAuthority(
 
   async function executeCommand(
     command: WebAppAuthorityCommand,
+    options: WebAppAuthorityCommandOptions,
   ): Promise<WebAppAuthorityCommandResult> {
     if (command.kind !== "write-secret-field") {
       throw new Error("Unsupported web authority command.");
     }
 
-    return runWriteSecretFieldCommand(command.input);
+    return runWriteSecretFieldCommand(command.input, options);
   }
 
-  async function writeSecretField(input: WriteSecretFieldInput): Promise<WriteSecretFieldResult> {
-    return executeCommand({
-      kind: "write-secret-field",
-      input,
-    });
+  async function writeSecretField(
+    input: WriteSecretFieldInput,
+    options: WebAppAuthoritySecretFieldOptions,
+  ): Promise<WriteSecretFieldResult> {
+    return executeCommand(
+      {
+        kind: "write-secret-field",
+        input,
+      },
+      options,
+    );
   }
 
   return {
     ...authority,
     executeCommand,
+    applyTransaction,
+    createSyncPayload,
+    getIncrementalSyncResult,
     writeSecretField,
   };
 }

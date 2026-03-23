@@ -164,7 +164,7 @@ The graph, not Better Auth, is the durable application model for identity and
 authorization.
 
 ```ts
-type PrincipalKind = "human" | "service" | "agent" | "anonymous" | "remote-graph";
+type PrincipalKind = "human" | "service" | "agent" | "anonymous" | "remoteGraph";
 
 type PrincipalStatus = "active" | "disabled" | "deleted";
 
@@ -390,6 +390,9 @@ Contract rules:
 
 - `projectSessionToPrincipal(...)` must never trust a client-supplied
   `principalId`
+- the stable projection input is the `graphId`, `sessionId`, and auth-subject
+  tuple (`issuer`, `provider`, `providerAccountId`, `authUserId`); Better Auth
+  request parsing remains a provisional Worker-bridge detail
 - `authorizeRead(...)` is applied after transport visibility filtering, not
   instead of it
 - `authorizeWrite(...)` must satisfy both principal-aware policy and the

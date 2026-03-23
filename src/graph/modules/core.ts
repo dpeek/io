@@ -8,6 +8,15 @@ import { durationTypeModule } from "./core/duration/index.js";
 import { emailTypeModule } from "./core/email/index.js";
 import { enumType } from "./core/enum/index.js";
 import { icon } from "./core/icon/index.js";
+import {
+  authSubjectProjection,
+  authSubjectStatus,
+  principal,
+  principalKind,
+  principalRoleBinding,
+  principalRoleBindingStatus,
+  principalStatus,
+} from "./core/identity/index.js";
 import { jsonTypeModule } from "./core/json/index.js";
 import { markdownTypeModule } from "./core/markdown/index.js";
 import { moneyTypeModule } from "./core/money/index.js";
@@ -86,4 +95,11 @@ export const core = defineNamespace(coreIdMap, {
   enum: enumType,
   node,
   secretHandle,
+  principalKind,
+  principalStatus,
+  authSubjectStatus,
+  principalRoleBindingStatus,
+  principal,
+  authSubjectProjection,
+  principalRoleBinding,
 });
