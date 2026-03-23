@@ -92,3 +92,11 @@ void ({
   snapshot: loadResult.snapshot,
   // @ts-expect-error durable persisted state must retain authoritative write history for cursor recovery
 } satisfies PersistedAuthoritativeGraphState);
+
+void ({
+  version: 1,
+  snapshot: loadResult.snapshot,
+  writeHistory: durableState.writeHistory,
+  // @ts-expect-error shared persisted authority state excludes adapter-owned side storage
+  secrets: {},
+} satisfies PersistedAuthoritativeGraphState);

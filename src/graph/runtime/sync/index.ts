@@ -1,6 +1,12 @@
 export {
   GraphSyncWriteError,
+  authoritativeWriteScopes,
   graphSyncScope,
+  incrementalSyncFallbackReasons,
+  isAuthoritativeWriteScope,
+  isIncrementalSyncFallback,
+  isIncrementalSyncFallbackReason,
+  type AuthoritativeGraphCursor,
   type AuthoritativeGraphChangesAfterResult,
   type AuthoritativeGraphWriteHistory,
   type AuthoritativeGraphWriteResult,

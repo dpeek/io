@@ -69,6 +69,24 @@ function normalizeMap(input: IdMap | Record<string, string>): Record<string, str
   return input as Record<string, string>;
 }
 
+function validateNormalizedMap(keys: Record<string, string>): void {
+  const invalidKeys = Object.entries(keys)
+    .filter(([, id]) => typeof id !== "string" || id.length === 0)
+    .map(([key]) => key)
+    .sort((a, b) => a.localeCompare(b));
+  if (invalidKeys.length > 0) {
+    throw new Error(`Invalid stable ids for keys: ${invalidKeys.join(", ")}`);
+  }
+
+  const duplicates = findDuplicateIds({ version: 1, keys });
+  if (duplicates.length === 0) return;
+
+  const details = duplicates
+    .map(({ id, keys: duplicateKeys }) => `${id} (${duplicateKeys.join(", ")})`)
+    .join("; ");
+  throw new Error(`Duplicate stable ids: ${details}`);
+}
+
 function walkOwnedKeys(tree: FieldsOutput, keys: Set<string>): void {
   keys.add(tree[fieldsMeta].key);
   for (const value of Object.values(tree) as unknown[]) {
@@ -127,11 +145,17 @@ export function extractSchemaKeys(namespace: IdNamespace): string[] {
   return filtered.sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * Stable contract: schema-authored ids are durable by schema key. Re-running
+ * this with an existing map preserves prior ids, allocates ids only for newly
+ * introduced owned keys, and keeps orphaned keys until pruning is requested.
+ */
 export function createIdMap(
   namespace: IdNamespace,
   existing?: IdMap,
   options: { pruneOrphans?: boolean } = {},
 ): { map: IdMap; added: string[]; removed: string[] } {
+  if (existing) validateNormalizedMap(existing.keys);
   const schemaKeys = extractSchemaKeys(namespace);
   const nextKeys: Record<string, string> = { ...existing?.keys };
   const added: string[] = [];
@@ -189,6 +213,7 @@ export function defineNamespace<const T extends IdNamespace>(
 ): ResolvedNamespace<T> {
   const strict = options.strict ?? true;
   const keys = normalizeMap(input);
+  validateNormalizedMap(keys);
   const missing = new Set<string>();
 
   for (const typeDef of Object.values(namespace)) {

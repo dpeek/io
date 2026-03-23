@@ -107,6 +107,11 @@ type WebAppAuthorityCommandStageContext = {
   addRollback(rollback: WebAppAuthorityCommandRollback): void;
 };
 
+/**
+ * Web authority storage adds secret side-storage to the shared graph/runtime
+ * persisted-authority boundary. Only the adapted graph state contract should be
+ * treated as stable across branches.
+ */
 export interface WebAppAuthorityStorage {
   load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null>;
   loadSecrets(): Promise<Record<string, WebAppAuthoritySecretRecord>>;
@@ -650,6 +655,8 @@ function createAuthorityStorage(
   storage: WebAppAuthorityStorage,
   pendingSecretWriteRef: { current: WebAppAuthoritySecretWrite | null },
 ): PersistedAuthoritativeGraphStorage {
+  // This adapter is the explicit boundary between the stable graph/runtime
+  // persisted-authority contract and web-only secret side storage.
   return {
     async load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null> {
       const persistedState = await storage.load();

@@ -212,10 +212,13 @@ Assumptions inherited from upstream repo docs:
 
 `AuthoritativeGraphWriteResult`
 
-- accepted authoritative transaction record: `{ txId, cursor, replayed, transaction }`
+- accepted authoritative transaction record:
+  `{ txId, cursor, replayed, writeScope, transaction }`
 - `cursor` is the authoritative ordering token
 - `replayed` is `true` only when the authority recognizes a duplicate tx id
   with identical contents
+- retained history and incremental pull delivery keep the original accepted
+  result with `replayed: false`
 
 `AuthoritativeGraphWriteHistory`
 
@@ -234,6 +237,9 @@ Assumptions inherited from upstream repo docs:
   `visibility`, `write`, and optional sealed-secret metadata
 - current write levels are `client-tx`, `server-command`, and `authority-only`
 - current visibility levels are `replicated` and `authority-only`
+- shared runtime helpers publish these exact value sets and the defaulted
+  metadata accessors; downstream branches should depend on that surface rather
+  than re-encoding field-authority rules in route or adapter code
 
 `SecretHandle`
 
@@ -252,6 +258,7 @@ Assumptions inherited from upstream repo docs:
 
 ```ts
 type Id = string;
+type AuthoritativeGraphCursor = string;
 
 type Edge = {
   readonly id: Id;
@@ -276,8 +283,9 @@ type GraphWriteTransaction = {
 
 type AuthoritativeGraphWriteResult = {
   readonly txId: string;
-  readonly cursor: string;
+  readonly cursor: AuthoritativeGraphCursor;
   readonly replayed: boolean;
+  readonly writeScope: "client-tx" | "server-command" | "authority-only";
   readonly transaction: GraphWriteTransaction;
 };
 
@@ -392,8 +400,11 @@ Secret-backed fields:
 - Inputs: current snapshot or retained authoritative results, optional `after`
   cursor
 - Outputs: total snapshot or ordered incremental writes for `scope.kind =
-"graph"`
+"graph"`; empty incremental `transactions` without `fallback` are successful
+  no-op or cursor-advanced pulls rather than recovery signals
 - Failure shape: fallback reasons `unknown-cursor`, `gap`, or `reset`
+- Cursor stability: callers must treat cursor strings as opaque tokens and rely
+  only on equality, ordering from the authority, and fallback behavior
 - Stability: `stable`
 
 ### Persisted authority boundary
@@ -404,6 +415,8 @@ Secret-backed fields:
 - Callee: storage adapter implementations
 - Inputs: `load()`, per-tx `commit(...)`, and full `persist(...)`
 - Outputs: hydrated snapshot and retained history, or committed durable state
+- Contract note: the shared boundary is snapshot-plus-history only; SQL rows,
+  Durable Object transactions, and secret side-storage remain adapter details
 - Failure shape: storage exceptions trigger in-memory rollback or full rewrite
   on next persist
 - Stability: `stable`
@@ -811,8 +824,10 @@ Unknown retract target:
 
 ## 12. Open Questions
 
-- Should cursor format be treated as a long-term external contract, or only the
-  ordering semantics and fallback behavior?
+Resolved for Branch 1: cursor strings are opaque outside the shared runtime;
+only ordering, equality, and fallback behavior are stable for downstream
+callers.
+
 - Does the branch eventually own a generic authoritative command envelope in
   `graph`, or should secret and other server commands stay consumer-owned until
   Branch 2 and Branch 4 stabilize?

@@ -7,6 +7,7 @@ import {
   createAuthoritativeGraphWriteResultValidator,
   createAuthoritativeGraphWriteSession,
   createAuthoritativeTotalSyncValidator,
+  createIncrementalSyncPayload,
   createGraphWriteOperationsFromSnapshots,
   createGraphWriteTransactionFromSnapshots,
   createStore,
@@ -18,6 +19,7 @@ import {
   edgeId,
   formatValidationPath,
   type GraphWriteTransaction,
+  isIncrementalSyncFallback,
   typeId,
   validateAuthoritativeGraphWriteResult,
   validateAuthoritativeGraphWriteTransaction,
@@ -2612,6 +2614,71 @@ describe("authoritative graph writes", () => {
     });
   });
 
+  it("treats a pull at the current cursor as a successful no-op incremental result", () => {
+    const server = createServerGraph();
+    const companyId = server.graph.company.create({
+      name: "Acme Corp",
+      status: testNamespace.status.values.draft.id,
+      website: new URL("https://acme.com"),
+    });
+    const authority = createAuthoritativeGraphWriteSession(server.store, testNamespace, {
+      cursorPrefix: "server:",
+    });
+    const first = authority.apply(
+      createCompanyNameWriteTransaction(server.store, companyId, "Acme Head", "tx:1"),
+    );
+
+    const noop = authority.getIncrementalSyncResult(first.cursor, {
+      freshness: "stale",
+    });
+
+    expect(isIncrementalSyncFallback(noop)).toBe(false);
+    if (isIncrementalSyncFallback(noop)) {
+      throw new Error("Expected a successful no-op incremental payload.");
+    }
+    expect(noop).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: first.cursor,
+      transactions: [],
+      cursor: first.cursor,
+      completeness: "complete",
+      freshness: "stale",
+    });
+    expect(validateIncrementalSyncResult(noop)).toMatchObject({
+      ok: true,
+      phase: "authoritative",
+      event: "reconcile",
+      value: noop,
+      changedPredicateKeys: [],
+    });
+  });
+
+  it("accepts empty incremental payloads that advance the cursor without fallback", () => {
+    const result = createIncrementalSyncPayload([], {
+      after: "server:1",
+      cursor: "server:2",
+      freshness: "stale",
+    });
+
+    expect(result).toEqual({
+      mode: "incremental",
+      scope: { kind: "graph" },
+      after: "server:1",
+      transactions: [],
+      cursor: "server:2",
+      completeness: "complete",
+      freshness: "stale",
+    });
+    expect(validateIncrementalSyncResult(result)).toMatchObject({
+      ok: true,
+      phase: "authoritative",
+      event: "reconcile",
+      value: result,
+      changedPredicateKeys: [],
+    });
+  });
+
   it("surfaces unknown cursor, gap, and reset as explicit incremental pull fallbacks", () => {
     const server = createServerGraph();
     const companyId = server.graph.company.create({
@@ -2896,6 +2963,18 @@ describe("authoritative graph writes", () => {
       cursor: "server:1",
       replayed: true,
     });
+    const incremental = authority.getIncrementalSyncResult(authority.getBaseCursor());
+
+    expect(isIncrementalSyncFallback(incremental)).toBe(false);
+    if (isIncrementalSyncFallback(incremental)) {
+      throw new Error("Expected a data-bearing incremental payload.");
+    }
+    expect(incremental.transactions).toEqual([firstResult]);
+    expect(incremental.transactions).toHaveLength(1);
+    expect(incremental.transactions.every((transaction) => transaction.replayed === false)).toBe(
+      true,
+    );
+    expect(incremental.cursor).toBe(firstResult.cursor);
     expect(server.graph.company.get(companyId).name).toBe("Acme Replay");
     expect(authority.getCursor()).toBe("server:1");
   });

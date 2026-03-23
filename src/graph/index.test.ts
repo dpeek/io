@@ -66,6 +66,11 @@ const requiredRootExports = [
   "defineType",
   "existingEntityReferenceField",
   "existingEntityReferenceFieldMeta",
+  "fieldSecretMetadataVisibility",
+  "graphFieldVisibilities",
+  "graphFieldWritePolicies",
+  "isGraphFieldVisibility",
+  "isGraphFieldWritePolicy",
   "sanitizeSvgMarkup",
 ] as const;
 

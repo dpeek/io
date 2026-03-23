@@ -18,6 +18,8 @@ import type { AnyTypeOutput, EdgeOutput, FieldsOutput, TypeOutput } from "./sche
 import { cloneStoreSnapshot, createStore, type Store, type StoreSnapshot } from "./store.js";
 
 type SchemaTree = FieldsOutput;
+// Canonical bootstrap timestamps keep independently seeded schema entities
+// convergent across repeated bootstrap and restart flows.
 const bootstrapTimestamp = new Date("2000-01-01T00:00:00.000Z");
 const bootstrappedSnapshotCache = new WeakMap<Record<string, AnyTypeOutput>, StoreSnapshot>();
 
@@ -142,6 +144,9 @@ function assertSeedIcons(
 }
 
 export function bootstrap(store: Store, types: Record<string, AnyTypeOutput> = core): void {
+  // Stable contract: bootstrap is additive and idempotent for a resolved
+  // namespace. Reapplying it after restart must not duplicate schema facts or
+  // rewrite already-materialized schema state.
   store.batch(() => {
     const namespace = { ...core, ...types };
     const orderedTypes = Object.values(types).sort(compareBootstrapTypeOrder);

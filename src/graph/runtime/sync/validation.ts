@@ -10,6 +10,7 @@ import {
   cloneAuthoritativeGraphWriteResult,
   cloneGraphWriteTransaction,
   graphSyncScope,
+  isIncrementalSyncFallbackReason,
   isAuthoritativeWriteScope,
   isObjectRecord,
   type AuthoritativeGraphWriteResult,
@@ -387,10 +388,8 @@ function validateTotalSyncPayloadShape(payload: TotalSyncPayload): readonly Grap
   return issues;
 }
 
-function isIncrementalSyncFallbackReason(value: unknown): value is IncrementalSyncFallbackReason {
-  return value === "unknown-cursor" || value === "gap" || value === "reset";
-}
-
+// A successful incremental result may still be empty. That represents either a
+// no-op pull at the head cursor or a cursor advance with no replicated writes.
 export function createIncrementalSyncPayload(
   transactions: readonly AuthoritativeGraphWriteResult[],
   options: {
@@ -412,6 +411,8 @@ export function createIncrementalSyncPayload(
   };
 }
 
+// `fallback` is reserved for cases where the caller must recover with a total
+// sync rather than apply an empty incremental payload.
 export function createIncrementalSyncFallback(
   fallback: IncrementalSyncFallbackReason,
   options: {

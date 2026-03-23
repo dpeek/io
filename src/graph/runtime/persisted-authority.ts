@@ -18,18 +18,38 @@ export const persistedAuthoritativeGraphStateVersion = 1 as const;
 export type PersistedAuthoritativeGraphStateVersion =
   typeof persistedAuthoritativeGraphStateVersion;
 
+/**
+ * Shared durable authority state published by the graph runtime.
+ *
+ * Storage adapters may persist this shape directly or reconstruct it from a
+ * different on-disk layout, but downstream branches should only depend on this
+ * snapshot-plus-history contract.
+ */
 export type PersistedAuthoritativeGraphState = {
   readonly version: PersistedAuthoritativeGraphStateVersion;
   readonly snapshot: StoreSnapshot;
   readonly writeHistory: AuthoritativeGraphWriteHistory;
 };
 
+/**
+ * Hydrated authority state returned by a storage adapter.
+ *
+ * `needsPersistence` requests a rewrite through the shared persisted-authority
+ * surface after load, typically for legacy migrations or retained-history
+ * normalization.
+ */
 export type PersistedAuthoritativeGraphStorageLoadResult = {
   readonly snapshot: StoreSnapshot;
   readonly writeHistory?: AuthoritativeGraphWriteHistory;
   readonly needsPersistence: boolean;
 };
 
+/**
+ * Incremental durable commit for one accepted authoritative transaction.
+ *
+ * This is the stable shared commit boundary. Adapter-specific row ids, SQL
+ * statements, and transport concerns stay outside this input shape.
+ */
 export type PersistedAuthoritativeGraphStorageCommitInput = {
   readonly snapshot: StoreSnapshot;
   readonly transaction: GraphWriteTransaction;
@@ -37,6 +57,9 @@ export type PersistedAuthoritativeGraphStorageCommitInput = {
   readonly writeHistory: AuthoritativeGraphWriteHistory;
 };
 
+/**
+ * Full durable snapshot rewrite for the current authority baseline.
+ */
 export type PersistedAuthoritativeGraphStoragePersistInput = {
   readonly snapshot: StoreSnapshot;
   readonly writeHistory: AuthoritativeGraphWriteHistory;
@@ -48,6 +71,14 @@ export type PersistedAuthoritativeGraphSeed<T extends Record<string, AnyTypeOutp
 
 export type PersistedAuthoritativeGraphCursorPrefixFactory = () => string;
 
+/**
+ * Stable storage boundary between the shared persisted-authority runtime and a
+ * durable adapter implementation.
+ *
+ * The runtime depends only on `load`, per-transaction `commit`, and baseline
+ * `persist`. File formats, SQL tables, Durable Object wiring, and secret side
+ * storage remain adapter-specific concerns.
+ */
 export interface PersistedAuthoritativeGraphStorage {
   load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null>;
   commit(input: PersistedAuthoritativeGraphStorageCommitInput): Promise<void>;

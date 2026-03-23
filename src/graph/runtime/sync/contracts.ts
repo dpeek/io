@@ -3,20 +3,29 @@ import { core } from "../core";
 import type { AnyTypeOutput, GraphFieldWritePolicy } from "../schema";
 import type { Store, StoreSnapshot } from "../store";
 
+/**
+ * Opaque cursor issued by an authoritative graph session.
+ *
+ * Callers may persist and echo the value back through `after`, but they must
+ * not depend on the string layout. Only equality, authority-defined ordering,
+ * and fallback behavior are stable across runtimes.
+ */
+export type AuthoritativeGraphCursor = string;
+
 export type SyncCompleteness = "complete" | "incomplete";
 export type SyncFreshness = "current" | "stale";
 export type SyncStatus = "idle" | "syncing" | "pushing" | "ready" | "error";
 export type SyncActivity =
   | {
       readonly kind: "total";
-      readonly cursor: string;
+      readonly cursor: AuthoritativeGraphCursor;
       readonly freshness: SyncFreshness;
       readonly at: Date;
     }
   | {
       readonly kind: "incremental";
-      readonly after: string;
-      readonly cursor: string;
+      readonly after: AuthoritativeGraphCursor;
+      readonly cursor: AuthoritativeGraphCursor;
       readonly freshness: SyncFreshness;
       readonly transactionCount: number;
       readonly txIds: readonly string[];
@@ -25,8 +34,8 @@ export type SyncActivity =
     }
   | {
       readonly kind: "fallback";
-      readonly after: string;
-      readonly cursor: string;
+      readonly after: AuthoritativeGraphCursor;
+      readonly cursor: AuthoritativeGraphCursor;
       readonly freshness: SyncFreshness;
       readonly reason: IncrementalSyncFallbackReason;
       readonly at: Date;
@@ -34,7 +43,7 @@ export type SyncActivity =
   | {
       readonly kind: "write";
       readonly txId: string;
-      readonly cursor: string;
+      readonly cursor: AuthoritativeGraphCursor;
       readonly freshness: SyncFreshness;
       readonly replayed: boolean;
       readonly writeScope: AuthoritativeWriteScope;
@@ -51,29 +60,55 @@ export type TotalSyncPayload = {
   readonly mode: "total";
   readonly scope: SyncScope;
   readonly snapshot: StoreSnapshot;
-  readonly cursor: string;
+  readonly cursor: AuthoritativeGraphCursor;
   readonly completeness: "complete";
   readonly freshness: SyncFreshness;
 };
 
 export type IncrementalSyncFallbackReason = "unknown-cursor" | "gap" | "reset";
+export const incrementalSyncFallbackReasons = [
+  "unknown-cursor",
+  "gap",
+  "reset",
+] as const satisfies readonly IncrementalSyncFallbackReason[];
 
+export function isIncrementalSyncFallbackReason(
+  value: unknown,
+): value is IncrementalSyncFallbackReason {
+  return (
+    typeof value === "string" &&
+    (incrementalSyncFallbackReasons as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Successful incremental delivery after an authority-issued cursor.
+ *
+ * `transactions` may be empty without becoming a fallback:
+ * - `cursor === after`: nothing new was accepted after the requested cursor
+ * - `cursor !== after`: the cursor advanced, but no replicated transactions
+ *   were visible in this graph-scoped result
+ */
 export type IncrementalSyncPayload = {
   readonly mode: "incremental";
   readonly scope: SyncScope;
-  readonly after: string;
+  readonly after: AuthoritativeGraphCursor;
   readonly transactions: readonly AuthoritativeGraphWriteResult[];
-  readonly cursor: string;
+  readonly cursor: AuthoritativeGraphCursor;
   readonly completeness: "complete";
   readonly freshness: SyncFreshness;
 };
 
+/**
+ * Recovery-only incremental result. An empty `transactions` array with
+ * `fallback` is distinct from a successful empty incremental payload.
+ */
 export type IncrementalSyncFallback = {
   readonly mode: "incremental";
   readonly scope: SyncScope;
-  readonly after: string;
+  readonly after: AuthoritativeGraphCursor;
   readonly transactions: readonly [];
-  readonly cursor: string;
+  readonly cursor: AuthoritativeGraphCursor;
   readonly completeness: "complete";
   readonly freshness: SyncFreshness;
   readonly fallback: IncrementalSyncFallbackReason;
@@ -81,6 +116,12 @@ export type IncrementalSyncFallback = {
 
 export type IncrementalSyncResult = IncrementalSyncPayload | IncrementalSyncFallback;
 export type SyncPayload = TotalSyncPayload | IncrementalSyncResult;
+
+export function isIncrementalSyncFallback(
+  result: IncrementalSyncResult,
+): result is IncrementalSyncFallback {
+  return "fallback" in result;
+}
 
 export type GraphWriteAssertOperation = {
   readonly op: "assert";
@@ -94,13 +135,19 @@ export type GraphWriteRetractOperation = {
 
 export type GraphWriteOperation = GraphWriteAssertOperation | GraphWriteRetractOperation;
 
+/**
+ * Caller-supplied authoritative write envelope.
+ *
+ * `id` is the idempotency key. Reusing it with the same canonical operations
+ * replays the accepted result; reusing it for different operations is invalid.
+ */
 export type GraphWriteTransaction = {
   readonly id: string;
   readonly ops: readonly GraphWriteOperation[];
 };
 
 export type AuthoritativeWriteScope = GraphFieldWritePolicy;
-const authoritativeWriteScopes = [
+export const authoritativeWriteScopes = [
   "client-tx",
   "server-command",
   "authority-only",
@@ -112,14 +159,29 @@ export function isAuthoritativeWriteScope(value: unknown): value is Authoritativ
   );
 }
 
+/**
+ * Accepted authoritative write acknowledgement.
+ *
+ * `replayed` is only true on the direct response to a duplicate `txId` whose
+ * canonical operations match a previously accepted transaction. Retained
+ * history and incremental delivery keep the original accepted result with
+ * `replayed: false`.
+ */
 export type AuthoritativeGraphWriteResult = {
   readonly txId: string;
-  readonly cursor: string;
+  readonly cursor: AuthoritativeGraphCursor;
   readonly replayed: boolean;
   readonly writeScope: AuthoritativeWriteScope;
   readonly transaction: GraphWriteTransaction;
 };
 
+/**
+ * Retained suffix of accepted write results for restart recovery and
+ * incremental delivery.
+ *
+ * `cursorPrefix` and `baseSequence` belong to the persisted authority
+ * implementation; transport callers should treat exported cursors as opaque.
+ */
 export type AuthoritativeGraphWriteHistory = {
   readonly cursorPrefix: string;
   readonly baseSequence: number;
@@ -129,12 +191,12 @@ export type AuthoritativeGraphWriteHistory = {
 export type AuthoritativeGraphChangesAfterResult =
   | {
       readonly kind: "changes";
-      readonly cursor: string;
+      readonly cursor: AuthoritativeGraphCursor;
       readonly changes: readonly AuthoritativeGraphWriteResult[];
     }
   | {
       readonly kind: "reset";
-      readonly cursor: string;
+      readonly cursor: AuthoritativeGraphCursor;
       readonly changes: readonly [];
     };
 

@@ -46,6 +46,9 @@ type DurableObjectEnvLike = {
   GRAPH_AUTHORITY_MAX_RETAINED_TRANSACTIONS?: number | string;
 };
 
+// These row shapes are internal to the current SQLite-backed Durable Object
+// adapter. They intentionally do not widen the stable graph/runtime persisted
+// authority contract.
 type GraphMetaRow = {
   cursor_prefix: string;
   head_cursor: string;
@@ -711,6 +714,8 @@ async function runStorageTransaction<T>(
 function createSqliteDurableObjectAuthorityStorage(
   state: DurableObjectStateLike,
 ): WebAppAuthorityStorage {
+  // SQLite rows plus Durable Object transaction wiring are provisional adapter
+  // details that reconstruct the shared persisted-authority state at load time.
   return {
     async load(): Promise<DurableAuthorityLoadResult | null> {
       const meta = readGraphMetaRow(state.storage.sql);

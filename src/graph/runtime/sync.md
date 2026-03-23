@@ -21,6 +21,9 @@ The current engine already supports two authoritative delivery shapes in `../../
 
 - total payloads for bootstrap and recovery
 - incremental payloads for ordered authoritative write delivery after a cursor
+- transaction envelopes keyed by stable idempotency ids
+- authoritative write acknowledgements that retain `writeScope` and explicit
+  replay state
 
 Total payloads carry:
 
@@ -42,6 +45,24 @@ Incremental payloads carry:
 - `freshness`
 - optional `fallback`
 
+Stable delivery rules:
+
+- `GraphWriteTransaction.id` is the idempotency key; reusing it with identical
+  canonical operations replays the accepted result, and reusing it for
+  different operations is invalid
+- `AuthoritativeGraphWriteResult.replayed` is only `true` on the direct replay
+  acknowledgement returned from `apply(...)`; retained history and incremental
+  pull delivery keep the original accepted result with `replayed: false`
+- an incremental result with `transactions: []` and no `fallback` is still a
+  successful pull: `cursor === after` means no new authoritative change,
+  while `cursor !== after` means the cursor advanced without any replicated
+  writes in scope
+- `fallback` is reserved for `unknown-cursor`, `gap`, and `reset`, and always
+  means the caller must recover with total sync
+- cursor strings are opaque to transport callers; the shared runtime may parse
+  its own authority-issued tokens internally, but downstream callers should
+  only persist them, compare them for equality, and echo them back
+
 ## Current Session APIs
 
 ### Authoritative side
@@ -60,6 +81,10 @@ Incremental payloads carry:
 The current authority session already treats transaction ids as idempotency keys and emits monotonic cursors.
 The persisted authority helper layers restart hydration, per-transaction durable commits, explicit snapshot persistence, retained history recovery, legacy snapshot rewrite, and rollback-on-durable-write-failure on top of that session model without changing the sync payload shapes clients consume.
 Legacy persisted histories that predate `writeScope` are normalized to `client-tx` on load, so restarted diagnostics are compatibility-oriented rather than perfect pre-migration audit recovery.
+The public runtime surface also exports `authoritativeWriteScopes`,
+`incrementalSyncFallbackReasons`, `isAuthoritativeWriteScope(...)`, and
+`isIncrementalSyncFallback(...)` so downstream callers can branch on the shared
+contract without copying raw literal lists.
 
 ### Client/session side
 

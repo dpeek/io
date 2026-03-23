@@ -20,12 +20,60 @@ export type PredicatePolicyDescriptor = PredicatePolicyDefinition & {
   readonly transportVisibility: GraphFieldVisibility;
   readonly requiredWriteScope: GraphFieldWritePolicy;
 };
+
+/**
+ * Stable field-visibility values published by the shared graph/runtime layer.
+ *
+ * Downstream branches may depend on this set without coupling to a transport,
+ * policy engine, or storage adapter.
+ */
+export const graphFieldVisibilities = [
+  "replicated",
+  "authority-only",
+] as const satisfies readonly GraphFieldVisibility[];
+
+export function isGraphFieldVisibility(value: unknown): value is GraphFieldVisibility {
+  return typeof value === "string" && (graphFieldVisibilities as readonly string[]).includes(value);
+}
+
+/**
+ * Stable field-write levels published by the shared graph/runtime layer.
+ *
+ * Richer command or principal-aware policy surfaces may layer on top of these
+ * levels, but they should not redefine them.
+ */
+export const graphFieldWritePolicies = [
+  "client-tx",
+  "server-command",
+  "authority-only",
+] as const satisfies readonly GraphFieldWritePolicy[];
+
+export function isGraphFieldWritePolicy(value: unknown): value is GraphFieldWritePolicy {
+  return (
+    typeof value === "string" && (graphFieldWritePolicies as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Stable metadata for secret-backed predicates.
+ *
+ * This describes the graph-visible secret handle boundary only. Plaintext
+ * storage, reveal flows, and adapter-specific durability stay outside this
+ * contract.
+ */
 export type GraphSecretFieldAuthority = {
   kind: "sealed-handle";
   metadataVisibility?: GraphFieldVisibility;
   revealCapability?: PolicyCapabilityKey;
   rotateCapability?: PolicyCapabilityKey;
 };
+
+/**
+ * Stable field-authority metadata consumed by sync filtering, write-policy
+ * validation, and downstream branches.
+ *
+ * Do not attach adapter-specific transport or storage details here.
+ */
 export type GraphFieldAuthority = {
   visibility?: GraphFieldVisibility;
   write?: GraphFieldWritePolicy;
@@ -208,7 +256,11 @@ export function fieldPolicyDescriptor(
       : {}),
   } satisfies PredicatePolicyDescriptor;
 }
-
+export function fieldSecretMetadataVisibility(
+  field: { authority?: GraphFieldAuthority } | undefined,
+) {
+  return field?.authority?.secret?.metadataVisibility ?? fieldVisibility(field);
+}
 export function isSecretBackedField(field: { authority?: GraphFieldAuthority } | undefined) {
   return field?.authority?.secret?.kind === "sealed-handle";
 }
