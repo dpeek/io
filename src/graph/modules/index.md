@@ -18,6 +18,8 @@ that backs the published module subpaths.
   `pkm:` namespace assembly
 - `@io/core/graph/modules/ops/env-var`:
   `../../src/graph/modules/ops/env-var/schema.ts`
+- `@io/core/graph/modules/ops/workflow`:
+  `../../src/graph/modules/ops/workflow/schema.ts`
 - `@io/core/graph/modules/pkm/topic`:
   `../../src/graph/modules/pkm/topic/schema.ts`
 
@@ -36,6 +38,8 @@ re-exports the namespaces plus representative built-ins and slice symbols.
   enum vocabulary those graph-owned types depend on
 - `../../src/graph/modules/ops/<slice>/schema.ts`,
   `../../src/graph/modules/pkm/<slice>/schema.ts`: exported slice entrypoints
+- `../../src/graph/modules/ops/workflow/`: Branch 6 workflow root plus
+  repository execution mappings, state enums, and key validators
 - type-specific directories keep schema, metadata, filters, and helper enums
   together with common files such as `type.ts`, `meta.ts`, `filter.ts`,
   `kind.ts`, `index.ts`, and `data.ts`

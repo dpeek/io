@@ -55,6 +55,15 @@ import {
   envVarNamePattern,
   envVarSchema,
 } from "./ops/env-var/schema.js";
+import {
+  repositoryBranch,
+  repositoryCommit,
+  workflowBranch,
+  workflowCommit,
+  workflowProject,
+  workflowRepository,
+  workflowSchema,
+} from "./ops/workflow/schema.js";
 import { pkm as canonicalPkm } from "./pkm.js";
 import { topic, topicKind, topicSchema } from "./pkm/topic/schema.js";
 
@@ -167,6 +176,12 @@ describe("module entry surfaces", () => {
     expect(canonicalPkm.topic.values.key).toBe(topic.values.key);
     expect(canonicalPkm.topicKind.values.key).toBe(topicKind.values.key);
     expect(canonicalOps.envVar.values.key).toBe(envVar.values.key);
+    expect(canonicalOps.workflowProject.values.key).toBe(workflowProject.values.key);
+    expect(canonicalOps.workflowRepository.values.key).toBe(workflowRepository.values.key);
+    expect(canonicalOps.workflowBranch.values.key).toBe(workflowBranch.values.key);
+    expect(canonicalOps.workflowCommit.values.key).toBe(workflowCommit.values.key);
+    expect(canonicalOps.repositoryBranch.values.key).toBe(repositoryBranch.values.key);
+    expect(canonicalOps.repositoryCommit.values.key).toBe(repositoryCommit.values.key);
   });
 
   it("exports the env-var slice from the canonical ops module tree", () => {
@@ -226,6 +241,30 @@ describe("module entry surfaces", () => {
     expect(String(topic.fields.references.range)).toBe(resolvedTypeId(topic));
   });
 
+  it("exports the workflow slice from the canonical ops module tree", () => {
+    expect(workflowSchema).toEqual({
+      workflowProject,
+      workflowRepository,
+      workflowBranchState: canonicalOps.workflowBranchState,
+      workflowBranch,
+      workflowCommitState: canonicalOps.workflowCommitState,
+      workflowCommit,
+      repositoryCommitState: canonicalOps.repositoryCommitState,
+      repositoryCommitLeaseState: canonicalOps.repositoryCommitLeaseState,
+      repositoryBranch,
+      repositoryCommit,
+    });
+    expect(String(workflowRepository.fields.project.range)).toBe(resolvedTypeId(workflowProject));
+    expect(String(workflowBranch.fields.project.range)).toBe(resolvedTypeId(workflowProject));
+    expect(String(workflowCommit.fields.branch.range)).toBe(resolvedTypeId(workflowBranch));
+    expect(String(repositoryBranch.fields.repository.range)).toBe(
+      resolvedTypeId(workflowRepository),
+    );
+    expect(String(repositoryCommit.fields.workflowCommit.range)).toBe(
+      resolvedTypeId(workflowCommit),
+    );
+  });
+
   it("exposes canonical namespaces and representative built-ins from the module root", () => {
     expectNamedExports(moduleExports, [
       "core",
@@ -235,6 +274,12 @@ describe("module entry surfaces", () => {
       "icon",
       "iconReferenceField",
       "envVar",
+      "workflowProject",
+      "workflowRepository",
+      "workflowBranch",
+      "workflowCommit",
+      "repositoryBranch",
+      "repositoryCommit",
       "secretHandle",
       "principal",
       "authSubjectProjection",
@@ -257,6 +302,12 @@ describe("module entry surfaces", () => {
     expect(canonicalCore.authSubjectProjection.values.key).toBe(authSubjectProjection.values.key);
     expect(canonicalCore.principalRoleBinding.values.key).toBe(principalRoleBinding.values.key);
     expect(canonicalOps.envVar.values.key).toBe(envVar.values.key);
+    expect(canonicalOps.workflowProject.values.key).toBe(workflowProject.values.key);
+    expect(canonicalOps.workflowRepository.values.key).toBe(workflowRepository.values.key);
+    expect(canonicalOps.workflowBranch.values.key).toBe(workflowBranch.values.key);
+    expect(canonicalOps.workflowCommit.values.key).toBe(workflowCommit.values.key);
+    expect(canonicalOps.repositoryBranch.values.key).toBe(repositoryBranch.values.key);
+    expect(canonicalOps.repositoryCommit.values.key).toBe(repositoryCommit.values.key);
     expect(canonicalPkm.topic.values.key).toBe(topic.values.key);
     expect(canonicalPkm.topicKind.values.key).toBe(topicKind.values.key);
     expect(String(canonicalCore.type.fields.icon.range)).toBe(resolvedTypeId(icon));
@@ -264,11 +315,24 @@ describe("module entry surfaces", () => {
     expect(typeof moduleExports.core.node.values.id).toBe("string");
     expect(typeof moduleExports.core.principal.values.id).toBe("string");
     expect(typeof moduleExports.ops.envVar.values.id).toBe("string");
+    expect(typeof moduleExports.ops.workflowProject.values.id).toBe("string");
     expect(typeof moduleExports.pkm.topic.values.id).toBe("string");
     expect(moduleExports.node.values.key).toBe(canonicalCore.node.values.key);
     expect(moduleExports.icon.values.key).toBe(canonicalCore.icon.values.key);
     expect(moduleExports.iconReferenceField).toBe(iconReferenceField);
     expect(moduleExports.envVar.values.key).toBe(canonicalOps.envVar.values.key);
+    expect(moduleExports.workflowProject.values.key).toBe(canonicalOps.workflowProject.values.key);
+    expect(moduleExports.workflowRepository.values.key).toBe(
+      canonicalOps.workflowRepository.values.key,
+    );
+    expect(moduleExports.workflowBranch.values.key).toBe(canonicalOps.workflowBranch.values.key);
+    expect(moduleExports.workflowCommit.values.key).toBe(canonicalOps.workflowCommit.values.key);
+    expect(moduleExports.repositoryBranch.values.key).toBe(
+      canonicalOps.repositoryBranch.values.key,
+    );
+    expect(moduleExports.repositoryCommit.values.key).toBe(
+      canonicalOps.repositoryCommit.values.key,
+    );
     expect(moduleExports.secretHandle.values.key).toBe(canonicalCore.secretHandle.values.key);
     expect(moduleExports.principal.values.key).toBe(canonicalCore.principal.values.key);
     expect(moduleExports.authSubjectProjection.values.key).toBe(

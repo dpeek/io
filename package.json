@@ -22,6 +22,7 @@
     "./graph/modules/core": "./src/graph/modules/core.ts",
     "./graph/modules/ops": "./src/graph/modules/ops.ts",
     "./graph/modules/ops/env-var": "./src/graph/modules/ops/env-var/schema.ts",
+    "./graph/modules/ops/workflow": "./src/graph/modules/ops/workflow/schema.ts",
     "./graph/modules/pkm": "./src/graph/modules/pkm.ts",
     "./graph/modules/pkm/topic": "./src/graph/modules/pkm/topic/schema.ts",
     "./graph/adapters/react-dom": "./src/graph/adapters/react-dom/index.ts",

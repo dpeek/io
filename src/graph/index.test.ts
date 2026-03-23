@@ -26,6 +26,7 @@ const canonicalGraphSubpaths = [
   "./graph/modules/core",
   "./graph/modules/ops",
   "./graph/modules/ops/env-var",
+  "./graph/modules/ops/workflow",
   "./graph/modules/pkm",
   "./graph/modules/pkm/topic",
   "./graph/adapters/react-dom",
@@ -139,6 +140,26 @@ const requiredEnvVarExports = [
   "envVarNameInvalidMessage",
   "envVarNamePattern",
   "envVarSchema",
+] as const;
+
+const requiredWorkflowExports = [
+  "repositoryBranch",
+  "repositoryCommit",
+  "repositoryCommitLeaseState",
+  "repositoryCommitState",
+  "workflowBranch",
+  "workflowBranchKeyPattern",
+  "workflowBranchState",
+  "workflowBranchStateTypeModule",
+  "workflowCommit",
+  "workflowCommitKeyPattern",
+  "workflowCommitState",
+  "workflowCommitStateTypeModule",
+  "workflowProject",
+  "workflowProjectKeyPattern",
+  "workflowRepository",
+  "workflowRepositoryKeyPattern",
+  "workflowSchema",
 ] as const;
 
 const requiredTopicExports = [
@@ -285,23 +306,33 @@ describe("@io/core/graph package entry surfaces", () => {
   });
 
   it("keeps the canonical module entry surfaces explicit", async () => {
-    const [moduleExports, coreExports, opsExports, pkmExports, envVarExports, topicExports] =
-      await Promise.all([
-        import("@io/core/graph/modules"),
-        import("@io/core/graph/modules/core"),
-        import("@io/core/graph/modules/ops"),
-        import("@io/core/graph/modules/pkm"),
-        import("@io/core/graph/modules/ops/env-var"),
-        import("@io/core/graph/modules/pkm/topic"),
-      ]);
+    const [
+      moduleExports,
+      coreExports,
+      opsExports,
+      pkmExports,
+      envVarExports,
+      workflowExports,
+      topicExports,
+    ] = await Promise.all([
+      import("@io/core/graph/modules"),
+      import("@io/core/graph/modules/core"),
+      import("@io/core/graph/modules/ops"),
+      import("@io/core/graph/modules/pkm"),
+      import("@io/core/graph/modules/ops/env-var"),
+      import("@io/core/graph/modules/ops/workflow"),
+      import("@io/core/graph/modules/pkm/topic"),
+    ]);
 
     expectNamedExports(moduleExports, requiredModulesExports);
     expect(Object.keys(coreExports)).toEqual(["core"]);
     expect(Object.keys(opsExports)).toEqual(["ops"]);
     expect(Object.keys(pkmExports)).toEqual(["pkm"]);
     expectNamedExports(envVarExports, requiredEnvVarExports);
+    expectNamedExports(workflowExports, requiredWorkflowExports);
     expectNamedExports(topicExports, requiredTopicExports);
     expect(typeof opsExports.ops.envVar.values.id).toBe("string");
+    expect(typeof opsExports.ops.workflowProject.values.id).toBe("string");
     expect(typeof pkmExports.pkm.topic.values.id).toBe("string");
   });
 });

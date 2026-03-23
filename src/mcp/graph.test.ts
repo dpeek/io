@@ -210,13 +210,19 @@ describe("createGraphMcpSession", () => {
     });
     expect(status.cursor).toBeDefined();
     expect(status.lastSyncedAt).toBeDefined();
-    expect(status.entityTypeCounts).toHaveLength(2);
     expect(status.entityTypeCounts).toEqual(
       expect.arrayContaining([
         { count: 1, name: "topic", type: "pkm:topic" },
         { count: 1, name: "envVar", type: "ops:envVar" },
+        { count: 0, name: "workflowProject", type: "ops:workflowProject" },
+        { count: 0, name: "workflowRepository", type: "ops:workflowRepository" },
+        { count: 0, name: "workflowBranch", type: "ops:workflowBranch" },
+        { count: 0, name: "workflowCommit", type: "ops:workflowCommit" },
+        { count: 0, name: "repositoryBranch", type: "ops:repositoryBranch" },
+        { count: 0, name: "repositoryCommit", type: "ops:repositoryCommit" },
       ]),
     );
+    expect(status.entityTypeCounts).toHaveLength(8);
   });
 });
 
