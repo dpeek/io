@@ -1,4 +1,8 @@
-import { isInvalidationEventCompatibleWithTarget, type DependencyKey } from "@io/core/graph";
+import {
+  defineLiveSyncRegistration,
+  isInvalidationEventCompatibleWithTarget,
+  type DependencyKey,
+} from "@io/core/graph";
 
 import type {
   WorkflowReviewLiveInvalidation,
@@ -14,7 +18,17 @@ export type WorkflowReviewLiveScopeRouterOptions = {
   readonly registrationTtlMs?: number;
 };
 
+export type WorkflowReviewLiveInvalidationDelivery = (input: {
+  readonly invalidation: WorkflowReviewLiveInvalidation;
+  readonly registration: WorkflowReviewLiveRegistration;
+}) => void;
+
 export type WorkflowReviewLiveScopeRouter = {
+  attachInvalidationDelivery(input: {
+    readonly deliver: WorkflowReviewLiveInvalidationDelivery;
+    readonly scopeId: string;
+    readonly sessionId: string;
+  }): () => void;
   register(input: WorkflowReviewLiveRegistrationTarget): WorkflowReviewLiveRegistration;
   publish(invalidation: WorkflowReviewLiveInvalidation): readonly WorkflowReviewLiveRegistration[];
   pull(input: {
@@ -30,8 +44,8 @@ export type WorkflowReviewLiveScopeRouter = {
   registrationsForSession(sessionId: string): readonly WorkflowReviewLiveRegistration[];
 };
 
-function createRegistrationId(sessionId: string, scopeId: string): string {
-  return `workflow-review:${sessionId}:${scopeId}`;
+function createRegistrationId(sessionId: string, activeScopeId: string): string {
+  return `workflow-review:${sessionId}:${activeScopeId}`;
 }
 
 function createSessionScopeKey(sessionId: string, scopeId: string): string {
@@ -43,10 +57,9 @@ function createFrozenRegistration(
   input: WorkflowReviewLiveRegistrationTarget,
   expiresAt: string,
 ): WorkflowReviewLiveRegistration {
-  return Object.freeze({
+  return defineLiveSyncRegistration({
     ...input,
     registrationId,
-    dependencyKeys: Object.freeze([...input.dependencyKeys]),
     expiresAt,
   });
 }
@@ -102,6 +115,10 @@ export function createWorkflowReviewLiveScopeRouter(
   const registrationIdsByDependencyKey = new Map<string, Set<string>>();
   const registrationIdsByScope = new Map<string, Set<string>>();
   const registrationIdsBySession = new Map<string, Set<string>>();
+  const invalidationDeliveriesBySessionScope = new Map<
+    string,
+    WorkflowReviewLiveInvalidationDelivery
+  >();
   const invalidationsBySessionScope = new Map<string, readonly WorkflowReviewLiveInvalidation[]>();
 
   function unregisterById(registrationId: string): WorkflowReviewLiveRegistration | undefined {
@@ -113,6 +130,7 @@ export function createWorkflowReviewLiveScopeRouter(
     registrationsById.delete(registrationId);
     const sessionScopeKey = createSessionScopeKey(registration.sessionId, registration.scopeId);
     registrationIdBySessionScope.delete(sessionScopeKey);
+    invalidationDeliveriesBySessionScope.delete(sessionScopeKey);
     invalidationsBySessionScope.delete(sessionScopeKey);
     removeIndexedRegistration(registrationIdsBySession, registration.sessionId, registrationId);
     removeIndexedRegistration(registrationIdsByScope, registration.scopeId, registrationId);
@@ -164,6 +182,17 @@ export function createWorkflowReviewLiveScopeRouter(
   }
 
   return {
+    attachInvalidationDelivery(input) {
+      const sessionScopeKey = createSessionScopeKey(input.sessionId, input.scopeId);
+      invalidationDeliveriesBySessionScope.set(sessionScopeKey, input.deliver);
+      invalidationsBySessionScope.delete(sessionScopeKey);
+      return () => {
+        const current = invalidationDeliveriesBySessionScope.get(sessionScopeKey);
+        if (current === input.deliver) {
+          invalidationDeliveriesBySessionScope.delete(sessionScopeKey);
+        }
+      };
+    },
     register(input) {
       expire();
 
@@ -174,7 +203,7 @@ export function createWorkflowReviewLiveScopeRouter(
       }
 
       const registrationId =
-        existingRegistrationId ?? createRegistrationId(input.sessionId, input.scopeId);
+        existingRegistrationId ?? createRegistrationId(input.sessionId, input.activeScopeId);
       invalidationsBySessionScope.delete(sessionScopeKey);
       const registration = createFrozenRegistration(
         registrationId,
@@ -235,8 +264,22 @@ export function createWorkflowReviewLiveScopeRouter(
         }
 
         const sessionScopeKey = createSessionScopeKey(registration.sessionId, registration.scopeId);
-        const pending = invalidationsBySessionScope.get(sessionScopeKey) ?? [];
-        invalidationsBySessionScope.set(sessionScopeKey, [...pending, invalidation]);
+        const deliver = invalidationDeliveriesBySessionScope.get(sessionScopeKey);
+        if (deliver) {
+          try {
+            deliver({
+              invalidation,
+              registration,
+            });
+            invalidationsBySessionScope.delete(sessionScopeKey);
+          } catch {
+            unregisterById(registration.registrationId);
+            continue;
+          }
+        } else {
+          const pending = invalidationsBySessionScope.get(sessionScopeKey) ?? [];
+          invalidationsBySessionScope.set(sessionScopeKey, [...pending, invalidation]);
+        }
         matchedRegistrations.push(registration);
       }
 

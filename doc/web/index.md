@@ -121,12 +121,29 @@ generic shared command/read transports.
 - `../../src/web/lib/workflow-live-transport.ts`: shared
   `POST /api/workflow-live` request and response envelopes plus the fetch
   helper that callers can reuse for the first ephemeral workflow review live
-  registration, queued invalidation pull, and removal proof
+  registration, queued invalidation pull, and removal proof. The current
+  Worker transport still uses conservative `cursor-advanced` invalidations
+  with explicit scope identity so callers re-pull affected scopes instead of
+  receiving direct deltas
+- `../../src/web/lib/workflow-live-websocket.ts`: first WebSocket live-sync
+  transport entrypoint for `GET /api/workflow-live` upgrades, including
+  protocol negotiation, authenticated socket-session binding, multi-scope
+  workflow-review registration, renewal, and explicit unregister wiring,
+  heartbeat/expiry handling, direct `cursor-advanced` invalidation push to
+  matching active scoped registrations, delivery-failure socket teardown, and
+  close-time socket-bound registration cleanup inside the authority process
 - `../../src/web/lib/workflow-review-live-sync.ts`: browser-facing caller
   helper that composes `workflow-live-transport` with the scoped `/api/sync`
   client so workflow-review callers can register once, scoped-refresh on
   `cursor-advanced`, and recover from inactive pulls with re-registration plus
   another scoped re-pull
+- `../../src/web/lib/workflow-review-live-websocket-sync.ts`: browser-facing
+  WebSocket controller that composes the synced client with
+  `GET /api/workflow-live`, completes the issued socket-session handshake,
+  registers the active workflow-review scope and cursor, renews on heartbeat,
+  triggers scoped `/api/sync` re-pull from pushed `cursor-advanced`
+  invalidations, and reconnects with re-registration plus one explicit scoped
+  refresh after socket loss
 - `../../src/web/lib/authority.ts`: shared web authority behavior, secret-field
   mutation flow, the current web-owned `/api/commands` envelope, the shared
   write/command authorization seam, principal-aware sync filtering that omits
@@ -144,7 +161,10 @@ generic shared command/read transports.
   `/api/workflow-live` that stay scoped to the current review cursor and
   authenticated session identity, conservative `cursor-advanced` invalidation
   emission for accepted workflow writes through the shared transaction hook
-  plus dependency-key fan-out into matching live registrations,
+  plus dependency-key fan-out into matching live registrations over both the
+  queued pull transport and active WebSocket sessions, with stale or failed
+  socket delivery dropping only the affected scoped registration so freshness
+  recovers through reconnect plus scoped pull,
   authority-owned auth subject resolution with idempotent first-use
   principal/projection repair plus active role binding lookup, the provisional
   bearer-share lookup path that resolves hash-stored bearer grants only when
@@ -215,9 +235,11 @@ generic shared command/read transports.
   share tokens locally before calling the Durable Object's internal
   bearer-share lookup seam, lowers successful bearer lookups into anonymous
   shared-read `GET /api/sync` requests only, strips raw `Authorization` and
-  `Cookie` headers before forwarding to the Durable Object, and fails closed
-  when an authenticated session or bearer share token no longer resolves to an
-  active graph-backed authorization context.
+  `Cookie` headers before forwarding to the Durable Object, now forwards the
+  first authenticated `GET /api/workflow-live` WebSocket upgrade path with the
+  same authorization contract, and fails closed when an authenticated session
+  or bearer share token no longer resolves to an active graph-backed
+  authorization context.
 - `../../migrations/auth-store/`: committed Better Auth schema migrations for
   the dedicated D1 auth store, applied separately from Durable Object
   migrations

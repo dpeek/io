@@ -5,6 +5,7 @@ import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
 import { Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import {
   resolveWebSyncProofRequestedScope,
@@ -12,6 +13,7 @@ import {
   webSyncProofScopeOptions,
   type WebSyncProofScopeKey,
 } from "../lib/sync-scopes.js";
+import { createWorkflowReviewLiveWebSocketSync } from "../lib/workflow-review-live-websocket-sync.js";
 import { GraphAccessGate } from "./auth-shell.js";
 import { ExplorerSyncInspector } from "./explorer/index.js";
 import { useExplorerSyncSnapshot } from "./explorer/sync.js";
@@ -171,6 +173,19 @@ function SyncPageSurface({
 
 function SyncPageSurfaceFromRuntime({ scopeKey }: { scopeKey: WebSyncProofScopeKey }) {
   const runtime = useGraphRuntime();
+
+  useEffect(() => {
+    if (scopeKey !== "workflow-review") {
+      return;
+    }
+
+    const liveSync = createWorkflowReviewLiveWebSocketSync(runtime.sync);
+    liveSync.start();
+    return () => {
+      liveSync.stop();
+    };
+  }, [runtime, scopeKey]);
+
   return <SyncPageSurface runtime={runtime} scopeKey={scopeKey} />;
 }
 

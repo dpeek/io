@@ -11,6 +11,7 @@ import {
   defineSecretField,
   defineType,
   edgeId,
+  webSocketLiveSyncProtocol,
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthSubjectRef,
   type AnyTypeOutput,
@@ -51,6 +52,10 @@ import {
   webAppAuthorizationContextHeader,
 } from "./server-routes.js";
 import { webWorkflowLivePath, type WorkflowLiveResponse } from "./workflow-live-transport.js";
+import {
+  createTestWorkflowLiveWebSocketPair,
+  type TestWorkflowLiveWebSocket,
+} from "./workflow-live-websocket.js";
 import { webWorkflowReadPath, type WorkflowReadResponse } from "./workflow-transport.js";
 
 setDefaultTimeout(20_000);
@@ -884,6 +889,77 @@ async function postWorkflowLive(
   return { response, payload };
 }
 
+function createWorkflowLiveSocketRequest(
+  authorization: AuthorizationContext = testAuthorityAuthorization,
+): Request {
+  return createAuthorizedRequest(
+    `https://graph-authority.local${webWorkflowLivePath}`,
+    {
+      method: "GET",
+      headers: {
+        upgrade: "websocket",
+        "sec-websocket-protocol": webSocketLiveSyncProtocol,
+      },
+    },
+    authorization,
+  );
+}
+
+function readSocketMessages(socket: TestWorkflowLiveWebSocket): unknown[] {
+  return socket.sentMessages.map((message) => JSON.parse(message));
+}
+
+function sendSocketHandshake(socket: TestWorkflowLiveWebSocket, socketSessionId: string): void {
+  socket.send(
+    JSON.stringify({
+      direction: "client",
+      kind: "handshake",
+      protocol: webSocketLiveSyncProtocol,
+      session: {
+        socketSessionId,
+        sessionId: testAuthorityAuthorization.sessionId,
+        principalId: testAuthorityAuthorization.principalId,
+      },
+    }),
+  );
+}
+
+function sendSocketRegister(
+  socket: TestWorkflowLiveWebSocket,
+  input: {
+    readonly cursor: string;
+    readonly definitionHash: string;
+    readonly policyFilterVersion: string;
+    readonly scopeId: string;
+    readonly socketSessionId: string;
+  },
+): void {
+  socket.send(
+    JSON.stringify({
+      direction: "client",
+      kind: "register",
+      protocol: webSocketLiveSyncProtocol,
+      session: {
+        socketSessionId: input.socketSessionId,
+        sessionId: testAuthorityAuthorization.sessionId,
+        principalId: testAuthorityAuthorization.principalId,
+      },
+      scope: {
+        activeScopeId: `${input.scopeId}:${input.definitionHash}:${input.policyFilterVersion}`,
+        scopeId: input.scopeId,
+        definitionHash: input.definitionHash,
+        policyFilterVersion: input.policyFilterVersion,
+      },
+      cursor: input.cursor,
+      dependencyKeys: [
+        "scope:ops/workflow:review",
+        "projection:ops/workflow:project-branch-board",
+        "projection:ops/workflow:branch-commit-queue",
+      ],
+    }),
+  );
+}
+
 async function getDurableAuthority(durableObject: WebGraphAuthorityDurableObject): Promise<{
   persist(): Promise<void>;
   readSnapshot(options: { authorization: AuthorizationContext }): StoreSnapshot;
@@ -1599,9 +1675,10 @@ describe("web graph authority durable object", () => {
     expect(registered.payload).toMatchObject({
       kind: "workflow-review-register",
       result: {
-        registrationId: `workflow-review:${testAuthorityAuthorization.sessionId}:${workflowReviewModuleReadScope.scopeId}`,
+        registrationId: `workflow-review:${testAuthorityAuthorization.sessionId}:${workflowReviewModuleReadScope.scopeId}:${workflowReviewModuleReadScope.definitionHash}:policy:0`,
         sessionId: testAuthorityAuthorization.sessionId,
         principalId: testAuthorityAuthorization.principalId,
+        activeScopeId: `${workflowReviewModuleReadScope.scopeId}:${workflowReviewModuleReadScope.definitionHash}:policy:0`,
         scopeId: workflowReviewModuleReadScope.scopeId,
         definitionHash: workflowReviewModuleReadScope.definitionHash,
         policyFilterVersion: "policy:0",
@@ -1616,6 +1693,184 @@ describe("web graph authority durable object", () => {
         sessionId: testAuthorityAuthorization.sessionId,
       },
     });
+  });
+
+  it("pushes workflow live invalidations over websocket and recovers missed freshness with reconnect plus scoped re-pull", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const firstSockets = createTestWorkflowLiveWebSocketPair();
+    const durableObject = createTestDurableObject(
+      state,
+      {},
+      {
+        workflowLiveWebSocket: {
+          createSocketPair: () => firstSockets.pair,
+          createSocketSessionId: () => "socket:test:1",
+          now: () => new Date("2026-03-25T00:00:00.000Z"),
+        },
+      },
+    );
+    let authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const fixture = await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+    const total = await readSyncPayload(
+      durableObject,
+      undefined,
+      testAuthorityAuthorization,
+      workflowModuleScope,
+    );
+
+    const upgrade = await durableObject.fetch(createWorkflowLiveSocketRequest());
+    expect(upgrade.status).toBe(101);
+    expect(firstSockets.server.accepted).toBe(true);
+    expect((upgrade as Response & { webSocket?: unknown }).webSocket).toBe(firstSockets.client);
+
+    sendSocketHandshake(firstSockets.client, "socket:test:1");
+    sendSocketRegister(firstSockets.client, {
+      socketSessionId: "socket:test:1",
+      cursor: total.cursor,
+      scopeId: workflowReviewModuleReadScope.scopeId,
+      definitionHash: workflowReviewModuleReadScope.definitionHash,
+      policyFilterVersion: "policy:0",
+    });
+
+    const firstCommit = (await authority.executeCommand(
+      {
+        kind: "workflow-mutation",
+        input: {
+          action: "createCommit",
+          branchId: fixture.branchId,
+          title: "Durable websocket invalidation",
+          commitKey: "commit:durable-websocket-invalidation",
+          order: 0,
+          state: "ready",
+        },
+      },
+      {
+        authorization: testAuthorityAuthorization,
+      },
+    )) as { readonly cursor: string };
+
+    expect(readSocketMessages(firstSockets.server)).toMatchObject([
+      {
+        kind: "handshake",
+        session: {
+          socketSessionId: "socket:test:1",
+        },
+      },
+      {
+        kind: "registration",
+        registration: {
+          sessionId: "socket:test:1",
+          scopeId: workflowReviewModuleReadScope.scopeId,
+        },
+      },
+      {
+        kind: "invalidation",
+        session: {
+          socketSessionId: "socket:test:1",
+        },
+        scope: {
+          scopeId: workflowReviewModuleReadScope.scopeId,
+        },
+        invalidation: {
+          sourceCursor: firstCommit.cursor,
+          delivery: { kind: "cursor-advanced" },
+        },
+      },
+    ]);
+
+    const firstRefresh = await readSyncPayload(
+      durableObject,
+      total.cursor,
+      testAuthorityAuthorization,
+      workflowModuleScope,
+    );
+    if (firstRefresh.mode !== "incremental" || "fallback" in firstRefresh) {
+      throw new Error("Expected a scoped incremental refresh after websocket invalidation.");
+    }
+
+    firstSockets.client.close(1011, "connection lost");
+
+    const restartedSockets = createTestWorkflowLiveWebSocketPair();
+    const restarted = createTestDurableObject(
+      state,
+      {},
+      {
+        workflowLiveWebSocket: {
+          createSocketPair: () => restartedSockets.pair,
+          createSocketSessionId: () => "socket:test:2",
+          now: () => new Date("2026-03-25T00:00:05.000Z"),
+        },
+      },
+    );
+    authority = await getDurableAuthority<WebAppAuthority>(restarted);
+    const secondCommit = (await authority.executeCommand(
+      {
+        kind: "workflow-mutation",
+        input: {
+          action: "createCommit",
+          branchId: fixture.branchId,
+          title: "Durable websocket reconnect recovery",
+          commitKey: "commit:durable-websocket-reconnect-recovery",
+          order: 1,
+          state: "ready",
+        },
+      },
+      {
+        authorization: testAuthorityAuthorization,
+      },
+    )) as { readonly summary: { readonly id: string } };
+
+    const reconnect = await restarted.fetch(createWorkflowLiveSocketRequest());
+    expect(reconnect.status).toBe(101);
+
+    sendSocketHandshake(restartedSockets.client, "socket:test:2");
+    sendSocketRegister(restartedSockets.client, {
+      socketSessionId: "socket:test:2",
+      cursor: firstRefresh.cursor,
+      scopeId: workflowReviewModuleReadScope.scopeId,
+      definitionHash: workflowReviewModuleReadScope.definitionHash,
+      policyFilterVersion: "policy:0",
+    });
+
+    expect(readSocketMessages(restartedSockets.server)).toMatchObject([
+      {
+        kind: "handshake",
+        session: {
+          socketSessionId: "socket:test:2",
+        },
+      },
+      {
+        kind: "registration",
+        registration: {
+          sessionId: "socket:test:2",
+          scopeId: workflowReviewModuleReadScope.scopeId,
+        },
+      },
+    ]);
+
+    const recovered = await readSyncPayload(
+      restarted,
+      firstRefresh.cursor,
+      testAuthorityAuthorization,
+      workflowModuleScope,
+    );
+    if (recovered.mode !== "incremental" || "fallback" in recovered) {
+      throw new Error("Expected reconnect recovery to stay on the scoped incremental path.");
+    }
+    if (!recovered.transactions) {
+      throw new Error("Expected scoped incremental transactions after reconnect recovery.");
+    }
+
+    expect(recovered.scope).toEqual(firstRefresh.scope);
+    expect(recovered.transactions).toHaveLength(1);
+    expect(
+      recovered.transactions[0]?.transaction.ops.some(
+        (operation) =>
+          operation.op === "assert" &&
+          operation.edge.s === secondCommit.summary.id &&
+          operation.edge.p === edgeId(core.node.fields.name),
+      ),
+    ).toBe(true);
   });
 
   it("delivers workflow review invalidations and recovers with scoped re-pull after router loss", async () => {

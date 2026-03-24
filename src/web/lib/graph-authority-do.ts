@@ -43,6 +43,10 @@ import {
 } from "./server-routes.js";
 import { createWorkflowReviewLiveScopeRouter } from "./workflow-live-scope-router.js";
 import { webWorkflowLivePath } from "./workflow-live-transport.js";
+import {
+  handleWorkflowLiveWebSocketUpgrade,
+  type WorkflowLiveWebSocketDependencies,
+} from "./workflow-live-websocket.js";
 import { webWorkflowReadPath } from "./workflow-transport.js";
 
 type SqlRow = Record<string, unknown>;
@@ -1391,6 +1395,7 @@ export class WebGraphAuthorityDurableObject {
   private readonly state: DurableObjectStateLike;
   private readonly retainedHistoryPolicy: AuthoritativeGraphRetainedHistoryPolicy;
   private readonly createAuthority: WebGraphAuthorityFactory;
+  private readonly workflowLiveWebSocket: WorkflowLiveWebSocketDependencies;
   private readonly workflowReviewLiveScopeRouter = createWorkflowReviewLiveScopeRouter();
   private authorityPromise: Promise<WebAppAuthority> | null = null;
 
@@ -1399,11 +1404,13 @@ export class WebGraphAuthorityDurableObject {
     env: DurableObjectEnvLike = {},
     options: {
       createAuthority?: WebGraphAuthorityFactory;
+      workflowLiveWebSocket?: WorkflowLiveWebSocketDependencies;
     } = {},
   ) {
     this.state = state;
     this.retainedHistoryPolicy = readRetainedHistoryPolicy(env);
     this.createAuthority = options.createAuthority ?? createWebAppAuthority;
+    this.workflowLiveWebSocket = options.workflowLiveWebSocket ?? {};
     bootstrapDurableObjectAuthoritySchema(this.state.storage);
   }
 
@@ -1587,6 +1594,16 @@ export class WebGraphAuthorityDurableObject {
     }
 
     if (url.pathname === webWorkflowLivePath) {
+      if ((request.headers.get("upgrade") ?? "").toLowerCase() === "websocket") {
+        return handleWorkflowLiveWebSocketUpgrade(
+          request,
+          authority,
+          this.workflowReviewLiveScopeRouter,
+          authorization,
+          this.workflowLiveWebSocket,
+        );
+      }
+
       return handleWorkflowLiveRequest(
         request,
         authority,

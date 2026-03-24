@@ -2,6 +2,7 @@ import {
   type AnyTypeOutput,
   createIncrementalSyncFallback,
   createIncrementalSyncPayload,
+  createLiveSyncActiveScopeId,
   type AuthorizationContext,
   type PersistedAuthoritativeGraph,
   type PolicyError,
@@ -368,6 +369,11 @@ export function createScopedSyncServices(input: {
       );
 
       return Object.freeze({
+        activeScopeId: createLiveSyncActiveScopeId({
+          scopeId: plannedScope.scope.scopeId,
+          definitionHash: plannedScope.scope.definitionHash,
+          policyFilterVersion: plannedScope.scope.policyFilterVersion,
+        }),
         sessionId: principal.sessionId,
         principalId: principal.principalId,
         scopeId: plannedScope.scope.scopeId,

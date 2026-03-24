@@ -1,4 +1,8 @@
-import type { DependencyKey, InvalidationEvent } from "@io/core/graph";
+import type {
+  InvalidationEvent,
+  LiveSyncRegistration,
+  LiveSyncRegistrationTarget,
+} from "@io/core/graph";
 
 export const webWorkflowLivePath = "/api/workflow-live";
 
@@ -10,21 +14,9 @@ export const workflowLiveRequestKinds = [
 
 export type WorkflowLiveRequestKind = (typeof workflowLiveRequestKinds)[number];
 
-export type WorkflowReviewLiveRegistration = {
-  readonly registrationId: string;
-  readonly sessionId: string;
-  readonly principalId: string;
-  readonly scopeId: string;
-  readonly definitionHash: string;
-  readonly policyFilterVersion: string;
-  readonly dependencyKeys: readonly DependencyKey[];
-  readonly expiresAt: string;
-};
+export type WorkflowReviewLiveRegistration = LiveSyncRegistration;
 
-export type WorkflowReviewLiveRegistrationTarget = Omit<
-  WorkflowReviewLiveRegistration,
-  "expiresAt" | "registrationId"
->;
+export type WorkflowReviewLiveRegistrationTarget = LiveSyncRegistrationTarget;
 
 export type WorkflowReviewLiveInvalidation = InvalidationEvent;
 

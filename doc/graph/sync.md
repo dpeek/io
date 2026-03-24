@@ -70,6 +70,13 @@ The first live invalidation proof is intentionally conservative:
   and performs an explicit scoped `/api/sync` pull. The first shipped caller
   helper for that path now lives in
   `../../src/web/lib/workflow-review-live-sync.ts`
+- browser callers can also attach the WebSocket transport through
+  `../../src/web/lib/workflow-review-live-websocket-sync.ts`, which learns the
+  issued socket session from the initial server handshake, registers the
+  current workflow-review cursor and scope identity, sends heartbeat plus
+  renewal messages, triggers scoped `/api/sync` pulls on pushed
+  `cursor-advanced` invalidations, and reconnects with re-registration plus
+  one explicit scoped re-pull after socket loss
 - direct scoped-delta delivery remains a reserved contract shape; the current
   proof only emits `cursor-advanced`
 
@@ -162,6 +169,66 @@ The current live workflow proof layers on top of that scoped sync baseline:
    whole-graph resync. `createWorkflowReviewLiveSync(...)` is the current
    shipped seam that packages that register, pull, and scoped re-pull flow for
    workflow-review callers.
+
+## WebSocket Live-Sync Contract
+
+The first coded WebSocket transport contract now lives in
+`../../src/graph/runtime/live-sync.ts` and is exported through
+`@io/core/graph`.
+
+This transport is now treated as reusable live infrastructure for scoped sync,
+not a workflow-only experiment, even though the first shipped registration
+planner still targets the workflow-review scope. The shared contract is
+intentionally scoped to the first shipped `cursor-advanced` push model:
+
+- `LiveSyncActiveScopeIdentity` freezes the code-owned active scope identity as
+  `activeScopeId`, `scopeId`, `definitionHash`, and `policyFilterVersion`
+- `LiveSyncRegistrationTarget` and `LiveSyncRegistration` give HTTP and
+  WebSocket seams one shared registration payload instead of worker-local JSON
+- `WebSocketLiveSyncSocketSessionIdentity` separates the transport-local
+  `socketSessionId` from the auth/session principal ids already carried by the
+  current web authority
+- `WebSocketLiveSyncClientMessage` defines the client handshake, register,
+  renew, and heartbeat envelopes
+- `WebSocketLiveSyncServerEvent` defines the server handshake, registration,
+  renewal, heartbeat, invalidation, and error envelopes
+
+The first worker-owned transport entrypoint now ships on
+`GET /api/workflow-live` with `Upgrade: websocket` and
+`Sec-WebSocket-Protocol: io.live-sync.v1`. The worker resolves the same
+authenticated `AuthorizationContext` it already uses for `/api/sync`,
+`/api/tx`, and `POST /api/workflow-live`, forwards the upgrade to the authority
+Durable Object, and the authority binds the accepted socket to one explicit
+`socketSessionId`, Better Auth-backed `sessionId`, and graph-backed
+`principalId` in server-side state before any registration messages are
+accepted.
+
+The current WebSocket proof keeps cross-graph multiplexing and direct scoped
+delta delivery out of scope, but it does enforce the first lifecycle contract:
+
+- only authenticated callers can upgrade successfully
+- the server issues that socket-session identity in an initial handshake
+  event, and the client must echo it back before it can register or heartbeat
+- workflow-review registrations are still planned by the authority and routed
+  through the existing session/scope router
+- close and expiry cleanup remove any active socket registration so stale
+  session state cannot linger in the authority process
+- socket loss, expiry, or router restart fail closed as a freshness-only
+  degradation: callers keep their current scoped cache readable, reconnect,
+  re-register the same active scope identity, and run one explicit scoped
+  `/api/sync` pull to recover missed changes
+
+Validation helpers are shipped with the contract:
+
+- `createLiveSyncActiveScopeId(...)` derives the canonical active-scope id from
+  scope identity fields
+- `defineLiveSyncRegistration(...)` and
+  `defineWebSocketLiveSyncClientMessage(...)` /
+  `defineWebSocketLiveSyncServerEvent(...)` validate and freeze shared
+  transport payloads before they cross the client/server seam
+- registration compatibility now requires the exact active-scope identity, so
+  renewals and invalidations cannot silently drift to a new scope hash or
+  policy version
 
 ## Current Session APIs
 

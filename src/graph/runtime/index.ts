@@ -7,6 +7,7 @@ export * from "./http-client";
 export * from "./http-sync-request";
 export * from "./id";
 export * from "./identity";
+export * from "./live-sync";
 export * from "./projection";
 export * from "./schema";
 export * from "./store";

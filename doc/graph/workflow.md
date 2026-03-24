@@ -241,12 +241,28 @@ live proof now lives in `../../src/web/lib/workflow-review-live-sync.ts`:
   queue them for matching registrations, and callers treat
   `active: false` on `workflow-review-pull` as the signal to re-register from
   the current scoped sync cursor before the next scoped refresh
+- `GET /api/workflow-live` with `Upgrade: websocket` and
+  `Sec-WebSocket-Protocol: io.live-sync.v1`
+- websocket runtime model:
+  the worker and authority reuse the same authenticated authorization lookup,
+  each accepted socket is bound to an explicit socket-session id plus the
+  current session/principal identity in authority-owned state, the server
+  issues that socket-session identity in an initial handshake event, the
+  client must echo it back before register/renew/heartbeat messages are
+  processed, and close or expiry removes any active workflow live registration
+  for that socket
 - caller helper:
   `createWorkflowReviewLiveSync(sync, options)` wraps the current
   `workflow-review-register`, `workflow-review-pull`, and scoped `/api/sync`
   flow so a workflow-review client can register interest, react to
   `cursor-advanced`, and recover freshness after expiry or router loss without
   widening to whole-graph sync
+- websocket caller helper:
+  `createWorkflowReviewLiveWebSocketSync(sync, options)` wraps the shipped
+  WebSocket path so a workflow-review client can register its active scoped
+  cursor, renew with heartbeats, react to pushed `cursor-advanced`
+  invalidations with scoped re-pull, and reconnect with re-registration plus
+  one explicit scoped refresh after socket loss
 - failure body: `{ error, code? }`, where stable live-registration codes such
   as `auth.unauthenticated`, `policy-changed`, and `scope-changed` are
   preserved at the transport boundary

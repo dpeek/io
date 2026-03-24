@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { defineInvalidationEvent } from "@io/core/graph";
+import { createLiveSyncActiveScopeId, defineInvalidationEvent } from "@io/core/graph";
 
 import { createWorkflowReviewLiveScopeRouter } from "./workflow-live-scope-router.js";
 import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-transport.js";
@@ -8,12 +8,23 @@ import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-trans
 function createRegistrationTarget(
   overrides: Partial<WorkflowReviewLiveRegistrationTarget> = {},
 ): WorkflowReviewLiveRegistrationTarget {
+  const scopeId = overrides.scopeId ?? "scope:ops/workflow:review";
+  const definitionHash = overrides.definitionHash ?? "scope-def:ops/workflow:review:v1";
+  const policyFilterVersion = overrides.policyFilterVersion ?? "policy:0";
+
   return {
     sessionId: "session:review-1",
     principalId: "principal:reviewer-1",
-    scopeId: "scope:ops/workflow:review",
-    definitionHash: "scope-def:ops/workflow:review:v1",
-    policyFilterVersion: "policy:0",
+    activeScopeId:
+      overrides.activeScopeId ??
+      createLiveSyncActiveScopeId({
+        scopeId,
+        definitionHash,
+        policyFilterVersion,
+      }),
+    scopeId,
+    definitionHash,
+    policyFilterVersion,
     dependencyKeys: [
       "scope:ops/workflow:review",
       "projection:ops/workflow:project-branch-board",
@@ -42,9 +53,11 @@ describe("workflow review live scope router", () => {
     const registration = router.register(createRegistrationTarget());
 
     expect(registration).toEqual({
-      registrationId: "workflow-review:session:review-1:scope:ops/workflow:review",
+      registrationId:
+        "workflow-review:session:review-1:scope:ops/workflow:review:scope-def:ops/workflow:review:v1:policy:0",
       sessionId: "session:review-1",
       principalId: "principal:reviewer-1",
+      activeScopeId: "scope:ops/workflow:review:scope-def:ops/workflow:review:v1:policy:0",
       scopeId: "scope:ops/workflow:review",
       definitionHash: "scope-def:ops/workflow:review:v1",
       policyFilterVersion: "policy:0",
@@ -167,6 +180,85 @@ describe("workflow review live scope router", () => {
       invalidations: [],
       scopeId: "scope:ops/workflow:backlog",
       sessionId: "session:review-1",
+    });
+  });
+
+  it("delivers matching invalidations directly to attached session scopes without queueing them", () => {
+    const router = createWorkflowReviewLiveScopeRouter({
+      now: () => new Date("2026-03-24T00:00:00.000Z"),
+    });
+    const registration = router.register(createRegistrationTarget());
+    const invalidation = createWorkflowReviewInvalidation();
+    const delivered: WorkflowReviewLiveRegistrationTarget[] = [];
+
+    router.attachInvalidationDelivery({
+      sessionId: registration.sessionId,
+      scopeId: registration.scopeId,
+      deliver({ invalidation: deliveredInvalidation, registration: deliveredRegistration }) {
+        expect(deliveredInvalidation).toEqual(invalidation);
+        delivered.push(deliveredRegistration);
+      },
+    });
+
+    expect(router.publish(invalidation)).toEqual([registration]);
+    expect(delivered).toEqual([registration]);
+    expect(
+      router.pull({
+        sessionId: registration.sessionId,
+        scopeId: registration.scopeId,
+      }),
+    ).toEqual({
+      active: true,
+      invalidations: [],
+      scopeId: registration.scopeId,
+      sessionId: registration.sessionId,
+    });
+  });
+
+  it("drops only the failing scoped registration when attached delivery throws", () => {
+    const router = createWorkflowReviewLiveScopeRouter({
+      now: () => new Date("2026-03-24T00:00:00.000Z"),
+    });
+    const failing = router.register(createRegistrationTarget());
+    const healthy = router.register(
+      createRegistrationTarget({
+        sessionId: "session:review-2",
+        principalId: "principal:reviewer-2",
+      }),
+    );
+    const invalidation = createWorkflowReviewInvalidation();
+
+    router.attachInvalidationDelivery({
+      sessionId: failing.sessionId,
+      scopeId: failing.scopeId,
+      deliver() {
+        throw new Error("socket closed");
+      },
+    });
+
+    expect(router.publish(invalidation)).toEqual([healthy]);
+    expect(router.registrationsForSession(failing.sessionId)).toEqual([]);
+    expect(
+      router.pull({
+        sessionId: failing.sessionId,
+        scopeId: failing.scopeId,
+      }),
+    ).toEqual({
+      active: false,
+      invalidations: [],
+      scopeId: failing.scopeId,
+      sessionId: failing.sessionId,
+    });
+    expect(
+      router.pull({
+        sessionId: healthy.sessionId,
+        scopeId: healthy.scopeId,
+      }),
+    ).toEqual({
+      active: true,
+      invalidations: [invalidation],
+      scopeId: healthy.scopeId,
+      sessionId: healthy.sessionId,
     });
   });
 

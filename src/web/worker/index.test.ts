@@ -387,6 +387,66 @@ describe("web worker route forwarding", () => {
       policyVersion: 0,
     });
   });
+
+  it("forwards authenticated workflow live websocket upgrades through the web transport path", async () => {
+    const upgradeResponse = new Response(null, {
+      status: 101,
+      headers: {
+        connection: "Upgrade",
+        upgrade: "websocket",
+        "sec-websocket-protocol": "io.live-sync.v1",
+      },
+    });
+    Object.defineProperty(upgradeResponse, "webSocket", {
+      configurable: true,
+      enumerable: true,
+      value: { id: "socket:client" },
+    });
+    const { authorityPaths, env, principalLookupPaths, readForwardedAuthorization } =
+      createWorkerEnv({
+        authorityResponse: upgradeResponse,
+        principalLookupResponse: Response.json({
+          principalId: "principal:user-better-auth",
+          principalKind: "human",
+          roleKeys: ["graph:member"],
+          capabilityGrantIds: ["grant-1"],
+          capabilityVersion: 4,
+        }),
+      });
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-better-auth" },
+          user: { id: "user-better-auth" },
+        };
+      },
+    });
+
+    const response = await handler.fetch(
+      new Request(`https://web.local${webWorkflowLivePath}`, {
+        method: "GET",
+        headers: {
+          upgrade: "websocket",
+          "sec-websocket-protocol": "io.live-sync.v1",
+        },
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(101);
+    expect(authorityPaths).toEqual([webWorkflowLivePath]);
+    expect(principalLookupPaths).toEqual([webGraphAuthoritySessionPrincipalLookupPath]);
+    expect(readForwardedAuthorization()).toEqual({
+      graphId: "graph:global",
+      principalId: "principal:user-better-auth",
+      principalKind: "human",
+      sessionId: "session-better-auth",
+      roleKeys: ["graph:member"],
+      capabilityGrantIds: ["grant-1"],
+      capabilityVersion: 4,
+      policyVersion: 0,
+    });
+  });
   it("forwards unauthenticated graph writes with an anonymous authorization context", async () => {
     const { env, readForwardedAuthorization } = createWorkerEnv();
     const handler = createWorkerFetchHandler({

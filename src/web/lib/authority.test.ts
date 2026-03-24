@@ -1,6 +1,7 @@
 import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
 import {
+  createLiveSyncActiveScopeId,
   createIdMap,
   createStore,
   createSyncedTypeClient,
@@ -2546,6 +2547,11 @@ describe("web authority", () => {
     ).toEqual({
       sessionId: authorization.sessionId!,
       principalId: authorization.principalId!,
+      activeScopeId: createLiveSyncActiveScopeId({
+        scopeId: workflowReviewModuleReadScope.scopeId,
+        definitionHash: workflowReviewModuleReadScope.definitionHash,
+        policyFilterVersion: "policy:0",
+      }),
       scopeId: workflowReviewModuleReadScope.scopeId,
       definitionHash: workflowReviewModuleReadScope.definitionHash,
       policyFilterVersion: "policy:0",
