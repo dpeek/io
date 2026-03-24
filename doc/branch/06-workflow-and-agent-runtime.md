@@ -666,7 +666,7 @@ Context bundles:
 | `CommitQueueScope`        | Returns the canonical branch-detail view and ordered commit queue for one selected branch               | TUI, session launcher                                     | Branch 3 scope planner and projections             | branch id, cursor                                                    | branch detail, ordered commit rows, freshness                    | `branch-not-found`, `policy-denied`, `projection-stale`      | `stable`                                                |
 | `ContextBundleRequest`    | Resolves the immutable branch-specific or commit-specific context bundle for one session                | agent runtime                                             | context retrieval engine plus Branch 3 scope reads | subject, session id, retrieval mode, budget                          | `ContextBundle` and ordered `ContextBundleEntry[]`               | missing inputs, policy denied, incomplete scope, over-budget | `stable`                                                |
 | `WorkflowMutationCommand` | Creates and transitions projects, repositories, branches, commits, and their execution mappings         | operator tooling, session launcher, worker runtime        | authoritative workflow runtime                     | create, reorder, attach, activate, block, complete, archive commands | updated summary rows and cursor                                  | lock conflict, invalid transition, policy denied             | `stable`                                                |
-| `CodexSessionLaunch`      | Starts a branch-scoped or commit-scoped interactive Codex session                                       | TUI, future web operator surface                          | session launcher plus workspace manager            | project id, subject, actor, mode                                     | session summary and launch metadata                              | subject locked, workspace missing, git mismatch              | `stable`                                                |
+| `CodexSessionLaunch`      | Starts a branch-scoped or commit-scoped interactive Codex session                                       | TUI, future web operator surface                          | session launcher plus workspace manager            | project id, subject, actor, mode                                     | session summary plus launch and attach metadata                  | subject locked, workspace state missing, repo mismatch       | `stable`                                                |
 | `AgentSessionAppend`      | Creates sessions and appends ordered session events                                                     | worker runtime, Codex runner bridge                       | authoritative workflow runtime                     | session metadata or event envelopes                                  | accepted record ids, optional summaries                          | missing subject, bad sequence, payload rejected              | `stable` for envelope, `provisional` for storage layout |
 | `ArtifactWrite`           | Persists text or blob-backed artifacts for a session                                                    | worker runtime, future ingest jobs                        | artifact writer                                    | session id, metadata, body or blob ref                               | `WorkflowArtifact` record                                        | missing session, blob missing, policy denied                 | `stable`                                                |
 | `DecisionWrite`           | Persists durable decisions and blockers                                                                 | worker runtime, operator UI                               | decision writer                                    | session id, decision payload                                         | `WorkflowDecision` record                                        | missing session, policy denied                               | `stable`                                                |
@@ -914,20 +914,91 @@ interface CommitQueueScopeResult {
   the TUI
 - caller: TUI branch detail view, future web operator view
 - callee: session launcher plus workspace manager
-- inputs:
-  - `projectId`
-  - `subject`
-  - actor principal
-  - session kind such as `planning`, `execution`, or `review`
-- outputs:
-  - persisted `AgentSession`
-  - launch metadata including repository id, branch name, and worktree path if
-    assigned
+- canonical request:
+
+```ts
+type CodexSessionLaunchRequest = {
+  projectId: string;
+  actorId: string;
+  kind: "planning" | "execution" | "review";
+  subject:
+    | {
+        kind: "branch";
+        branchId: string;
+      }
+    | {
+        kind: "commit";
+        branchId: string;
+        commitId: string;
+      };
+};
+```
+
+- canonical success result:
+
+```ts
+type CodexSessionLaunchSuccess = {
+  ok: true;
+  session: {
+    id: string;
+    kind: "planning" | "execution" | "review";
+    subject:
+      | { kind: "branch"; branchId: string }
+      | { kind: "commit"; branchId: string; commitId: string };
+  };
+  launch: {
+    disposition: "launched" | "attached";
+    repositoryId: string;
+    repositoryRoot?: string;
+    managedBranchName: string;
+    worktreePath?: string;
+    attach: {
+      sessionId: string;
+    };
+  };
+};
+```
+
+- result notes:
+  - `subject.kind: "branch"` launches against the logical workflow branch and
+    does not name a commit
+  - `subject.kind: "commit"` always includes both `branchId` and `commitId` so
+    the runtime and workspace layer can validate the active commit lineage in
+    one request
+  - `launch.disposition: "launched"` means the launcher created the first
+    session for that subject; `"attached"` means the subject already had the
+    attachable running session the TUI should hand off to
+  - `launch.attach.sessionId` is the only first-milestone attach handoff the
+    TUI needs; richer replay or retained-history navigation stays out of scope
+  - `repositoryRoot` and `worktreePath` are optional because planning sessions
+    may resolve before a local worktree exists
 - failure shape:
-  - `subject-locked`
-  - `workspace-unavailable`
-  - `repository-branch-missing`
-  - `policy-denied`
+
+```ts
+type CodexSessionLaunchFailure = {
+  ok: false;
+  code: "subject-locked" | "workspace-state-missing" | "repository-mismatch" | "policy-denied";
+  message: string;
+  subject:
+    | { kind: "branch"; branchId: string }
+    | { kind: "commit"; branchId: string; commitId: string };
+};
+```
+
+- failure notes:
+  - `subject-locked`: another editing or execution session already owns the
+    selected branch or its active commit
+  - `workspace-state-missing`: the local repository, checkout, or worktree
+    state required for the requested launch kind is not materialized
+  - `repository-mismatch`: authoritative workflow mappings and the local
+    attached repository or branch realization disagree, so launch must stop
+    before Codex starts
+  - `policy-denied`: the caller cannot read the subject or create or attach the
+    session
+- non-goals:
+  - retained-history replay, transcript pagination, and later session recovery
+  - arbitrary workspace repair or git reconcile during the launch call
+  - commit finalization, artifact writes, or post-launch lifecycle state
 - stability: `stable`
 
 ### `AgentSessionAppend`

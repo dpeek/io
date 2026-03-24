@@ -348,6 +348,13 @@ export interface CodexAppServerRunnerOptions {
   sessionEvents?: AgentSessionEventBus;
 }
 
+export interface CodexAppServerLaunch {
+  completion: Promise<IssueRunResult>;
+  session: AgentSessionRef;
+  threadId: string;
+  turnId: string;
+}
+
 export class CodexAppServerRunner {
   readonly #config: CodexConfig;
   readonly #log: Logger;
@@ -369,6 +376,16 @@ export class CodexAppServerRunner {
     session?: AgentSessionRef;
     workspace: PreparedWorkspace;
   }): Promise<IssueRunResult> {
+    const launched = await this.launch(options);
+    return await launched.completion;
+  }
+
+  async launch(options: {
+    issue: AgentIssue;
+    prompt: string;
+    session?: AgentSessionRef;
+    workspace: PreparedWorkspace;
+  }): Promise<CodexAppServerLaunch> {
     let session = options.session ?? {
       branchName: options.workspace.branchName,
       id: `worker:${options.workspace.workerId}`,
@@ -567,55 +584,61 @@ export class CodexAppServerRunner {
       phase: "started",
       type: "session",
     });
-
-    try {
-      await this.#waitForTurnCompletion(queue, state, options.workspace.path, sendLine);
-      const result = {
-        issue: options.issue,
-        logPaths: {
-          eventLog: logs.eventLogPath,
-          mainOutput: logs.mainOutputPath,
-          stderrLog: logs.stderrLogPath,
-          stdoutLog: logs.stdoutLogPath,
-        },
-        prompt: options.prompt,
-        sessionId: session.id,
-        stderr: state.stderr,
-        stdout: state.stdout,
-        success: !state.inputRequired,
-        threadId,
-        turnId,
-        workspace: options.workspace,
-      };
-      await logs.flush();
-      return result;
-    } catch (error) {
-      publish({
-        data: {
-          reason: error instanceof Error ? error.message : String(error),
-        },
-        phase: "failed",
-        type: "session",
-      });
-      throw error;
-    } finally {
-      clearInterval(heartbeat);
-      publish({
-        data: {
-          threadId: heartbeatThreadId,
-          turnId: heartbeatTurnId,
-          workspacePath: options.workspace.path,
-        },
-        phase: "stopped",
-        type: "session",
-      });
+    const completion = (async () => {
       try {
-        proc.kill();
-      } catch {
-        // ignore
+        await this.#waitForTurnCompletion(queue, state, options.workspace.path, sendLine);
+        return {
+          issue: options.issue,
+          logPaths: {
+            eventLog: logs.eventLogPath,
+            mainOutput: logs.mainOutputPath,
+            stderrLog: logs.stderrLogPath,
+            stdoutLog: logs.stdoutLogPath,
+          },
+          prompt: options.prompt,
+          sessionId: session.id,
+          stderr: state.stderr,
+          stdout: state.stdout,
+          success: !state.inputRequired,
+          threadId,
+          turnId,
+          workspace: options.workspace,
+        } satisfies IssueRunResult;
+      } catch (error) {
+        publish({
+          data: {
+            reason: error instanceof Error ? error.message : String(error),
+          },
+          phase: "failed",
+          type: "session",
+        });
+        throw error;
+      } finally {
+        clearInterval(heartbeat);
+        publish({
+          data: {
+            threadId: heartbeatThreadId,
+            turnId: heartbeatTurnId,
+            workspacePath: options.workspace.path,
+          },
+          phase: "stopped",
+          type: "session",
+        });
+        try {
+          proc.kill();
+        } catch {
+          // ignore
+        }
+        await logs.flush();
       }
-      await logs.flush();
-    }
+    })();
+
+    return {
+      completion,
+      session,
+      threadId,
+      turnId,
+    };
   }
 
   async #handleServerRequest(

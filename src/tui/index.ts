@@ -10,6 +10,15 @@ export {
   normalizeWorkflowTuiSurfaceModel,
 } from "./model.js";
 export type {
+  CodexSessionLaunchFailure,
+  CodexSessionLaunchFailureCode,
+  CodexSessionLaunchKind,
+  CodexSessionLaunchMetadata,
+  CodexSessionLaunchRequest,
+  CodexSessionLaunchResult,
+  CodexSessionLaunchSessionMetadata,
+  CodexSessionLaunchSubject,
+  CodexSessionLaunchSuccess,
   WorkflowTuiFocus,
   WorkflowTuiPanelModel,
   WorkflowTuiSurfaceModel,
@@ -36,6 +45,7 @@ export {
 export type { WorkflowProjectionQueryOptions } from "./projection.js";
 export { parseWorkflowTuiCliArgs, runWorkflowTuiCli } from "./server.js";
 export type { WorkflowTuiCliOptions } from "./server.js";
+export { createWorkflowTuiLaunchActionExecutor } from "./launch.js";
 export { createWorkflowTui } from "./tui.js";
 export type {
   WorkflowTui,

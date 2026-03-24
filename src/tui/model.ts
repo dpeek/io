@@ -38,6 +38,73 @@ export const workflowTuiActionValues = ["branch-session", "commit-session"] as c
 
 export type WorkflowTuiAction = (typeof workflowTuiActionValues)[number];
 
+export const codexSessionLaunchKindValues = ["planning", "execution", "review"] as const;
+
+export type CodexSessionLaunchKind = (typeof codexSessionLaunchKindValues)[number];
+
+export type CodexSessionLaunchSubject =
+  | {
+      readonly branchId: string;
+      readonly kind: "branch";
+    }
+  | {
+      readonly branchId: string;
+      readonly commitId: string;
+      readonly kind: "commit";
+    };
+
+export interface CodexSessionLaunchRequest {
+  readonly actorId: string;
+  readonly kind: CodexSessionLaunchKind;
+  readonly projectId: string;
+  readonly subject: CodexSessionLaunchSubject;
+}
+
+export const codexSessionLaunchDispositionValues = ["launched", "attached"] as const;
+
+export type CodexSessionLaunchDisposition = (typeof codexSessionLaunchDispositionValues)[number];
+
+export interface CodexSessionLaunchSessionMetadata {
+  readonly id: string;
+  readonly kind: CodexSessionLaunchKind;
+  readonly subject: CodexSessionLaunchSubject;
+}
+
+export interface CodexSessionLaunchMetadata {
+  readonly attach: {
+    readonly sessionId: string;
+  };
+  readonly disposition: CodexSessionLaunchDisposition;
+  readonly managedBranchName: string;
+  readonly repositoryId: string;
+  readonly repositoryRoot?: string;
+  readonly worktreePath?: string;
+}
+
+export interface CodexSessionLaunchSuccess {
+  readonly launch: CodexSessionLaunchMetadata;
+  readonly ok: true;
+  readonly session: CodexSessionLaunchSessionMetadata;
+}
+
+export const codexSessionLaunchFailureCodeValues = [
+  "subject-locked",
+  "workspace-state-missing",
+  "repository-mismatch",
+  "policy-denied",
+] as const;
+
+export type CodexSessionLaunchFailureCode = (typeof codexSessionLaunchFailureCodeValues)[number];
+
+export interface CodexSessionLaunchFailure {
+  readonly code: CodexSessionLaunchFailureCode;
+  readonly message: string;
+  readonly ok: false;
+  readonly subject: CodexSessionLaunchSubject;
+}
+
+export type CodexSessionLaunchResult = CodexSessionLaunchSuccess | CodexSessionLaunchFailure;
+
 export interface WorkflowTuiBranchSubjectStateModel {
   readonly branchId: string;
   readonly branchState: WorkflowBranchStateValue;

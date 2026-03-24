@@ -36,6 +36,9 @@ If `entrypointPath` is omitted, the loader defaults to `./io.ts` plus
 `io agent tui ...` remains the legacy retained session monitor.
 The CLI now initializes the synced workflow graph client before rendering and
 fails closed when startup cannot materialize the initial workflow surface.
+Workflow launch from `io tui` stays in that shell for the first slice: success
+and failure are reported in-shell, and successful launches surface the attach
+handoff metadata instead of automatically switching into retained-session view.
 
 The first workflow TUI startup contract is intentionally small:
 

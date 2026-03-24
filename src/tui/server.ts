@@ -9,6 +9,7 @@ import {
 } from "../graph/modules/ops/workflow/query.js";
 import { workflowSchema } from "../graph/modules/ops/workflow/schema.js";
 import { createHttpGraphClient } from "../graph/runtime/http-client.js";
+import { createWorkflowTuiLaunchActionExecutor } from "./launch.js";
 import { createWorkflowTuiWorkflowModel, type WorkflowTuiWorkflowSurfaceModel } from "./model.js";
 import { resolveWorkflowTuiStartupContract, type WorkflowTuiStartupContract } from "./startup.js";
 import { createWorkflowTui, type WorkflowTui } from "./tui.js";
@@ -284,6 +285,7 @@ export async function runWorkflowTuiCli(
   dependencies: WorkflowTuiCliDependencies = {},
 ) {
   let tui: WorkflowTui | undefined;
+  let runtime: WorkflowTuiRuntimeBootstrap | undefined;
   let stopped = false;
   const stop = async () => {
     if (stopped || !tui) {
@@ -317,13 +319,19 @@ export async function runWorkflowTuiCli(
       graphUrl: options.graphUrl,
       projectId: options.projectId,
     });
+    const executeAction = createWorkflowTuiLaunchActionExecutor({
+      getRuntime: () => runtime,
+      repoRoot: process.cwd(),
+      workflow: result.value,
+    });
     tui = (dependencies.createTui ?? createWorkflowTui)({
+      onAction: executeAction,
       startup: {
         contract: startup,
         entrypointPath: startup.entrypointPath,
         hydrate: async () => {
           try {
-            const runtime = await createWorkflowTuiRuntimeBootstrap(startup, dependencies);
+            runtime = await createWorkflowTuiRuntimeBootstrap(startup, dependencies);
             return runtime.surfaceModel;
           } catch (error) {
             process.exitCode = 1;
