@@ -3,6 +3,7 @@ import { describe, expect, it, setDefaultTimeout } from "bun:test";
 import { GraphValidationError, edgeId, type GraphWriteTransaction } from "@io/core/graph";
 import { pkm } from "@io/core/graph/modules/pkm";
 
+import { createWorkflowProjectionIndex } from "../../graph/modules/ops/workflow/query.js";
 import { createExampleRuntime } from "./example-runtime.js";
 
 setDefaultTimeout(20_000);
@@ -38,6 +39,31 @@ function createTopicNameWriteTransaction(
 }
 
 describe("example runtime sync integration", () => {
+  it("seeds a workflow projection that the TUI can hydrate", () => {
+    const runtime = createExampleRuntime();
+    const projection = createWorkflowProjectionIndex(runtime.graph);
+
+    const branchBoard = projection.readProjectBranchScope({
+      projectId: runtime.ids.workflowProject,
+      filter: {
+        showUnmanagedRepositoryBranches: true,
+      },
+    });
+    const commitQueue = projection.readCommitQueueScope({
+      branchId: runtime.ids.workflowBranch,
+    });
+
+    expect(branchBoard.project.id).toBe(runtime.ids.workflowProject);
+    expect(branchBoard.repository?.id).toBe(runtime.ids.workflowRepository);
+    expect(branchBoard.rows.map((row) => row.workflowBranch.id)).toEqual([
+      runtime.ids.workflowBranch,
+    ]);
+    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
+      runtime.ids.workflowCommit,
+    ]);
+    expect(commitQueue.branch.latestSession?.id).toBe(runtime.ids.agentSession);
+  });
+
   it("proves peers catch up through ordered incremental delivery without extra total snapshots", async () => {
     const runtime = createExampleRuntime();
     const peer = runtime.createPeer();

@@ -38,6 +38,9 @@ package.
   and commit-queue surface from synced workflow projection reads
 - creates a synced workflow HTTP client at startup using the fixed workflow
   review module scope before resolving the first project-backed workflow shell
+- the default local graph served from `http://io.localhost:1355/` now seeds one
+  workflow project, repository, branch, commit, and running session so a fresh
+  local `io tui` can hydrate without extra graph setup
 - renders a read-only workflow shell after startup resolves graph-backed
   workflow projection data
 - shows the workflow branch board, branch detail, and selected branch commit

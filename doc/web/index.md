@@ -170,7 +170,8 @@ generic shared command/read transports.
   of diffing whole-store before/after snapshots
 - `../../src/web/lib/example-runtime.ts`: seeded sync-proof runtime fixture
   that now reuses a cached seeded authority baseline and direct recorded
-  mutation planning for hidden-only cursor tests
+  mutation planning for hidden-only cursor tests while seeding the local
+  workflow shell fixture used by `io tui`
 - `../../src/web/lib/`: worker-backed graph authority, generic secret-field
   mutation contracts, seeded example data/runtime fixtures, and HTTP route
   helpers

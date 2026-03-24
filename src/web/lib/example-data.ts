@@ -10,63 +10,216 @@ function resolvedEnumValue(value: { key: string; id?: string }): string {
   return value.id ?? value.key;
 }
 
+function date(value: string): Date {
+  return new Date(value);
+}
+
+function resolveEntityId<TEntity extends { id: string }>(
+  entity: TEntity | undefined,
+  create: () => string,
+): string {
+  return entity?.id ?? create();
+}
+
 export type ExampleGraphIds = {
+  readonly agentSession: string;
   readonly docsTag: string;
   readonly graphExplorer: string;
   readonly graphTag: string;
+  readonly repositoryBranch: string;
+  readonly repositoryCommit: string;
   readonly runtimeSync: string;
   readonly secretRotation: string;
+  readonly workflowBranch: string;
+  readonly workflowCommit: string;
+  readonly workflowProject: string;
+  readonly workflowRepository: string;
 };
 
 export function seedExampleGraph(
   graph: NamespaceClient<typeof exampleGraph & Pick<typeof core, "tag">>,
 ): ExampleGraphIds {
-  const graphTag = graph.tag.create({
-    color: "#0ea5e9",
-    key: "graph",
-    name: "Graph",
-  });
-  const docsTag = graph.tag.create({
-    color: "#f59e0b",
-    key: "docs",
-    name: "Docs",
-  });
+  const graphTag = resolveEntityId(
+    graph.tag.list().find((tag) => tag.key === "graph"),
+    () =>
+      graph.tag.create({
+        color: "#0ea5e9",
+        key: "graph",
+        name: "Graph",
+      }),
+  );
+  const docsTag = resolveEntityId(
+    graph.tag.list().find((tag) => tag.key === "docs"),
+    () =>
+      graph.tag.create({
+        color: "#f59e0b",
+        key: "docs",
+        name: "Docs",
+      }),
+  );
 
-  const graphExplorer = graph.topic.create({
-    content: "Shared explorer surface for the canonical product graph.",
-    kind: resolvedEnumValue(topicKind.values.module),
-    name: "Graph Explorer",
-    isArchived: false,
-    order: 1,
-    slug: "graph-explorer",
-    tags: [graphTag, docsTag],
-  });
-  const runtimeSync = graph.topic.create({
-    content: "Total snapshots bootstrap clients before ordered incremental updates.",
-    kind: resolvedEnumValue(topicKind.values.workflow),
-    name: "Runtime Sync",
-    isArchived: false,
-    order: 2,
-    parent: graphExplorer,
-    references: [graphExplorer],
-    tags: [graphTag],
-  });
-  const secretRotation = graph.topic.create({
-    content: "Rotate env-var secrets through authority-only commands.",
-    kind: resolvedEnumValue(topicKind.values.runbook),
-    name: "Secret Rotation",
-    isArchived: false,
-    order: 3,
-    parent: graphExplorer,
-    references: [runtimeSync],
-    tags: [docsTag],
-  });
+  const graphExplorer = resolveEntityId(
+    graph.topic.list().find((topic) => topic.slug === "graph-explorer"),
+    () =>
+      graph.topic.create({
+        content: "Shared explorer surface for the canonical product graph.",
+        kind: resolvedEnumValue(topicKind.values.module),
+        name: "Graph Explorer",
+        isArchived: false,
+        order: 1,
+        slug: "graph-explorer",
+        tags: [graphTag, docsTag],
+      }),
+  );
+  const runtimeSync = resolveEntityId(
+    graph.topic.list().find((topic) => topic.name === "Runtime Sync"),
+    () =>
+      graph.topic.create({
+        content: "Total snapshots bootstrap clients before ordered incremental updates.",
+        kind: resolvedEnumValue(topicKind.values.workflow),
+        name: "Runtime Sync",
+        isArchived: false,
+        order: 2,
+        parent: graphExplorer,
+        references: [graphExplorer],
+        tags: [graphTag],
+      }),
+  );
+  const secretRotation = resolveEntityId(
+    graph.topic.list().find((topic) => topic.name === "Secret Rotation"),
+    () =>
+      graph.topic.create({
+        content: "Rotate env-var secrets through authority-only commands.",
+        kind: resolvedEnumValue(topicKind.values.runbook),
+        name: "Secret Rotation",
+        isArchived: false,
+        order: 3,
+        parent: graphExplorer,
+        references: [runtimeSync],
+        tags: [docsTag],
+      }),
+  );
+  const workflowProject = resolveEntityId(
+    graph.workflowProject.list().find((project) => project.projectKey === "project:io"),
+    () =>
+      graph.workflowProject.create({
+        name: "IO",
+        projectKey: "project:io",
+        inferred: true,
+        createdAt: date("2026-01-01T00:00:00.000Z"),
+        updatedAt: date("2026-01-06T00:00:00.000Z"),
+      }),
+  );
+  const workflowRepository = resolveEntityId(
+    graph.workflowRepository.list().find((repository) => repository.repositoryKey === "repo:io"),
+    () =>
+      graph.workflowRepository.create({
+        name: "io",
+        project: workflowProject,
+        repositoryKey: "repo:io",
+        repoRoot: "/tmp/io",
+        defaultBaseBranch: "main",
+        createdAt: date("2026-01-01T00:00:00.000Z"),
+        updatedAt: date("2026-01-06T00:00:00.000Z"),
+      }),
+  );
+  const workflowBranch = resolveEntityId(
+    graph.workflowBranch.list().find((branch) => branch.branchKey === "branch:workflow-shell"),
+    () =>
+      graph.workflowBranch.create({
+        name: "Workflow shell",
+        project: workflowProject,
+        branchKey: "branch:workflow-shell",
+        state: ops.workflowBranchState.values.active.id,
+        queueRank: 1,
+        goalSummary: "Hydrate the first graph-backed workflow shell from the synced review scope.",
+        createdAt: date("2026-01-02T00:00:00.000Z"),
+        updatedAt: date("2026-01-06T00:00:00.000Z"),
+      }),
+  );
+  const workflowCommit = resolveEntityId(
+    graph.workflowCommit
+      .list()
+      .find((commit) => commit.commitKey === "commit:hydrate-workflow-shell"),
+    () =>
+      graph.workflowCommit.create({
+        name: "Hydrate workflow shell",
+        branch: workflowBranch,
+        commitKey: "commit:hydrate-workflow-shell",
+        state: ops.workflowCommitState.values.active.id,
+        order: 1,
+        createdAt: date("2026-01-03T00:00:00.000Z"),
+        updatedAt: date("2026-01-06T00:00:00.000Z"),
+      }),
+  );
+  const repositoryBranch = resolveEntityId(
+    graph.repositoryBranch.list().find((branch) => branch.branchName === "workflow/shell"),
+    () =>
+      graph.repositoryBranch.create({
+        name: "workflow/shell",
+        project: workflowProject,
+        repository: workflowRepository,
+        workflowBranch,
+        managed: true,
+        branchName: "workflow/shell",
+        baseBranchName: "main",
+        latestReconciledAt: date("2026-01-06T12:00:00.000Z"),
+        createdAt: date("2026-01-02T00:00:00.000Z"),
+        updatedAt: date("2026-01-06T12:00:00.000Z"),
+      }),
+  );
+  const repositoryCommit = resolveEntityId(
+    graph.repositoryCommit.list().find((commit) => commit.name === "Hydrate workflow shell"),
+    () =>
+      graph.repositoryCommit.create({
+        name: "Hydrate workflow shell",
+        repository: workflowRepository,
+        repositoryBranch,
+        workflowCommit,
+        state: ops.repositoryCommitState.values.attached.id,
+        worktree: {
+          path: "/tmp/io-worktree-shell",
+          branchName: "workflow/shell",
+          leaseState: ops.repositoryCommitLeaseState.values.attached.id,
+        },
+        createdAt: date("2026-01-03T00:00:00.000Z"),
+        updatedAt: date("2026-01-06T12:00:00.000Z"),
+      }),
+  );
+  const agentSession = resolveEntityId(
+    graph.agentSession
+      .list()
+      .find((session) => session.sessionKey === "session:hydrate-workflow-shell"),
+    () =>
+      graph.agentSession.create({
+        name: "Hydrate workflow shell",
+        project: workflowProject,
+        repository: workflowRepository,
+        subjectKind: ops.agentSessionSubjectKind.values.commit.id,
+        branch: workflowBranch,
+        commit: workflowCommit,
+        sessionKey: "session:hydrate-workflow-shell",
+        kind: ops.agentSessionKind.values.execution.id,
+        workerId: "worker-example",
+        runtimeState: ops.agentSessionRuntimeState.values.running.id,
+        startedAt: date("2026-01-06T09:30:00.000Z"),
+        createdAt: date("2026-01-06T09:30:00.000Z"),
+        updatedAt: date("2026-01-06T09:30:00.000Z"),
+      }),
+  );
 
   return {
+    agentSession,
     docsTag,
     graphExplorer,
     graphTag,
+    repositoryBranch,
+    repositoryCommit,
     runtimeSync,
     secretRotation,
+    workflowBranch,
+    workflowCommit,
+    workflowProject,
+    workflowRepository,
   };
 }

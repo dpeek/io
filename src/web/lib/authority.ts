@@ -2768,6 +2768,18 @@ export async function createWebAppAuthority(
     createCursorPrefix: createAuthorityCursorPrefix,
     retainedHistoryPolicy: options.retainedHistoryPolicy,
   });
+  if (options.seedExampleGraph !== false) {
+    const seeded = planAuthorityMutation(
+      authority.store.snapshot(),
+      `seed:example-graph-backfill:${Date.now()}`,
+      (mutationGraph) => seedExampleGraph(mutationGraph),
+    );
+    if (seeded.changed) {
+      await authority.applyTransaction(seeded.transaction, {
+        writeScope: "server-command",
+      });
+    }
+  }
   const workflowReviewInvalidationListener = options.onWorkflowReviewInvalidation;
   // Early persisted Better Auth rollouts could create graph principals without
   // `homeGraphId`. Repair them before any sync or direct graph reads materialize
