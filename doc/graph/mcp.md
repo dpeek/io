@@ -3,14 +3,25 @@
 ## Purpose
 
 Describe the current read-first Model Context Protocol surface for `io`,
-including the opt-in CRUD write gate and the remaining command roadmap.
+including the current bearer-share auth proof, the opt-in CRUD write gate, and
+the remaining command roadmap.
 
 ## Current Implemented Surface
 
 The repo now ships a stdio graph MCP entrypoint:
 
-- command: `io mcp graph [--url <url>] [--allow-writes]`
+- command:
+  `io mcp graph [--url <url>] [--bearer-token <token>] [--allow-writes]`
 - runtime: one `createHttpGraphClient(app, ...)` session kept alive for the stdio server
+- auth:
+  - default local flow can run without a bearer token against a locally trusted
+    Worker
+  - optional bearer auth comes from `--bearer-token` or
+    `IO_GRAPH_BEARER_TOKEN` and is forwarded as
+    `Authorization: Bearer <token>` on MCP transport requests
+  - the shipped bearer auth path is the existing bearer-share flow backed by
+    hashed share-grant lookup
+  - this is not machine-token auth and not principal-backed service auth
 - current read tools:
   - `graph.status`
   - `graph.listTypes`
@@ -32,6 +43,14 @@ The repo now ships a stdio graph MCP entrypoint:
   - writes use the current typed mutation plus `sync.flush()` path
   - failed pushes surface the current validation or authority error text
   - failed pushes reset the local MCP session client before the next request
+- bearer-share limitation:
+  - bearer share tokens only authorize `GET /api/sync` in the current Worker
+    proof
+  - startup rejects `--allow-writes` when bearer auth comes from
+    `--bearer-token` or `IO_GRAPH_BEARER_TOKEN`
+  - bearer-auth MCP is therefore explicitly read-only in the current shipped
+    proof
+  - MCP writes require another auth path that can post to `/api/tx`
 
 ## Why This Is Feasible Now
 
@@ -65,6 +84,7 @@ small amount of schema-to-tool plumbing.
 ## Non-Goals
 
 - a final auth or capability model for remote multi-tenant access
+- machine tokens or principal-backed service auth for MCP
 - a complete graph query language
 - a full graph-command framework for type-local business methods
 - exposing secret reveal or secret rotation through the first MCP cut
@@ -81,6 +101,12 @@ The first version should be a stdio MCP server launched by the existing CLI:
 - default backend: the existing graph HTTP routes exposed by the Worker
 - expected local flow: run `io start`, then point an MCP-capable client at
   `io mcp graph --url http://io.localhost:1355/`
+- explicit remote bearer-share flow:
+  `io mcp graph --url <url> --bearer-token <token>`
+
+The explicit remote bearer flow is intentionally narrow: it reuses the current
+share-link style bearer-share proof instead of introducing a second auth model.
+That means the remote bearer path is for shared reads, not general write access.
 
 This is the fastest path because it:
 
@@ -219,6 +245,13 @@ Write tools are only registered when the server is launched with
 `--allow-writes`.
 
 That is not real auth. It is just a deliberate local safety latch for the MVP.
+Actual write authorization still comes from the graph HTTP authority path behind
+`/api/tx`.
+
+For bearer-share sessions, that means:
+
+- startup rejects the write gate before the MCP server boots
+- bearer-auth MCP remains read-only in the current shipped proof
 
 ### Proposed write tools
 
@@ -323,6 +356,8 @@ The read-first MCP plus opt-in CRUD writes is in place:
 - authority-only and hidden fields are not returned by default
 - write tools are registered only when the server is launched with
   `--allow-writes`
+- bearer-share sessions reject `--allow-writes` at startup when bearer auth is
+  provided through the CLI flag or environment fallback
 - `graph.createEntity`, `graph.updateEntity`, and `graph.deleteEntity` work for
   normal replicated fields
 - failed flushes surface the current validation or authority error text

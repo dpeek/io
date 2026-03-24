@@ -182,6 +182,46 @@ describe("createHttpGraphClient", () => {
     ]);
   });
 
+  it("sends the bearer authorization header on sync and transaction requests", async () => {
+    const authority = createAuthority();
+    const authorizationHeaders: string[] = [];
+    const fetch: FetchImpl = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(String(input), init);
+      authorizationHeaders.push(request.headers.get("authorization") ?? "");
+      const url = new URL(request.url);
+
+      if (url.pathname === "/api/sync") {
+        return Response.json(
+          createTotalSyncPayload(authority.store, {
+            cursor: authority.writes.getCursor() ?? authority.writes.getBaseCursor(),
+            diagnostics: createAuthoritySyncDiagnostics({ writes: authority.writes }),
+          }),
+        );
+      }
+
+      if (url.pathname === "/api/tx" && request.method === "POST") {
+        const transaction = (await request.json()) as GraphWriteTransaction;
+        return Response.json(authority.writes.apply(transaction));
+      }
+
+      return Response.json(
+        { error: `Unhandled ${request.method} ${url.pathname}` },
+        { status: 404 },
+      );
+    };
+
+    const client = await createHttpGraphClient(testGraph, {
+      bearerToken: "share-token",
+      createTxId: () => "cli:auth:1",
+      fetch,
+    });
+
+    client.graph.item.create({ name: "Created from client" });
+    await client.sync.flush();
+
+    expect(authorizationHeaders).toEqual(["Bearer share-token", "Bearer share-token"]);
+  });
+
   it("preserves one requested module scope across scoped bootstrap and refresh requests", async () => {
     const authority = createAuthority();
     const requestedScope = {

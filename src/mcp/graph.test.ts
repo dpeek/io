@@ -253,6 +253,24 @@ describe("createGraphMcpSession", () => {
     );
     expect(status.entityTypeCounts).toHaveLength(14);
   });
+
+  it("forwards the bearer token into graph session transport requests", async () => {
+    const authority = createProductAuthority();
+    const forwardedAuthorization: string[] = [];
+    const fetch: FetchImpl = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(String(input), init);
+      forwardedAuthorization.push(request.headers.get("authorization") ?? "");
+      return createMockFetch(authority)(request);
+    };
+
+    await createGraphMcpSession({
+      bearerToken: "share-token",
+      fetch,
+      url: "http://graph.test",
+    });
+
+    expect(forwardedAuthorization).toEqual(["Bearer share-token"]);
+  });
 });
 
 describe("createGraphMcpServer", () => {

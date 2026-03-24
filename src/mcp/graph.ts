@@ -124,6 +124,7 @@ export type GraphStatus = {
 
 export type GraphMcpSessionOptions = {
   readonly allowWrites?: boolean;
+  readonly bearerToken?: string;
   readonly fetch?: FetchImpl;
   readonly namespace?: GraphMcpNamespace;
   readonly url?: string;
@@ -445,6 +446,7 @@ export async function createGraphMcpSession(
   const { entityTypeEntries, schema } = getGraphMcpSessionMetadata(namespace);
   const createClient = async () =>
     (await createHttpGraphClient(namespace, {
+      bearerToken: options.bearerToken,
       fetch: options.fetch,
       url: baseUrl,
     })) as SyncedTypeClient<GraphMcpNamespace>;

@@ -16,6 +16,7 @@ export type FetchImpl = (input: RequestInfo | URL, init?: RequestInit) => Promis
 export const defaultHttpGraphUrl = "http://io.localhost:1355/";
 
 export type HttpGraphClientOptions = {
+  readonly bearerToken?: string;
   readonly url?: string;
   readonly syncPath?: string;
   readonly transactionPath?: string;
@@ -45,6 +46,20 @@ function resolveEndpointUrl(path: string, baseUrl: string): string {
   return new URL(path, baseUrl).toString();
 }
 
+function createHttpRequestHeaders(
+  bearerToken: string | undefined,
+  headers: Record<string, string>,
+): Record<string, string> {
+  if (!bearerToken) {
+    return headers;
+  }
+
+  return {
+    ...headers,
+    authorization: `Bearer ${bearerToken}`,
+  };
+}
+
 export function createHttpGraphTxIdFactory(prefix = "cli"): () => string {
   const sessionId = createGraphId();
   let txSequence = 0;
@@ -63,6 +78,7 @@ export async function createHttpGraphClient<const T extends Record<string, AnyTy
   const transactionUrl = resolveEndpointUrl(options.transactionPath ?? "/api/tx", baseUrl);
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const createTxId = options.createTxId ?? createHttpGraphTxIdFactory();
+  const bearerToken = options.bearerToken?.trim() || undefined;
 
   async function fetchSyncPayload(
     state: Pick<SyncState, "cursor" | "requestedScope">,
@@ -75,9 +91,9 @@ export async function createHttpGraphClient<const T extends Record<string, AnyTy
 
     const response = await fetchImpl(requestUrl, {
       cache: "no-store",
-      headers: {
+      headers: createHttpRequestHeaders(bearerToken, {
         accept: "application/json",
-      },
+      }),
     });
 
     const payload = (await response.json().catch(() => undefined)) as
@@ -98,10 +114,10 @@ export async function createHttpGraphClient<const T extends Record<string, AnyTy
   ): Promise<AuthoritativeGraphWriteResult> {
     const response = await fetchImpl(transactionUrl, {
       method: "POST",
-      headers: {
+      headers: createHttpRequestHeaders(bearerToken, {
         accept: "application/json",
         "content-type": "application/json",
-      },
+      }),
       body: JSON.stringify(transaction),
     });
 

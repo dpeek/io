@@ -54,10 +54,25 @@ The first workflow TUI startup contract is intentionally small:
 
 ## MCP
 
-- `io mcp graph [--url <url>] [--allow-writes]` starts the stdio MCP server
-  against the graph HTTP routes.
+- `io mcp graph [--url <url>] [--bearer-token <token>] [--allow-writes]`
+  starts the stdio MCP server against the graph HTTP routes.
+- `--bearer-token` overrides the `IO_GRAPH_BEARER_TOKEN` env fallback and sends
+  `Authorization: Bearer <token>` on graph MCP HTTP requests.
+- `IO_GRAPH_BEARER_TOKEN` provides the same bearer-share token through the
+  environment when the flag is omitted.
+- bearer auth here is the existing bearer-share path backed by hashed share
+  grants. It is not machine-token auth and it is not principal-backed service
+  auth.
+- bearer-share auth is currently read-only in the shipped proof because the
+  Worker only accepts bearer share tokens on `GET /api/sync`. MCP reads work
+  over that path; MCP writes do not.
 - `--allow-writes` registers the gated `graph.createEntity`,
   `graph.updateEntity`, and `graph.deleteEntity` tools.
+- `--allow-writes` only helps when the backing graph URL is using an auth path
+  that can post to `/api/tx`.
+- startup now fails closed when `--allow-writes` is combined with
+  `--bearer-token` or `IO_GRAPH_BEARER_TOKEN` because bearer-share sessions are
+  explicitly read-only in the current proof.
 - The canonical graph MCP contract lives in
   [../graph/mcp.md](../graph/mcp.md).
 

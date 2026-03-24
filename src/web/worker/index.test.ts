@@ -277,6 +277,35 @@ describe("web worker route forwarding", () => {
     });
   });
 
+  it("rejects bearer share tokens on graph transaction routes used by MCP writes", async () => {
+    const issued = await issueBearerShareToken();
+    const { authorityPaths, bearerLookupPaths, env } = createWorkerEnv();
+    const handler = createWorkerFetchHandler();
+
+    const response = await handler.fetch(
+      new Request("https://web.local/api/tx", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${issued.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          id: "tx:mcp-bearer-write",
+          ops: [],
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(405);
+    expect(authorityPaths).toEqual([]);
+    expect(bearerLookupPaths).toEqual([]);
+    expect(await response.json()).toMatchObject({
+      code: "grant.invalid",
+      error: 'Bearer share tokens only support "GET /api/sync" requests in the current proof.',
+    });
+  });
+
   it("fails closed when the authority rejects a bearer share lookup", async () => {
     const issued = await issueBearerShareToken();
     const { authorityPaths, bearerLookupPaths, env } = createWorkerEnv({
