@@ -75,6 +75,12 @@ function createWorkflow(root: string, promptPath: string): Workflow {
       kind: "linear",
       terminalStates: ["Done"],
     },
+    tui: {
+      graph: {
+        kind: "http",
+      },
+      initialScope: {},
+    },
     workspace: {
       root,
     },

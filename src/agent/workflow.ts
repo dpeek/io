@@ -72,6 +72,22 @@ const workflowModuleSchema = z.object({
   path: z.string().min(1),
 });
 
+const workflowTuiGraphSchema = z
+  .object({
+    kind: z.literal("http").default("http"),
+    url: z.string().url().optional(),
+  })
+  .default({
+    kind: "http",
+  });
+
+const workflowTuiInitialScopeSchema = z
+  .object({
+    branch: z.string().min(1).optional(),
+    project: z.string().min(1).optional(),
+  })
+  .default({});
+
 const ioExtensionsSchema = z
   .object({
     context: z
@@ -93,12 +109,24 @@ const ioExtensionsSchema = z
         routing: [],
       }),
     modules: z.record(z.string().min(1), workflowModuleSchema).default({}),
+    tui: z
+      .object({
+        graph: workflowTuiGraphSchema,
+        initialScope: workflowTuiInitialScopeSchema,
+      })
+      .default({
+        graph: {
+          kind: "http",
+        },
+        initialScope: {},
+      }),
   })
   .passthrough();
 
 type IoExtensions = z.infer<typeof ioExtensionsSchema>;
 type IoIssueRoutingConfig = IoExtensions["issues"];
 type IoModuleConfig = IoExtensions["modules"];
+type IoTuiConfig = IoExtensions["tui"];
 type WorkflowConfigFields = Pick<
   Workflow,
   | "agent"
@@ -109,6 +137,7 @@ type WorkflowConfigFields = Pick<
   | "modules"
   | "polling"
   | "tracker"
+  | "tui"
   | "workspace"
 >;
 
@@ -200,6 +229,19 @@ function normalizeModules(config: IoModuleConfig, baseDir: string) {
   );
 }
 
+function normalizeTuiConfig(config: IoTuiConfig) {
+  return {
+    graph: {
+      kind: config.graph.kind,
+      url: config.graph.url?.trim() || undefined,
+    },
+    initialScope: {
+      branch: config.initialScope.branch?.trim() || undefined,
+      project: config.initialScope.project?.trim() || undefined,
+    },
+  } satisfies Pick<WorkflowConfigFields, "tui">["tui"];
+}
+
 function normalizeIoExtensions(config: IoExtensions, baseDir: string) {
   const defaultProfiles = {
     backlog: {
@@ -244,12 +286,13 @@ function normalizeIoExtensions(config: IoExtensions, baseDir: string) {
     },
     issues: normalizeIssueRouting(config.issues),
     modules: normalizeModules(config.modules, baseDir),
-  } satisfies Pick<WorkflowConfigFields, "context" | "issues" | "modules">;
+    tui: normalizeTuiConfig(config.tui),
+  } satisfies Pick<WorkflowConfigFields, "context" | "issues" | "modules" | "tui">;
 }
 
 function normalizeLoadedIoConfig(
   config: NormalizedIoConfig,
-  extensions: Pick<WorkflowConfigFields, "context" | "issues" | "modules">,
+  extensions: Pick<WorkflowConfigFields, "context" | "issues" | "modules" | "tui">,
 ): WorkflowConfigFields {
   return {
     agent: {
@@ -287,6 +330,7 @@ function normalizeLoadedIoConfig(
       projectSlug: config.tracker.projectSlug,
       terminalStates: [...config.tracker.terminalStates],
     },
+    tui: extensions.tui,
     workspace: {
       origin: config.workspace.origin,
       root: config.workspace.root,
@@ -327,7 +371,7 @@ async function loadRawIoConfig(path: string) {
 
 async function loadIoExtensions(
   configPath: string,
-): Promise<ValidationResult<Pick<WorkflowConfigFields, "context" | "issues" | "modules">>> {
+): Promise<ValidationResult<Pick<WorkflowConfigFields, "context" | "issues" | "modules" | "tui">>> {
   try {
     const rawConfig = await loadRawIoConfig(configPath);
     if (!isRecord(rawConfig)) {

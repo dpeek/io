@@ -1423,6 +1423,15 @@ graph.
   branch board, branch detail, and commit queue
 - prerequisite contracts:
   - Slice 2 branch-board and commit-queue read models
+- startup contract for the first network-backed proof:
+  - `io tui` keeps the existing `io.ts` plus `io.md` entrypoint loading path
+  - graph bootstrap source is one HTTP base URL, with the synced graph request
+    fixed to the workflow review module scope
+    `ops/workflow / scope:ops/workflow:review`
+  - initial project resolves from CLI override, then workflow config, then
+    inferring the one visible `WorkflowProject` in the synced scope
+  - initial branch resolves from CLI override, then workflow config, then the
+    first branch-board row in the resolved project
 - what it proves:
   - the terminal product surface can render workflow state directly from the
     graph
@@ -1431,6 +1440,8 @@ graph.
 - what it postpones:
   - minimal editing and session launch
   - transcript and session replay migration
+  - alternate runtime kinds, custom startup filters, and launch-time git action
+    policy
 
 ### Slice 4: Session launch, retained history, and commit finalization
 

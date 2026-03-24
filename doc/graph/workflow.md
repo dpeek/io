@@ -233,6 +233,23 @@ live proof now lives in `../../src/web/lib/workflow-review-live-sync.ts`:
   as `auth.unauthenticated`, `policy-changed`, and `scope-changed` are
   preserved at the transport boundary
 
+## Workflow TUI Boundary
+
+The first graph-backed `io tui` startup flow consumes this workflow slice
+directly, but the ownership line stays explicit:
+
+- `graph` owns the fixed workflow review sync scope descriptor,
+  `createWorkflowProjectionIndex(...)`, and the stable
+  `ProjectBranchScope` plus `CommitQueueScope` read contracts
+- `../../src/tui/server.ts` owns CLI parsing, graph URL selection, initial
+  project-and-branch resolution, and startup failure presentation
+- `../../src/tui/startup.ts` owns the startup contract defaults and the
+  `--graph-url` / workflow-config / default precedence that selects the graph
+  source before hydration starts
+- the first TUI hydration remains read-only: it consumes graph-backed
+  projection reads and fails closed when startup cannot materialize the first
+  surface rather than falling back to legacy retained-session state
+
 ## Branch Detail And Commit Queue Query
 
 The branch-detail view paired with the TUI commit queue uses

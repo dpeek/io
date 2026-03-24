@@ -6,12 +6,14 @@ import { useMemo } from "react";
 
 import { buildWorkflowTuiRootComponentModel } from "./layout.js";
 import {
-  createWorkflowTuiBootstrapModel,
+  createWorkflowTuiStartupFailureModel,
+  createWorkflowTuiStartupLoadingModel,
   moveWorkflowTuiFocus,
   moveWorkflowTuiSelection,
   normalizeWorkflowTuiSurfaceModel,
-  type WorkflowTuiBootstrapModelOptions,
   type WorkflowTuiSurfaceModel,
+  type WorkflowTuiStartupModelOptions,
+  type WorkflowTuiWorkflowSurfaceModel,
 } from "./model.js";
 
 const APP_ROOT_ID = "workflow-tui-root";
@@ -20,13 +22,17 @@ const WIDE_LAYOUT_MIN_COLUMNS = 132;
 export type WorkflowTuiTerminal = NodeJS.WriteStream;
 
 export interface WorkflowTuiOptions {
-  bootstrap?: WorkflowTuiBootstrapModelOptions;
   input?: NodeJS.ReadStream;
   onExitRequest?: () => void | Promise<void>;
   output?: WorkflowTuiTerminal;
   renderer?: CliRenderer;
   requireTty?: boolean;
   surfaceModel?: WorkflowTuiSurfaceModel;
+  startup?: WorkflowTuiStartupOptions;
+}
+
+export interface WorkflowTuiStartupOptions extends WorkflowTuiStartupModelOptions {
+  hydrate?: () => Promise<WorkflowTuiWorkflowSurfaceModel>;
 }
 
 export interface WorkflowTui {
@@ -109,20 +115,21 @@ export function createWorkflowTui(options?: WorkflowTuiOptions): WorkflowTui {
     });
   const output = options?.output ?? process.stdout;
   const requireTty = options?.requireTty ?? true;
-  let surfaceModel =
-    options?.surfaceModel ??
-    createWorkflowTuiBootstrapModel(
-      options?.bootstrap ?? {
-        entrypointPath: process.cwd(),
-        workspaceRoot: process.cwd(),
-      },
-    );
+  const startup =
+    options?.startup ??
+    ({
+      entrypointPath: process.cwd(),
+      workspaceRoot: process.cwd(),
+    } satisfies WorkflowTuiStartupOptions);
+  let surfaceModel = options?.surfaceModel ?? createWorkflowTuiStartupLoadingModel(startup);
   surfaceModel = normalizeWorkflowTuiSurfaceModel(surfaceModel);
   let active = false;
   let renderScheduled = false;
   let renderer = options?.renderer;
   let root: Root | undefined;
   let startPromise: Promise<void> | undefined;
+  let startupHydrationPromise: Promise<void> | undefined;
+  let startupHydrated = surfaceModel.kind === "workflow" || !startup.hydrate;
 
   const ownsRenderer = !options?.renderer;
 
@@ -144,6 +151,38 @@ export function createWorkflowTui(options?: WorkflowTuiOptions): WorkflowTui {
     }
     renderScheduled = true;
     queueMicrotask(render);
+  };
+
+  const hydrateStartup = async () => {
+    if (options?.surfaceModel || !startup.hydrate || startupHydrated) {
+      return;
+    }
+    if (startupHydrationPromise) {
+      await startupHydrationPromise;
+      return;
+    }
+    const hydrate = startup.hydrate;
+
+    surfaceModel = createWorkflowTuiStartupLoadingModel(startup);
+    scheduleRender();
+    startupHydrationPromise = (async () => {
+      try {
+        const hydratedModel = await hydrate();
+        startupHydrated = true;
+        surfaceModel = normalizeWorkflowTuiSurfaceModel(hydratedModel);
+      } catch (error) {
+        startupHydrated = false;
+        surfaceModel = createWorkflowTuiStartupFailureModel({
+          ...startup,
+          error,
+        });
+      } finally {
+        scheduleRender();
+        startupHydrationPromise = undefined;
+      }
+    })();
+
+    await startupHydrationPromise;
   };
 
   const handleKeyPress = (key: {
@@ -223,6 +262,7 @@ export function createWorkflowTui(options?: WorkflowTuiOptions): WorkflowTui {
         renderer.start();
       }
       render();
+      await hydrateStartup();
     })();
 
     try {
@@ -239,6 +279,7 @@ export function createWorkflowTui(options?: WorkflowTuiOptions): WorkflowTui {
     },
     setSurfaceModel(model) {
       surfaceModel = normalizeWorkflowTuiSurfaceModel(model);
+      startupHydrated = surfaceModel.kind === "workflow" || !startup.hydrate;
       scheduleRender();
     },
     async start() {

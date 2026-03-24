@@ -4,6 +4,12 @@ import type {
   ProjectBranchScopeResult,
   WorkflowProjectionIndex,
 } from "../graph/modules/ops/workflow/query.js";
+import {
+  createDefaultWorkflowTuiStartupContract,
+  type WorkflowTuiBranchResolution,
+  type WorkflowTuiProjectResolution,
+  type WorkflowTuiStartupContract,
+} from "./startup.js";
 
 export interface WorkflowTuiPanelModel {
   id: string;
@@ -11,10 +17,11 @@ export interface WorkflowTuiPanelModel {
   title: string;
 }
 
-export interface WorkflowTuiBootstrapSurfaceModel {
-  kind: "bootstrap";
+export interface WorkflowTuiStartupSurfaceModel {
   footerLines: readonly string[];
+  kind: "startup";
   panels: readonly WorkflowTuiPanelModel[];
+  status: "failure" | "loading";
   summaryLines: readonly string[];
 }
 
@@ -32,13 +39,18 @@ export interface WorkflowTuiWorkflowSurfaceModel {
 }
 
 export type WorkflowTuiSurfaceModel =
-  | WorkflowTuiBootstrapSurfaceModel
+  | WorkflowTuiStartupSurfaceModel
   | WorkflowTuiWorkflowSurfaceModel;
 
-export interface WorkflowTuiBootstrapModelOptions {
+export interface WorkflowTuiStartupModelOptions {
+  contract?: WorkflowTuiStartupContract;
   entrypointPath: string;
   legacyCommand?: string;
   workspaceRoot: string;
+}
+
+export interface WorkflowTuiStartupFailureModelOptions extends WorkflowTuiStartupModelOptions {
+  error: unknown;
 }
 
 export interface WorkflowTuiWorkflowModelOptions {
@@ -145,49 +157,120 @@ function moveSelection(currentId: string | undefined, ids: readonly string[], de
   return ids[clamp(currentIndex + delta, 0, ids.length - 1)];
 }
 
-export function createWorkflowTuiBootstrapModel(
-  options: WorkflowTuiBootstrapModelOptions,
-): WorkflowTuiBootstrapSurfaceModel {
+function formatWorkflowTuiGraphScope(contract: WorkflowTuiStartupContract) {
+  const scope = contract.graph.requestedScope;
+  return `${scope.moduleId} / ${scope.scopeId}`;
+}
+
+function formatWorkflowTuiProjectResolution(resolution: WorkflowTuiProjectResolution) {
+  return resolution.kind === "configured"
+    ? `${resolution.projectId} (configured)`
+    : "infer the one visible WorkflowProject in the synced workflow scope";
+}
+
+function formatWorkflowTuiBranchResolution(resolution: WorkflowTuiBranchResolution) {
+  return resolution.kind === "configured"
+    ? `${resolution.branchId} (configured)`
+    : "select the first branch-board row in the resolved project";
+}
+
+function formatWorkflowTuiStartupError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function buildWorkflowTuiStartupModel(
+  options: WorkflowTuiStartupModelOptions,
+  status: WorkflowTuiStartupSurfaceModel["status"],
+  error?: unknown,
+): WorkflowTuiStartupSurfaceModel {
   const legacyCommand = options.legacyCommand ?? "io agent tui";
+  const contract =
+    options.contract ??
+    createDefaultWorkflowTuiStartupContract({
+      entrypointPath: options.entrypointPath,
+      workspaceRoot: options.workspaceRoot,
+    });
+  const loading = status === "loading";
+  const errorMessage = error === undefined ? undefined : formatWorkflowTuiStartupError(error);
 
   return {
-    kind: "bootstrap",
-    footerLines: ["Keys: q, esc, ctrl-c exit", `Legacy session monitor: ${legacyCommand}`],
+    footerLines: [
+      "Keys: q, esc, ctrl-c exit",
+      loading
+        ? "Status: loading the first branch board and commit queues from the synced workflow graph."
+        : "Status: startup failed. Review the error below, then quit or rerun io tui.",
+      `Legacy session monitor: ${legacyCommand}`,
+    ],
+    kind: "startup",
     panels: [
       {
         id: "surface",
         lines: [
-          "Workflow shell bootstrap for the graph-backed terminal product surface.",
-          `Entrypoint: ${options.entrypointPath}`,
-          `Workspace root: ${options.workspaceRoot}`,
-          "Status: CLI startup still falls back to bootstrap copy until runtime graph wiring is available.",
+          loading
+            ? "Workflow shell startup is waiting for the first graph-backed workflow surface."
+            : "Workflow shell startup could not hydrate the first graph-backed workflow surface.",
+          `Entrypoint: ${contract.entrypointPath}`,
+          `Workspace root: ${contract.workspaceRoot}`,
+          `Graph source: ${contract.graph.kind} ${contract.graph.url}`,
+          `Sync scope: ${formatWorkflowTuiGraphScope(contract)}`,
+          loading
+            ? "Hydration reads the first project branch board and commit queues from the synced workflow projection."
+            : "Hydration stays read-only and does not fall back to legacy bootstrap copy.",
         ],
         title: "Surface",
       },
       {
-        id: "boundaries",
+        id: "startup",
         lines: [
-          "src/tui owns terminal workflow UX and product-shell composition.",
-          "src/graph/adapters/react-opentui remains the shared graph/OpenTUI adapter landing root.",
-          "src/agent/tui stays in place as the legacy retained session monitor during migration.",
+          `Initial project: ${formatWorkflowTuiProjectResolution(contract.initialScope.project)}`,
+          `Initial branch: ${formatWorkflowTuiBranchResolution(contract.initialScope.branch)}`,
+          loading
+            ? "Startup owns graph location and the first branch-board plus commit-queue selection only."
+            : "Startup stopped before the read-only branch-board and commit-queue shell became available.",
         ],
-        title: "Boundaries",
+        title: "Startup",
       },
       {
-        id: "next",
-        lines: [
-          "Bind workflow-owned project branch and commit-queue graph scopes.",
-          "Keep reusable OpenTUI runtime bindings behind react-opentui.",
-          "Launch planning and execution sessions from selected workflow subjects.",
-        ],
-        title: "Next",
+        id: loading ? "boundaries" : "failure",
+        lines: loading
+          ? [
+              "src/tui owns terminal workflow UX and product-shell composition.",
+              "src/graph/adapters/react-opentui remains the shared graph/OpenTUI adapter landing root.",
+              "The first contract does not launch sessions, reconcile git, or perform workflow writes.",
+              "src/agent/tui stays in place as the legacy retained session monitor during migration.",
+            ]
+          : [
+              `Error: ${errorMessage ?? "Unknown startup failure."}`,
+              "The rendered shell remains read-only; startup does not attempt workflow writes or session launch.",
+              "Startup failure is presented in the TUI instead of falling back to static bootstrap copy.",
+              "Use the legacy session monitor only for retained agent output, not workflow hydration.",
+            ],
+        title: loading ? "Boundaries" : "Failure",
       },
     ],
+    status,
     summaryLines: [
       "IO Workflow TUI",
-      "Bootstrap shell for the graph-backed terminal product surface.",
+      loading
+        ? "Loading the graph-backed workflow shell."
+        : "Unable to load the graph-backed workflow shell.",
     ],
   };
+}
+
+export function createWorkflowTuiStartupLoadingModel(
+  options: WorkflowTuiStartupModelOptions,
+): WorkflowTuiStartupSurfaceModel {
+  return buildWorkflowTuiStartupModel(options, "loading");
+}
+
+export function createWorkflowTuiStartupFailureModel(
+  options: WorkflowTuiStartupFailureModelOptions,
+): WorkflowTuiStartupSurfaceModel {
+  return buildWorkflowTuiStartupModel(options, "failure", options.error);
 }
 
 export function createWorkflowTuiWorkflowModel(

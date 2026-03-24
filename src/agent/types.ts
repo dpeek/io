@@ -76,6 +76,21 @@ export interface WorkflowEntrypoint {
   promptPath: string;
 }
 
+export interface WorkflowTuiGraphConfig {
+  kind: "http";
+  url?: string;
+}
+
+export interface WorkflowTuiInitialScopeConfig {
+  branch?: string;
+  project?: string;
+}
+
+export interface WorkflowTuiConfig {
+  graph: WorkflowTuiGraphConfig;
+  initialScope: WorkflowTuiInitialScopeConfig;
+}
+
 export interface IssueRoutingCondition {
   hasChildren?: boolean;
   hasParent?: boolean;
@@ -150,6 +165,7 @@ export interface Workflow {
   polling: PollingConfig;
   entrypointContent: string;
   tracker: TrackerConfig;
+  tui: WorkflowTuiConfig;
   workspace: {
     origin?: string;
     root: string;

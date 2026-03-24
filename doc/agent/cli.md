@@ -30,10 +30,27 @@ If `entrypointPath` is omitted, the loader defaults to `./io.ts` plus
 
 ## TUI Commands
 
-- `io tui [entrypointPath]`
+- `io tui [entrypointPath] [--graph-url <url>] [--project <projectId>] [--branch <branchId>]`
 
 `io tui` boots the new terminal workflow product shell from `src/tui/*`.
 `io agent tui ...` remains the legacy retained session monitor.
+The CLI now initializes the synced workflow graph client before rendering and
+fails closed when startup cannot materialize the initial workflow surface.
+
+The first workflow TUI startup contract is intentionally small:
+
+- `entrypointPath` still resolves through the existing `io.ts` plus `io.md`
+  loader path
+- graph source is one HTTP base URL resolved from `--graph-url`, then
+  `io.ts -> tui.graph.url`, then the default `http://io.localhost:1355/`
+- sync scope is fixed to the workflow review module scope
+  `ops/workflow / scope:ops/workflow:review`
+- initial project resolves from `--project`, then
+  `io.ts -> tui.initialScope.project`, then by inferring the one visible
+  `WorkflowProject` in the synced scope
+- initial branch resolves from `--branch`, then
+  `io.ts -> tui.initialScope.branch`, then the first branch-board row in the
+  resolved project
 
 ## MCP
 

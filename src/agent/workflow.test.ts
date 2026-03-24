@@ -54,6 +54,16 @@ test("loadWorkflowFile loads io.ts and io.md by default", async () => {
       kind: "linear",
       projectSlug: "$LINEAR_PROJECT_SLUG",
     },
+    tui: {
+      graph: {
+        kind: "http",
+        url: "https://graph.example/workflow",
+      },
+      initialScope: {
+        branch: "branch:workflow-runtime-contract",
+        project: "project:io",
+      },
+    },
     workspace: {
       root: "./workspace",
     },
@@ -108,6 +118,16 @@ test("loadWorkflowFile loads io.ts and io.md by default", async () => {
     });
     expect(result.value.tracker.apiKey).toBe("linear-token");
     expect(result.value.tracker.projectSlug).toBe("project-slug");
+    expect(result.value.tui).toEqual({
+      graph: {
+        kind: "http",
+        url: "https://graph.example/workflow",
+      },
+      initialScope: {
+        branch: "branch:workflow-runtime-contract",
+        project: "project:io",
+      },
+    });
     expect(result.value.workspace.root).toBe(resolve(root, "workspace"));
   } finally {
     await rm(root, { force: true, recursive: true });

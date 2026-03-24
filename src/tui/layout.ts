@@ -20,7 +20,7 @@ export interface WorkflowTuiRootComponentModel {
   summaryLines: readonly string[];
 }
 
-function renderBootstrapPanelBody(panel: WorkflowTuiPanelModel) {
+function renderStartupPanelBody(panel: WorkflowTuiPanelModel) {
   return panel.lines.map((line) => `- ${line}`).join("\n");
 }
 
@@ -258,7 +258,7 @@ export function buildWorkflowTuiRootComponentModel(
   return {
     footerLines: model.footerLines,
     panels: model.panels.map((panel) => ({
-      body: renderBootstrapPanelBody(panel),
+      body: renderStartupPanelBody(panel),
       id: panel.id,
       title: panel.title,
     })),

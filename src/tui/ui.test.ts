@@ -9,7 +9,8 @@ import { ops } from "../graph/modules/ops.js";
 import { createWorkflowProjectionIndex } from "../graph/modules/ops/workflow/query.js";
 import { buildWorkflowTuiRootComponentModel } from "./layout.js";
 import {
-  createWorkflowTuiBootstrapModel,
+  createWorkflowTuiStartupFailureModel,
+  createWorkflowTuiStartupLoadingModel,
   createWorkflowTuiWorkflowModelFromProjection,
 } from "./model.js";
 import { createWorkflowTui } from "./tui.js";
@@ -228,8 +229,8 @@ function createWorkflowProjectionFixture() {
   };
 }
 
-test("buildWorkflowTuiRootComponentModel reserves the new workflow surface boundary", () => {
-  const model = createWorkflowTuiBootstrapModel({
+test("buildWorkflowTuiRootComponentModel renders the startup loading shell", () => {
+  const model = createWorkflowTuiStartupLoadingModel({
     entrypointPath: "/Users/dpeek/code/io/io.ts",
     workspaceRoot: "/Users/dpeek/code/io/tmp/workspace",
   });
@@ -237,16 +238,51 @@ test("buildWorkflowTuiRootComponentModel reserves the new workflow surface bound
   const layout = buildWorkflowTuiRootComponentModel(model);
   expect(layout.summaryLines).toEqual([
     "IO Workflow TUI",
-    "Bootstrap shell for the graph-backed terminal product surface.",
+    "Loading the graph-backed workflow shell.",
   ]);
-  expect(layout.panels.map((panel) => panel.title)).toEqual(["Surface", "Boundaries", "Next"]);
+  expect(layout.panels.map((panel) => panel.title)).toEqual(["Surface", "Startup", "Boundaries"]);
   expect(layout.panels.find((panel) => panel.id === "surface")?.body).toContain(
     "/Users/dpeek/code/io/tmp/workspace",
+  );
+  expect(layout.panels.find((panel) => panel.id === "surface")?.body).toContain(
+    "http://io.localhost:1355/",
+  );
+  expect(layout.panels.find((panel) => panel.id === "startup")?.body).toContain(
+    "infer the one visible WorkflowProject",
+  );
+  expect(layout.panels.find((panel) => panel.id === "surface")?.body).toContain(
+    "Hydration reads the first project branch board and commit queues",
   );
   expect(layout.panels.find((panel) => panel.id === "boundaries")?.body).toContain(
     "src/graph/adapters/react-opentui",
   );
+  expect(layout.panels.find((panel) => panel.id === "boundaries")?.body).toContain(
+    "does not launch sessions",
+  );
   expect(layout.footerLines).toContain("Legacy session monitor: io agent tui");
+});
+
+test("buildWorkflowTuiRootComponentModel renders the startup failure shell", () => {
+  const layout = buildWorkflowTuiRootComponentModel(
+    createWorkflowTuiStartupFailureModel({
+      entrypointPath: "/Users/dpeek/code/io/io.ts",
+      error: new Error("Sync request failed with 503 Service Unavailable."),
+      workspaceRoot: "/Users/dpeek/code/io/tmp/workspace",
+    }),
+  );
+
+  expect(layout.summaryLines).toEqual([
+    "IO Workflow TUI",
+    "Unable to load the graph-backed workflow shell.",
+  ]);
+  expect(layout.panels.map((panel) => panel.title)).toEqual(["Surface", "Startup", "Failure"]);
+  expect(layout.panels.find((panel) => panel.id === "failure")?.body).toContain(
+    "Sync request failed with 503 Service Unavailable.",
+  );
+  expect(layout.panels.find((panel) => panel.id === "failure")?.body).toContain(
+    "presented in the TUI",
+  );
+  expect(layout.footerLines.some((line) => line.includes("Status: startup failed."))).toBe(true);
 });
 
 test("buildWorkflowTuiRootComponentModel renders workflow branch board, detail, and commit queue panels", () => {
@@ -315,7 +351,8 @@ test("buildWorkflowTuiRootComponentModel renders commit queue repository summari
   );
 });
 
-test("createWorkflowTui renders the bootstrap shell, updates the surface model, and exits on q", async () => {
+test("createWorkflowTui hydrates from loading state into the graph-backed workflow shell", async () => {
+  const { projectId, projection } = createWorkflowProjectionFixture();
   const { captureCharFrame, mockInput, renderOnce, renderer } = await createTestRenderer({
     height: 24,
     width: 140,
@@ -327,10 +364,15 @@ test("createWorkflowTui renders the bootstrap shell, updates the surface model, 
     },
     renderer,
     requireTty: false,
-    surfaceModel: createWorkflowTuiBootstrapModel({
+    startup: {
       entrypointPath: "/Users/dpeek/code/io/io.ts",
+      hydrate: async () =>
+        createWorkflowTuiWorkflowModelFromProjection({
+          projection,
+          projectId,
+        }),
       workspaceRoot: "/Users/dpeek/code/io/tmp/workspace",
-    }),
+    },
   });
 
   try {
@@ -339,37 +381,52 @@ test("createWorkflowTui renders the bootstrap shell, updates the surface model, 
       await renderOnce();
     });
 
-    let frame = captureCharFrame();
-    expect(frame).toContain("IO Workflow TUI");
-    expect(frame).toContain("react-opentui");
-    expect(frame).toContain("Legacy session monitor");
-
-    await act(async () => {
-      tui.setSurfaceModel({
-        kind: "bootstrap",
-        footerLines: ["Keys: q, esc, ctrl-c exit"],
-        panels: [
-          {
-            id: "surface",
-            lines: ["Updated shell content for the workflow surface."],
-            title: "Surface",
-          },
-        ],
-        summaryLines: ["IO Workflow TUI", "Updated shell"],
-      });
-      await Promise.resolve();
-      await renderOnce();
-    });
-
-    frame = captureCharFrame();
-    expect(frame).toContain("Updated shell");
-    expect(frame).toContain("Updated shell content");
+    const frame = captureCharFrame();
+    expect(frame).toContain("Project: IO (project:io)");
+    expect(frame).toContain("Selected branch: Workflow runtime contract [active]");
+    expect(frame).toContain("Document commit queue scope");
 
     await act(async () => {
       await mockInput.typeText("q");
       await Promise.resolve();
     });
     expect(exitRequested).toBe(1);
+  } finally {
+    await act(async () => {
+      await tui.stop();
+    });
+    renderer.destroy();
+  }
+});
+
+test("createWorkflowTui renders startup failure presentation when hydration fails", async () => {
+  const { captureCharFrame, renderOnce, renderer } = await createTestRenderer({
+    height: 24,
+    width: 140,
+  });
+  const tui = createWorkflowTui({
+    renderer,
+    requireTty: false,
+    startup: {
+      entrypointPath: "/Users/dpeek/code/io/io.ts",
+      hydrate: async () => {
+        throw new Error("Sync request failed with 503 Service Unavailable.");
+      },
+      workspaceRoot: "/Users/dpeek/code/io/tmp/workspace",
+    },
+  });
+
+  try {
+    await act(async () => {
+      await tui.start();
+      await renderOnce();
+    });
+
+    const frame = captureCharFrame();
+    expect(frame).toContain("Unable to load the graph-backed workflow shell.");
+    expect(frame).toContain("Sync request failed with 503");
+    expect(frame).toContain("Service Unavailable.");
+    expect(frame).toContain("Status: startup failed.");
   } finally {
     await act(async () => {
       await tui.stop();
