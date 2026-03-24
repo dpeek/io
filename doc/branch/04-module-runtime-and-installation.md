@@ -259,10 +259,7 @@ export type ModulePermissionApprovalRecord =
       readonly decidedAt: string;
       readonly decidedByPrincipalId: string;
       readonly note?: string;
-      readonly lowerings: readonly [
-        ModulePermissionLowering,
-        ...ModulePermissionLowering[],
-      ];
+      readonly lowerings: readonly [ModulePermissionLowering, ...ModulePermissionLowering[]];
     }
   | {
       readonly moduleId: string;
@@ -285,10 +282,7 @@ export type ModulePermissionApprovalRecord =
       readonly revokedAt: string;
       readonly revokedByPrincipalId: string;
       readonly revocationNote?: string;
-      readonly lowerings: readonly [
-        ModulePermissionLowering,
-        ...ModulePermissionLowering[],
-      ];
+      readonly lowerings: readonly [ModulePermissionLowering, ...ModulePermissionLowering[]];
     };
 
 export interface ModuleSetupField {

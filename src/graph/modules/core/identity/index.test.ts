@@ -14,6 +14,8 @@ import {
   principalRoleBinding,
   principalRoleBindingStatus,
   principalStatus,
+  shareGrant,
+  shareSurfaceKind,
 } from "./index.js";
 
 describe("core identity family", () => {
@@ -26,10 +28,12 @@ describe("core identity family", () => {
       capabilityGrantResourceKind,
       capabilityGrantTargetKind,
       capabilityGrantStatus,
+      shareSurfaceKind,
       principal,
       authSubjectProjection,
       principalRoleBinding,
       capabilityGrant,
+      shareGrant,
     });
 
     expect(Object.keys(map.keys)).toEqual(
@@ -52,6 +56,15 @@ describe("core identity family", () => {
         "core:principalStatus.disabled",
         "core:authSubjectStatus",
         "core:principalRoleBindingStatus",
+        "core:shareGrant",
+        "core:shareGrant:capabilityGrant",
+        "core:shareGrant:status",
+        "core:shareGrant:surfaceId",
+        "core:shareGrant:surfaceKind",
+        "core:shareGrant:surfacePredicateId",
+        "core:shareGrant:surfaceRootEntityId",
+        "core:shareSurfaceKind",
+        "core:shareSurfaceKind.entityPredicateSlice",
         "core:principal",
         "core:principal:capabilityVersion",
         "core:principal:kind",
@@ -95,13 +108,20 @@ describe("core identity family", () => {
     expect(String(core.capabilityGrant.fields.status.range)).toBe(
       core.capabilityGrantStatus.values.id,
     );
+    expect(String(core.shareGrant.fields.surfaceKind.range)).toBe(core.shareSurfaceKind.values.id);
+    expect(String(core.shareGrant.fields.capabilityGrant.range)).toBe(
+      core.capabilityGrant.values.id,
+    );
+    expect(String(core.shareGrant.fields.status.range)).toBe(core.capabilityGrantStatus.values.id);
     expect(typeof core.principal.fields.homeGraphId.id).toBe("string");
     expect(typeof core.principal.fields.capabilityVersion.id).toBe("string");
     expect(typeof core.authSubjectProjection.fields.mirroredAt.id).toBe("string");
     expect(typeof core.principalRoleBinding.fields.roleKey.id).toBe("string");
     expect(typeof core.capabilityGrant.fields.constraintPredicateId.id).toBe("string");
+    expect(typeof core.shareGrant.fields.surfacePredicateId.id).toBe("string");
     expect(typeof core.principalKind.values.remoteGraph.id).toBe("string");
     expect(typeof core.capabilityGrantTargetKind.values.principal.id).toBe("string");
+    expect(typeof core.shareSurfaceKind.values.entityPredicateSlice.id).toBe("string");
   });
 
   it("keeps authority-owned identity strings off current replicated read surfaces", () => {
@@ -118,5 +138,9 @@ describe("core identity family", () => {
     );
     expect(core.capabilityGrant.fields.targetPrincipal.authority?.write).toBe("authority-only");
     expect(core.capabilityGrant.fields.status.authority?.visibility).toBe("authority-only");
+    expect(core.shareGrant.fields.surfaceId.authority?.visibility).toBe("authority-only");
+    expect(core.shareGrant.fields.surfaceKind.authority?.write).toBe("authority-only");
+    expect(core.shareGrant.fields.capabilityGrant.authority?.visibility).toBe("authority-only");
+    expect(core.shareGrant.fields.status.authority?.visibility).toBe("authority-only");
   });
 });

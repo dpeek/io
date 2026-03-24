@@ -7,6 +7,10 @@ import type {
 
 type MaybePromise<T> = T | Promise<T>;
 
+const bearerShareTokenPrefix = "io_share_";
+const bearerShareTokenPattern = /^io_share_[0-9a-f]{64}$/;
+const bearerShareTokenHashPattern = /^sha256:[0-9a-f]{64}$/;
+
 function cloneStringList(values: readonly string[] | undefined): readonly string[] {
   return values ? [...values] : [];
 }
@@ -55,6 +59,15 @@ export type SessionPrincipalProjection = {
   readonly capabilityVersion?: number;
 };
 
+export type BearerShareLookupInput = {
+  readonly graphId: string;
+  readonly tokenHash: string;
+};
+
+export type BearerShareProjection = {
+  readonly capabilityGrantIds: readonly string[];
+};
+
 /**
  * Stable web authority seam. Host-specific request parsing remains
  * provisional; this contract starts once a request has been reduced to the
@@ -74,6 +87,15 @@ export type CreateWorkerAuthorizationContextInput = Omit<
   "session"
 > & {
   readonly betterAuthSession: BetterAuthSessionResult | null;
+};
+
+export type ProjectBearerShareTokenInput = {
+  readonly graphId: string;
+  readonly policyVersion: number;
+  readonly token: string;
+  readonly lookupBearerShare: (
+    input: BearerShareLookupInput,
+  ) => MaybePromise<BearerShareProjection | null>;
 };
 
 export class BetterAuthSessionReductionError extends Error {
@@ -101,6 +123,17 @@ export class SessionPrincipalProjectionError extends Error {
   }
 }
 
+export class BearerShareTokenProjectionError extends Error {
+  readonly code = "grant.invalid" as const;
+  readonly graphId: string;
+
+  constructor(input: { readonly graphId: string }) {
+    super(`No active bearer share grant exists for graph "${input.graphId}".`);
+    this.name = "BearerShareTokenProjectionError";
+    this.graphId = input.graphId;
+  }
+}
+
 export function createAnonymousAuthorizationContext(input: {
   readonly graphId: string;
   readonly policyVersion: number;
@@ -112,6 +145,60 @@ export function createAnonymousAuthorizationContext(input: {
     sessionId: null,
     roleKeys: [],
     capabilityGrantIds: [],
+    capabilityVersion: 0,
+    policyVersion: input.policyVersion,
+  };
+}
+
+export function isBearerShareToken(token: string): boolean {
+  return bearerShareTokenPattern.test(token);
+}
+
+export function isBearerShareTokenHash(tokenHash: string): boolean {
+  return bearerShareTokenHashPattern.test(tokenHash);
+}
+
+function encodeHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+export async function hashBearerShareToken(token: string): Promise<string> {
+  if (!isBearerShareToken(token)) {
+    throw new Error(
+      "Bearer share tokens must use the issued io_share_<64 lowercase hex chars> format.",
+    );
+  }
+
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return `sha256:${encodeHex(new Uint8Array(digest))}`;
+}
+
+export async function issueBearerShareToken(): Promise<{
+  readonly token: string;
+  readonly tokenHash: string;
+}> {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const token = `${bearerShareTokenPrefix}${encodeHex(bytes)}`;
+
+  return {
+    token,
+    tokenHash: await hashBearerShareToken(token),
+  };
+}
+
+export function createBearerShareAuthorizationContext(input: {
+  readonly graphId: string;
+  readonly policyVersion: number;
+  readonly capabilityGrantIds: readonly string[];
+}): AuthorizationContext {
+  return {
+    graphId: input.graphId,
+    principalId: null,
+    principalKind: "anonymous",
+    sessionId: null,
+    roleKeys: [],
+    capabilityGrantIds: [...input.capabilityGrantIds],
     capabilityVersion: 0,
     policyVersion: input.policyVersion,
   };
@@ -168,6 +255,27 @@ export async function projectSessionToPrincipal(
     capabilityVersion: projection.capabilityVersion ?? 0,
     policyVersion: input.policyVersion,
   };
+}
+
+export async function projectBearerShareToken(
+  input: ProjectBearerShareTokenInput,
+): Promise<AuthorizationContext> {
+  const projection = await input.lookupBearerShare({
+    graphId: input.graphId,
+    tokenHash: await hashBearerShareToken(input.token),
+  });
+
+  if (!projection || projection.capabilityGrantIds.length === 0) {
+    throw new BearerShareTokenProjectionError({
+      graphId: input.graphId,
+    });
+  }
+
+  return createBearerShareAuthorizationContext({
+    graphId: input.graphId,
+    policyVersion: input.policyVersion,
+    capabilityGrantIds: projection.capabilityGrantIds,
+  });
 }
 
 export function createWorkerAuthorizationContext(

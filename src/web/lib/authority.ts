@@ -41,6 +41,7 @@ import {
   type Store,
   type StoreSnapshot,
   type AuthoritativeGraphWriteResult,
+  validateShareGrant,
   matchesModuleReadScopeRequest,
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
@@ -68,7 +69,12 @@ import {
 } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
 
-import type { SessionPrincipalLookupInput, SessionPrincipalProjection } from "./auth-bridge.js";
+import type {
+  BearerShareLookupInput,
+  BearerShareProjection,
+  SessionPrincipalLookupInput,
+  SessionPrincipalProjection,
+} from "./auth-bridge.js";
 import { seedExampleGraph } from "./example-data.js";
 import { planRecordedMutation } from "./mutation-planning.js";
 import {
@@ -108,15 +114,19 @@ type AuthorizationDecisionTarget = {
 };
 type ResolvedAuthorizationCapabilityGrant = {
   readonly id: string;
+  readonly statusId?: string;
   readonly resourceKindId: string;
   readonly resourcePredicateId?: string;
   readonly resourceCommandKey?: string;
+  readonly resourceSurfaceId?: string;
+  readonly targetKindId?: string;
   readonly constraintRootEntityId?: string;
   readonly constraintPredicateIds: readonly string[];
   readonly constraintExpiresAt?: string;
 };
 type AuthorizationCapabilityResolver = {
   readonly readKeysFor: (target: AuthorizationDecisionTarget) => readonly string[];
+  readonly allowsSharedReadFor: (target: AuthorizationDecisionTarget) => boolean;
   readonly writeKeysFor: (target: AuthorizationDecisionTarget) => readonly string[];
   readonly commandKeysFor: (input: {
     readonly commandKey: string;
@@ -279,6 +289,7 @@ export type WebAppAuthority = Omit<
   PersistedWebAppAuthority,
   "applyTransaction" | "createSyncPayload" | "getIncrementalSyncResult" | "graph" | "store"
 > & {
+  lookupBearerShare(input: BearerShareLookupInput): Promise<BearerShareProjection>;
   lookupSessionPrincipal(
     input: SessionPrincipalLookupInput,
     options?: WebAppAuthoritySessionPrincipalLookupOptions,
@@ -425,27 +436,50 @@ const capabilityGrantConstraintDelegatedFromGrantIdPredicateId = edgeId(
 const capabilityGrantStatusPredicateId = edgeId(core.capabilityGrant.fields.status);
 const capabilityGrantIssuedAtPredicateId = edgeId(core.capabilityGrant.fields.issuedAt);
 const capabilityGrantRevokedAtPredicateId = edgeId(core.capabilityGrant.fields.revokedAt);
+const shareGrantSurfaceIdPredicateId = edgeId(core.shareGrant.fields.surfaceId);
+const shareGrantSurfaceKindPredicateId = edgeId(core.shareGrant.fields.surfaceKind);
+const shareGrantSurfaceRootEntityIdPredicateId = edgeId(core.shareGrant.fields.surfaceRootEntityId);
+const shareGrantSurfacePredicateIdPredicateId = edgeId(core.shareGrant.fields.surfacePredicateId);
+const shareGrantCapabilityGrantPredicateId = edgeId(core.shareGrant.fields.capabilityGrant);
+const shareGrantStatusPredicateId = edgeId(core.shareGrant.fields.status);
 const principalTypeId = core.principal.values.id;
 const authSubjectProjectionTypeId = core.authSubjectProjection.values.id;
 const principalRoleBindingTypeId = core.principalRoleBinding.values.id;
 const capabilityGrantTypeId = core.capabilityGrant.values.id;
+const shareGrantTypeId = core.shareGrant.values.id;
 const nonAuthorityHiddenIdentityTypeIds = new Set([
   principalTypeId,
   authSubjectProjectionTypeId,
   principalRoleBindingTypeId,
   capabilityGrantTypeId,
+  shareGrantTypeId,
 ]);
 const activePrincipalStatusId = core.principalStatus.values.active.id;
 const activeAuthSubjectStatusId = core.authSubjectStatus.values.active.id;
 const activePrincipalRoleBindingStatusId = core.principalRoleBindingStatus.values.active.id;
 const activeCapabilityGrantStatusId = core.capabilityGrantStatus.values.active.id;
+const expiredCapabilityGrantStatusId = core.capabilityGrantStatus.values.expired.id;
 const principalCapabilityGrantTargetKindId = core.capabilityGrantTargetKind.values.principal.id;
+const bearerCapabilityGrantTargetKindId = core.capabilityGrantTargetKind.values.bearer.id;
+const revokedCapabilityGrantStatusId = core.capabilityGrantStatus.values.revoked.id;
 const predicateReadCapabilityGrantResourceKindId =
   core.capabilityGrantResourceKind.values.predicateRead.id;
 const predicateWriteCapabilityGrantResourceKindId =
   core.capabilityGrantResourceKind.values.predicateWrite.id;
 const commandExecuteCapabilityGrantResourceKindId =
   core.capabilityGrantResourceKind.values.commandExecute.id;
+const shareSurfaceCapabilityGrantResourceKindId =
+  core.capabilityGrantResourceKind.values.shareSurface.id;
+const entityPredicateSliceShareSurfaceKindId = core.shareSurfaceKind.values.entityPredicateSlice.id;
+const shareGrantVisibilityTriggerPredicateIds = new Set([
+  typePredicateId,
+  shareGrantSurfaceIdPredicateId,
+  shareGrantSurfaceKindPredicateId,
+  shareGrantSurfaceRootEntityIdPredicateId,
+  shareGrantSurfacePredicateIdPredicateId,
+  shareGrantCapabilityGrantPredicateId,
+  shareGrantStatusPredicateId,
+]);
 const capabilityVersionTriggerPredicateIds = new Set([
   typePredicateId,
   principalRoleBindingPrincipalPredicateId,
@@ -1031,6 +1065,23 @@ export class WebAppAuthoritySessionPrincipalLookupError extends Error {
     this.reason = reason;
   }
 }
+
+export class WebAppAuthorityBearerShareLookupError extends Error {
+  readonly status: number;
+  readonly code = "grant.invalid" as const;
+  readonly reason: "conflict" | "expired" | "missing" | "revoked";
+
+  constructor(
+    status: number,
+    reason: "conflict" | "expired" | "missing" | "revoked",
+    message: string,
+  ) {
+    super(message);
+    this.name = "WebAppAuthorityBearerShareLookupError";
+    this.status = status;
+    this.reason = reason;
+  }
+}
 function getFirstObject(store: Store, subjectId: string, predicateId: string): string | undefined {
   return store.facts(subjectId, predicateId)[0]?.o;
 }
@@ -1168,6 +1219,65 @@ function readCapabilityGrantTargetPrincipalId(
     : undefined;
 }
 
+function readCapabilityGrantTargetKindId(
+  store: Store,
+  capabilityGrantId: string,
+): string | undefined {
+  return getFirstObject(store, capabilityGrantId, capabilityGrantTargetKindPredicateId);
+}
+
+function readResolvedAuthorizationCapabilityGrant(
+  store: Store,
+  capabilityGrantId: string,
+): ResolvedAuthorizationCapabilityGrant | null {
+  if (!hasEntityOfType(store, capabilityGrantId, capabilityGrantTypeId)) {
+    return null;
+  }
+
+  const resourceKindId =
+    getFirstObject(store, capabilityGrantId, capabilityGrantResourceKindPredicateId) ?? "";
+  if (resourceKindId.length === 0) {
+    return null;
+  }
+
+  return {
+    id: capabilityGrantId,
+    statusId: getFirstObject(store, capabilityGrantId, capabilityGrantStatusPredicateId),
+    resourceKindId,
+    resourcePredicateId: getFirstObject(
+      store,
+      capabilityGrantId,
+      capabilityGrantResourcePredicateIdPredicateId,
+    ),
+    resourceCommandKey: getFirstObject(
+      store,
+      capabilityGrantId,
+      capabilityGrantResourceCommandKeyPredicateId,
+    ),
+    resourceSurfaceId: getFirstObject(
+      store,
+      capabilityGrantId,
+      capabilityGrantResourceSurfaceIdPredicateId,
+    ),
+    targetKindId: readCapabilityGrantTargetKindId(store, capabilityGrantId),
+    constraintRootEntityId: getFirstObject(
+      store,
+      capabilityGrantId,
+      capabilityGrantConstraintRootEntityIdPredicateId,
+    ),
+    constraintPredicateIds: uniqueStrings(
+      store
+        .facts(capabilityGrantId, capabilityGrantConstraintPredicateIdPredicateId)
+        .map((edge) => edge.o),
+    ),
+    constraintExpiresAt: getFirstObject(
+      store,
+      capabilityGrantId,
+      capabilityGrantConstraintExpiresAtPredicateId,
+    ),
+  };
+}
+
 function readActivePrincipalCapabilityGrantIds(
   store: Store,
   principalId: string,
@@ -1186,51 +1296,47 @@ function readActivePrincipalCapabilityGrantIds(
   ).sort();
 }
 
+function isBearerShareAuthorizationContext(authorization: AuthorizationContext): boolean {
+  return authorization.principalId === null && authorization.principalKind === "anonymous";
+}
+
 function readAuthorizationCapabilityGrants(
   store: Store,
   authorization: AuthorizationContext,
 ): readonly ResolvedAuthorizationCapabilityGrant[] {
-  if (!authorization.principalId || authorization.capabilityGrantIds.length === 0) {
+  if (authorization.capabilityGrantIds.length === 0) {
     return [];
   }
 
-  const activeGrantIds = new Set(
-    readActivePrincipalCapabilityGrantIds(store, authorization.principalId),
-  );
+  if (authorization.principalId) {
+    const activeGrantIds = new Set(
+      readActivePrincipalCapabilityGrantIds(store, authorization.principalId),
+    );
+
+    return uniqueStrings(authorization.capabilityGrantIds)
+      .filter((capabilityGrantId) => activeGrantIds.has(capabilityGrantId))
+      .map((capabilityGrantId) =>
+        readResolvedAuthorizationCapabilityGrant(store, capabilityGrantId),
+      )
+      .filter((grant): grant is ResolvedAuthorizationCapabilityGrant => grant !== null);
+  }
+
+  if (!isBearerShareAuthorizationContext(authorization)) {
+    return [];
+  }
 
   return uniqueStrings(authorization.capabilityGrantIds)
-    .filter((capabilityGrantId) => activeGrantIds.has(capabilityGrantId))
-    .map((capabilityGrantId) => ({
-      id: capabilityGrantId,
-      resourceKindId:
-        getFirstObject(store, capabilityGrantId, capabilityGrantResourceKindPredicateId) ?? "",
-      resourcePredicateId: getFirstObject(
-        store,
-        capabilityGrantId,
-        capabilityGrantResourcePredicateIdPredicateId,
-      ),
-      resourceCommandKey: getFirstObject(
-        store,
-        capabilityGrantId,
-        capabilityGrantResourceCommandKeyPredicateId,
-      ),
-      constraintRootEntityId: getFirstObject(
-        store,
-        capabilityGrantId,
-        capabilityGrantConstraintRootEntityIdPredicateId,
-      ),
-      constraintPredicateIds: uniqueStrings(
-        store
-          .facts(capabilityGrantId, capabilityGrantConstraintPredicateIdPredicateId)
-          .map((edge) => edge.o),
-      ),
-      constraintExpiresAt: getFirstObject(
-        store,
-        capabilityGrantId,
-        capabilityGrantConstraintExpiresAtPredicateId,
-      ),
-    }))
-    .filter((grant) => grant.resourceKindId.length > 0);
+    .map((capabilityGrantId) => readResolvedAuthorizationCapabilityGrant(store, capabilityGrantId))
+    .filter((grant): grant is ResolvedAuthorizationCapabilityGrant => {
+      return (
+        grant !== null &&
+        grant.statusId === activeCapabilityGrantStatusId &&
+        grant.targetKindId === bearerCapabilityGrantTargetKindId &&
+        grant.resourceKindId === shareSurfaceCapabilityGrantResourceKindId &&
+        grant.constraintExpiresAt !== undefined &&
+        !grantHasExpired(grant)
+      );
+    });
 }
 
 function grantHasExpired(grant: ResolvedAuthorizationCapabilityGrant): boolean {
@@ -1240,6 +1346,206 @@ function grantHasExpired(grant: ResolvedAuthorizationCapabilityGrant): boolean {
 
   const expiresAt = Date.parse(grant.constraintExpiresAt);
   return Number.isNaN(expiresAt) || expiresAt <= Date.now();
+}
+
+function readActiveCapabilityGrantShareGrantIds(
+  store: Store,
+  capabilityGrantId: string,
+): readonly string[] {
+  return uniqueStrings(
+    store
+      .facts(undefined, shareGrantCapabilityGrantPredicateId, capabilityGrantId)
+      .map((edge) => edge.s)
+      .filter(
+        (shareGrantId) =>
+          hasEntityOfType(store, shareGrantId, shareGrantTypeId) &&
+          getFirstObject(store, shareGrantId, shareGrantStatusPredicateId) ===
+            activeCapabilityGrantStatusId &&
+          getFirstObject(store, shareGrantId, shareGrantCapabilityGrantPredicateId) ===
+            capabilityGrantId,
+      ),
+  ).sort();
+}
+
+function readValidatedActiveShareGrants(
+  store: Store,
+  grant: ResolvedAuthorizationCapabilityGrant,
+): ReadonlyArray<{
+  readonly id: string;
+  readonly rootEntityId: string;
+  readonly predicateIds: readonly string[];
+}> {
+  const resourceSurfaceId = grant.resourceSurfaceId;
+  if (
+    grant.resourceKindId !== shareSurfaceCapabilityGrantResourceKindId ||
+    resourceSurfaceId === undefined ||
+    grant.constraintRootEntityId === undefined ||
+    grant.constraintPredicateIds.length === 0
+  ) {
+    return [];
+  }
+
+  return readActiveCapabilityGrantShareGrantIds(store, grant.id).flatMap((shareGrantId) => {
+    const surfaceKindId = getFirstObject(store, shareGrantId, shareGrantSurfaceKindPredicateId);
+    const surfaceId = getFirstObject(store, shareGrantId, shareGrantSurfaceIdPredicateId);
+    const rootEntityId = getFirstObject(
+      store,
+      shareGrantId,
+      shareGrantSurfaceRootEntityIdPredicateId,
+    );
+    const predicateIds = uniqueStrings(
+      store.facts(shareGrantId, shareGrantSurfacePredicateIdPredicateId).map((edge) => edge.o),
+    );
+
+    if (
+      surfaceKindId !== entityPredicateSliceShareSurfaceKindId ||
+      surfaceId === undefined ||
+      rootEntityId === undefined
+    ) {
+      return [];
+    }
+
+    const validation = validateShareGrant(
+      {
+        id: shareGrantId,
+        surface: {
+          surfaceId,
+          kind: "entity-predicate-slice",
+          rootEntityId,
+          predicateIds,
+        },
+        capabilityGrantId: grant.id,
+        status: "active",
+      },
+      {
+        id: grant.id,
+        resource: {
+          kind: "share-surface",
+          surfaceId: resourceSurfaceId,
+        },
+        constraints: {
+          rootEntityId: grant.constraintRootEntityId,
+          predicateIds: grant.constraintPredicateIds,
+          ...(grant.constraintExpiresAt === undefined
+            ? {}
+            : { expiresAt: grant.constraintExpiresAt }),
+        },
+        status: "active",
+      },
+    );
+
+    return validation.ok
+      ? [
+          {
+            id: shareGrantId,
+            rootEntityId,
+            predicateIds,
+          },
+        ]
+      : [];
+  });
+}
+
+function readCapabilityGrantShareGrantIds(
+  store: Store,
+  capabilityGrantId: string,
+): readonly string[] {
+  return uniqueStrings(
+    store
+      .facts(undefined, shareGrantCapabilityGrantPredicateId, capabilityGrantId)
+      .map((edge) => edge.s)
+      .filter(
+        (shareGrantId) =>
+          hasEntityOfType(store, shareGrantId, shareGrantTypeId) &&
+          getFirstObject(store, shareGrantId, shareGrantCapabilityGrantPredicateId) ===
+            capabilityGrantId,
+      ),
+  ).sort();
+}
+
+function readBearerShareProjection(
+  store: Store,
+  input: BearerShareLookupInput,
+): BearerShareProjection {
+  const matchingGrantIds = uniqueStrings(
+    store
+      .facts(undefined, capabilityGrantBearerTokenHashPredicateId, input.tokenHash)
+      .map((edge) => edge.s)
+      .filter(
+        (capabilityGrantId) =>
+          hasEntityOfType(store, capabilityGrantId, capabilityGrantTypeId) &&
+          readCapabilityGrantTargetKindId(store, capabilityGrantId) ===
+            bearerCapabilityGrantTargetKindId,
+      ),
+  ).sort();
+
+  if (matchingGrantIds.length === 0) {
+    createMissingBearerShareLookupError(input);
+  }
+
+  const matchingGrants = matchingGrantIds
+    .map((capabilityGrantId) => readResolvedAuthorizationCapabilityGrant(store, capabilityGrantId))
+    .filter((grant): grant is ResolvedAuthorizationCapabilityGrant => grant !== null);
+  const activeEligibleGrants = matchingGrants.filter(
+    (grant) =>
+      grant.statusId === activeCapabilityGrantStatusId &&
+      grant.targetKindId === bearerCapabilityGrantTargetKindId &&
+      grant.resourceKindId === shareSurfaceCapabilityGrantResourceKindId &&
+      grant.constraintExpiresAt !== undefined &&
+      !grantHasExpired(grant) &&
+      readValidatedActiveShareGrants(store, grant).length > 0,
+  );
+
+  if (activeEligibleGrants.length > 1) {
+    createConflictingBearerShareLookupError(
+      input,
+      activeEligibleGrants.map((grant) => grant.id),
+    );
+  }
+
+  const activeEligibleGrant = activeEligibleGrants[0];
+  if (activeEligibleGrant) {
+    return {
+      capabilityGrantIds: [activeEligibleGrant.id],
+    };
+  }
+
+  if (
+    matchingGrants.some(
+      (grant) =>
+        grant.statusId === expiredCapabilityGrantStatusId ||
+        (grant.statusId === activeCapabilityGrantStatusId && grantHasExpired(grant)),
+    ) ||
+    matchingGrants.some((grant) =>
+      readCapabilityGrantShareGrantIds(store, grant.id).some(
+        (shareGrantId) =>
+          getFirstObject(store, shareGrantId, shareGrantStatusPredicateId) ===
+          expiredCapabilityGrantStatusId,
+      ),
+    )
+  ) {
+    createExpiredBearerShareLookupError(input);
+  }
+
+  if (
+    matchingGrants.some((grant) => grant.statusId === revokedCapabilityGrantStatusId) ||
+    matchingGrants.some((grant) =>
+      readCapabilityGrantShareGrantIds(store, grant.id).some(
+        (shareGrantId) =>
+          getFirstObject(store, shareGrantId, shareGrantStatusPredicateId) ===
+          revokedCapabilityGrantStatusId,
+      ),
+    ) ||
+    matchingGrants.some(
+      (grant) =>
+        readCapabilityGrantShareGrantIds(store, grant.id).length > 0 &&
+        readValidatedActiveShareGrants(store, grant).length === 0,
+    )
+  ) {
+    createRevokedBearerShareLookupError(input);
+  }
+
+  createMissingBearerShareLookupError(input);
 }
 
 function grantMatchesPredicateTarget(
@@ -1262,6 +1568,31 @@ function grantMatchesPredicateTarget(
   return (
     grant.constraintPredicateIds.length === 0 ||
     grant.constraintPredicateIds.includes(target.predicateId)
+  );
+}
+
+function grantMatchesSharedPredicateTarget(
+  store: Store,
+  grant: ResolvedAuthorizationCapabilityGrant,
+  target: AuthorizationDecisionTarget,
+): boolean {
+  const resourceSurfaceId = grant.resourceSurfaceId;
+  if (
+    grant.resourceKindId !== shareSurfaceCapabilityGrantResourceKindId ||
+    grantHasExpired(grant) ||
+    resourceSurfaceId === undefined ||
+    grant.constraintRootEntityId === undefined ||
+    grant.constraintPredicateIds.length === 0 ||
+    target.policy?.shareable !== true ||
+    target.policy.transportVisibility !== "replicated"
+  ) {
+    return false;
+  }
+
+  return readValidatedActiveShareGrants(store, grant).some(
+    (shareGrant) =>
+      shareGrant.rootEntityId === target.subjectId &&
+      shareGrant.predicateIds.includes(target.predicateId),
   );
 }
 
@@ -1326,6 +1657,9 @@ function createAuthorizationCapabilityResolver(
   return {
     readKeysFor(target) {
       return resolvePredicateCapabilityKeys(predicateReadCapabilityGrantResourceKindId, target);
+    },
+    allowsSharedReadFor(target) {
+      return grants.some((grant) => grantMatchesSharedPredicateTarget(store, grant, target));
     },
     writeKeysFor(target) {
       return resolvePredicateCapabilityKeys(predicateWriteCapabilityGrantResourceKindId, target);
@@ -1554,6 +1888,41 @@ function createConflictingAuthSubjectProjectionError(
   );
 }
 
+function createMissingBearerShareLookupError(input: BearerShareLookupInput): never {
+  throw new WebAppAuthorityBearerShareLookupError(
+    404,
+    "missing",
+    `No active bearer share grant exists for token hash "${input.tokenHash}" in graph "${input.graphId}".`,
+  );
+}
+
+function createExpiredBearerShareLookupError(input: BearerShareLookupInput): never {
+  throw new WebAppAuthorityBearerShareLookupError(
+    403,
+    "expired",
+    `Bearer share token "${input.tokenHash}" has expired in graph "${input.graphId}".`,
+  );
+}
+
+function createRevokedBearerShareLookupError(input: BearerShareLookupInput): never {
+  throw new WebAppAuthorityBearerShareLookupError(
+    403,
+    "revoked",
+    `Bearer share token "${input.tokenHash}" has been revoked in graph "${input.graphId}".`,
+  );
+}
+
+function createConflictingBearerShareLookupError(
+  input: BearerShareLookupInput,
+  capabilityGrantIds: readonly string[],
+): never {
+  throw new WebAppAuthorityBearerShareLookupError(
+    409,
+    "conflict",
+    `Multiple active bearer share grants (${capabilityGrantIds.join(", ")}) matched token hash "${input.tokenHash}" in graph "${input.graphId}".`,
+  );
+}
+
 function setSingleReferenceField(
   store: Store,
   subjectId: string,
@@ -1585,6 +1954,23 @@ function resolveCapabilityGrantPrincipalIds(
   capabilityGrantId: string,
 ): readonly string[] {
   return uniqueStrings([readCapabilityGrantTargetPrincipalId(store, capabilityGrantId)]);
+}
+
+function resolveShareGrantPrincipalIds(store: Store, shareGrantId: string): readonly string[] {
+  const capabilityGrantId = getFirstObject(
+    store,
+    shareGrantId,
+    shareGrantCapabilityGrantPredicateId,
+  );
+  if (!capabilityGrantId) {
+    return [];
+  }
+
+  return resolveCapabilityGrantPrincipalIds(store, capabilityGrantId);
+}
+
+function readShareGrantCapabilityGrantId(store: Store, shareGrantId: string): string | undefined {
+  return getFirstObject(store, shareGrantId, shareGrantCapabilityGrantPredicateId);
 }
 
 function resolveCapabilityVersionAffectedPrincipalIds(
@@ -1777,6 +2163,72 @@ function resolveTransactionTarget(
   return targets;
 }
 
+function changesRequireVisibilityReset(
+  store: Store,
+  snapshot: StoreSnapshot,
+  changes: ReturnType<PersistedWebAppAuthority["getChangesAfter"]>,
+  authorization: AuthorizationContext,
+): boolean {
+  if (changes.kind !== "changes" || changes.changes.length === 0) {
+    return false;
+  }
+
+  const bearerCapabilityGrantIds = new Set(
+    isBearerShareAuthorizationContext(authorization)
+      ? readAuthorizationCapabilityGrants(store, authorization).map((grant) => grant.id)
+      : [],
+  );
+  const edgeById = createTransactionEdgeIndex(snapshot);
+  for (const result of changes.changes) {
+    for (const operation of result.transaction.ops) {
+      const target = resolveOperationTarget(operation, edgeById);
+      if (!target) {
+        continue;
+      }
+
+      if (
+        authorization.principalId !== null &&
+        target.subjectId === authorization.principalId &&
+        target.predicateId === principalCapabilityVersionPredicateId
+      ) {
+        return true;
+      }
+
+      if (
+        bearerCapabilityGrantIds.size > 0 &&
+        capabilityVersionTriggerPredicateIds.has(target.predicateId) &&
+        hasEntityOfType(store, target.subjectId, capabilityGrantTypeId) &&
+        bearerCapabilityGrantIds.has(target.subjectId)
+      ) {
+        return true;
+      }
+
+      if (
+        !shareGrantVisibilityTriggerPredicateIds.has(target.predicateId) ||
+        !hasEntityOfType(store, target.subjectId, shareGrantTypeId)
+      ) {
+        continue;
+      }
+
+      if (
+        (authorization.principalId !== null &&
+          resolveShareGrantPrincipalIds(store, target.subjectId).includes(
+            authorization.principalId,
+          )) ||
+        (bearerCapabilityGrantIds.size > 0 &&
+          (() => {
+            const capabilityGrantId = readShareGrantCapabilityGrantId(store, target.subjectId);
+            return capabilityGrantId ? bearerCapabilityGrantIds.has(capabilityGrantId) : false;
+          })())
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function createAuthorizationTarget(
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
   subjectId: string,
@@ -1844,6 +2296,7 @@ function evaluateReadAuthorization(
   return authorizeRead({
     authorization,
     capabilityKeys: capabilityResolver.readKeysFor(target),
+    sharedRead: capabilityResolver.allowsSharedReadFor(target),
     target,
   });
 }
@@ -2360,20 +2813,15 @@ export async function createWebAppAuthority(
     after: string | undefined,
     options: WebAppAuthoritySyncOptions,
   ) {
+    const requestedAfter = after;
+    const snapshot = authority.store.snapshot();
     const authorizeRead = createReadableReplicationAuthorizer(
       authority.store,
       options.authorization,
       compiledFieldIndex,
     );
     const plannedScope = planSyncScope(options.scope, options.authorization);
-    if (!plannedScope) {
-      return authority.getIncrementalSyncResult(after, {
-        authorizeRead,
-        freshness: options.freshness,
-      });
-    }
-
-    if (after) {
+    if (after && plannedScope) {
       const currentScopedCursor = formatScopedModuleCursor(
         plannedScope.scope,
         authority.createSyncPayload({
@@ -2413,10 +2861,31 @@ export async function createWebAppAuthority(
       after = parsedAfter.cursor;
     }
 
+    if (after) {
+      const changes = authority.getChangesAfter(after);
+      if (
+        changesRequireVisibilityReset(authority.store, snapshot, changes, options.authorization)
+      ) {
+        const cursor = plannedScope
+          ? formatScopedModuleCursor(plannedScope.scope, changes.cursor)
+          : changes.cursor;
+
+        return createIncrementalSyncFallback(plannedScope ? "policy-changed" : "reset", {
+          after: requestedAfter ?? after,
+          cursor,
+          freshness: options.freshness,
+          ...(plannedScope ? { scope: plannedScope.scope } : {}),
+        });
+      }
+    }
+
     const result = authority.getIncrementalSyncResult(after, {
       authorizeRead,
       freshness: options.freshness,
     });
+    if (!plannedScope) {
+      return result;
+    }
     const resultAfter = formatScopedModuleCursor(plannedScope.scope, result.after);
     const resultCursor = formatScopedModuleCursor(plannedScope.scope, result.cursor);
     if ("fallback" in result) {
@@ -2445,6 +2914,10 @@ export async function createWebAppAuthority(
       freshness: result.freshness,
       scope: plannedScope.scope,
     });
+  }
+
+  async function lookupBearerShare(input: BearerShareLookupInput): Promise<BearerShareProjection> {
+    return readBearerShareProjection(authority.store, input);
   }
 
   async function lookupSessionPrincipal(
@@ -2713,6 +3186,7 @@ export async function createWebAppAuthority(
     applyTransaction,
     createSyncPayload,
     getIncrementalSyncResult,
+    lookupBearerShare,
     lookupSessionPrincipal,
     readCommitQueueScope,
     readPredicateValue,

@@ -5,7 +5,11 @@ import type {
   PersistedAuthoritativeGraphStoragePersistInput as DurableAuthorityPersistInput,
 } from "@io/core/graph";
 
-import type { SessionPrincipalLookupInput } from "./auth-bridge.js";
+import {
+  isBearerShareTokenHash,
+  type BearerShareLookupInput,
+  type SessionPrincipalLookupInput,
+} from "./auth-bridge.js";
 import type {
   WebAppAuthoritySecretInventoryRecord,
   WebAppAuthoritySecretLoadOptions,
@@ -19,6 +23,7 @@ import type {
 import {
   collectLiveSecretIds,
   createWebAppAuthority,
+  WebAppAuthorityBearerShareLookupError,
   WebAppAuthoritySessionPrincipalLookupError,
 } from "./authority.js";
 import {
@@ -109,6 +114,7 @@ type SecretValueRow = {
 
 const durableObjectAuthoritySchemaVersion = 1;
 const defaultMaxRetainedTransactions = 128;
+export const webGraphAuthorityBearerShareLookupPath = "/_internal/bearer-share";
 export const webGraphAuthoritySessionPrincipalLookupPath = "/_internal/session-principal";
 
 type WebGraphAuthorityFactory = (
@@ -195,6 +201,15 @@ class SessionPrincipalLookupRequestError extends Error {
   }
 }
 
+class BearerShareLookupRequestError extends Error {
+  readonly status = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "BearerShareLookupRequestError";
+  }
+}
+
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
 }
@@ -203,6 +218,16 @@ function requireNonEmptyRequestString(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new SessionPrincipalLookupRequestError(
       `Session principal lookup request must include a non-empty "${label}" string.`,
+    );
+  }
+
+  return value;
+}
+
+function requireNonEmptyBearerShareRequestString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new BearerShareLookupRequestError(
+      `Bearer share lookup request must include a non-empty "${label}" string.`,
     );
   }
 
@@ -245,6 +270,31 @@ async function readSessionPrincipalLookupInput(
       ),
       authUserId: requireNonEmptyRequestString(subject.authUserId, "subject.authUserId"),
     },
+  };
+}
+
+async function readBearerShareLookupInput(request: Request): Promise<BearerShareLookupInput> {
+  let decoded: unknown;
+  try {
+    decoded = await request.json();
+  } catch {
+    throw new BearerShareLookupRequestError("Bearer share lookup request must be valid JSON.");
+  }
+
+  if (!isObjectRecord(decoded)) {
+    throw new BearerShareLookupRequestError("Bearer share lookup request must be a JSON object.");
+  }
+
+  const tokenHash = requireNonEmptyBearerShareRequestString(decoded.tokenHash, "tokenHash");
+  if (!isBearerShareTokenHash(tokenHash)) {
+    throw new BearerShareLookupRequestError(
+      "Bearer share lookup request must include a sha256:<64 lowercase hex chars> tokenHash.",
+    );
+  }
+
+  return {
+    graphId: requireNonEmptyBearerShareRequestString(decoded.graphId, "graphId"),
+    tokenHash,
   };
 }
 
@@ -1075,8 +1125,64 @@ export class WebGraphAuthorityDurableObject {
     }
   }
 
+  private async handleBearerShareLookupRequest(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return new Response("Method Not Allowed", {
+        status: 405,
+        headers: { allow: "POST" },
+      });
+    }
+
+    let input: BearerShareLookupInput;
+    try {
+      input = await readBearerShareLookupInput(request);
+    } catch (error) {
+      if (error instanceof BearerShareLookupRequestError) {
+        return Response.json(
+          { error: error.message },
+          {
+            status: error.status,
+            headers: {
+              "cache-control": "no-store",
+            },
+          },
+        );
+      }
+      throw error;
+    }
+
+    try {
+      const authority = await this.getAuthority();
+      return Response.json(await authority.lookupBearerShare(input), {
+        headers: {
+          "cache-control": "no-store",
+        },
+      });
+    } catch (error) {
+      if (error instanceof WebAppAuthorityBearerShareLookupError) {
+        return Response.json(
+          {
+            error: error.message,
+            code: error.code,
+          },
+          {
+            status: error.status,
+            headers: {
+              "cache-control": "no-store",
+            },
+          },
+        );
+      }
+      throw error;
+    }
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === webGraphAuthorityBearerShareLookupPath) {
+      return this.state.blockConcurrencyWhile(() => this.handleBearerShareLookupRequest(request));
+    }
+
     if (url.pathname === webGraphAuthoritySessionPrincipalLookupPath) {
       return this.state.blockConcurrencyWhile(() =>
         this.handleSessionPrincipalLookupRequest(request),

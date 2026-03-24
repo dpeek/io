@@ -20,6 +20,8 @@ import {
   principalRoleBinding,
   principalRoleBindingStatus,
   principalStatus,
+  shareGrant,
+  shareSurfaceKind,
 } from "./core/identity/index.js";
 import { jsonTypeModule } from "./core/json/index.js";
 import { markdownTypeModule } from "./core/markdown/index.js";
@@ -106,8 +108,10 @@ export const core = defineNamespace(coreIdMap, {
   capabilityGrantResourceKind,
   capabilityGrantTargetKind,
   capabilityGrantStatus,
+  shareSurfaceKind,
   principal,
   authSubjectProjection,
   principalRoleBinding,
   capabilityGrant,
+  shareGrant,
 });

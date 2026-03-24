@@ -3,8 +3,14 @@ import { describe, expect, it } from "bun:test";
 import type { AuthSubjectRef, AuthenticatedSession } from "@io/core/graph";
 
 import {
+  createBearerShareAuthorizationContext,
   createAnonymousAuthorizationContext,
   createWorkerAuthorizationContext,
+  hashBearerShareToken,
+  issueBearerShareToken,
+  isBearerShareToken,
+  isBearerShareTokenHash,
+  projectBearerShareToken,
   projectSessionToPrincipal,
   reduceBetterAuthSession,
 } from "./auth-bridge.js";
@@ -167,6 +173,40 @@ describe("web auth bridge", () => {
     });
   });
 
+  it("issues opaque bearer share tokens and stores only their hashes durably", async () => {
+    const issued = await issueBearerShareToken();
+
+    expect(isBearerShareToken(issued.token)).toBe(true);
+    expect(isBearerShareTokenHash(issued.tokenHash)).toBe(true);
+    expect(await hashBearerShareToken(issued.token)).toBe(issued.tokenHash);
+    expect(issued.tokenHash).not.toContain(issued.token);
+  });
+
+  it("projects verified bearer share tokens into anonymous shared-read authorization contexts", async () => {
+    const issued = await issueBearerShareToken();
+    const context = await projectBearerShareToken({
+      graphId: "graph-1",
+      policyVersion: 9,
+      token: issued.token,
+      lookupBearerShare({ graphId, tokenHash }) {
+        expect(graphId).toBe("graph-1");
+        expect(tokenHash).toBe(issued.tokenHash);
+
+        return {
+          capabilityGrantIds: ["grant:bearer-share"],
+        };
+      },
+    });
+
+    expect(context).toEqual(
+      createBearerShareAuthorizationContext({
+        graphId: "graph-1",
+        policyVersion: 9,
+        capabilityGrantIds: ["grant:bearer-share"],
+      }),
+    );
+  });
+
   it("fails closed when an authenticated subject has no graph principal projection", async () => {
     await expect(
       projectSessionToPrincipal({
@@ -182,6 +222,25 @@ describe("web auth bridge", () => {
       code: "auth.principal_missing",
       graphId: "graph-1",
       subject,
+    });
+  });
+
+  it("fails closed when a bearer share token has no active delegated grant", async () => {
+    const issued = await issueBearerShareToken();
+
+    await expect(
+      projectBearerShareToken({
+        graphId: "graph-1",
+        policyVersion: 2,
+        token: issued.token,
+        lookupBearerShare() {
+          return null;
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: "BearerShareTokenProjectionError",
+      code: "grant.invalid",
+      graphId: "graph-1",
     });
   });
 });

@@ -215,6 +215,17 @@ export const capabilityGrantStatus = defineEnum({
 
 export const capabilityGrantStatusTypeModule = defineDefaultEnumTypeModule(capabilityGrantStatus);
 
+export const shareSurfaceKind = defineEnum({
+  values: { key: "core:shareSurfaceKind", name: "Share Surface Kind" },
+  options: {
+    entityPredicateSlice: {
+      name: "Entity predicate slice",
+    },
+  },
+});
+
+export const shareSurfaceKindTypeModule = defineDefaultEnumTypeModule(shareSurfaceKind);
+
 export const principal = defineType({
   values: { key: "core:principal", name: "Principal" },
   fields: {
@@ -386,5 +397,53 @@ export const capabilityGrant = defineType({
       },
       authority: authorityOwnedIdentityFieldAuthority,
     }),
+  },
+});
+
+export const shareGrant = defineType({
+  values: { key: "core:shareGrant", name: "Share Grant" },
+  fields: {
+    ...node.fields,
+    surfaceId: requiredIdentityStringField("Surface id"),
+    surfaceKind: shareSurfaceKindTypeModule.field({
+      cardinality: "one",
+      meta: {
+        label: "Surface kind",
+      },
+      authority: authorityOwnedIdentityFieldAuthority,
+    }),
+    surfaceRootEntityId: requiredIdentityStringField("Surface root entity id"),
+    surfacePredicateId: stringTypeModule.field({
+      cardinality: "many",
+      validate: ({ value }) => validateRequiredStringList("Surface predicate id", value),
+      meta: {
+        label: "Surface predicate id",
+      },
+      filter: {
+        operators: ["equals", "prefix"] as const,
+        defaultOperator: "equals",
+      },
+      authority: authorityOwnedIdentityFieldAuthority,
+    }),
+    capabilityGrant: defineReferenceField({
+      range: capabilityGrant.values.key,
+      cardinality: "one",
+      meta: {
+        label: "Capability grant",
+      },
+      authority: authorityOwnedIdentityFieldAuthority,
+    }),
+    status: {
+      ...capabilityGrantStatusTypeModule.field({
+        cardinality: "one",
+        onCreate: ({ incoming }) =>
+          incoming ?? resolvedEnumValue(capabilityGrantStatus.values.active),
+        meta: {
+          label: "Status",
+        },
+        authority: authorityOwnedIdentityFieldAuthority,
+      }),
+      createOptional: true as const,
+    },
   },
 });

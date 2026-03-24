@@ -258,6 +258,11 @@ Current first-cut target boundary:
 - `graph` and `bearer` targets are durable graph vocabulary now, but remain
   provisional until later sharing and federation work makes them live
   authorization inputs
+- the current bearer-share proof is intentionally narrower than principal
+  sharing: issuance returns plaintext once, the durable graph stores only a
+  `sha256:` bearer token hash, lookups reject missing, expired, or revoked
+  tokens before protected reads continue, and the current Worker bridge only
+  lowers bearer shares into anonymous shared-read `GET /api/sync` requests
 - only principal-target grants participate in `capabilityVersion`
   invalidation in the current proof
 
@@ -317,10 +322,7 @@ type ModulePermissionRequest =
       blobClassKeys: readonly string[];
     });
 
-type ModulePermissionGrantResource = Extract<
-  CapabilityResource,
-  { kind: "module-permission" }
->;
+type ModulePermissionGrantResource = Extract<CapabilityResource, { kind: "module-permission" }>;
 
 type ModulePermissionLowering =
   | {
@@ -372,6 +374,7 @@ type ModulePermissionApprovalRecord =
 interface ShareGrant {
   id: string;
   surface: {
+    surfaceId: string;
     kind: "entity-predicate-slice";
     rootEntityId: string;
     predicateIds: readonly string[];
@@ -401,12 +404,15 @@ Entity and concept responsibilities:
 - `ModulePermissionApprovalRecord` is the durable install-time review result for
   one declared permission key. It persists approval, denial, and revocation
   without creating ambient hidden rights.
-- `ShareGrant` is a narrowed sharing wrapper over a capability grant.
+- `ShareGrant` is a narrowed sharing wrapper over a capability grant and the
+  explicit share-surface selector it exposes.
 
 Identifier rules:
 
 - `principalId`, `capabilityGrantId`, and `shareGrantId` are stable graph node
   ids.
+- `ShareGrant.surface.surfaceId` is the durable share-surface reference lowered
+  through `CapabilityGrant.resource.surfaceId` in the first cut.
 - `provider + providerAccountId` must map to at most one active
   `AuthSubjectProjection` per graph.
 - `capabilityVersion` starts at `0` when a principal is created.
@@ -466,19 +472,19 @@ interface PolicyError {
 
 ### Contract Table
 
-| Name                             | Purpose                                                                            | Caller                                        | Callee                                         | Inputs                                                        | Outputs                               | Failure shape                                                            | Stability                                                                  |
-| -------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `GraphFieldAuthority`            | Low-level replication and write-scope metadata already used by validation and sync | schema authors, authority runtime             | graph runtime                                  | field definition                                              | authored metadata                     | validation error if malformed                                            | `stable`                                                                   |
-| `PredicatePolicyDescriptor`      | Principal-aware read, write, and sharing rule for a predicate                      | schema authors, module authors                | policy evaluator                               | predicate id, policy audiences, capabilities                  | descriptor                            | `policy.write.forbidden` or `policy.read.forbidden` when violated        | `provisional`                                                              |
-| `AuthorizationContext`           | Request-local resolved actor and version snapshot                                  | auth bridge, authority runtime                | policy evaluator, sync, commands               | Better Auth session plus graph projection                     | principal id, roles, grants, versions | `auth.unauthenticated`, `auth.principal_missing`, `policy.stale_context` | `stable`                                                                   |
-| `projectSessionToPrincipal(...)` | Map a Better Auth session to graph identity                                        | Worker auth bridge                            | Better Auth store plus graph projection lookup | request session, graph id                                     | `AuthorizationContext`                | `auth.unauthenticated`, `auth.principal_missing`                         | `stable`                                                                   |
-| `authorizeRead(...)`             | Decide whether a predicate may materialize for a principal                         | query and sync paths                          | policy evaluator                               | `AuthorizationContext`, subject id, predicate id              | allow or deny                         | `policy.read.forbidden` on explicit reads; sync omits denied predicates  | `stable`                                                                   |
-| `authorizeWrite(...)`            | Decide whether a mutation may touch a predicate                                    | write validator, command executor             | policy evaluator                               | `AuthorizationContext`, subject id, predicate id, write scope | allow or deny                         | `policy.write.forbidden`                                                 | `stable`                                                                   |
-| `authorizeCommand(...)`          | Enforce command capability requirements                                            | command executor                              | policy evaluator                               | `AuthorizationContext`, command key, touched predicates       | allow or deny                         | `policy.command.forbidden`                                               | `stable`                                                                   |
-| `CapabilityGrant`                | Durable delegated permission                                                       | share service, install flow, workflow runtime | authority persistence                          | resource, target, constraints                                 | stored grant id                       | `grant.invalid`                                                          | `stable` for principal targets, `provisional` for bearer and graph targets |
-| `ModulePermissionRequest`        | Canonical manifest-facing install-time permission request                          | module manifest loader                        | module installer and policy runtime            | stable `key`, `required`, `reason`, and kind-specific target fields | approval or denial keyed by `permissionKey` | `policy.command.forbidden`, `grant.invalid`                              | `stable` for key space plus predicate, command, and secret kinds; `provisional` for `share-admin` details and host-expansion kinds |
-| `ModulePermissionApprovalRecord` | Durable reviewed outcome for one declared module permission                        | module installer, install review UI           | authority persistence plus Branch 2 lowering   | `moduleId`, `permissionKey`, reviewed `request`, and lowerings | stored approval, denial, or revocation record | `policy.command.forbidden`, `grant.invalid`                              | `stable` for approval, denial, revocation, and explicit lowering references |
-| `ShareGrant`                     | Narrow grant for shareable entity predicate slices                                 | share service, future federation bridge       | authority persistence plus policy runtime      | surface selector, grant target                                | stored share grant id                 | `share.surface_invalid`, `grant.invalid`                                 | `provisional`                                                              |
+| Name                             | Purpose                                                                            | Caller                                        | Callee                                         | Inputs                                                              | Outputs                                       | Failure shape                                                            | Stability                                                                                                                          |
+| -------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `GraphFieldAuthority`            | Low-level replication and write-scope metadata already used by validation and sync | schema authors, authority runtime             | graph runtime                                  | field definition                                                    | authored metadata                             | validation error if malformed                                            | `stable`                                                                                                                           |
+| `PredicatePolicyDescriptor`      | Principal-aware read, write, and sharing rule for a predicate                      | schema authors, module authors                | policy evaluator                               | predicate id, policy audiences, capabilities                        | descriptor                                    | `policy.write.forbidden` or `policy.read.forbidden` when violated        | `provisional`                                                                                                                      |
+| `AuthorizationContext`           | Request-local resolved actor and version snapshot                                  | auth bridge, authority runtime                | policy evaluator, sync, commands               | Better Auth session plus graph projection                           | principal id, roles, grants, versions         | `auth.unauthenticated`, `auth.principal_missing`, `policy.stale_context` | `stable`                                                                                                                           |
+| `projectSessionToPrincipal(...)` | Map a Better Auth session to graph identity                                        | Worker auth bridge                            | Better Auth store plus graph projection lookup | request session, graph id                                           | `AuthorizationContext`                        | `auth.unauthenticated`, `auth.principal_missing`                         | `stable`                                                                                                                           |
+| `authorizeRead(...)`             | Decide whether a predicate may materialize for a principal                         | query and sync paths                          | policy evaluator                               | `AuthorizationContext`, subject id, predicate id                    | allow or deny                                 | `policy.read.forbidden` on explicit reads; sync omits denied predicates  | `stable`                                                                                                                           |
+| `authorizeWrite(...)`            | Decide whether a mutation may touch a predicate                                    | write validator, command executor             | policy evaluator                               | `AuthorizationContext`, subject id, predicate id, write scope       | allow or deny                                 | `policy.write.forbidden`                                                 | `stable`                                                                                                                           |
+| `authorizeCommand(...)`          | Enforce command capability requirements                                            | command executor                              | policy evaluator                               | `AuthorizationContext`, command key, touched predicates             | allow or deny                                 | `policy.command.forbidden`                                               | `stable`                                                                                                                           |
+| `CapabilityGrant`                | Durable delegated permission                                                       | share service, install flow, workflow runtime | authority persistence                          | resource, target, constraints                                       | stored grant id                               | `grant.invalid`                                                          | `stable` for principal targets, `provisional` for bearer and graph targets                                                         |
+| `ModulePermissionRequest`        | Canonical manifest-facing install-time permission request                          | module manifest loader                        | module installer and policy runtime            | stable `key`, `required`, `reason`, and kind-specific target fields | approval or denial keyed by `permissionKey`   | `policy.command.forbidden`, `grant.invalid`                              | `stable` for key space plus predicate, command, and secret kinds; `provisional` for `share-admin` details and host-expansion kinds |
+| `ModulePermissionApprovalRecord` | Durable reviewed outcome for one declared module permission                        | module installer, install review UI           | authority persistence plus Branch 2 lowering   | `moduleId`, `permissionKey`, reviewed `request`, and lowerings      | stored approval, denial, or revocation record | `policy.command.forbidden`, `grant.invalid`                              | `stable` for approval, denial, revocation, and explicit lowering references                                                        |
+| `ShareGrant`                     | Narrow grant for shareable entity predicate slices                                 | share service, future federation bridge       | authority persistence plus policy runtime      | surface selector, grant target                                      | stored share grant id                         | `share.surface_invalid`, `grant.invalid`                                 | `provisional`                                                                                                                      |
 
 Contract rules:
 
@@ -500,7 +506,7 @@ Contract rules:
   install plans, durable grants, approval UI state, and revocation
 - approval lowers every `ModulePermissionRequest` into the same grant key space
   by recording `CapabilityResource = { kind: "module-permission",
-  permissionKey: request.key }`; the union member determines what Branch 2
+permissionKey: request.key }`; the union member determines what Branch 2
   evaluates before that grant is issued
 - approved `ModulePermissionApprovalRecord`s must reference at least one
   explicit `module-permission` capability grant or reusable role binding
@@ -519,6 +525,16 @@ Contract rules:
 - `command-execute.touchesPredicates`, when present, is review metadata that
   must summarize rather than replace the authoritative
   `GraphCommandSpec.policy.touchesPredicates` surface
+- first-cut `ShareGrant.surface` records are always
+  `kind = "entity-predicate-slice"` with one explicit `surfaceId`, one
+  `rootEntityId`, and one explicit predicate set
+- first-cut share issuance must reject empty, duplicate, malformed, or
+  non-shareable predicate selections with `share.surface_invalid`
+- first-cut share lowering must keep
+  `CapabilityGrant.resource = { kind: "share-surface", surfaceId }` aligned
+  with `ShareGrant.surface.surfaceId`, and
+  `CapabilityGrant.constraints.{ rootEntityId, predicateIds }` must mirror the
+  same selector exactly rather than broadening it
 - authority-owned write and command paths must fail closed with
   `policy.stale_context` when the request-bound `AuthorizationContext` carries
   an older `policyVersion` than the authority currently serves
@@ -535,9 +551,17 @@ Current Branch 2 read baseline in the single-graph proof:
 - total and incremental sync apply transport visibility first, then omit
   predicates the current principal is not allowed to read; the sync cursor may
   still advance with fewer or zero visible operations
-- explicit direct predicate reads fail with `policy.read.forbidden`
-- the end-to-end proof for that divergence lives in
-  `src/web/lib/graph-authority-do.test.ts`
+- principal-target `share-surface` grants plus active `ShareGrant` records may
+  additionally expose one explicit shareable replicated predicate slice to a
+  delegated principal through those same sync and direct-read surfaces
+- when delegated share visibility changes, incremental sync falls back to total
+  recovery so previously hidden data can materialize and revoked data can clear
+  without leaving stale client-visible state behind
+- predicates outside the granted slice, non-shareable predicates, and revoked
+  shared predicates remain omitted from sync and fail explicit direct reads with
+  `policy.read.forbidden`
+- the end-to-end proof for those read-path outcomes lives in
+  `src/web/lib/authority.test.ts` and `src/web/lib/graph-authority-do.test.ts`
 
 ## 5. Runtime Architecture
 
@@ -649,17 +673,20 @@ Not owned here:
   closed when they cannot satisfy the current `policyVersion`
 - bearer share tokens are stored only as token hashes; plaintext bearer tokens
   are write-only at issuance time
+- the current single-graph bearer proof requires an explicit `expiresAt`
+  constraint on bearer-target share grants so the anonymous read surface stays
+  narrow, auditable, and revocable
 
 ## 7. Integration Points
 
-| Branch                                    | Dependency direction         | Imported contracts                                                                                 | Exported contracts                                                | What may be mocked                                               | What must be stable                                              |
-| ----------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Branch 1: Graph Kernel And Authority      | Branch 2 depends on Branch 1 | stable ids, transaction application, write scopes, sync filtering seams, command dispatch boundary | principal-aware policy evaluation, grant records, policy versions | allow-all principal model for early prototypes                   | write-scope enforcement hook and filtered sync hook              |
-| Branch 3: Sync Query And Projections      | Branch 3 depends on Branch 2 | `AuthorizationContext`, predicate policy, share-surface ids, policy versions                       | principal-scoped visibility semantics for scoped sync             | temporary whole-graph reads filtered by current field visibility | stable deny-by-default read contract and versioned policy filter |
+| Branch                                    | Dependency direction         | Imported contracts                                                                                 | Exported contracts                                                | What may be mocked                                               | What must be stable                                                    |
+| ----------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Branch 1: Graph Kernel And Authority      | Branch 2 depends on Branch 1 | stable ids, transaction application, write scopes, sync filtering seams, command dispatch boundary | principal-aware policy evaluation, grant records, policy versions | allow-all principal model for early prototypes                   | write-scope enforcement hook and filtered sync hook                    |
+| Branch 3: Sync Query And Projections      | Branch 3 depends on Branch 2 | `AuthorizationContext`, predicate policy, share-surface ids, policy versions                       | principal-scoped visibility semantics for scoped sync             | temporary whole-graph reads filtered by current field visibility | stable deny-by-default read contract and versioned policy filter       |
 | Branch 4: Module Runtime And Installation | Branch 4 depends on Branch 2 | `ModulePermissionRequest`, grant creation, command authorization                                   | install-time approval model and durable permission grant shape    | built-in module allowlist                                        | manifest permission keys, kind-specific lowering, and revocation rules |
-| Branch 5: Blob Ingestion And Media        | mutual dependency            | secret-use capabilities, command authorization, shareability rules                                 | blob and secret command keys referenced by grants                 | local operator-only secrets                                      | capability names for reveal, rotate, and ingest flows            |
-| Branch 6: Workflow And Agent Runtime      | Branch 6 depends on Branch 2 | agent and service principal kinds, command authorization, share grants                             | durable agent permission model                                    | operator-run workflows under one principal                       | service and agent principal semantics                            |
-| Branch 7: Web And Operator Surfaces       | Branch 7 depends on Branch 2 | auth bridge contract, principal summary, share grant contract                                      | capability-aware UX requirements                                  | developer-only sign-in and single-user mode                      | request context contract and explicit forbidden behavior         |
+| Branch 5: Blob Ingestion And Media        | mutual dependency            | secret-use capabilities, command authorization, shareability rules                                 | blob and secret command keys referenced by grants                 | local operator-only secrets                                      | capability names for reveal, rotate, and ingest flows                  |
+| Branch 6: Workflow And Agent Runtime      | Branch 6 depends on Branch 2 | agent and service principal kinds, command authorization, share grants                             | durable agent permission model                                    | operator-run workflows under one principal                       | service and agent principal semantics                                  |
+| Branch 7: Web And Operator Surfaces       | Branch 7 depends on Branch 2 | auth bridge contract, principal summary, share grant contract                                      | capability-aware UX requirements                                  | developer-only sign-in and single-user mode                      | request context contract and explicit forbidden behavior               |
 
 Integration rules:
 

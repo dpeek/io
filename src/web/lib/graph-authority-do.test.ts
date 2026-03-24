@@ -28,7 +28,9 @@ import {
 import { pkm } from "@io/core/graph/modules/pkm";
 
 import {
+  createBearerShareAuthorizationContext,
   createAnonymousAuthorizationContext,
+  issueBearerShareToken,
   type SessionPrincipalLookupInput,
 } from "./auth-bridge.js";
 import { createTestWebAppAuthority, createTestWorkflowFixture } from "./authority-test-helpers.js";
@@ -39,6 +41,7 @@ import {
 } from "./authority.js";
 import {
   WebGraphAuthorityDurableObject,
+  webGraphAuthorityBearerShareLookupPath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "./graph-authority-do.js";
 import {
@@ -168,6 +171,51 @@ const capabilityNoteNamespace = defineNamespace(createIdMap({ capabilityNote }).
 });
 const capabilityProofGraph = { ...productGraph, ...capabilityNoteNamespace } as const;
 const capabilityReadNotePredicateId = edgeId(capabilityNote.fields.readNote);
+const shareableNote = defineType({
+  values: { key: "test:shareableNote", name: "Shareable Note" },
+  fields: {
+    sharedNote: {
+      ...core.node.fields.description,
+      key: "test:shareableNote:sharedNote",
+      authority: {
+        visibility: "replicated",
+        write: "authority-only",
+        policy: {
+          readAudience: "graph-member",
+          writeAudience: "authority",
+          shareable: true,
+        },
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Shared note",
+      },
+    },
+    otherSharedNote: {
+      ...core.node.fields.description,
+      key: "test:shareableNote:otherSharedNote",
+      authority: {
+        visibility: "replicated",
+        write: "authority-only",
+        policy: {
+          readAudience: "graph-member",
+          writeAudience: "authority",
+          shareable: true,
+        },
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Other shared note",
+      },
+    },
+  },
+});
+const shareableNoteNamespace = defineNamespace(createIdMap({ shareableNote }).map, {
+  shareableNote,
+});
+const shareableProofGraph = { ...productGraph, ...shareableNoteNamespace } as const;
+const shareableSharedNotePredicateId = edgeId(shareableNote.fields.sharedNote);
+const shareableOtherSharedNotePredicateId = edgeId(shareableNote.fields.otherSharedNote);
 
 type SqliteMasterRow = {
   name: string;
@@ -388,6 +436,23 @@ function createSessionPrincipalLookupRequest(
       ...init,
     },
   );
+}
+
+function createBearerShareLookupRequest(
+  input: {
+    readonly graphId: string;
+    readonly tokenHash: string;
+  },
+  init: RequestInit = {},
+): Request {
+  return new Request(`https://graph-authority.local${webGraphAuthorityBearerShareLookupPath}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(input),
+    ...init,
+  });
 }
 
 function readProductGraph(authority: WebAppAuthority, authorization: AuthorizationContext) {
@@ -915,6 +980,205 @@ describe("web graph authority durable object", () => {
     });
   });
 
+  it("resolves active bearer share grants through the internal hash lookup route", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(
+      state,
+      {},
+      {
+        createAuthority(storage, options) {
+          return createWebAppAuthority(storage, {
+            ...options,
+            graph: shareableProofGraph,
+          });
+        },
+      },
+    );
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const ownerProjection = await authority.lookupSessionPrincipal(
+      createSessionPrincipalLookupInput(),
+    );
+    const issued = await issueBearerShareToken();
+    const createdNote = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      shareableProofGraph,
+      "tx:create-bearer-lookup-shareable-note",
+      (graph) =>
+        graph.shareableNote.create({
+          sharedNote: "Durable bearer share",
+        }),
+    );
+
+    await authority.applyTransaction(createdNote.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const grantedShare = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      shareableProofGraph,
+      "tx:grant-bearer-lookup-shareable-note-read",
+      (graph) => {
+        const shareSurfaceId = "surface:shareable-note:bearer-shared-note";
+        const capabilityGrantId = graph.capabilityGrant.create({
+          bearerTokenHash: issued.tokenHash,
+          constraintExpiresAt: new Date(Date.now() + 60_000),
+          constraintPredicateId: [shareableSharedNotePredicateId],
+          constraintRootEntityId: createdNote.result,
+          grantedByPrincipal: ownerProjection.principalId,
+          name: "Bearer shareable note read",
+          resourceKind: core.capabilityGrantResourceKind.values.shareSurface.id,
+          resourceSurfaceId: shareSurfaceId,
+          status: core.capabilityGrantStatus.values.active.id,
+          targetKind: core.capabilityGrantTargetKind.values.bearer.id,
+        });
+
+        graph.shareGrant.create({
+          capabilityGrant: capabilityGrantId,
+          name: "Bearer shareable note grant",
+          status: core.capabilityGrantStatus.values.active.id,
+          surfaceId: shareSurfaceId,
+          surfaceKind: core.shareSurfaceKind.values.entityPredicateSlice.id,
+          surfacePredicateId: [shareableSharedNotePredicateId],
+          surfaceRootEntityId: createdNote.result,
+        });
+      },
+    );
+
+    await authority.applyTransaction(grantedShare.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const response = await durableObject.fetch(
+      createBearerShareLookupRequest({
+        graphId: "graph:test",
+        tokenHash: issued.tokenHash,
+      }),
+    );
+    const projection = (await response.json()) as {
+      readonly capabilityGrantIds: readonly string[];
+    };
+    const bearerAuthorization = createBearerShareAuthorizationContext({
+      graphId: "graph:test",
+      policyVersion: 0,
+      capabilityGrantIds: projection.capabilityGrantIds,
+    });
+    const sync = await readSyncPayload(durableObject, undefined, bearerAuthorization);
+
+    expect(response.status).toBe(200);
+    expect(projection.capabilityGrantIds).toHaveLength(1);
+    expect(
+      sync.snapshot?.edges.some(
+        (edge) =>
+          edge.s === createdNote.result &&
+          edge.p === shareableSharedNotePredicateId &&
+          edge.o === "Durable bearer share",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects revoked bearer share grants through the internal hash lookup route", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(
+      state,
+      {},
+      {
+        createAuthority(storage, options) {
+          return createWebAppAuthority(storage, {
+            ...options,
+            graph: shareableProofGraph,
+          });
+        },
+      },
+    );
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const ownerProjection = await authority.lookupSessionPrincipal(
+      createSessionPrincipalLookupInput(),
+    );
+    const issued = await issueBearerShareToken();
+    const createdNote = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      shareableProofGraph,
+      "tx:create-revoked-bearer-shareable-note",
+      (graph) =>
+        graph.shareableNote.create({
+          sharedNote: "Revoked durable bearer share",
+        }),
+    );
+
+    await authority.applyTransaction(createdNote.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const grantedShare = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      shareableProofGraph,
+      "tx:grant-revoked-bearer-shareable-note-read",
+      (graph) => {
+        const shareSurfaceId = "surface:shareable-note:revoked-bearer-shared-note";
+        const capabilityGrantId = graph.capabilityGrant.create({
+          bearerTokenHash: issued.tokenHash,
+          constraintExpiresAt: new Date(Date.now() + 60_000),
+          constraintPredicateId: [shareableSharedNotePredicateId],
+          constraintRootEntityId: createdNote.result,
+          grantedByPrincipal: ownerProjection.principalId,
+          name: "Revoked bearer shareable note read",
+          resourceKind: core.capabilityGrantResourceKind.values.shareSurface.id,
+          resourceSurfaceId: shareSurfaceId,
+          status: core.capabilityGrantStatus.values.active.id,
+          targetKind: core.capabilityGrantTargetKind.values.bearer.id,
+        });
+
+        return {
+          shareGrantId: graph.shareGrant.create({
+            capabilityGrant: capabilityGrantId,
+            name: "Revoked bearer shareable note grant",
+            status: core.capabilityGrantStatus.values.active.id,
+            surfaceId: shareSurfaceId,
+            surfaceKind: core.shareSurfaceKind.values.entityPredicateSlice.id,
+            surfacePredicateId: [shareableSharedNotePredicateId],
+            surfaceRootEntityId: createdNote.result,
+          }),
+        };
+      },
+    );
+
+    await authority.applyTransaction(grantedShare.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const revokedShare = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      shareableProofGraph,
+      "tx:revoke-bearer-lookup-shareable-note-read",
+      (graph) =>
+        graph.shareGrant.update(grantedShare.result.shareGrantId, {
+          status: core.capabilityGrantStatus.values.revoked.id,
+        }),
+    );
+
+    await authority.applyTransaction(revokedShare.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const response = await durableObject.fetch(
+      createBearerShareLookupRequest({
+        graphId: "graph:test",
+        tokenHash: issued.tokenHash,
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      code: "grant.invalid",
+      error: expect.stringContaining("revoked"),
+    });
+  });
+
   it("fails closed on stale policy versions when serving sync reads", async () => {
     const { state } = createSqliteDurableObjectState();
     const durableObject = createTestDurableObject(state);
@@ -1432,6 +1696,242 @@ describe("web graph authority durable object", () => {
         authorization: refreshedAuthorization,
       }),
     ).toBe("Capability-gated sync note");
+  });
+
+  it("applies principal-target share grants to delegated sync and direct reads", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(
+      state,
+      {},
+      {
+        createAuthority(storage, options) {
+          return createWebAppAuthority(storage, {
+            ...options,
+            graph: shareableProofGraph,
+          });
+        },
+      },
+    );
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const ownerLookupInput = createSessionPrincipalLookupInput();
+    const delegateLookupInput = createSessionPrincipalLookupInput({
+      subject: {
+        providerAccountId: "user-2",
+        authUserId: "auth-user-2",
+      },
+    });
+    const ownerProjection = await authority.lookupSessionPrincipal(ownerLookupInput);
+    const initialDelegateProjection = await authority.lookupSessionPrincipal(delegateLookupInput);
+    const createdNote = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      shareableProofGraph,
+      "tx:create-shareable-note",
+      (graph) =>
+        graph.shareableNote.create({
+          sharedNote: "Shared before grant",
+          otherSharedNote: "Always private",
+        }),
+    );
+
+    await authority.applyTransaction(createdNote.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const initialDelegateAuthorization = createProjectedAuthorizationContext(
+      delegateLookupInput,
+      initialDelegateProjection,
+    );
+    const deniedTotal = await readSyncPayload(
+      durableObject,
+      undefined,
+      initialDelegateAuthorization,
+    );
+
+    if (deniedTotal.mode !== "total") {
+      throw new Error("Expected a total sync payload before the share grant is applied.");
+    }
+
+    expect(
+      deniedTotal.snapshot?.edges.some(
+        (edge) =>
+          edge.s === createdNote.result &&
+          (edge.p === shareableSharedNotePredicateId ||
+            edge.p === shareableOtherSharedNotePredicateId),
+      ),
+    ).toBe(false);
+    try {
+      authority.readPredicateValue(createdNote.result, shareableSharedNotePredicateId, {
+        authorization: initialDelegateAuthorization,
+      });
+      throw new Error("Expected shared-note direct reads to fail before the share grant.");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: "policy.read.forbidden",
+        message: expect.stringContaining("policy.read.forbidden"),
+        status: 403,
+      });
+    }
+
+    const grantedShare = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      shareableProofGraph,
+      "tx:grant-shareable-note-read",
+      (graph) => {
+        const shareSurfaceId = "surface:shareable-note:shared-note";
+        const capabilityGrantId = graph.capabilityGrant.create({
+          grantedByPrincipal: ownerProjection.principalId,
+          name: "Delegated shareable note read",
+          resourceKind: core.capabilityGrantResourceKind.values.shareSurface.id,
+          resourceSurfaceId: shareSurfaceId,
+          constraintRootEntityId: createdNote.result,
+          constraintPredicateId: [shareableSharedNotePredicateId],
+          status: core.capabilityGrantStatus.values.active.id,
+          targetKind: core.capabilityGrantTargetKind.values.principal.id,
+          targetPrincipal: initialDelegateProjection.principalId,
+        });
+
+        return {
+          capabilityGrantId,
+          shareGrantId: graph.shareGrant.create({
+            capabilityGrant: capabilityGrantId,
+            name: "Delegated shareable note grant",
+            status: core.capabilityGrantStatus.values.active.id,
+            surfaceId: shareSurfaceId,
+            surfaceKind: core.shareSurfaceKind.values.entityPredicateSlice.id,
+            surfacePredicateId: [shareableSharedNotePredicateId],
+            surfaceRootEntityId: createdNote.result,
+          }),
+        };
+      },
+    );
+
+    await authority.applyTransaction(grantedShare.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const refreshedDelegateProjection = await authority.lookupSessionPrincipal(delegateLookupInput);
+    const refreshedDelegateAuthorization = createProjectedAuthorizationContext(
+      delegateLookupInput,
+      refreshedDelegateProjection,
+    );
+    const grantedTotal = await readSyncPayload(
+      durableObject,
+      undefined,
+      refreshedDelegateAuthorization,
+    );
+    const grantedIncremental = await readSyncPayload(
+      durableObject,
+      deniedTotal.cursor,
+      refreshedDelegateAuthorization,
+    );
+
+    if (grantedTotal.mode !== "total") {
+      throw new Error("Expected a total sync payload after the share grant is applied.");
+    }
+    if (
+      grantedIncremental.mode !== "incremental" ||
+      !("fallback" in grantedIncremental) ||
+      grantedIncremental.fallback !== "reset"
+    ) {
+      throw new Error("Expected delegated sharing to force total-sync recovery.");
+    }
+    if (!grantedTotal.snapshot) {
+      throw new Error("Expected delegated share proofs to include a total snapshot.");
+    }
+
+    expect(
+      grantedTotal.snapshot.edges.some(
+        (edge) =>
+          edge.s === createdNote.result &&
+          edge.p === shareableSharedNotePredicateId &&
+          edge.o === "Shared before grant",
+      ),
+    ).toBe(true);
+    expect(
+      grantedTotal.snapshot.edges.some(
+        (edge) => edge.s === createdNote.result && edge.p === shareableOtherSharedNotePredicateId,
+      ),
+    ).toBe(false);
+    expect(
+      authority.readPredicateValue(createdNote.result, shareableSharedNotePredicateId, {
+        authorization: refreshedDelegateAuthorization,
+      }),
+    ).toBe("Shared before grant");
+    try {
+      authority.readPredicateValue(createdNote.result, shareableOtherSharedNotePredicateId, {
+        authorization: refreshedDelegateAuthorization,
+      });
+      throw new Error("Expected non-shared predicates to remain forbidden.");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: "policy.read.forbidden",
+        message: expect.stringContaining("policy.read.forbidden"),
+        status: 403,
+      });
+    }
+
+    const revokedShare = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      shareableProofGraph,
+      "tx:revoke-shareable-note-read",
+      (graph) =>
+        graph.shareGrant.update(grantedShare.result.shareGrantId, {
+          status: core.capabilityGrantStatus.values.revoked.id,
+        }),
+    );
+
+    await authority.applyTransaction(revokedShare.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const revokedTotal = await readSyncPayload(
+      durableObject,
+      undefined,
+      refreshedDelegateAuthorization,
+    );
+    const revokedIncremental = await readSyncPayload(
+      durableObject,
+      grantedTotal.cursor,
+      refreshedDelegateAuthorization,
+    );
+
+    if (revokedTotal.mode !== "total") {
+      throw new Error("Expected a total sync payload after revoking the share grant.");
+    }
+    if (
+      revokedIncremental.mode !== "incremental" ||
+      !("fallback" in revokedIncremental) ||
+      revokedIncremental.fallback !== "reset"
+    ) {
+      throw new Error("Expected share revocation to force total-sync recovery.");
+    }
+    if (!revokedTotal.snapshot) {
+      throw new Error("Expected revoked share proofs to include a total snapshot.");
+    }
+
+    expect(
+      revokedTotal.snapshot.edges.some(
+        (edge) =>
+          edge.s === createdNote.result &&
+          (edge.p === shareableSharedNotePredicateId ||
+            edge.p === shareableOtherSharedNotePredicateId),
+      ),
+    ).toBe(false);
+    try {
+      authority.readPredicateValue(createdNote.result, shareableSharedNotePredicateId, {
+        authorization: refreshedDelegateAuthorization,
+      });
+      throw new Error("Expected shared-note direct reads to fail after share revocation.");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: "policy.read.forbidden",
+        message: expect.stringContaining("policy.read.forbidden"),
+        status: 403,
+      });
+    }
   });
 
   it("bootstraps the graph tables and indexes in the constructor", () => {

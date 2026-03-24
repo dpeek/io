@@ -24,7 +24,9 @@ import {
 import { pkm } from "@io/core/graph/modules/pkm";
 
 import {
+  createBearerShareAuthorizationContext,
   createAnonymousAuthorizationContext,
+  issueBearerShareToken,
   type SessionPrincipalLookupInput,
 } from "./auth-bridge.js";
 import {
@@ -122,6 +124,52 @@ const capabilityNoteNamespace = defineNamespace(createIdMap({ capabilityNote }).
 const capabilityGraph = { ...productGraph, ...capabilityNoteNamespace } as const;
 const capabilityReadNotePredicateId = edgeId(capabilityNote.fields.readNote);
 const capabilityWriteNotePredicateId = edgeId(capabilityNote.fields.writeNote);
+const shareProbe = defineType({
+  values: { key: "test:shareProbe", name: "Share Probe" },
+  fields: {
+    ...core.node.fields,
+    sharedNote: {
+      ...core.node.fields.description,
+      key: "test:shareProbe:sharedNote",
+      authority: {
+        visibility: "replicated",
+        write: "authority-only",
+        policy: {
+          readAudience: "graph-member",
+          writeAudience: "authority",
+          shareable: true,
+        },
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Shared note",
+      },
+    },
+    privateNote: {
+      ...core.node.fields.description,
+      key: "test:shareProbe:privateNote",
+      authority: {
+        visibility: "replicated",
+        write: "authority-only",
+        policy: {
+          readAudience: "graph-member",
+          writeAudience: "authority",
+          shareable: false,
+        },
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Private note",
+      },
+    },
+  },
+});
+const shareProbeNamespace = defineNamespace(createIdMap({ shareProbe }).map, {
+  shareProbe,
+});
+const shareProofGraph = { ...productGraph, ...shareProbeNamespace } as const;
+const shareProbeSharedNotePredicateId = edgeId(shareProbe.fields.sharedNote);
+const shareProbePrivateNotePredicateId = edgeId(shareProbe.fields.privateNote);
 
 setDefaultTimeout(20_000);
 
@@ -190,6 +238,20 @@ function createProjectedAuthorizationContext(
     capabilityVersion: projection.capabilityVersion ?? 0,
     ...overrides,
   });
+}
+
+function createBearerAuthorizationContext(
+  capabilityGrantIds: readonly string[],
+  overrides: Partial<AuthorizationContext> = {},
+): AuthorizationContext {
+  return {
+    ...createBearerShareAuthorizationContext({
+      graphId: "graph:test",
+      policyVersion: 0,
+      capabilityGrantIds,
+    }),
+    ...overrides,
+  };
 }
 
 const workflowModuleScope = workflowReviewSyncScopeRequest;
@@ -2837,6 +2899,435 @@ describe("web authority", () => {
         authorization: refreshedAuthorization,
       }),
     ).toBe("Capability-gated note");
+  });
+
+  it("applies principal-target share grants to delegated sync and direct reads", async () => {
+    const authorityAuthorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage, {
+      graph: shareProofGraph,
+    });
+    const ownerLookupInput = createSessionPrincipalLookupInput();
+    const delegateLookupInput = createSessionPrincipalLookupInput({
+      subject: {
+        providerAccountId: "user-2",
+        authUserId: "auth-user-2",
+      },
+    });
+    const ownerProjection = await authority.lookupSessionPrincipal(ownerLookupInput);
+    const initialDelegateProjection = await authority.lookupSessionPrincipal(delegateLookupInput);
+    const { mutationGraph: createGraph, mutationStore: createStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      shareProofGraph,
+    );
+    const beforeCreate = createStore.snapshot();
+    const noteId = createGraph.shareProbe.create({
+      name: "Delegated share proof",
+      sharedNote: "Shared before grant",
+      privateNote: "Always private",
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeCreate,
+        createStore.snapshot(),
+        "tx:create-delegated-share-note",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const initialDelegateAuthorization = createProjectedAuthorizationContext(
+      delegateLookupInput,
+      initialDelegateProjection,
+    );
+    const deniedTotal = authority.createSyncPayload({
+      authorization: initialDelegateAuthorization,
+    });
+
+    expect(
+      deniedTotal.snapshot.edges.some(
+        (edge) =>
+          edge.s === noteId &&
+          (edge.p === shareProbeSharedNotePredicateId ||
+            edge.p === shareProbePrivateNotePredicateId),
+      ),
+    ).toBe(false);
+    expect(() =>
+      authority.readPredicateValue(noteId, shareProbeSharedNotePredicateId, {
+        authorization: initialDelegateAuthorization,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "policy.read.forbidden",
+        status: 403,
+      }),
+    );
+
+    const { mutationGraph: grantGraph, mutationStore: grantStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      shareProofGraph,
+    );
+    const beforeGrant = grantStore.snapshot();
+    const shareSurfaceId = "surface:share-probe:shared-note";
+    const capabilityGrantId = grantGraph.capabilityGrant.create({
+      grantedByPrincipal: ownerProjection.principalId,
+      name: "Delegated shared note read",
+      resourceKind: core.capabilityGrantResourceKind.values.shareSurface.id,
+      resourceSurfaceId: shareSurfaceId,
+      constraintRootEntityId: noteId,
+      constraintPredicateId: [shareProbeSharedNotePredicateId],
+      status: core.capabilityGrantStatus.values.active.id,
+      targetKind: core.capabilityGrantTargetKind.values.principal.id,
+      targetPrincipal: initialDelegateProjection.principalId,
+    });
+    const shareGrantId = grantGraph.shareGrant.create({
+      capabilityGrant: capabilityGrantId,
+      name: "Delegated share grant",
+      status: core.capabilityGrantStatus.values.active.id,
+      surfaceId: shareSurfaceId,
+      surfaceKind: core.shareSurfaceKind.values.entityPredicateSlice.id,
+      surfacePredicateId: [shareProbeSharedNotePredicateId],
+      surfaceRootEntityId: noteId,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(beforeGrant, grantStore.snapshot(), "tx:grant-shared-note-read"),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const refreshedDelegateProjection = await authority.lookupSessionPrincipal(delegateLookupInput);
+    const refreshedDelegateAuthorization = createProjectedAuthorizationContext(
+      delegateLookupInput,
+      refreshedDelegateProjection,
+    );
+    const grantedTotal = authority.createSyncPayload({
+      authorization: refreshedDelegateAuthorization,
+    });
+    const grantedIncremental = authority.getIncrementalSyncResult(deniedTotal.cursor, {
+      authorization: refreshedDelegateAuthorization,
+    });
+
+    expect(
+      grantedTotal.snapshot.edges.some(
+        (edge) =>
+          edge.s === noteId &&
+          edge.p === shareProbeSharedNotePredicateId &&
+          edge.o === "Shared before grant",
+      ),
+    ).toBe(true);
+    expect(
+      grantedTotal.snapshot.edges.some(
+        (edge) => edge.s === noteId && edge.p === shareProbePrivateNotePredicateId,
+      ),
+    ).toBe(false);
+    expect(grantedIncremental).toMatchObject({
+      mode: "incremental",
+      after: deniedTotal.cursor,
+      cursor: grantedTotal.cursor,
+      fallback: "reset",
+    });
+    expect(
+      readStringPredicateValue(
+        authority,
+        refreshedDelegateAuthorization,
+        noteId,
+        shareProbeSharedNotePredicateId,
+      ),
+    ).toBe("Shared before grant");
+    expect(() =>
+      authority.readPredicateValue(noteId, shareProbePrivateNotePredicateId, {
+        authorization: refreshedDelegateAuthorization,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "policy.read.forbidden",
+        status: 403,
+      }),
+    );
+
+    const { mutationGraph: revokeGraph, mutationStore: revokeStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      shareProofGraph,
+    );
+    const beforeRevoke = revokeStore.snapshot();
+    revokeGraph.shareGrant.update(shareGrantId, {
+      status: core.capabilityGrantStatus.values.revoked.id,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeRevoke,
+        revokeStore.snapshot(),
+        "tx:revoke-shared-note-read",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const revokedTotal = authority.createSyncPayload({
+      authorization: refreshedDelegateAuthorization,
+    });
+    const revokedIncremental = authority.getIncrementalSyncResult(grantedTotal.cursor, {
+      authorization: refreshedDelegateAuthorization,
+    });
+
+    expect(
+      revokedTotal.snapshot.edges.some(
+        (edge) =>
+          edge.s === noteId &&
+          (edge.p === shareProbeSharedNotePredicateId ||
+            edge.p === shareProbePrivateNotePredicateId),
+      ),
+    ).toBe(false);
+    expect(revokedIncremental).toMatchObject({
+      mode: "incremental",
+      after: grantedTotal.cursor,
+      cursor: revokedTotal.cursor,
+      fallback: "reset",
+    });
+    expect(() =>
+      authority.readPredicateValue(noteId, shareProbeSharedNotePredicateId, {
+        authorization: refreshedDelegateAuthorization,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "policy.read.forbidden",
+        status: 403,
+      }),
+    );
+  });
+
+  it("applies bearer-token share grants through hashed lookup, expiry, and revocation", async () => {
+    const authorityAuthorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage, {
+      graph: shareProofGraph,
+    });
+    const ownerLookupInput = createSessionPrincipalLookupInput();
+    const ownerProjection = await authority.lookupSessionPrincipal(ownerLookupInput);
+    const issued = await issueBearerShareToken();
+    const { mutationGraph: createGraph, mutationStore: createStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      shareProofGraph,
+    );
+    const beforeCreate = createStore.snapshot();
+    const noteId = createGraph.shareProbe.create({
+      name: "Bearer share proof",
+      sharedNote: "Shared by bearer",
+      privateNote: "Still private",
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(beforeCreate, createStore.snapshot(), "tx:create-bearer-share"),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const { mutationGraph: grantGraph, mutationStore: grantStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      shareProofGraph,
+    );
+    const beforeGrant = grantStore.snapshot();
+    const shareSurfaceId = "surface:share-probe:bearer-shared-note";
+    const capabilityGrantId = grantGraph.capabilityGrant.create({
+      bearerTokenHash: issued.tokenHash,
+      constraintExpiresAt: new Date(Date.now() + 60_000),
+      constraintPredicateId: [shareProbeSharedNotePredicateId],
+      constraintRootEntityId: noteId,
+      grantedByPrincipal: ownerProjection.principalId,
+      name: "Bearer shared note read",
+      resourceKind: core.capabilityGrantResourceKind.values.shareSurface.id,
+      resourceSurfaceId: shareSurfaceId,
+      status: core.capabilityGrantStatus.values.active.id,
+      targetKind: core.capabilityGrantTargetKind.values.bearer.id,
+    });
+    const shareGrantId = grantGraph.shareGrant.create({
+      capabilityGrant: capabilityGrantId,
+      name: "Bearer share grant",
+      status: core.capabilityGrantStatus.values.active.id,
+      surfaceId: shareSurfaceId,
+      surfaceKind: core.shareSurfaceKind.values.entityPredicateSlice.id,
+      surfacePredicateId: [shareProbeSharedNotePredicateId],
+      surfaceRootEntityId: noteId,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeGrant,
+        grantStore.snapshot(),
+        "tx:grant-bearer-shared-note-read",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const bearerProjection = await authority.lookupBearerShare({
+      graphId: "graph:test",
+      tokenHash: issued.tokenHash,
+    });
+    const bearerAuthorization = createBearerAuthorizationContext(
+      bearerProjection.capabilityGrantIds,
+    );
+    const grantedTotal = authority.createSyncPayload({
+      authorization: bearerAuthorization,
+    });
+
+    expect(
+      readProductGraph(authority, authorityAuthorization).capabilityGrant.get(capabilityGrantId),
+    ).toMatchObject({
+      bearerTokenHash: issued.tokenHash,
+    });
+    expect(
+      grantedTotal.snapshot.edges.some(
+        (edge) =>
+          edge.s === noteId &&
+          edge.p === shareProbeSharedNotePredicateId &&
+          edge.o === "Shared by bearer",
+      ),
+    ).toBe(true);
+    expect(
+      grantedTotal.snapshot.edges.some(
+        (edge) => edge.s === noteId && edge.p === shareProbePrivateNotePredicateId,
+      ),
+    ).toBe(false);
+    expect(
+      readStringPredicateValue(
+        authority,
+        bearerAuthorization,
+        noteId,
+        shareProbeSharedNotePredicateId,
+      ),
+    ).toBe("Shared by bearer");
+    expect(() =>
+      authority.readPredicateValue(noteId, shareProbePrivateNotePredicateId, {
+        authorization: bearerAuthorization,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "auth.unauthenticated",
+        status: 401,
+      }),
+    );
+
+    const { mutationGraph: revokeGraph, mutationStore: revokeStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      shareProofGraph,
+    );
+    const beforeRevoke = revokeStore.snapshot();
+    revokeGraph.shareGrant.update(shareGrantId, {
+      status: core.capabilityGrantStatus.values.revoked.id,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeRevoke,
+        revokeStore.snapshot(),
+        "tx:revoke-bearer-shared-note-read",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const revokedIncremental = authority.getIncrementalSyncResult(grantedTotal.cursor, {
+      authorization: bearerAuthorization,
+    });
+
+    expect(revokedIncremental).toMatchObject({
+      mode: "incremental",
+      after: grantedTotal.cursor,
+      fallback: "reset",
+    });
+    await expect(
+      authority.lookupBearerShare({
+        graphId: "graph:test",
+        tokenHash: issued.tokenHash,
+      }),
+    ).rejects.toMatchObject({
+      code: "grant.invalid",
+      reason: "revoked",
+      status: 403,
+    });
+  });
+
+  it("rejects expired bearer share tokens before reads continue", async () => {
+    const authorityAuthorization = createAuthorityAuthorizationContext();
+    const authority = await createTestWebAppAuthority(
+      createInMemoryTestWebAppAuthorityStorage().storage,
+      {
+        graph: shareProofGraph,
+      },
+    );
+    const ownerProjection = await authority.lookupSessionPrincipal(
+      createSessionPrincipalLookupInput(),
+    );
+    const issued = await issueBearerShareToken();
+    const { mutationGraph, mutationStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      shareProofGraph,
+    );
+    const beforeGrant = mutationStore.snapshot();
+    const noteId = mutationGraph.shareProbe.create({
+      name: "Expired bearer share proof",
+      sharedNote: "Expired shared note",
+    });
+    const capabilityGrantId = mutationGraph.capabilityGrant.create({
+      bearerTokenHash: issued.tokenHash,
+      constraintExpiresAt: new Date(Date.now() - 60_000),
+      constraintPredicateId: [shareProbeSharedNotePredicateId],
+      constraintRootEntityId: noteId,
+      grantedByPrincipal: ownerProjection.principalId,
+      name: "Expired bearer shared note read",
+      resourceKind: core.capabilityGrantResourceKind.values.shareSurface.id,
+      resourceSurfaceId: "surface:share-probe:expired-bearer-shared-note",
+      status: core.capabilityGrantStatus.values.active.id,
+      targetKind: core.capabilityGrantTargetKind.values.bearer.id,
+    });
+    mutationGraph.shareGrant.create({
+      capabilityGrant: capabilityGrantId,
+      name: "Expired bearer share grant",
+      status: core.capabilityGrantStatus.values.active.id,
+      surfaceId: "surface:share-probe:expired-bearer-shared-note",
+      surfaceKind: core.shareSurfaceKind.values.entityPredicateSlice.id,
+      surfacePredicateId: [shareProbeSharedNotePredicateId],
+      surfaceRootEntityId: noteId,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeGrant,
+        mutationStore.snapshot(),
+        "tx:grant-expired-bearer-shared-note-read",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    await expect(
+      authority.lookupBearerShare({
+        graphId: "graph:test",
+        tokenHash: issued.tokenHash,
+      }),
+    ).rejects.toMatchObject({
+      code: "grant.invalid",
+      reason: "expired",
+      status: 403,
+    });
   });
 
   it("unlocks capability-gated writes from principal-target grants", async () => {

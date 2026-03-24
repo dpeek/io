@@ -3,8 +3,12 @@ import { describe, expect, it } from "bun:test";
 
 import type { AuthorizationContext } from "@io/core/graph";
 
+import { issueBearerShareToken } from "../lib/auth-bridge.js";
 import type { BetterAuthWorkerEnv } from "../lib/better-auth.js";
-import { webGraphAuthoritySessionPrincipalLookupPath } from "../lib/graph-authority-do.js";
+import {
+  webGraphAuthorityBearerShareLookupPath,
+  webGraphAuthoritySessionPrincipalLookupPath,
+} from "../lib/graph-authority-do.js";
 import { readRequestAuthorizationContext } from "../lib/server-routes.js";
 import { webWorkflowReadPath } from "../lib/workflow-transport.js";
 import worker, { BetterAuthSessionVerificationError, createWorkerFetchHandler } from "./index.js";
@@ -21,13 +25,16 @@ function createWorkerEnv(
   input: {
     readonly assetResponse?: Response;
     readonly authorityResponse?: Response;
+    readonly bearerLookupResponse?: Response;
     readonly principalLookupResponse?: Response;
     readonly onAuthorityFetch?: (request: Request) => Promise<void> | void;
+    readonly onBearerLookup?: (request: Request) => Promise<void> | void;
     readonly onPrincipalLookup?: (request: Request) => Promise<void> | void;
   } = {},
 ) {
   const assetPaths: string[] = [];
   const authorityPaths: string[] = [];
+  const bearerLookupPaths: string[] = [];
   const principalLookupPaths: string[] = [];
   let forwardedAuthorization: AuthorizationContext | null = null;
 
@@ -49,6 +56,12 @@ function createWorkerEnv(
         return {
           async fetch(request: Request) {
             const pathname = new URL(request.url).pathname;
+            if (pathname === webGraphAuthorityBearerShareLookupPath) {
+              bearerLookupPaths.push(pathname);
+              await input.onBearerLookup?.(request);
+              return input.bearerLookupResponse ?? new Response(null, { status: 404 });
+            }
+
             if (pathname === webGraphAuthoritySessionPrincipalLookupPath) {
               principalLookupPaths.push(pathname);
               await input.onPrincipalLookup?.(request);
@@ -68,6 +81,7 @@ function createWorkerEnv(
   return {
     assetPaths,
     authorityPaths,
+    bearerLookupPaths,
     env,
     principalLookupPaths,
     readForwardedAuthorization() {
@@ -154,6 +168,143 @@ describe("web worker route forwarding", () => {
       capabilityGrantIds: ["grant-1"],
       capabilityVersion: 4,
       policyVersion: 0,
+    });
+  });
+
+  it("forwards bearer share sync requests with anonymous shared-read authorization", async () => {
+    const issued = await issueBearerShareToken();
+    const {
+      authorityPaths,
+      bearerLookupPaths,
+      env,
+      principalLookupPaths,
+      readForwardedAuthorization,
+    } = createWorkerEnv({
+      bearerLookupResponse: Response.json({
+        capabilityGrantIds: ["grant:bearer-share"],
+      }),
+      async onAuthorityFetch(request) {
+        expect(request.headers.get("authorization")).toBeNull();
+        expect(request.headers.get("cookie")).toBeNull();
+      },
+      async onBearerLookup(request) {
+        expect(await request.json()).toEqual({
+          graphId: "graph:global",
+          tokenHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        });
+      },
+    });
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        throw new Error("Better Auth session lookup should not run for bearer share sync");
+      },
+    });
+
+    const response = await handler.fetch(
+      new Request("https://web.local/api/sync", {
+        headers: {
+          authorization: `Bearer ${issued.token}`,
+        },
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(authorityPaths).toEqual(["/api/sync"]);
+    expect(bearerLookupPaths).toEqual([webGraphAuthorityBearerShareLookupPath]);
+    expect(principalLookupPaths).toEqual([]);
+    expect(readForwardedAuthorization()).toEqual({
+      graphId: "graph:global",
+      principalId: null,
+      principalKind: "anonymous",
+      sessionId: null,
+      roleKeys: [],
+      capabilityGrantIds: ["grant:bearer-share"],
+      capabilityVersion: 0,
+      policyVersion: 0,
+    });
+  });
+
+  it("rejects malformed bearer share tokens before forwarding sync requests", async () => {
+    const { authorityPaths, bearerLookupPaths, env } = createWorkerEnv();
+    const handler = createWorkerFetchHandler();
+
+    const response = await handler.fetch(
+      new Request("https://web.local/api/sync", {
+        headers: {
+          authorization: "Bearer not-a-valid-share-token",
+        },
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(400);
+    expect(authorityPaths).toEqual([]);
+    expect(bearerLookupPaths).toEqual([]);
+    expect(await response.json()).toMatchObject({
+      code: "grant.invalid",
+    });
+  });
+
+  it("rejects bearer share tokens on non-sync graph routes", async () => {
+    const issued = await issueBearerShareToken();
+    const { authorityPaths, bearerLookupPaths, env } = createWorkerEnv();
+    const handler = createWorkerFetchHandler();
+
+    const response = await handler.fetch(
+      new Request("https://web.local/api/commands", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${issued.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          kind: "workflow-mutation",
+          input: {
+            action: "noop",
+          },
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(405);
+    expect(authorityPaths).toEqual([]);
+    expect(bearerLookupPaths).toEqual([]);
+    expect(await response.json()).toMatchObject({
+      code: "grant.invalid",
+    });
+  });
+
+  it("fails closed when the authority rejects a bearer share lookup", async () => {
+    const issued = await issueBearerShareToken();
+    const { authorityPaths, bearerLookupPaths, env } = createWorkerEnv({
+      bearerLookupResponse: Response.json(
+        {
+          error: "Bearer share token has been revoked.",
+          code: "grant.invalid",
+        },
+        {
+          status: 403,
+        },
+      ),
+    });
+    const handler = createWorkerFetchHandler();
+
+    const response = await handler.fetch(
+      new Request("https://web.local/api/sync", {
+        headers: {
+          authorization: `Bearer ${issued.token}`,
+        },
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(403);
+    expect(authorityPaths).toEqual([]);
+    expect(bearerLookupPaths).toEqual([webGraphAuthorityBearerShareLookupPath]);
+    expect(await response.json()).toMatchObject({
+      code: "grant.invalid",
     });
   });
 

@@ -102,9 +102,9 @@ transports.
   adapter that bootstraps graph tables in the constructor, hydrates retained
   history during authority init, commits graph and secret side-storage changes
   in one Durable Object storage transaction, prunes old transaction rows, and
-  now exposes an internal Worker-only auth-subject lookup-and-repair seam plus
-  the first public workflow projection read route ahead of future transport
-  expansion
+  now exposes internal Worker-only auth-subject lookup-and-repair plus
+  bearer-share hash lookup seams, alongside the first public workflow
+  projection read route ahead of future transport expansion
 - `../../src/web/lib/better-auth.ts`: shared Better Auth option/factory helper
   for the dedicated `AUTH_DB` binding, optional trusted-origin wiring, the
   stable `/api/auth` base path, and the minimal email/password browser demo
@@ -129,7 +129,11 @@ transports.
   `/api/sync`, `/api/tx`, and `/api/commands` paths, authority-planned
   module-scoped sync for the first named `ops/workflow` review scope over
   `/api/sync`, authority-owned auth subject resolution with idempotent
-  first-use principal/projection repair plus active role binding lookup,
+  first-use principal/projection repair plus active role binding lookup, the
+  provisional bearer-share lookup path that resolves hash-stored bearer grants
+  only when they still have an active validated share surface plus an explicit
+  unexpired `constraintExpiresAt`, and bearer-share visibility resets that
+  force total-sync recovery when linked share grants change,
   authority-owned `ProjectBranchScope` and `CommitQueueScope` reads that
   rebuild from authoritative workflow, repository, and session records and
   fail closed with stable workflow query codes, and the storage abstraction
@@ -159,8 +163,12 @@ transports.
   forwards anonymous requests as anonymous, resolves authenticated subjects
   through the Durable Object's internal lookup-and-repair seam, forwards the
   first `POST /api/workflow-read` proof alongside `/api/sync`, `/api/tx`, and
-  `/api/commands`, and fails closed when an authenticated session still lacks a
-  graph principal projection.
+  `/api/commands`, hashes issued bearer share tokens locally before calling the
+  Durable Object's internal bearer-share lookup seam, lowers successful bearer
+  lookups into anonymous shared-read `GET /api/sync` requests only, strips raw
+  `Authorization` and `Cookie` headers before forwarding to the Durable
+  Object, and fails closed when an authenticated session or bearer share token
+  no longer resolves to an active graph-backed authorization context.
 - `../../migrations/auth-store/`: committed Better Auth schema migrations for
   the dedicated D1 auth store, applied separately from Durable Object
   migrations

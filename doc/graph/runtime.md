@@ -108,6 +108,11 @@ The current implementation keeps ids stable per key and treats rename as an expl
 
 ### Runtime helpers
 
+- `../../src/graph/runtime/contracts.ts` publishes the shared Branch 2
+  authorization contract surface, including the first-cut
+  `entity-predicate-slice` share selector, durable `ShareGrant` shape, and the
+  validation helpers that reject malformed or non-shareable share slices before
+  runtime enforcement consumes them
 - `../../src/graph/runtime/projection.ts` owns the shared Branch 3 read-scope
   and projection metadata contracts, including `ModuleReadScopeDefinition`,
   `ProjectionSpec`, and helpers that keep requested scope ids,

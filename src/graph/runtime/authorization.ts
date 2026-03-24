@@ -310,6 +310,10 @@ export function authorizeRead(input: AuthorizeReadInput): AuthorizationDecision 
     return policy;
   }
 
+  if (input.sharedRead && policy.shareable && policy.transportVisibility === "replicated") {
+    return allow();
+  }
+
   const audienceDecision = evaluateReadAudience(
     input.authorization,
     input.target,

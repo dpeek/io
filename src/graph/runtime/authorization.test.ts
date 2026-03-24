@@ -82,6 +82,47 @@ describe("graph authorization evaluator", () => {
     });
   });
 
+  it("allows delegated reads when a share grant resolves a shareable replicated predicate", () => {
+    const decision = authorizeRead({
+      authorization: createAuthorizationContext({
+        principalId: "principal:delegate",
+        roleKeys: [],
+        sessionId: "session:delegate",
+      }),
+      target: createTarget({
+        ownerPrincipalId: "principal:owner",
+      }),
+      sharedRead: true,
+    });
+
+    expect(decision).toEqual({ allowed: true });
+  });
+
+  it("keeps delegated reads closed for non-shareable or non-replicated predicates", () => {
+    const decision = authorizeRead({
+      authorization: createAuthorizationContext({
+        principalId: "principal:delegate",
+        roleKeys: [],
+        sessionId: "session:delegate",
+      }),
+      target: createTarget({
+        policy: {
+          ...probeContractSummaryPolicy,
+          shareable: false,
+          transportVisibility: "authority-only",
+        },
+      }),
+      sharedRead: true,
+    });
+
+    expect(decision).toEqual({
+      allowed: false,
+      error: expect.objectContaining({
+        code: "policy.read.forbidden",
+      }),
+    });
+  });
+
   it("rejects direct writes to module-command predicates outside a command path", () => {
     const decision = authorizeWrite({
       authorization: probeAuthorizationContext,

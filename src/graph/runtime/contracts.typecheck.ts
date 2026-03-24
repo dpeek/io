@@ -20,6 +20,8 @@ import type {
   PrincipalRoleBinding as PrincipalRoleBindingFromRoot,
   PrincipalKind as PrincipalKindFromRoot,
   PredicatePolicyDescriptor as PredicatePolicyDescriptorFromRoot,
+  ShareGrant as ShareGrantFromRoot,
+  ShareSurface as ShareSurfaceFromRoot,
   WorkflowSpec as WorkflowSpecFromRoot,
 } from "../index.js";
 import type {
@@ -44,6 +46,8 @@ import type {
   PrincipalRoleBinding,
   PrincipalKind,
   PredicatePolicyDescriptor,
+  ShareGrant,
+  ShareSurface,
   WorkflowSpec,
 } from "./index.js";
 
@@ -297,6 +301,20 @@ const capabilityGrant = {
   issuedAt: "2026-03-24T00:00:00.000Z",
 } satisfies CapabilityGrant;
 
+const topicShareSurface = {
+  surfaceId: "share:topic-1:summary",
+  kind: "entity-predicate-slice",
+  rootEntityId: "topic-1",
+  predicateIds: ["pkm:topic.name", topicContentPolicy.predicateId],
+} satisfies ShareSurface;
+
+const topicShareGrant = {
+  id: "share-grant-1",
+  surface: topicShareSurface,
+  capabilityGrantId: "grant-share-1",
+  status: "active",
+} satisfies ShareGrant;
+
 const rootAuthSubject: AuthSubjectRefFromRoot = authSubject;
 const rootAuthenticatedSession: AuthenticatedSessionFromRoot = authenticatedSession;
 const rootAuthorizationContext: AuthorizationContextFromRoot = authorizationContext;
@@ -309,6 +327,8 @@ const rootCapabilityGrant: CapabilityGrantFromRoot = capabilityGrant;
 const rootPredicatePolicy: PredicatePolicyDescriptorFromRoot = topicContentPolicy;
 const rootCommandPolicy: GraphCommandPolicyFromRoot = saveTopicCommand.policy!;
 const rootTouchedPredicate: GraphCommandTouchedPredicateFromRoot = topicContentTouch;
+const rootShareSurface: ShareSurfaceFromRoot = topicShareSurface;
+const rootShareGrant: ShareGrantFromRoot = topicShareGrant;
 const rootCapabilityVersion: CapabilityVersionFromRoot = authorizationContext.capabilityVersion;
 const rootPolicyVersion: PolicyVersionFromRoot = authorizationContext.policyVersion;
 const rootPrincipalKind: PrincipalKindFromRoot = "remoteGraph";
@@ -323,6 +343,8 @@ const runtimeCapabilityGrant: CapabilityGrant = rootCapabilityGrant;
 const runtimePredicatePolicy: PredicatePolicyDescriptor = rootPredicatePolicy;
 const runtimeCommandPolicy: GraphCommandPolicy = rootCommandPolicy;
 const runtimeTouchedPredicate: GraphCommandTouchedPredicate = rootTouchedPredicate;
+const runtimeShareSurface: ShareSurface = rootShareSurface;
+const runtimeShareGrant: ShareGrant = rootShareGrant;
 const runtimePrincipalKind: PrincipalKind = rootPrincipalKind;
 const runtimeModulePermissionGrantResource: ModulePermissionGrantResource =
   rootModulePermissionGrantResource;
@@ -362,6 +384,8 @@ void rootCapabilityGrant;
 void rootPredicatePolicy;
 void rootCommandPolicy;
 void rootTouchedPredicate;
+void rootShareSurface;
+void rootShareGrant;
 void rootCapabilityVersion;
 void rootPolicyVersion;
 void rootPrincipalKind;
@@ -375,6 +399,8 @@ void runtimeCapabilityGrant;
 void runtimePredicatePolicy;
 void runtimeCommandPolicy;
 void runtimeTouchedPredicate;
+void runtimeShareSurface;
+void runtimeShareGrant;
 void runtimePrincipalKind;
 void runtimeModulePermissionGrantResource;
 void runtimeModulePermissionCapabilityGrant;
@@ -520,6 +546,20 @@ void ({
   // @ts-expect-error role bindings use the shared active/revoked status literals
   status: "disabled",
 } satisfies PrincipalRoleBinding);
+
+void ({
+  kind: "entity-predicate-slice",
+  rootEntityId: "topic-1",
+  predicateIds: [topicContentPolicy.predicateId],
+  // @ts-expect-error share surfaces require a durable surfaceId
+} satisfies ShareSurface);
+
+void ({
+  id: "share-grant-2",
+  surface: topicShareSurface,
+  status: "active",
+  // @ts-expect-error share grants require a linked capabilityGrantId
+} satisfies ShareGrant);
 
 void ({
   graphId: "graph-1",

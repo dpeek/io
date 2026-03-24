@@ -1,6 +1,11 @@
 import {
+  BearerShareTokenProjectionError,
+  type BearerShareLookupInput,
+  type BearerShareProjection,
   BetterAuthSessionReductionError,
   createWorkerAuthorizationContext,
+  isBearerShareToken,
+  projectBearerShareToken,
   type BetterAuthSessionResult,
   type SessionPrincipalLookupInput,
   type SessionPrincipalProjection,
@@ -9,6 +14,7 @@ import {
 import { betterAuthBasePath, getBetterAuth, type BetterAuthWorkerEnv } from "../lib/better-auth.js";
 import {
   WebGraphAuthorityDurableObject,
+  webGraphAuthorityBearerShareLookupPath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "../lib/graph-authority-do.js";
 import {
@@ -50,9 +56,18 @@ export type WorkerPrincipalLookup = (
   },
 ) => Promise<SessionPrincipalProjection | null>;
 
+export type WorkerBearerShareLookup = (
+  input: BearerShareLookupInput,
+  context: {
+    readonly env: Env;
+    readonly request: Request;
+  },
+) => Promise<BearerShareProjection | null>;
+
 export type WorkerFetchDependencies = {
   readonly getBetterAuthSession?: WorkerBetterAuthSessionLookup;
   readonly lookupPrincipal?: WorkerPrincipalLookup;
+  readonly lookupBearerShare?: WorkerBearerShareLookup;
 };
 
 export class BetterAuthSessionVerificationError extends Error {
@@ -75,6 +90,29 @@ export class GraphPrincipalLookupError extends Error {
     this.name = "GraphPrincipalLookupError";
     this.status = status;
     this.code = code;
+  }
+}
+
+export class GraphBearerShareLookupError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "GraphBearerShareLookupError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export class BearerShareTokenRequestError extends Error {
+  readonly code = "grant.invalid" as const;
+  readonly status: number;
+
+  constructor(message: string, status = 400) {
+    super(message);
+    this.name = "BearerShareTokenRequestError";
+    this.status = status;
   }
 }
 
@@ -185,11 +223,87 @@ async function lookupGraphPrincipal(
   );
 }
 
+async function lookupGraphBearerShare(
+  input: BearerShareLookupInput,
+  context: {
+    readonly env: Env;
+    readonly request: Request;
+  },
+): Promise<BearerShareProjection | null> {
+  const response = await getGraphAuthorityFetcher(context.env).fetch(
+    new Request(new URL(webGraphAuthorityBearerShareLookupPath, context.request.url), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(input),
+    }),
+  );
+  if (response.ok) {
+    return (await response.json()) as BearerShareProjection;
+  }
+
+  const payload = await readLookupPrincipalResponse(response);
+  if (response.status === 404) {
+    return null;
+  }
+
+  throw new GraphBearerShareLookupError(
+    payload.error ?? "Unable to resolve the bearer share grant for this graph API request.",
+    response.status,
+    payload.code,
+  );
+}
+
+function readRequestBearerShareToken(request: Request): string | undefined {
+  const authorization = request.headers.get("authorization");
+  if (!authorization) {
+    return undefined;
+  }
+
+  const match = /^Bearer\s+(.+)$/i.exec(authorization);
+  if (!match) {
+    return undefined;
+  }
+
+  const token = match[1]?.trim() ?? "";
+  if (!isBearerShareToken(token)) {
+    throw new BearerShareTokenRequestError(
+      "Bearer share tokens must use the issued io_share_<64 lowercase hex chars> format.",
+    );
+  }
+
+  return token;
+}
+
 export async function createRequestAuthorizationContext(
   request: Request,
   env: Env,
   dependencies: WorkerFetchDependencies = {},
 ) {
+  const bearerShareToken = readRequestBearerShareToken(request);
+  if (bearerShareToken) {
+    const url = new URL(request.url);
+    if (url.pathname !== "/api/sync" || request.method !== "GET") {
+      throw new BearerShareTokenRequestError(
+        'Bearer share tokens only support "GET /api/sync" requests in the current proof.',
+        405,
+      );
+    }
+
+    return projectBearerShareToken({
+      graphId: webAppGraphId,
+      policyVersion: webAppPolicyVersion,
+      token: bearerShareToken,
+      lookupBearerShare(input) {
+        return (dependencies.lookupBearerShare ?? lookupGraphBearerShare)(input, {
+          env,
+          request,
+        });
+      },
+    });
+  }
+
   return createWorkerAuthorizationContext({
     graphId: webAppGraphId,
     policyVersion: webAppPolicyVersion,
@@ -211,6 +325,8 @@ async function createAuthorizedGraphAuthorityRequest(
   const authorization = await createRequestAuthorizationContext(request, env, dependencies);
   const headers = new Headers(request.headers);
 
+  headers.delete("authorization");
+  headers.delete("cookie");
   headers.set(webAppAuthorizationContextHeader, encodeRequestAuthorizationContext(authorization));
   return new Request(request, { headers });
 }
@@ -229,8 +345,11 @@ function errorCode(error: unknown): string | undefined {
 
 function createGraphAuthorizationErrorResponse(error: unknown): Response | null {
   if (
+    !(error instanceof BearerShareTokenRequestError) &&
+    !(error instanceof BearerShareTokenProjectionError) &&
     !(error instanceof BetterAuthSessionVerificationError) &&
     !(error instanceof BetterAuthSessionReductionError) &&
+    !(error instanceof GraphBearerShareLookupError) &&
     !(error instanceof GraphPrincipalLookupError) &&
     !(error instanceof SessionPrincipalProjectionError)
   ) {
@@ -243,7 +362,12 @@ function createGraphAuthorizationErrorResponse(error: unknown): Response | null 
       code: errorCode(error),
     },
     {
-      status: errorStatus(error) ?? (error instanceof SessionPrincipalProjectionError ? 403 : 503),
+      status:
+        errorStatus(error) ??
+        (error instanceof SessionPrincipalProjectionError ||
+        error instanceof BearerShareTokenProjectionError
+          ? 403
+          : 503),
       headers: {
         "cache-control": "no-store",
       },
