@@ -422,6 +422,22 @@ Contract rules:
   merge rules
 - invalidations must never require the client to inspect unauthorized raw facts
 
+Current coded proof:
+
+- `ops/workflow` review registrations compile to one conservative dependency
+  set:
+  `scope:ops/workflow:review`,
+  `projection:ops/workflow:project-branch-board`, and
+  `projection:ops/workflow:branch-commit-queue`
+- accepted writes that touch the current workflow review types publish one
+  `cursor-advanced` invalidation over that same dependency set
+- callers drain those invalidations from the current ephemeral router state,
+  then re-pull the same workflow-review scope instead of widening to a
+  whole-graph refresh
+- router loss or registration expiry only affects freshness; callers recover by
+  re-registering from the current scoped cursor plus scoped pull
+- unrelated writes publish nothing; direct scoped deltas remain out of scope
+
 ## 5. Runtime Architecture
 
 Branch 3 introduces four runtime components.

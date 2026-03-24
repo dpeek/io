@@ -165,10 +165,14 @@ const requiredEnvVarExports = [
 ] as const;
 
 const requiredWorkflowExports = [
+  "compileWorkflowReviewScopeDependencyKeys",
+  "compileWorkflowReviewWriteDependencyKeys",
+  "createWorkflowReviewInvalidationEvent",
   "repositoryBranch",
   "repositoryCommit",
   "repositoryCommitLeaseState",
   "repositoryCommitState",
+  "workflowBranchCommitQueueProjectionDependencyKey",
   "workflowBranch",
   "workflowBranchKeyPattern",
   "workflowBranchState",
@@ -177,10 +181,13 @@ const requiredWorkflowExports = [
   "workflowCommitKeyPattern",
   "workflowCommitState",
   "workflowCommitStateTypeModule",
+  "workflowProjectBranchBoardProjectionDependencyKey",
   "workflowProject",
   "workflowProjectBranchBoardProjection",
   "workflowProjectionMetadata",
+  "workflowReviewDependencyKeys",
   "workflowReviewModuleReadScope",
+  "workflowReviewScopeDependencyKey",
   "workflowReviewSyncScopeRequest",
   "workflowProjectKeyPattern",
   "workflowRepository",

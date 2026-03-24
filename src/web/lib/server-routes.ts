@@ -8,6 +8,7 @@ import {
   projectBranchScopeOrderDirectionValues,
   projectBranchScopeOrderFieldValues,
   workflowBranchStateValues,
+  workflowReviewModuleReadScope,
   type CommitQueueScopeQuery,
   type ProjectBranchScopeFilters,
   type ProjectBranchScopeOrderClause,
@@ -21,6 +22,12 @@ import type {
   WebAuthorityCommand,
   WebAuthorityCommandResult,
 } from "./authority.js";
+import type { WorkflowReviewLiveScopeRouter } from "./workflow-live-scope-router.js";
+import {
+  type WorkflowLiveRequestKind,
+  type WorkflowLiveRequest,
+  workflowLiveRequestKinds,
+} from "./workflow-live-transport.js";
 import { type WorkflowReadRequest, workflowReadRequestKinds } from "./workflow-transport.js";
 
 const supportedPrincipalKinds = new Set([
@@ -57,6 +64,15 @@ export class RequestWorkflowReadError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "RequestWorkflowReadError";
+  }
+}
+
+export class RequestWorkflowLiveError extends Error {
+  readonly status = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "RequestWorkflowLiveError";
   }
 }
 
@@ -425,6 +441,51 @@ function parseWorkflowReadRequest(value: unknown): WorkflowReadRequest {
   };
 }
 
+function requireWorkflowLiveString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new RequestWorkflowLiveError(`${label} must be a non-empty string.`);
+  }
+
+  return value;
+}
+
+function parseWorkflowLiveRequest(value: unknown): WorkflowLiveRequest {
+  if (!isObjectRecord(value)) {
+    throw new RequestWorkflowLiveError("Workflow live request must be a JSON object.");
+  }
+
+  const kind = value.kind;
+  if (
+    typeof kind !== "string" ||
+    !workflowLiveRequestKinds.includes(kind as WorkflowLiveRequestKind)
+  ) {
+    throw new RequestWorkflowLiveError(
+      `Workflow live request "kind" must be one of: ${workflowLiveRequestKinds.join(", ")}.`,
+    );
+  }
+
+  const workflowLiveKind = kind as WorkflowLiveRequestKind;
+
+  if (workflowLiveKind === "workflow-review-register") {
+    return {
+      kind: workflowLiveKind,
+      cursor: requireWorkflowLiveString(value.cursor, 'Workflow live request "cursor"'),
+    };
+  }
+
+  if (workflowLiveKind === "workflow-review-pull") {
+    return {
+      kind: workflowLiveKind,
+      scopeId: requireWorkflowLiveString(value.scopeId, 'Workflow live request "scopeId"'),
+    };
+  }
+
+  return {
+    kind: workflowLiveKind,
+    scopeId: requireWorkflowLiveString(value.scopeId, 'Workflow live request "scopeId"'),
+  };
+}
+
 function isSupportedWebCommandPayload(value: unknown): value is WebAuthorityCommand {
   return (
     isObjectRecord(value) &&
@@ -493,6 +554,89 @@ function executeWorkflowReadRequest(
         "cache-control": "no-store",
       },
     });
+  } catch (error) {
+    if (isHttpError(error)) {
+      return errorResponse(error.message, error.status, httpErrorCode(error));
+    }
+
+    throw error;
+  }
+}
+
+function executeWorkflowLiveRequest(
+  live: WorkflowLiveRequest,
+  authority: WebAppAuthority,
+  router: WorkflowReviewLiveScopeRouter,
+  authorization: AuthorizationContext,
+): Response {
+  try {
+    if (live.kind === "workflow-review-register") {
+      return Response.json(
+        {
+          kind: live.kind,
+          result: router.register(
+            authority.planWorkflowReviewLiveRegistration(live.cursor, { authorization }),
+          ),
+        },
+        {
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    const sessionId = authorization.sessionId;
+    if (!sessionId) {
+      return errorResponse(
+        "Workflow live registrations require an authenticated session principal.",
+        401,
+        "auth.unauthenticated",
+      );
+    }
+    if (live.scopeId !== workflowReviewModuleReadScope.scopeId) {
+      return errorResponse(
+        `Workflow live scope "${live.scopeId}" was not found.`,
+        404,
+        "scope-changed",
+      );
+    }
+
+    if (live.kind === "workflow-review-pull") {
+      return Response.json(
+        {
+          kind: live.kind,
+          result: router.pull({
+            sessionId,
+            scopeId: live.scopeId,
+          }),
+        },
+        {
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    return Response.json(
+      {
+        kind: live.kind,
+        result: {
+          removed: router.remove({
+            sessionId,
+            scopeId: live.scopeId,
+          }),
+          scopeId: live.scopeId,
+          sessionId,
+        },
+      },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
   } catch (error) {
     if (isHttpError(error)) {
       return errorResponse(error.message, error.status, httpErrorCode(error));
@@ -593,6 +737,42 @@ export async function handleWorkflowReadRequest(
     return executeWorkflowReadRequest(workflowRead, authority, authorization);
   } catch (error) {
     if (error instanceof RequestWorkflowReadError) {
+      return errorResponse(error.message, error.status);
+    }
+
+    if (isHttpError(error)) {
+      return errorResponse(error.message, error.status, httpErrorCode(error));
+    }
+
+    throw error;
+  }
+}
+
+export async function handleWorkflowLiveRequest(
+  request: Request,
+  authority: WebAppAuthority,
+  router: WorkflowReviewLiveScopeRouter,
+  authorization: AuthorizationContext,
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { allow: "POST" },
+    });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Request body must be valid JSON.", 400);
+  }
+
+  try {
+    const workflowLive = parseWorkflowLiveRequest(body);
+    return executeWorkflowLiveRequest(workflowLive, authority, router, authorization);
+  } catch (error) {
+    if (error instanceof RequestWorkflowLiveError) {
       return errorResponse(error.message, error.status);
     }
 

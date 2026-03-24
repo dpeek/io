@@ -10,6 +10,7 @@ import {
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "../lib/graph-authority-do.js";
 import { readRequestAuthorizationContext } from "../lib/server-routes.js";
+import { webWorkflowLivePath } from "../lib/workflow-live-transport.js";
 import { webWorkflowReadPath } from "../lib/workflow-transport.js";
 import worker, { BetterAuthSessionVerificationError, createWorkerFetchHandler } from "./index.js";
 
@@ -308,6 +309,55 @@ describe("web worker route forwarding", () => {
     });
   });
 
+  it("forwards authenticated workflow live registrations over the first web transport route", async () => {
+    const { authorityPaths, env, principalLookupPaths, readForwardedAuthorization } =
+      createWorkerEnv({
+        principalLookupResponse: Response.json({
+          principalId: "principal:user-better-auth",
+          principalKind: "human",
+          roleKeys: ["graph:member"],
+          capabilityGrantIds: ["grant-1"],
+          capabilityVersion: 4,
+        }),
+      });
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-better-auth" },
+          user: { id: "user-better-auth" },
+        };
+      },
+    });
+
+    const response = await handler.fetch(
+      new Request(`https://web.local${webWorkflowLivePath}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          kind: "workflow-review-register",
+          cursor:
+            "scope:kind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview&definitionHash=scope-def%3Aops%2Fworkflow%3Areview%3Av1&policyFilterVersion=policy%3A0&cursor=web-authority%3A1",
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(authorityPaths).toEqual([webWorkflowLivePath]);
+    expect(principalLookupPaths).toEqual([webGraphAuthoritySessionPrincipalLookupPath]);
+    expect(readForwardedAuthorization()).toEqual({
+      graphId: "graph:global",
+      principalId: "principal:user-better-auth",
+      principalKind: "human",
+      sessionId: "session-better-auth",
+      roleKeys: ["graph:member"],
+      capabilityGrantIds: ["grant-1"],
+      capabilityVersion: 4,
+      policyVersion: 0,
+    });
+  });
   it("forwards unauthenticated graph writes with an anonymous authorization context", async () => {
     const { env, readForwardedAuthorization } = createWorkerEnv();
     const handler = createWorkerFetchHandler({

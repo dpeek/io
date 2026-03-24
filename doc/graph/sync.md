@@ -44,11 +44,34 @@ side:
 That first scoped proof is now defined from one shared graph-owned seam:
 
 - `../../src/graph/runtime/projection.ts` exports the public Branch 3
-  `ModuleReadScopeDefinition` and `ProjectionSpec` metadata helpers
+  `ModuleReadScopeDefinition`, `ProjectionSpec`, `DependencyKey`, and
+  `InvalidationEvent` helpers
 - `../../src/graph/modules/ops/workflow/projection.ts` owns the canonical
   `workflowReviewModuleReadScope`, `workflowReviewSyncScopeRequest`, and the
-  first workflow projection descriptors for `project-branch-board` and
-  `branch-commit-queue`
+  first workflow projection descriptors plus the explicit
+  `compileWorkflowReviewScopeDependencyKeys(...)`,
+  `compileWorkflowReviewWriteDependencyKeys(...)`, and
+  `createWorkflowReviewInvalidationEvent(...)` helpers for
+  `project-branch-board` and `branch-commit-queue`
+
+The first live invalidation proof is intentionally conservative:
+
+- active registrations for `scope:ops/workflow:review` subscribe to
+  `scope:ops/workflow:review`,
+  `projection:ops/workflow:project-branch-board`, and
+  `projection:ops/workflow:branch-commit-queue`
+- any accepted write that touches an `ops/workflow` entity republishes that
+  full dependency-key set as one `cursor-advanced` invalidation event with the
+  workflow review scope id plus both workflow projection ids attached
+- callers drain those queued events with
+  `POST /api/workflow-live { kind: "workflow-review-pull", scopeId }`; a
+  response with `active: false` means the live registration expired or the
+  router restarted, so the caller re-registers from its current scoped cursor
+  and performs an explicit scoped `/api/sync` pull. The first shipped caller
+  helper for that path now lives in
+  `../../src/web/lib/workflow-review-live-sync.ts`
+- direct scoped-delta delivery remains a reserved contract shape; the current
+  proof only emits `cursor-advanced`
 
 Scoped cursors stay opaque to callers, but the web authority now binds them to
 the planned module scope metadata. Incremental refreshes for that scope fail
@@ -120,6 +143,25 @@ The current end-to-end proof is intentionally narrow and explicit:
 That flow is the baseline proof covered today across shared sync validation,
 client apply behavior, HTTP client transport, and the durable `/api/sync`
 browser route.
+
+The current live workflow proof layers on top of that scoped sync baseline:
+
+1. a scoped caller registers the current workflow-review cursor through
+   `POST /api/workflow-live { kind: "workflow-review-register", cursor }`
+2. accepted workflow-affecting writes publish one conservative
+   `cursor-advanced` invalidation from the authority write hook and fan it out
+   to each active registration whose workflow-review dependency keys overlap
+3. the caller drains queued invalidations through
+   `POST /api/workflow-live { kind: "workflow-review-pull", scopeId }`
+4. when a drained event reports `delivery.kind === "cursor-advanced"`, the
+   caller re-pulls the same workflow-review scope over `/api/sync` instead of
+   widening to `scopeKind=graph`
+5. if `workflow-review-pull` reports `active: false`, the caller re-registers
+   from its current scoped cursor and performs that same scoped `/api/sync`
+   pull; router loss or expiry never requires data repair or implicit
+   whole-graph resync. `createWorkflowReviewLiveSync(...)` is the current
+   shipped seam that packages that register, pull, and scoped re-pull flow for
+   workflow-review callers.
 
 ## Current Session APIs
 

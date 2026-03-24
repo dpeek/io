@@ -21,6 +21,7 @@ import {
   encodeRequestAuthorizationContext,
   webAppAuthorizationContextHeader,
 } from "../lib/server-routes.js";
+import { webWorkflowLivePath } from "../lib/workflow-live-transport.js";
 import { webWorkflowReadPath } from "../lib/workflow-transport.js";
 
 type Fetcher = {
@@ -125,6 +126,7 @@ function isGraphApiRequest(url: URL): boolean {
     url.pathname === "/api/sync" ||
     url.pathname === "/api/tx" ||
     url.pathname === "/api/commands" ||
+    url.pathname === webWorkflowLivePath ||
     url.pathname === webWorkflowReadPath
   );
 }

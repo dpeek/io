@@ -48,6 +48,7 @@ import {
   encodeRequestAuthorizationContext,
   webAppAuthorizationContextHeader,
 } from "./server-routes.js";
+import { webWorkflowLivePath, type WorkflowLiveResponse } from "./workflow-live-transport.js";
 import { webWorkflowReadPath, type WorkflowReadResponse } from "./workflow-transport.js";
 
 setDefaultTimeout(20_000);
@@ -808,6 +809,47 @@ async function postWorkflowRead(
   return { response, payload };
 }
 
+async function postWorkflowLive(
+  durableObject: WebGraphAuthorityDurableObject,
+  request:
+    | {
+        readonly kind: "workflow-review-register";
+        readonly cursor: string;
+      }
+    | {
+        readonly kind: "workflow-review-pull";
+        readonly scopeId: string;
+      }
+    | {
+        readonly kind: "workflow-review-remove";
+        readonly scopeId: string;
+      },
+  authorization: AuthorizationContext = testAuthorityAuthorization,
+): Promise<{
+  readonly response: Response;
+  readonly payload: WorkflowLiveResponse | { readonly code?: string; readonly error?: string };
+}> {
+  const response = await durableObject.fetch(
+    createAuthorizedRequest(
+      `https://graph-authority.local${webWorkflowLivePath}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(request),
+      },
+      authorization,
+    ),
+  );
+
+  const payload = (await response.json()) as
+    | WorkflowLiveResponse
+    | { readonly code?: string; readonly error?: string };
+
+  return { response, payload };
+}
+
 async function getDurableAuthority(durableObject: WebGraphAuthorityDurableObject): Promise<{
   persist(): Promise<void>;
   readSnapshot(options: { authorization: AuthorizationContext }): StoreSnapshot;
@@ -1287,6 +1329,231 @@ describe("web graph authority durable object", () => {
           },
         ],
       },
+    });
+  });
+
+  it("registers and removes workflow review live scope interest over the durable workflow live route", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+    const total = await readSyncPayload(
+      durableObject,
+      undefined,
+      testAuthorityAuthorization,
+      workflowModuleScope,
+    );
+    const registered = await postWorkflowLive(durableObject, {
+      kind: "workflow-review-register",
+      cursor: total.cursor,
+    });
+    const removed = await postWorkflowLive(durableObject, {
+      kind: "workflow-review-remove",
+      scopeId: workflowReviewModuleReadScope.scopeId,
+    });
+
+    expect(registered.response.status).toBe(200);
+    expect(registered.payload).toMatchObject({
+      kind: "workflow-review-register",
+      result: {
+        registrationId: `workflow-review:${testAuthorityAuthorization.sessionId}:${workflowReviewModuleReadScope.scopeId}`,
+        sessionId: testAuthorityAuthorization.sessionId,
+        principalId: testAuthorityAuthorization.principalId,
+        scopeId: workflowReviewModuleReadScope.scopeId,
+        definitionHash: workflowReviewModuleReadScope.definitionHash,
+        policyFilterVersion: "policy:0",
+      },
+    });
+    expect(removed.response.status).toBe(200);
+    expect(removed.payload).toEqual({
+      kind: "workflow-review-remove",
+      result: {
+        removed: true,
+        scopeId: workflowReviewModuleReadScope.scopeId,
+        sessionId: testAuthorityAuthorization.sessionId,
+      },
+    });
+  });
+
+  it("delivers workflow review invalidations and recovers with scoped re-pull after router loss", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    let authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const fixture = await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+    const total = await readSyncPayload(
+      durableObject,
+      undefined,
+      testAuthorityAuthorization,
+      workflowModuleScope,
+    );
+
+    await postWorkflowLive(durableObject, {
+      kind: "workflow-review-register",
+      cursor: total.cursor,
+    });
+
+    const firstCommit = (await authority.executeCommand(
+      {
+        kind: "workflow-mutation",
+        input: {
+          action: "createCommit",
+          branchId: fixture.branchId,
+          title: "Durable workflow live invalidation",
+          commitKey: "commit:durable-workflow-live-invalidation",
+          order: 0,
+          state: "ready",
+        },
+      },
+      {
+        authorization: testAuthorityAuthorization,
+      },
+    )) as { readonly cursor: string; readonly summary: { readonly id: string } };
+    const delivered = await postWorkflowLive(durableObject, {
+      kind: "workflow-review-pull",
+      scopeId: workflowReviewModuleReadScope.scopeId,
+    });
+
+    expect(delivered.response.status).toBe(200);
+    expect(delivered.payload).toMatchObject({
+      kind: "workflow-review-pull",
+      result: {
+        active: true,
+        scopeId: workflowReviewModuleReadScope.scopeId,
+        sessionId: testAuthorityAuthorization.sessionId,
+        invalidations: [
+          {
+            sourceCursor: firstCommit.cursor,
+            dependencyKeys: [
+              "scope:ops/workflow:review",
+              "projection:ops/workflow:project-branch-board",
+              "projection:ops/workflow:branch-commit-queue",
+            ],
+            affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
+            delivery: { kind: "cursor-advanced" },
+          },
+        ],
+      },
+    });
+
+    const firstRefresh = await readSyncPayload(
+      durableObject,
+      total.cursor,
+      testAuthorityAuthorization,
+      workflowModuleScope,
+    );
+
+    if (firstRefresh.mode !== "incremental" || "fallback" in firstRefresh) {
+      throw new Error("Expected a scoped incremental refresh after live invalidation.");
+    }
+    if (!firstRefresh.transactions) {
+      throw new Error("Expected scoped incremental transactions after live invalidation.");
+    }
+
+    expect(firstRefresh.scope).toMatchObject({
+      kind: "module",
+      moduleId: workflowModuleScope.moduleId,
+      scopeId: workflowModuleScope.scopeId,
+    });
+    expect(firstRefresh.transactions).toHaveLength(1);
+    expect(
+      firstRefresh.transactions[0]?.transaction.ops.some(
+        (operation) =>
+          operation.op === "assert" &&
+          operation.edge.s === firstCommit.summary.id &&
+          operation.edge.p === edgeId(core.node.fields.name),
+      ),
+    ).toBe(true);
+
+    const restarted = createTestDurableObject(state);
+    authority = await getDurableAuthority<WebAppAuthority>(restarted);
+    const secondCommit = (await authority.executeCommand(
+      {
+        kind: "workflow-mutation",
+        input: {
+          action: "createCommit",
+          branchId: fixture.branchId,
+          title: "Durable workflow live recovery",
+          commitKey: "commit:durable-workflow-live-recovery",
+          order: 1,
+          state: "ready",
+        },
+      },
+      {
+        authorization: testAuthorityAuthorization,
+      },
+    )) as { readonly summary: { readonly id: string } };
+
+    const missed = await postWorkflowLive(restarted, {
+      kind: "workflow-review-pull",
+      scopeId: workflowReviewModuleReadScope.scopeId,
+    });
+
+    expect(missed.response.status).toBe(200);
+    expect(missed.payload).toEqual({
+      kind: "workflow-review-pull",
+      result: {
+        active: false,
+        invalidations: [],
+        scopeId: workflowReviewModuleReadScope.scopeId,
+        sessionId: testAuthorityAuthorization.sessionId,
+      },
+    });
+
+    const reregistered = await postWorkflowLive(restarted, {
+      kind: "workflow-review-register",
+      cursor: firstRefresh.cursor,
+    });
+
+    expect(reregistered.response.status).toBe(200);
+
+    const recovered = await readSyncPayload(
+      restarted,
+      firstRefresh.cursor,
+      testAuthorityAuthorization,
+      workflowModuleScope,
+    );
+
+    if (recovered.mode !== "incremental" || "fallback" in recovered) {
+      throw new Error("Expected router-loss recovery to stay on the scoped incremental path.");
+    }
+    if (!recovered.transactions) {
+      throw new Error("Expected scoped incremental transactions after router-loss recovery.");
+    }
+
+    expect(recovered.scope).toEqual(firstRefresh.scope);
+    expect(recovered.transactions).toHaveLength(1);
+    expect(
+      recovered.transactions[0]?.transaction.ops.some(
+        (operation) =>
+          operation.op === "assert" &&
+          operation.edge.s === secondCommit.summary.id &&
+          operation.edge.p === edgeId(core.node.fields.name),
+      ),
+    ).toBe(true);
+  });
+
+  it("surfaces stable workflow live policy drift failures over the durable route", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+    const total = await readSyncPayload(
+      durableObject,
+      undefined,
+      testAuthorityAuthorization,
+      workflowModuleScope,
+    );
+    const response = await postWorkflowLive(durableObject, {
+      kind: "workflow-review-register",
+      cursor: updateScopedCursor(total.cursor, {
+        policyFilterVersion: "policy:999",
+      }),
+    });
+
+    expect(response.response.status).toBe(409);
+    expect(response.payload).toEqual({
+      error: expect.stringContaining('policy "policy:999"'),
+      code: "policy-changed",
     });
   });
 

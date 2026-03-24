@@ -13,11 +13,13 @@ import {
   type AuthSubjectRef,
   type AuthorizationContext,
   type GraphWriteTransaction,
+  type InvalidationEvent,
   type StoreSnapshot,
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
+  workflowReviewDependencyKeys,
   workflowReviewModuleReadScope,
   workflowReviewSyncScopeRequest,
 } from "@io/core/graph/modules/ops/workflow";
@@ -31,6 +33,7 @@ import {
 } from "./auth-bridge.js";
 import {
   createTestWebAppAuthority,
+  createTestWorkflowFixture,
   createTestWebAppAuthorityWithWorkflowFixture,
   executeTestWorkflowMutation as executeWorkflowMutation,
   type WorkflowFixture,
@@ -41,6 +44,7 @@ import {
   type WebAppAuthority,
   type WebAuthorityCommand,
   WebAppAuthorityWorkflowReadError,
+  WebAppAuthorityWorkflowLiveScopeError,
   type WebAppAuthorityStorage,
   type WebAppAuthoritySyncOptions,
   type WebAppAuthorityTransactionOptions,
@@ -2257,6 +2261,8 @@ describe("web authority", () => {
     }
     expect(incremental.scope).toEqual(total.scope);
     expect(incremental.transactions).toHaveLength(1);
+    expect(incremental.transactions[0]?.cursor).toContain("moduleId=ops%2Fworkflow");
+    expect(incremental.transactions[0]?.cursor).toBe(incremental.cursor);
     expect(
       incremental.transactions[0]?.transaction.ops.some(
         (operation) =>
@@ -2307,6 +2313,166 @@ describe("web authority", () => {
       scope: total.scope,
       after: policyChangedCursor,
     });
+  });
+
+  it("plans workflow review live registrations from the current scoped cursor", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const { authority } = await createTestWebAppAuthorityWithWorkflowFixture(authorization);
+    const total = authority.createSyncPayload({
+      authorization,
+      scope: workflowModuleScope,
+    });
+
+    expect(
+      authority.planWorkflowReviewLiveRegistration(total.cursor, {
+        authorization,
+      }),
+    ).toEqual({
+      sessionId: authorization.sessionId!,
+      principalId: authorization.principalId!,
+      scopeId: workflowReviewModuleReadScope.scopeId,
+      definitionHash: workflowReviewModuleReadScope.definitionHash,
+      policyFilterVersion: "policy:0",
+      dependencyKeys: workflowReviewDependencyKeys,
+    });
+  });
+
+  it("publishes cursor-advanced invalidations for accepted workflow writes", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const invalidations: InvalidationEvent[] = [];
+    const authority = await createTestWebAppAuthority(
+      createInMemoryTestWebAppAuthorityStorage().storage,
+      {
+        onWorkflowReviewInvalidation(invalidation) {
+          invalidations.push(invalidation);
+        },
+      },
+    );
+    const fixture = await createTestWorkflowFixture(authority, authorization);
+    invalidations.length = 0;
+
+    await executeWorkflowMutation(authority, authorization, {
+      action: "createCommit",
+      branchId: fixture.branchId,
+      title: "Workflow live invalidation",
+      commitKey: "commit:workflow-live-invalidation",
+      order: 0,
+      state: "ready",
+    });
+
+    expect(invalidations).toEqual([
+      {
+        eventId: expect.stringContaining("workflow-review:web-authority:"),
+        graphId: "graph:global",
+        sourceCursor: expect.stringContaining("web-authority:"),
+        dependencyKeys: workflowReviewDependencyKeys,
+        affectedProjectionIds: [
+          "ops/workflow:project-branch-board",
+          "ops/workflow:branch-commit-queue",
+        ],
+        affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
+        delivery: { kind: "cursor-advanced" },
+      },
+    ]);
+  });
+
+  it("publishes cursor-advanced invalidations for direct accepted workflow transactions", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const invalidations: InvalidationEvent[] = [];
+    const authority = await createTestWebAppAuthority(
+      createInMemoryTestWebAppAuthorityStorage().storage,
+      {
+        onWorkflowReviewInvalidation(invalidation) {
+          invalidations.push(invalidation);
+        },
+      },
+    );
+    const fixture = await createTestWorkflowFixture(authority, authorization);
+    invalidations.length = 0;
+    const { mutationGraph, mutationStore } = createProductMutationStore(
+      authority.readSnapshot({ authorization }),
+    );
+    const before = mutationStore.snapshot();
+
+    mutationGraph.workflowBranch.update(fixture.branchId, {
+      name: "Workflow live invalidation transaction",
+    });
+
+    const result = await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        before,
+        mutationStore.snapshot(),
+        "tx:workflow-live-invalidation:direct",
+      ),
+      { authorization },
+    );
+
+    expect(invalidations).toEqual([
+      {
+        eventId: `workflow-review:${result.cursor}`,
+        graphId: "graph:global",
+        sourceCursor: result.cursor,
+        dependencyKeys: workflowReviewDependencyKeys,
+        affectedProjectionIds: [
+          "ops/workflow:project-branch-board",
+          "ops/workflow:branch-commit-queue",
+        ],
+        affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
+        delivery: { kind: "cursor-advanced" },
+      },
+    ]);
+  });
+
+  it("does not publish workflow review invalidations for unrelated accepted writes", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const invalidations: InvalidationEvent[] = [];
+    const authority = await createTestWebAppAuthority(
+      createInMemoryTestWebAppAuthorityStorage().storage,
+      {
+        onWorkflowReviewInvalidation(invalidation) {
+          invalidations.push(invalidation);
+        },
+      },
+    );
+
+    await createEnvVar(
+      authority,
+      authorization,
+      {
+        description: "Unrelated to workflow review live scopes",
+        name: "OPENAI_API_KEY",
+      },
+      "tx:workflow-live-invalidation:unrelated",
+    );
+
+    expect(invalidations).toEqual([]);
+  });
+
+  it("fails workflow review live registrations when scoped cursor assumptions drift", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const { authority } = await createTestWebAppAuthorityWithWorkflowFixture(authorization);
+    const total = authority.createSyncPayload({
+      authorization,
+      scope: workflowModuleScope,
+    });
+    const policyChangedCursor = updateScopedCursor(total.cursor, {
+      policyFilterVersion: "policy:999",
+    });
+
+    try {
+      authority.planWorkflowReviewLiveRegistration(policyChangedCursor, {
+        authorization,
+      });
+      throw new Error("Expected a workflow live registration failure.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(WebAppAuthorityWorkflowLiveScopeError);
+      expect(error).toMatchObject({
+        status: 409,
+        code: "policy-changed",
+        message:
+          'Workflow live registration cursor policy "policy:999" does not match the current workflow review policy filter "policy:0". Re-sync and register again.',
+      });
+    }
   });
 
   it("returns workflow failure codes through the command route", async () => {

@@ -35,6 +35,7 @@ import {
   type PersistedAuthoritativeGraphStorage,
   type PersistedAuthoritativeGraphStorageLoadResult,
   type PolicyError,
+  type InvalidationEvent,
   type PredicatePolicyDescriptor,
   readPredicateValue as decodePredicateValue,
   type ReplicationReadAuthorizer,
@@ -48,6 +49,8 @@ import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
   agentSession,
+  compileWorkflowReviewScopeDependencyKeys,
+  createWorkflowReviewInvalidationEvent,
   repositoryBranch,
   repositoryCommit,
   workflowBranch,
@@ -86,6 +89,7 @@ import {
   type WriteSecretFieldResult,
 } from "./secret-fields.js";
 import { runWorkflowMutationCommand } from "./workflow-authority.js";
+import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-transport.js";
 
 const webAppGraph = { ...core, ...pkm, ...ops } as const;
 
@@ -308,6 +312,10 @@ export type WebAppAuthority = Omit<
     query: CommitQueueScopeQuery,
     options: WebAppAuthorityReadOptions,
   ): CommitQueueScopeResult;
+  planWorkflowReviewLiveRegistration(
+    cursor: string,
+    options: WebAppAuthorityReadOptions,
+  ): WorkflowReviewLiveRegistrationTarget;
   createSyncPayload(
     options: WebAppAuthoritySyncOptions,
   ): ReturnType<PersistedWebAppAuthority["createSyncPayload"]>;
@@ -332,6 +340,7 @@ export type WebAppAuthority = Omit<
 export type WebAppAuthorityOptions = {
   readonly graph?: WebAppAuthorityGraph;
   readonly maxRetainedTransactions?: number;
+  readonly onWorkflowReviewInvalidation?: (invalidation: InvalidationEvent) => void;
   readonly seedExampleGraph?: boolean;
 };
 
@@ -920,6 +929,20 @@ function throwWorkflowProjectionReadError(error: unknown): never {
   throw error;
 }
 
+type WorkflowLiveScopeFailureCode = "auth.unauthenticated" | "policy-changed" | "scope-changed";
+
+export class WebAppAuthorityWorkflowLiveScopeError extends Error {
+  readonly status: number;
+  readonly code?: WorkflowLiveScopeFailureCode;
+
+  constructor(status: number, message: string, code?: WorkflowLiveScopeFailureCode) {
+    super(message);
+    this.name = "WebAppAuthorityWorkflowLiveScopeError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 type PlannedWebAppAuthorityScope = {
   readonly scope: ModuleSyncScope;
   readonly typeIds: ReadonlySet<string>;
@@ -973,6 +996,24 @@ function parseScopedModuleCursor(
   };
 }
 
+function requireWorkflowLiveRegistrationPrincipal(authorization: AuthorizationContext): {
+  readonly principalId: string;
+  readonly sessionId: string;
+} {
+  if (!authorization.principalId || !authorization.sessionId) {
+    throw new WebAppAuthorityWorkflowLiveScopeError(
+      401,
+      "Workflow live registrations require an authenticated session principal.",
+      "auth.unauthenticated",
+    );
+  }
+
+  return {
+    principalId: authorization.principalId,
+    sessionId: authorization.sessionId,
+  };
+}
+
 function resolveScopedSubjectId(
   operation: GraphWriteTransaction["ops"][number],
   edgeById: Map<string, StoreSnapshot["edges"][number]>,
@@ -983,6 +1024,39 @@ function resolveScopedSubjectId(
 
 function subjectTypeId(store: Store, subjectId: string): string | undefined {
   return store.get(subjectId, typePredicateId) ?? store.find(subjectId, typePredicateId)[0]?.o;
+}
+
+function addTouchedSubjectTypeId(
+  typeIds: Set<string>,
+  store: Store,
+  subjectId: string | undefined,
+): void {
+  if (!subjectId) {
+    return;
+  }
+
+  const typeId = subjectTypeId(store, subjectId);
+  if (typeId) {
+    typeIds.add(typeId);
+  }
+}
+
+function collectTouchedTypeIdsForTransaction(
+  snapshot: StoreSnapshot,
+  store: Store,
+  transaction: GraphWriteTransaction,
+): readonly string[] {
+  const edgeById = new Map(snapshot.edges.map((edge) => [edge.id, edge]));
+  const typeIds = new Set<string>();
+
+  for (const operation of transaction.ops) {
+    if (operation.op === "assert" && operation.edge.p === typePredicateId) {
+      typeIds.add(operation.edge.o);
+    }
+    addTouchedSubjectTypeId(typeIds, store, resolveScopedSubjectId(operation, edgeById));
+  }
+
+  return [...typeIds];
 }
 
 function scopeIncludesSubject(
@@ -1025,6 +1099,7 @@ function filterModuleScopedWriteResult(
 
   return {
     ...result,
+    cursor: formatScopedModuleCursor(plannedScope.scope, result.cursor),
     transaction: {
       ...result.transaction,
       ops,
@@ -2680,6 +2755,7 @@ export async function createWebAppAuthority(
     createCursorPrefix: createAuthorityCursorPrefix,
     maxRetainedTransactions: options.maxRetainedTransactions,
   });
+  const workflowReviewInvalidationListener = options.onWorkflowReviewInvalidation;
   // Early persisted Better Auth rollouts could create graph principals without
   // `homeGraphId`. Repair them before any sync or direct graph reads materialize
   // those entities through the typed client.
@@ -2765,6 +2841,66 @@ export async function createWebAppAuthority(
     }
   }
 
+  function planWorkflowReviewLiveRegistration(
+    cursor: string,
+    options: WebAppAuthorityReadOptions,
+  ): WorkflowReviewLiveRegistrationTarget {
+    const staleContextError = assertCurrentAuthorizationVersion(
+      authority.store,
+      options.authorization,
+    );
+    if (staleContextError) {
+      throw createReadPolicyError(staleContextError);
+    }
+
+    const parsedCursor = parseScopedModuleCursor(cursor);
+    if (!parsedCursor) {
+      throw new WebAppAuthorityWorkflowLiveScopeError(
+        400,
+        "Workflow live registration requires the current scoped workflow-review cursor.",
+      );
+    }
+
+    const plannedScope = planSyncScope(workflowReviewModuleReadScope, options.authorization);
+    if (!plannedScope) {
+      throw new WebAppAuthorityWorkflowLiveScopeError(
+        500,
+        "Workflow live registration planning requires the shipped workflow review scope.",
+      );
+    }
+
+    if (
+      parsedCursor.moduleId !== plannedScope.scope.moduleId ||
+      parsedCursor.scopeId !== plannedScope.scope.scopeId ||
+      parsedCursor.definitionHash !== plannedScope.scope.definitionHash
+    ) {
+      throw new WebAppAuthorityWorkflowLiveScopeError(
+        409,
+        `Workflow live registration cursor no longer matches scope "${plannedScope.scope.scopeId}". Re-sync and register again.`,
+        "scope-changed",
+      );
+    }
+
+    if (parsedCursor.policyFilterVersion !== plannedScope.scope.policyFilterVersion) {
+      throw new WebAppAuthorityWorkflowLiveScopeError(
+        409,
+        `Workflow live registration cursor policy "${parsedCursor.policyFilterVersion}" does not match the current workflow review policy filter "${plannedScope.scope.policyFilterVersion}". Re-sync and register again.`,
+        "policy-changed",
+      );
+    }
+
+    const principal = requireWorkflowLiveRegistrationPrincipal(options.authorization);
+
+    return Object.freeze({
+      sessionId: principal.sessionId,
+      principalId: principal.principalId,
+      scopeId: plannedScope.scope.scopeId,
+      definitionHash: plannedScope.scope.definitionHash,
+      policyFilterVersion: plannedScope.scope.policyFilterVersion,
+      dependencyKeys: Object.freeze([...compileWorkflowReviewScopeDependencyKeys()]),
+    });
+  }
+
   function createSyncPayload(options: WebAppAuthoritySyncOptions) {
     const authorizeRead = createReadableReplicationAuthorizer(
       authority.store,
@@ -2794,6 +2930,12 @@ export async function createWebAppAuthority(
   ) {
     const writeScope = options.writeScope ?? "client-tx";
     const snapshot = authority.store.snapshot();
+    const plannedTransaction = planCapabilityVersionInvalidationTransaction(snapshot, transaction);
+    const touchedTypeIds = collectTouchedTypeIdsForTransaction(
+      snapshot,
+      authority.store,
+      plannedTransaction,
+    );
     assertTransactionAuthorized(
       transaction,
       snapshot,
@@ -2801,12 +2943,26 @@ export async function createWebAppAuthority(
       writeScope,
       compiledFieldIndex,
     );
-    return authority.applyTransaction(
-      planCapabilityVersionInvalidationTransaction(snapshot, transaction),
-      {
-        writeScope,
-      },
-    );
+    const result = await authority.applyTransaction(plannedTransaction, {
+      writeScope,
+    });
+
+    if (!result.replayed) {
+      const invalidation = createWorkflowReviewInvalidationEvent({
+        eventId: `workflow-review:${result.cursor}`,
+        graphId: webAppGraphId,
+        sourceCursor: result.cursor,
+        touchedTypeIds,
+      });
+      if (invalidation) {
+        try {
+          // Live fan-out is ephemeral; losing it must not affect the committed write.
+          workflowReviewInvalidationListener?.(invalidation);
+        } catch {}
+      }
+    }
+
+    return result;
   }
 
   function getIncrementalSyncResult(
@@ -3188,6 +3344,7 @@ export async function createWebAppAuthority(
     getIncrementalSyncResult,
     lookupBearerShare,
     lookupSessionPrincipal,
+    planWorkflowReviewLiveRegistration,
     readCommitQueueScope,
     readPredicateValue,
     readProjectBranchScope,

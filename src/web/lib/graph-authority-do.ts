@@ -27,6 +27,7 @@ import {
   WebAppAuthoritySessionPrincipalLookupError,
 } from "./authority.js";
 import {
+  handleWorkflowLiveRequest,
   handleWorkflowReadRequest,
   handleWebCommandRequest,
   RequestAuthorizationContextError,
@@ -34,6 +35,8 @@ import {
   handleTransactionRequest,
   readRequestAuthorizationContext,
 } from "./server-routes.js";
+import { createWorkflowReviewLiveScopeRouter } from "./workflow-live-scope-router.js";
+import { webWorkflowLivePath } from "./workflow-live-transport.js";
 import { webWorkflowReadPath } from "./workflow-transport.js";
 
 type SqlRow = Record<string, unknown>;
@@ -1040,6 +1043,7 @@ export class WebGraphAuthorityDurableObject {
   private readonly state: DurableObjectStateLike;
   private readonly maxRetainedTransactions: number;
   private readonly createAuthority: WebGraphAuthorityFactory;
+  private readonly workflowReviewLiveScopeRouter = createWorkflowReviewLiveScopeRouter();
   private authorityPromise: Promise<WebAppAuthority> | null = null;
 
   constructor(
@@ -1062,6 +1066,9 @@ export class WebGraphAuthorityDurableObject {
       .blockConcurrencyWhile(() =>
         this.createAuthority(createSqliteDurableObjectAuthorityStorage(this.state), {
           maxRetainedTransactions: this.maxRetainedTransactions,
+          onWorkflowReviewInvalidation: (invalidation) => {
+            this.workflowReviewLiveScopeRouter.publish(invalidation);
+          },
         }),
       )
       .catch((error) => {
@@ -1193,6 +1200,7 @@ export class WebGraphAuthorityDurableObject {
       url.pathname !== "/api/sync" &&
       url.pathname !== "/api/tx" &&
       url.pathname !== "/api/commands" &&
+      url.pathname !== webWorkflowLivePath &&
       url.pathname !== webWorkflowReadPath
     ) {
       return new Response("Not Found", { status: 404 });
@@ -1228,6 +1236,15 @@ export class WebGraphAuthorityDurableObject {
 
     if (url.pathname === "/api/commands") {
       return handleWebCommandRequest(request, authority, authorization);
+    }
+
+    if (url.pathname === webWorkflowLivePath) {
+      return handleWorkflowLiveRequest(
+        request,
+        authority,
+        this.workflowReviewLiveScopeRouter,
+        authorization,
+      );
     }
 
     if (url.pathname === webWorkflowReadPath) {

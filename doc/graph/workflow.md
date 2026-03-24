@@ -23,8 +23,9 @@ The exported surface is:
 - `command.ts`: defines the stable `workflow-mutation` command envelope,
   summary shapes, and failure codes consumed by the authority layer
 - `projection.ts`: defines the canonical workflow review scope descriptor plus
-  the first Branch 3 projection ids, `definitionHash` values, and metadata
-  shared across workflow reads and the web authority proof
+  the first Branch 3 projection ids, `definitionHash` values, dependency-key
+  compilation helpers, and conservative invalidation-event builder shared
+  across workflow reads and the web authority proof
 - `query.ts`: defines the stable `ProjectBranchScope` branch-board contract and
   the stable `CommitQueueScope` branch-detail and commit-queue contract,
   plus the rebuildable in-memory projection helpers that materialize those
@@ -158,14 +159,41 @@ That read helper now also exposes the canonical workflow projection metadata
 for the branch board and commit queue, so projection ids and `definitionHash`
 values stay shared with the authority-side scope proof instead of living in
 web-local constants.
+The same module export now owns the first live invalidation proof for workflow
+review:
+
+- review-scope registrations compile to
+  `scope:ops/workflow:review`,
+  `projection:ops/workflow:project-branch-board`, and
+  `projection:ops/workflow:branch-commit-queue`
+- any accepted write that touches a workflow entity type conservatively emits
+  that full dependency-key set, even when only one workflow projection may have
+  changed
+- `createWorkflowReviewInvalidationEvent(...)` currently emits only
+  `cursor-advanced` delivery with the workflow review scope id and both
+  workflow projection ids attached; direct scoped deltas stay out of scope for
+  the current proof
+- `compileWorkflowReviewScopeDependencyKeys()` is the shared dependency-key
+  planner used by the first live registration proof, so the authority and
+  router agree on the scope and projection fan-out set
+- the current web proof delivers those invalidations through
+  `workflow-review-pull`, so callers react by scoped `/api/sync` re-pull, and
+  only re-register from their current scoped cursor when a pull reports
+  `active: false`
 
 The first authority-owned runtime seam now lives beside the web authority in
 `../../src/web/lib/authority.ts`. `createWebAppAuthority(...)` exposes
-`readProjectBranchScope(...)` and `readCommitQueueScope(...)`, rebuilds the
-projection from authoritative graph state on each read, and maps read-policy
-failures back onto the stable workflow query code `policy-denied`.
-The first shipped web transport proof for those reads now lives in
-`../../src/web/lib/workflow-transport.ts` and `../../src/web/lib/server-routes.ts`:
+`readProjectBranchScope(...)`, `readCommitQueueScope(...)`, and
+`planWorkflowReviewLiveRegistration(...)`, rebuilds the projection from
+authoritative graph state on each read, derives live registrations from the
+current scoped cursor and authenticated session principal, and maps read-policy
+and live-registration failures back onto stable workflow codes such as
+`policy-denied`, `policy-changed`, and `scope-changed`.
+The first shipped web transport proofs for those reads and live registrations
+now live in `../../src/web/lib/workflow-transport.ts`,
+`../../src/web/lib/workflow-live-transport.ts`, and
+`../../src/web/lib/server-routes.ts`. The first shipped caller seam for the
+live proof now lives in `../../src/web/lib/workflow-review-live-sync.ts`:
 
 - `POST /api/workflow-read`
 - request body:
@@ -177,6 +205,33 @@ The first shipped web transport proof for those reads now lives in
 - failure body: `{ error, code? }`, where stable workflow read codes such as
   `project-not-found`, `branch-not-found`, `policy-denied`, and
   `projection-stale` are preserved at the transport boundary
+- `POST /api/workflow-live`
+- request body:
+  `{ kind: "workflow-review-register", cursor: string }`,
+  `{ kind: "workflow-review-pull", scopeId: string }`, or
+  `{ kind: "workflow-review-remove", scopeId: string }`
+- success body:
+  `{ kind: "workflow-review-register", result: WorkflowReviewLiveRegistration }`
+  or
+  `{ kind: "workflow-review-pull", result: { active, invalidations, scopeId, sessionId } }`
+  or
+  `{ kind: "workflow-review-remove", result: { removed, scopeId, sessionId } }`
+- runtime model:
+  live registrations are ephemeral, indexed by session, scope, and dependency
+  key inside the Durable Object process, accepted workflow-affecting writes
+  publish `cursor-advanced` invalidations from the authority write hook and
+  queue them for matching registrations, and callers treat
+  `active: false` on `workflow-review-pull` as the signal to re-register from
+  the current scoped sync cursor before the next scoped refresh
+- caller helper:
+  `createWorkflowReviewLiveSync(sync, options)` wraps the current
+  `workflow-review-register`, `workflow-review-pull`, and scoped `/api/sync`
+  flow so a workflow-review client can register interest, react to
+  `cursor-advanced`, and recover freshness after expiry or router loss without
+  widening to whole-graph sync
+- failure body: `{ error, code? }`, where stable live-registration codes such
+  as `auth.unauthenticated`, `policy-changed`, and `scope-changed` are
+  preserved at the transport boundary
 
 ## Branch Detail And Commit Queue Query
 
