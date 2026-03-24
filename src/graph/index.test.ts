@@ -128,6 +128,17 @@ const requiredReactDomExports = [
   "defaultWebFilterResolver",
 ] as const;
 
+const requiredReactOpenTuiExports = [
+  "GraphRuntimeProvider",
+  "useCommitQueueScope",
+  "useGraphQuery",
+  "useGraphRuntime",
+  "useGraphSyncState",
+  "useOptionalGraphRuntime",
+  "useProjectBranchScope",
+  "useWorkflowProjectionIndex",
+] as const;
+
 const requiredModulesExports = [
   "core",
   "country",
@@ -309,7 +320,8 @@ describe("@io/core/graph package entry surfaces", () => {
 
     expectNamedExports(reactDomAdapterExports, requiredReactDomExports);
     expect(Object.keys(reactDomAdapterExports)).not.toContain("GraphMutationRuntimeProvider");
-    expect(Object.keys(reactOpentuiAdapterExports)).toEqual([]);
+    expectNamedExports(reactOpentuiAdapterExports, requiredReactOpenTuiExports);
+    expect(Object.keys(reactOpentuiAdapterExports)).not.toContain("GraphMutationRuntimeProvider");
   });
 
   it("keeps the canonical module entry surfaces explicit", async () => {

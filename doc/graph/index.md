@@ -109,7 +109,8 @@ subpaths.
   field views/editors, filter resolvers, icon rendering, and field-family
   modules
 - `../../src/graph/adapters/react-opentui/index.ts`: terminal adapter package
-  root; it currently exports an empty surface
+  root with the OpenTUI graph runtime provider, sync-state hooks, and
+  workflow projection query helpers
 - `../../src/graph/icon.ts`: graph-owned icon helpers
 - `../../src/graph/testing/kitchen-sink/`: private test fixtures used by graph
   proof coverage

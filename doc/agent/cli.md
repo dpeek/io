@@ -14,6 +14,7 @@ Current top-level task modules are:
 - `setup`
 - `show-files`
 - `start`
+- `tui`
 
 ## Agent Commands
 
@@ -26,6 +27,13 @@ Current top-level task modules are:
 
 If `entrypointPath` is omitted, the loader defaults to `./io.ts` plus
 `./io.md`.
+
+## TUI Commands
+
+- `io tui [entrypointPath]`
+
+`io tui` boots the new terminal workflow product shell from `src/tui/*`.
+`io agent tui ...` remains the legacy retained session monitor.
 
 ## MCP
 

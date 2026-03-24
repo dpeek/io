@@ -21,7 +21,8 @@ demo surface rather than a finished account-management product.
 
 ## Ownership Boundary
 
-`web` is the product surface package, not the shared browser-primitive package.
+`web` is the browser product surface package, not the shared browser-primitive
+package. The terminal sibling surface lives in `../../src/tui/*`.
 
 - keep reusable browser UI and editor chrome in `../../lib/web/src/*`
 - keep graph-aware field resolver, predicate mutation, and typed preview logic

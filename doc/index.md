@@ -19,6 +19,7 @@ the graph-first application direction the rest of the workspace is proving.
 - `./graph/index.md`
 - `./graph/mcp.md`
 - `./graph/storage.md`
+- `./tui/index.md`
 - `./README.md`
 - `./branch/README.md`
 - `./web/index.md`
@@ -37,11 +38,13 @@ the graph-first application direction the rest of the workspace is proving.
 - `./graph/mcp.md`: current graph MCP read surface, opt-in writes, and the remaining command roadmap
 - `./graph/storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,
   retained-history model, and secret side-storage split
+- `./tui/index.md`: terminal workflow product surface and the boundary against legacy agent TUI
 - `./README.md`: architecture and vision doc map for the numbered roadmap and branch docs
 - `./branch/README.md`: platform branches as parallel workstreams with canonical specs where available
 - `./index.md`: repo map and context entrypoint
 - `../src/agent/`: scheduler, context assembly, tracker integration, retained runtime,
   and the operator TUI
+- `../src/tui/`: graph-backed terminal workflow product surface
 - `../src/config/`, `../src/lib/`: shared config loading and typed config surface
 - `../src/graph/`, `../src/web/`: graph runtime, canonical `core:`, `ops:`, and `pkm:`
   schema families, the persisted-authority contract, worker-backed browser surfaces, and the
