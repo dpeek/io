@@ -159,6 +159,21 @@ That read helper now also exposes the canonical workflow projection metadata
 for the branch board and commit queue, so projection ids and `definitionHash`
 values stay shared with the authority-side scope proof instead of living in
 web-local constants.
+The first retained projection storage seam now shares checkpoint and row
+metadata through `../../src/graph/runtime/projection.ts`, and retained workflow
+reads treat `{ projectionId, definitionHash }` as the explicit compatibility
+boundary. A retained row set for the right `projectionId` but the wrong
+`definitionHash` is incompatible state that must rebuild, not a silent or
+“missing checkpoint” fallback.
+When retained workflow projection state is missing, row-incomplete, stale for
+the current authority cursor, or incompatible at restart, the authority
+rebuilds it deterministically from authoritative graph facts and rewrites only
+the retained projection rows/checkpoints before serving reads. Callers do not
+repair or merge retained rows themselves.
+`createWebAppAuthority(...)` now also exposes
+`rebuildRetainedWorkflowProjection()` as the explicit retained-projection
+recovery seam, so later queue-driven rebuild orchestration can move off the
+read path without changing the rebuild contract.
 The same module export now owns the first live invalidation proof for workflow
 review:
 
@@ -183,12 +198,15 @@ review:
 
 The first authority-owned runtime seam now lives beside the web authority in
 `../../src/web/lib/authority.ts`. `createWebAppAuthority(...)` exposes
-`readProjectBranchScope(...)`, `readCommitQueueScope(...)`, and
-`planWorkflowReviewLiveRegistration(...)`, rebuilds the projection from
-authoritative graph state on each read, derives live registrations from the
-current scoped cursor and authenticated session principal, and maps read-policy
-and live-registration failures back onto stable workflow codes such as
-`policy-denied`, `policy-changed`, and `scope-changed`.
+`readProjectBranchScope(...)`, `readCommitQueueScope(...)`,
+`rebuildRetainedWorkflowProjection()`, and
+`planWorkflowReviewLiveRegistration(...)`, validates retained workflow
+projection state against authoritative graph facts during startup recovery,
+rebuilds retained rows explicitly when recovery is required, derives live
+registrations from the current scoped cursor and authenticated session
+principal, and maps read-policy and live-registration failures back onto
+stable workflow codes such as `policy-denied`, `policy-changed`, and
+`scope-changed`.
 The first shipped web transport proofs for those reads and live registrations
 now live in `../../src/web/lib/workflow-transport.ts`,
 `../../src/web/lib/workflow-live-transport.ts`, and
@@ -350,6 +368,9 @@ The stable failure codes exposed by the query contract are:
   for lagged pagination, scope mismatch, or reuse after a projection rebuild.
   Callers discard the cursor and restart from the first page against a fresh
   projection.
+- retained workflow projection durability does not change the source of truth:
+  workflow, repository, and session graph facts remain authoritative, while
+  retained projection rows are restart optimization only.
 
 ## Field Conventions
 

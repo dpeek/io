@@ -19,6 +19,8 @@ import {
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
+  type RetainedWorkflowProjectionState,
+  workflowProjectionMetadata,
   workflowReviewDependencyKeys,
   workflowReviewModuleReadScope,
   workflowReviewSyncScopeRequest,
@@ -322,6 +324,26 @@ function expectWorkflowReadError(
     expect(error).toBeInstanceOf(WebAppAuthorityWorkflowReadError);
     expect(error).toMatchObject({ code });
   }
+}
+
+function expectRecoveredWorkflowProjection(
+  actual: RetainedWorkflowProjectionState | undefined,
+  expected: RetainedWorkflowProjectionState,
+) {
+  expect(actual?.rows).toEqual(expected.rows);
+  expect(actual?.checkpoints).toHaveLength(expected.checkpoints.length);
+  expect(actual?.checkpoints.map((checkpoint) => checkpoint.projectionId)).toEqual(
+    expected.checkpoints.map((checkpoint) => checkpoint.projectionId),
+  );
+  expect(actual?.checkpoints.map((checkpoint) => checkpoint.definitionHash)).toEqual(
+    expected.checkpoints.map((checkpoint) => checkpoint.definitionHash),
+  );
+  expect(actual?.checkpoints.map((checkpoint) => checkpoint.sourceCursor)).toEqual(
+    expected.checkpoints.map((checkpoint) => checkpoint.sourceCursor),
+  );
+  expect(actual?.checkpoints.map((checkpoint) => checkpoint.projectionCursor)).toEqual(
+    expected.checkpoints.map((checkpoint) => checkpoint.projectionCursor),
+  );
 }
 
 async function seedWorkflowProjectionReadFixture(
@@ -920,6 +942,12 @@ describe("web authority", () => {
       load() {
         return backingStorage.storage.load();
       },
+      loadWorkflowProjection() {
+        return backingStorage.storage.loadWorkflowProjection();
+      },
+      replaceWorkflowProjection(workflowProjection) {
+        return backingStorage.storage.replaceWorkflowProjection(workflowProjection);
+      },
       inspectSecrets() {
         return backingStorage.storage.inspectSecrets();
       },
@@ -933,8 +961,8 @@ describe("web authority", () => {
       commit(input, options) {
         return backingStorage.storage.commit(input, options);
       },
-      persist(input) {
-        return backingStorage.storage.persist(input);
+      persist(input, options) {
+        return backingStorage.storage.persist(input, options);
       },
     });
     const confirmedLive = await restarted.writeSecretField(
@@ -1141,6 +1169,12 @@ describe("web authority", () => {
       load() {
         return backingStorage.storage.load();
       },
+      loadWorkflowProjection() {
+        return backingStorage.storage.loadWorkflowProjection();
+      },
+      replaceWorkflowProjection(workflowProjection) {
+        return backingStorage.storage.replaceWorkflowProjection(workflowProjection);
+      },
       inspectSecrets() {
         return backingStorage.storage.inspectSecrets();
       },
@@ -1156,8 +1190,8 @@ describe("web authority", () => {
         }
         await backingStorage.storage.commit(input, options);
       },
-      persist(input) {
-        return backingStorage.storage.persist(input);
+      persist(input, options) {
+        return backingStorage.storage.persist(input, options);
       },
     } satisfies WebAppAuthorityStorage;
     const authority = await createTestWebAppAuthority(storage);
@@ -2164,6 +2198,188 @@ describe("web authority", () => {
     expect(
       refreshed.rows.some((row) => row.workflowBranch.branchKey === "branch:fresh-branch"),
     ).toBe(true);
+  });
+
+  it("keeps retained workflow projection pagination stable across restart when retained state is present", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const { authority, fixture, storage } =
+      await createTestWebAppAuthorityWithWorkflowFixture(authorization);
+
+    await seedWorkflowProjectionReadFixture(authority, authorization, fixture);
+
+    const firstPage = authority.readProjectBranchScope(
+      {
+        projectId: fixture.projectId,
+        limit: 1,
+      },
+      { authorization },
+    );
+
+    expect(firstPage.nextCursor).toEqual(expect.any(String));
+
+    const restarted = await createTestWebAppAuthority(storage.storage);
+    const secondPage = restarted.readProjectBranchScope(
+      {
+        projectId: fixture.projectId,
+        cursor: firstPage.nextCursor,
+        limit: 1,
+      },
+      { authorization },
+    );
+
+    expect(secondPage.rows.map((row) => row.workflowBranch.branchKey)).toEqual([
+      "branch:backlog-docs",
+    ]);
+  });
+
+  it("rebuilds workflow projection reads from authoritative graph state when retained state is missing on restart", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const { authority, fixture, storage } =
+      await createTestWebAppAuthorityWithWorkflowFixture(authorization);
+
+    const seeded = await seedWorkflowProjectionReadFixture(authority, authorization, fixture);
+    const persisted = storage.read();
+    if (!persisted) {
+      throw new Error("Expected persisted authority state for restart recovery test.");
+    }
+    const expectedWorkflowProjection = persisted.workflowProjection;
+    if (!expectedWorkflowProjection) {
+      throw new Error("Expected retained workflow projection state before restart recovery.");
+    }
+
+    const restarted = await createTestWebAppAuthority({
+      ...storage.storage,
+      async loadWorkflowProjection() {
+        return null;
+      },
+    });
+
+    const branchBoard = restarted.readProjectBranchScope(
+      {
+        projectId: fixture.projectId,
+        filter: {
+          showUnmanagedRepositoryBranches: true,
+        },
+        limit: 3,
+      },
+      { authorization },
+    );
+    const commitQueue = restarted.readCommitQueueScope(
+      {
+        branchId: fixture.branchId,
+        limit: 3,
+      },
+      { authorization },
+    );
+
+    expect(branchBoard.rows.map((row) => row.workflowBranch.id)).toEqual([
+      fixture.branchId,
+      seeded.backlogBranchId,
+      seeded.noRankBranchId,
+    ]);
+    expect(branchBoard.unmanagedRepositoryBranches.map((row) => row.repositoryBranch.id)).toEqual([
+      seeded.unmanagedRepositoryBranchId,
+    ]);
+    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
+      seeded.commit1Id,
+      seeded.commit2Id,
+      seeded.commit3Id,
+    ]);
+    expect(commitQueue.branch.latestSession?.id).toBe(seeded.sessionId);
+    expectRecoveredWorkflowProjection(
+      storage.read()?.workflowProjection,
+      expectedWorkflowProjection,
+    );
+  });
+
+  it("rebuilds retained workflow projection rows after retained row loss on restart", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const { authority, fixture, storage } =
+      await createTestWebAppAuthorityWithWorkflowFixture(authorization);
+
+    const seeded = await seedWorkflowProjectionReadFixture(authority, authorization, fixture);
+    const persisted = storage.read();
+    const workflowProjection = persisted?.workflowProjection;
+    if (!persisted || !workflowProjection) {
+      throw new Error("Expected retained workflow projection state for row-loss recovery test.");
+    }
+
+    const droppedBranchId = seeded.noRankBranchId;
+    const corruptedStorage = createInMemoryTestWebAppAuthorityStorage({
+      ...persisted,
+      workflowProjection: {
+        ...workflowProjection,
+        rows: workflowProjection.rows.filter(
+          (row) => !(row.rowKind === "branch" && row.rowKey === droppedBranchId),
+        ),
+      },
+    });
+
+    const restarted = await createTestWebAppAuthority(corruptedStorage.storage);
+    const branchBoard = restarted.readProjectBranchScope(
+      {
+        projectId: fixture.projectId,
+        limit: 3,
+      },
+      { authorization },
+    );
+
+    expect(branchBoard.rows.map((row) => row.workflowBranch.id)).toEqual([
+      fixture.branchId,
+      seeded.backlogBranchId,
+      seeded.noRankBranchId,
+    ]);
+    expectRecoveredWorkflowProjection(
+      corruptedStorage.read()?.workflowProjection,
+      workflowProjection,
+    );
+  });
+
+  it("rebuilds workflow projection reads from authoritative graph state when retained state is incompatible on restart", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const { authority, fixture, storage } =
+      await createTestWebAppAuthorityWithWorkflowFixture(authorization);
+
+    const seeded = await seedWorkflowProjectionReadFixture(authority, authorization, fixture);
+    const persisted = storage.read();
+    const workflowProjection = persisted?.workflowProjection;
+    if (!workflowProjection) {
+      throw new Error("Expected retained workflow projection state for compatibility test.");
+    }
+
+    const restarted = await createTestWebAppAuthority({
+      ...storage.storage,
+      async loadWorkflowProjection() {
+        return {
+          ...workflowProjection,
+          checkpoints: workflowProjection.checkpoints.map((checkpoint) =>
+            checkpoint.projectionId === workflowProjectionMetadata.branchCommitQueue.projectionId
+              ? {
+                  ...checkpoint,
+                  definitionHash: "projection-def:ops/workflow:branch-commit-queue:v999",
+                }
+              : checkpoint,
+          ),
+        };
+      },
+    });
+
+    const commitQueue = restarted.readCommitQueueScope(
+      {
+        branchId: fixture.branchId,
+        limit: 3,
+      },
+      { authorization },
+    );
+
+    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
+      seeded.commit1Id,
+      seeded.commit2Id,
+      seeded.commit3Id,
+    ]);
+    expect(commitQueue.branch.activeCommit?.workflowCommit.id).toBe(seeded.commit2Id);
+    expect(commitQueue.branch.latestSession?.id).toBe(seeded.sessionId);
+    expectRecoveredWorkflowProjection(storage.read()?.workflowProjection, workflowProjection);
   });
 
   it("surfaces stable workflow read failure codes", async () => {

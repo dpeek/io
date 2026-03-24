@@ -93,6 +93,52 @@ export interface ProjectionSpec {
   readonly visibilityMode: ProjectionVisibilityMode;
 }
 
+export interface RetainedProjectionMetadata<
+  ProjectionId extends string = string,
+  DefinitionHash extends string = string,
+> {
+  readonly projectionId: ProjectionId;
+  readonly definitionHash: DefinitionHash;
+}
+
+export interface RetainedProjectionCheckpointRecord<
+  ProjectionId extends string = string,
+  DefinitionHash extends string = string,
+> extends RetainedProjectionMetadata<ProjectionId, DefinitionHash> {
+  readonly sourceCursor: string;
+  readonly projectionCursor: string;
+  readonly projectedAt: string;
+}
+
+export interface RetainedProjectionRowRecord<
+  RowKind extends string = string,
+  Value = unknown,
+  ProjectionId extends string = string,
+  DefinitionHash extends string = string,
+> extends RetainedProjectionMetadata<ProjectionId, DefinitionHash> {
+  readonly rowKind: RowKind;
+  readonly rowKey: string;
+  readonly sortKey: string;
+  readonly value: Value;
+}
+
+export type RetainedProjectionRecordLookupResult<T extends RetainedProjectionMetadata> =
+  | {
+      readonly kind: "match";
+      readonly record: T;
+    }
+  | {
+      readonly kind: "definition-hash-mismatch";
+      readonly projectionId: string;
+      readonly expectedDefinitionHash: string;
+      readonly actualDefinitionHashes: readonly string[];
+    }
+  | {
+      readonly kind: "missing";
+      readonly projectionId: string;
+      readonly expectedDefinitionHash: string;
+    };
+
 function assertNonEmptyString(value: string, label: string): void {
   if (value.length === 0) {
     throw new TypeError(`${label} must not be empty.`);
@@ -325,6 +371,52 @@ export function isInvalidationEventCompatibleWithTarget(
 
   const dependencyKeys = new Set(event.dependencyKeys);
   return target.dependencyKeys.some((dependencyKey) => dependencyKeys.has(dependencyKey));
+}
+
+export function isRetainedProjectionMetadataCompatible(
+  record: RetainedProjectionMetadata,
+  metadata: RetainedProjectionMetadata,
+): boolean {
+  return (
+    record.projectionId === metadata.projectionId &&
+    record.definitionHash === metadata.definitionHash
+  );
+}
+
+export function findRetainedProjectionRecord<T extends RetainedProjectionMetadata>(
+  records: readonly T[],
+  metadata: RetainedProjectionMetadata,
+): RetainedProjectionRecordLookupResult<T> {
+  const matchesByProjectionId = records.filter(
+    (record) => record.projectionId === metadata.projectionId,
+  );
+  const exactMatch = matchesByProjectionId.find((record) =>
+    isRetainedProjectionMetadataCompatible(record, metadata),
+  );
+
+  if (exactMatch) {
+    return {
+      kind: "match",
+      record: exactMatch,
+    };
+  }
+
+  if (matchesByProjectionId.length > 0) {
+    return {
+      kind: "definition-hash-mismatch",
+      projectionId: metadata.projectionId,
+      expectedDefinitionHash: metadata.definitionHash,
+      actualDefinitionHashes: Object.freeze(
+        [...new Set(matchesByProjectionId.map((record) => record.definitionHash))].sort(),
+      ),
+    };
+  }
+
+  return {
+    kind: "missing",
+    projectionId: metadata.projectionId,
+    expectedDefinitionHash: metadata.definitionHash,
+  };
 }
 
 export function defineProjectionCatalog<const T extends readonly ProjectionSpec[]>(

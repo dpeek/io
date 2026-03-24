@@ -792,9 +792,14 @@ Current shipped workflow proof:
 - each workflow read rebuilds from authoritative workflow, repository, and
   session state, reports `projectedAt` plus `projectionCursor`, and keeps
   pagination fail-closed with `projection-stale`
-- retained projection rows, retained checkpoints, and restart-stable
-  projection durability are still deferred to `OPE-418`; the shipped proof is
-  rebuildable from authority, not durably retained derived state
+- retained projection rows and checkpoints now persist beside the authority so
+  restart can hydrate the workflow read proof from derived durable state when
+  the retained version is compatible
+- retained state remains derived-only. Missing or incompatible retained
+  workflow projection state must rebuild from authoritative graph facts instead
+  of widening scope or treating the retained rows as source of truth
+- callers recover from `projection-stale` by discarding the pagination cursor
+  and rereading from the first page of the rebuilt projection
 
 ### Slice 3: Live scope registration plus cursor-advanced invalidation
 

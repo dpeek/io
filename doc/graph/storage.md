@@ -79,6 +79,17 @@ Current behavior:
 - accepted authoritative results now carry `writeScope`, so durable state keeps
   `client-tx` versus `server-command` origin across commit, restart, and
   baseline rewrites for data written after `writeScope` existed
+- the first workflow projection proof now persists retained checkpoints and row
+  payloads beside the authority tables so workflow reads can survive restart
+  from durable derived state instead of rebuilding only on demand
+- retained workflow projection checkpoint and row metadata now shares the
+  `src/graph/runtime/projection.ts` contract surface, and the workflow read
+  proof treats `projectionId` plus `definitionHash` as an explicit retained
+  version seam instead of an authority-local string convention
+- startup now validates retained workflow projection rows against
+  authoritative graph facts and rewrites only the retained projection tables
+  when rows are missing, stale, or definition-hash incompatible, so restart
+  recovery no longer waits for an unrelated snapshot persistence boundary
 - additive compatibility is explicit: older `io_graph_tx` tables gain a
   `write_scope` column with a `client-tx` default, and legacy JSON write
   histories without `writeScope` are normalized and rewritten through the
@@ -155,6 +166,20 @@ The adapter stores two kinds of durable state:
 
 1. Current graph state for fast hydration and local authoritative reads.
 2. Ordered transaction history for incremental sync and replay boundaries.
+
+It also stores one explicitly derived surface:
+
+3. Retained workflow projection checkpoints and rows that can be discarded and
+   rebuilt from authoritative graph facts without corrupting the authority.
+
+For the current Branch 3 proof, retained workflow projection compatibility is
+keyed by the pair `{ projectionId, definitionHash }`. Reusing the same
+`projectionId` with a new `definitionHash` is an incompatible retained-state
+change that must trigger rebuild instead of being inferred as “missing” data.
+Retained row loss or cursor drift is handled the same way: the authority
+rebuilds the retained workflow projection deterministically from authoritative
+graph facts and replaces the retained projection tables without rewriting the
+authoritative graph snapshot or transaction history.
 
 ### Authoritative Tables
 
@@ -287,6 +312,54 @@ Purpose:
 The graph should continue to store only `secretHandle` identity and safe
 metadata. This table owns the actual secret value lifecycle.
 
+### Derived Workflow Projection Tables
+
+#### `io_workflow_projection_checkpoint`
+
+One row per retained workflow projection version.
+
+Columns:
+
+- `projection_id TEXT NOT NULL`
+- `definition_hash TEXT NOT NULL`
+- `source_cursor TEXT NOT NULL`
+- `projection_cursor TEXT NOT NULL`
+- `projected_at TEXT NOT NULL`
+- `PRIMARY KEY (projection_id, definition_hash)`
+
+Purpose:
+
+- explicit retained checkpoint versioning by `projectionId` and `definitionHash`
+- binding retained rows to the authoritative head cursor they were derived from
+- restart-safe reuse of the first workflow projection proof
+- fail-closed restart recovery: missing or incompatible checkpoints force a
+  rebuild from authoritative graph state instead of reusing stale derived data
+
+#### `io_workflow_projection_row`
+
+One row per retained workflow projection payload row.
+
+Columns:
+
+- `projection_id TEXT NOT NULL`
+- `definition_hash TEXT NOT NULL`
+- `row_kind TEXT NOT NULL`
+- `row_key TEXT NOT NULL`
+- `sort_key TEXT NOT NULL`
+- `payload_json TEXT NOT NULL`
+- `PRIMARY KEY (projection_id, definition_hash, row_kind, row_key)`
+
+Retained workflow projection rows are derived cache only. They can be deleted,
+ignored, or rebuilt without changing authoritative graph facts. Pagination
+cursors tied to an older retained or rebuilt projection must fail closed with
+`projection-stale`; callers recover by rereading from the first page.
+
+Purpose:
+
+- durable retained rows for the workflow branch-board and commit-queue proofs
+- projection-scoped payload versioning separate from authoritative graph facts
+- deterministic restart hydration of the retained workflow projection reader
+
 ### Optional Later Tables
 
 These are not required for the first adapter cut:
@@ -316,6 +389,10 @@ The current adapter uses a very small set of explicit indexes:
 - `io_graph_tx(cursor)` unique
 - `io_graph_tx(tx_id)` unique
 - `io_graph_tx_op(tx_seq, op_index)` primary key
+- `io_workflow_projection_checkpoint(source_cursor)` for retained checkpoint
+  validation against the current authoritative head
+- `io_workflow_projection_row(projection_id, definition_hash, row_kind, sort_key)`
+  for retained projection hydration in reader order
 
 If partial indexes are supported in the Durable Object SQLite environment, add
 live-fact indexes such as:
@@ -349,6 +426,8 @@ On startup:
      side-table versions abort startup instead of silently continuing
 8. It loads only the remaining live `io_secret_value` rows into the
    authority-owned secret map.
+9. It loads retained workflow projection checkpoints and rows only when their
+   `source_cursor` still matches the current authoritative head cursor.
 
 This avoids replaying the entire historical log just to rebuild the current
 graph.
@@ -367,10 +446,12 @@ For every accepted mutation:
    - insert one `io_graph_tx_op` row
    - update `io_graph_edge.retracted_tx_seq`
 6. It writes any secret side-data updates in the same transaction.
-7. It prunes `io_secret_value` rows whose `secret_id` is no longer reachable
+7. It replaces retained workflow projection checkpoints and rows with the newly
+   derived versioned payload for the current authority head.
+8. It prunes `io_secret_value` rows whose `secret_id` is no longer reachable
    from the post-commit live graph state.
-8. It updates `io_graph_meta.head_seq`, `head_cursor`, and `updated_at`.
-9. It commits.
+9. It updates `io_graph_meta.head_seq`, `head_cursor`, and `updated_at`.
+10. It commits.
 
 If the SQL transaction fails, the in-memory authority should roll back to the
 previous snapshot exactly as it does today.

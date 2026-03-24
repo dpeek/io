@@ -1,5 +1,10 @@
 import type { NamespaceClient } from "@io/core/graph";
 
+import type {
+  RetainedProjectionCheckpointRecord,
+  RetainedProjectionRowRecord,
+} from "../../../runtime/projection.js";
+import { findRetainedProjectionRecord } from "../../../runtime/projection.js";
 import opsIds from "../../ops.json";
 import type {
   RepositoryBranchSummary,
@@ -348,6 +353,93 @@ export interface WorkflowProjectionIndex {
   readProjectBranchScope(query: ProjectBranchScopeQuery): ProjectBranchScopeResult;
 }
 
+export type RetainedWorkflowProjectionCheckpoint = RetainedProjectionCheckpointRecord;
+
+type RetainedProjectBranchBoardRow =
+  | RetainedProjectionRowRecord<
+      "branch",
+      WorkflowBranchSummary,
+      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
+      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "managed-repository-branch",
+      ProjectBranchScopeRepositoryObservation,
+      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
+      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "project",
+      WorkflowProjectSummary,
+      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
+      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "project-freshness",
+      WorkflowProjectionFreshnessEntry,
+      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
+      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "repository",
+      WorkflowRepositorySummary,
+      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
+      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "unmanaged-repository-branch",
+      ProjectBranchScopeRepositoryObservation,
+      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
+      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+    >;
+
+type RetainedBranchCommitQueueRow =
+  | RetainedProjectionRowRecord<
+      "active-commit",
+      CommitQueueScopeCommitRow,
+      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
+      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "branch",
+      WorkflowBranchSummary,
+      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
+      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "commit-row",
+      CommitQueueScopeCommitRow,
+      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
+      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "latest-session",
+      CommitQueueScopeSessionSummary,
+      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
+      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "managed-repository-branch",
+      ProjectBranchScopeRepositoryObservation,
+      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
+      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+    >
+  | RetainedProjectionRowRecord<
+      "project-freshness",
+      WorkflowProjectionFreshnessEntry,
+      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
+      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+    >;
+
+export type RetainedWorkflowProjectionRow =
+  | RetainedProjectBranchBoardRow
+  | RetainedBranchCommitQueueRow;
+
+export type RetainedWorkflowProjectionState = {
+  readonly checkpoints: readonly RetainedWorkflowProjectionCheckpoint[];
+  readonly rows: readonly RetainedWorkflowProjectionRow[];
+};
+
 export function createWorkflowProjectionIndex(
   graph: WorkflowProjectionGraphClient,
   options: WorkflowProjectionIndexOptions = {},
@@ -355,6 +447,280 @@ export function createWorkflowProjectionIndex(
   const projectedAt = normalizeProjectedAt(options.projectedAt);
   const state = buildWorkflowProjectionIndexState(graph);
   const projectionCursor = options.projectionCursor ?? buildProjectionCursor(state);
+
+  return createWorkflowProjectionIndexFromState(state, {
+    projectedAt,
+    projectionCursor,
+  });
+}
+
+export function createRetainedWorkflowProjectionState(
+  graph: WorkflowProjectionGraphClient,
+  options: WorkflowProjectionIndexOptions & {
+    readonly sourceCursor: string;
+  },
+): RetainedWorkflowProjectionState {
+  const projectedAt = normalizeProjectedAt(options.projectedAt);
+  const state = buildWorkflowProjectionIndexState(graph);
+  const projectionCursor = options.projectionCursor ?? buildProjectionCursor(state);
+  const rows: RetainedWorkflowProjectionRow[] = [];
+
+  for (const project of state.projectById.values()) {
+    rows.push({
+      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      rowKind: "project",
+      rowKey: project.id,
+      sortKey: project.id,
+      value: project,
+    });
+  }
+  for (const repository of state.repositoryByProjectId.values()) {
+    rows.push({
+      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      rowKind: "repository",
+      rowKey: repository.projectId,
+      sortKey: repository.projectId,
+      value: repository,
+    });
+  }
+  for (const [projectId, freshness] of state.projectFreshnessById.entries()) {
+    rows.push({
+      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      rowKind: "project-freshness",
+      rowKey: projectId,
+      sortKey: projectId,
+      value: freshness,
+    });
+    rows.push({
+      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      rowKind: "project-freshness",
+      rowKey: projectId,
+      sortKey: projectId,
+      value: freshness,
+    });
+  }
+  for (const branch of state.branchById.values()) {
+    rows.push({
+      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      rowKind: "branch",
+      rowKey: branch.id,
+      sortKey: `${branch.projectId}\u0000${branch.id}`,
+      value: branch,
+    });
+    rows.push({
+      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      rowKind: "branch",
+      rowKey: branch.id,
+      sortKey: branch.id,
+      value: branch,
+    });
+  }
+  for (const [branchId, observation] of state.managedRepositoryBranchByBranchId.entries()) {
+    rows.push({
+      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      rowKind: "managed-repository-branch",
+      rowKey: branchId,
+      sortKey: branchId,
+      value: observation,
+    });
+    rows.push({
+      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      rowKind: "managed-repository-branch",
+      rowKey: branchId,
+      sortKey: branchId,
+      value: observation,
+    });
+  }
+  for (const [projectId, observations] of state.unmanagedRepositoryBranchesByProjectId.entries()) {
+    observations.forEach((observation) => {
+      rows.push({
+        projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
+        definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+        rowKind: "unmanaged-repository-branch",
+        rowKey: observation.repositoryBranch.id,
+        sortKey: `${projectId}\u0000${observation.repositoryBranch.branchName}\u0000${observation.repositoryBranch.id}`,
+        value: observation,
+      });
+    });
+  }
+  for (const [branchId, row] of state.activeCommitByBranchId.entries()) {
+    rows.push({
+      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      rowKind: "active-commit",
+      rowKey: branchId,
+      sortKey: branchId,
+      value: row,
+    });
+  }
+  for (const [branchId, rowsForBranch] of state.commitRowsByBranchId.entries()) {
+    rowsForBranch.forEach((row, index) => {
+      rows.push({
+        projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
+        definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+        rowKind: "commit-row",
+        rowKey: row.workflowCommit.id,
+        sortKey: `${branchId}\u0000${index.toString().padStart(8, "0")}\u0000${row.workflowCommit.id}`,
+        value: row,
+      });
+    });
+  }
+  for (const [branchId, session] of state.latestSessionByBranchId.entries()) {
+    rows.push({
+      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      rowKind: "latest-session",
+      rowKey: branchId,
+      sortKey: branchId,
+      value: session,
+    });
+  }
+
+  return {
+    checkpoints: [
+      {
+        projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
+        definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+        projectedAt,
+        projectionCursor,
+        sourceCursor: options.sourceCursor,
+      },
+      {
+        projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
+        definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+        projectedAt,
+        projectionCursor,
+        sourceCursor: options.sourceCursor,
+      },
+    ],
+    rows,
+  };
+}
+
+export function createWorkflowProjectionIndexFromRetainedState(
+  retained: RetainedWorkflowProjectionState,
+): WorkflowProjectionIndex {
+  const projectBranchBoardCheckpoint = requireRetainedWorkflowProjectionCheckpoint(
+    retained,
+    workflowProjectionMetadata.projectBranchBoard.projectionId,
+    workflowProjectionMetadata.projectBranchBoard.definitionHash,
+  );
+  const branchCommitQueueCheckpoint = requireRetainedWorkflowProjectionCheckpoint(
+    retained,
+    workflowProjectionMetadata.branchCommitQueue.projectionId,
+    workflowProjectionMetadata.branchCommitQueue.definitionHash,
+  );
+
+  if (
+    projectBranchBoardCheckpoint.projectedAt !== branchCommitQueueCheckpoint.projectedAt ||
+    projectBranchBoardCheckpoint.projectionCursor !== branchCommitQueueCheckpoint.projectionCursor
+  ) {
+    throw new Error("Retained workflow projection checkpoints must share one projected state.");
+  }
+
+  const projectById = new Map<string, WorkflowProjectSummary>();
+  const repositoryByProjectId = new Map<string, WorkflowRepositorySummary>();
+  const branchById = new Map<string, WorkflowBranchSummary>();
+  const managedRepositoryBranchByBranchId = new Map<
+    string,
+    ProjectBranchScopeRepositoryObservation
+  >();
+  const projectFreshnessById = new Map<string, WorkflowProjectionFreshnessEntry>();
+  const unmanagedRepositoryBranchesByProjectId = new Map<
+    string,
+    ProjectBranchScopeRepositoryObservation[]
+  >();
+  const activeCommitByBranchId = new Map<string, CommitQueueScopeCommitRow>();
+  const commitRowsByBranchId = new Map<string, CommitQueueScopeCommitRow[]>();
+  const latestSessionByBranchId = new Map<string, CommitQueueScopeSessionSummary>();
+
+  for (const row of retained.rows) {
+    switch (row.rowKind) {
+      case "project":
+        projectById.set(row.value.id, row.value);
+        break;
+      case "repository":
+        repositoryByProjectId.set(row.value.projectId, row.value);
+        break;
+      case "branch":
+        branchById.set(row.value.id, row.value);
+        break;
+      case "managed-repository-branch":
+        managedRepositoryBranchByBranchId.set(row.rowKey, row.value);
+        break;
+      case "project-freshness":
+        projectFreshnessById.set(row.rowKey, row.value);
+        break;
+      case "unmanaged-repository-branch": {
+        const projectId = row.value.repositoryBranch.projectId;
+        const existing = unmanagedRepositoryBranchesByProjectId.get(projectId) ?? [];
+        existing.push(row.value);
+        unmanagedRepositoryBranchesByProjectId.set(projectId, existing);
+        break;
+      }
+      case "active-commit":
+        activeCommitByBranchId.set(row.rowKey, row.value);
+        break;
+      case "commit-row": {
+        const branchId = row.value.workflowCommit.branchId;
+        const existing = commitRowsByBranchId.get(branchId) ?? [];
+        existing.push(row.value);
+        commitRowsByBranchId.set(branchId, existing);
+        break;
+      }
+      case "latest-session":
+        latestSessionByBranchId.set(row.rowKey, row.value);
+        break;
+    }
+  }
+
+  const branchesByProjectId = groupBy([...branchById.values()], (branch) => branch.projectId);
+  for (const [projectId, observations] of unmanagedRepositoryBranchesByProjectId.entries()) {
+    unmanagedRepositoryBranchesByProjectId.set(
+      projectId,
+      [...observations].sort(compareRepositoryObservations),
+    );
+  }
+  for (const [branchId, rowsForBranch] of commitRowsByBranchId.entries()) {
+    commitRowsByBranchId.set(branchId, [...rowsForBranch].sort(compareCommitQueueRows));
+  }
+
+  return createWorkflowProjectionIndexFromState(
+    {
+      activeCommitByBranchId,
+      branchById,
+      branchesByProjectId,
+      commitRowsByBranchId,
+      latestSessionByBranchId,
+      managedRepositoryBranchByBranchId,
+      projectById,
+      projectFreshnessById,
+      repositoryByProjectId,
+      unmanagedRepositoryBranchesByProjectId,
+    },
+    {
+      projectedAt: projectBranchBoardCheckpoint.projectedAt,
+      projectionCursor: projectBranchBoardCheckpoint.projectionCursor,
+    },
+  );
+}
+
+function createWorkflowProjectionIndexFromState(
+  state: WorkflowProjectionIndexState,
+  options: {
+    readonly projectedAt: string;
+    readonly projectionCursor: string;
+  },
+): WorkflowProjectionIndex {
+  const { projectedAt, projectionCursor } = options;
 
   function readProjectBranchScope(query: ProjectBranchScopeQuery): ProjectBranchScopeResult {
     const project = state.projectById.get(query.projectId);
@@ -456,6 +822,30 @@ export function createWorkflowProjectionIndex(
     readProjectBranchScope,
     readCommitQueueScope,
   };
+}
+
+function requireRetainedWorkflowProjectionCheckpoint(
+  retained: RetainedWorkflowProjectionState,
+  projectionId: string,
+  definitionHash: string,
+): RetainedWorkflowProjectionCheckpoint {
+  const result = findRetainedProjectionRecord(retained.checkpoints, {
+    projectionId,
+    definitionHash,
+  });
+  if (result.kind === "match") {
+    return result.record;
+  }
+
+  if (result.kind === "definition-hash-mismatch") {
+    throw new Error(
+      `Retained workflow projection checkpoint for "${projectionId}" is incompatible. Expected definitionHash "${definitionHash}" but found ${result.actualDefinitionHashes.join(", ")}.`,
+    );
+  }
+
+  throw new Error(
+    `Missing retained workflow projection checkpoint for "${projectionId}" at "${definitionHash}".`,
+  );
 }
 
 function buildWorkflowProjectionIndexState(

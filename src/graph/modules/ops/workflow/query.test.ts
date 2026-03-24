@@ -5,7 +5,9 @@ import { bootstrap, createStore, createTypeClient } from "@io/core/graph";
 import { core } from "../../core.js";
 import { ops } from "../../ops.js";
 import {
+  createRetainedWorkflowProjectionState,
   createWorkflowProjectionIndex,
+  createWorkflowProjectionIndexFromRetainedState,
   WorkflowProjectionQueryError,
   workflowProjectionMetadata,
 } from "./schema.js";
@@ -561,5 +563,80 @@ describe("workflow projection query helpers", () => {
     });
 
     expect(refreshedBranchPage.rows[0]?.workflowBranch.id).toBe(ids.activeBranchId);
+  });
+
+  it("round-trips retained workflow projection rows and checkpoints", () => {
+    const { graph, ids } = createWorkflowQueryFixture();
+    const retained = createRetainedWorkflowProjectionState(graph, {
+      sourceCursor: "web-authority:42",
+      projectedAt: "2026-01-10T00:00:00.000Z",
+      projectionCursor: "workflow-projection:retained-01",
+    });
+    const hydrated = createWorkflowProjectionIndexFromRetainedState(retained);
+
+    expect(retained.checkpoints).toEqual([
+      expect.objectContaining({
+        projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
+        definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+        sourceCursor: "web-authority:42",
+        projectedAt: "2026-01-10T00:00:00.000Z",
+        projectionCursor: "workflow-projection:retained-01",
+      }),
+      expect.objectContaining({
+        projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
+        definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+        sourceCursor: "web-authority:42",
+        projectedAt: "2026-01-10T00:00:00.000Z",
+        projectionCursor: "workflow-projection:retained-01",
+      }),
+    ]);
+
+    const branchBoard = hydrated.readProjectBranchScope({
+      projectId: ids.projectId,
+      filter: {
+        showUnmanagedRepositoryBranches: true,
+      },
+      limit: 2,
+    });
+    const commitQueue = hydrated.readCommitQueueScope({
+      branchId: ids.activeBranchId,
+      limit: 2,
+    });
+
+    expect(branchBoard.rows.map((row) => row.workflowBranch.id)).toEqual([
+      ids.activeBranchId,
+      ids.backlogBranchId,
+    ]);
+    expect(branchBoard.freshness.projectionCursor).toBe("workflow-projection:retained-01");
+    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
+      ids.commit1Id,
+      ids.commit2Id,
+    ]);
+    expect(commitQueue.branch.latestSession?.id).toBe(ids.branchCommitSessionId);
+  });
+
+  it("fails explicitly when retained projection metadata has an incompatible definitionHash", () => {
+    const { graph } = createWorkflowQueryFixture();
+    const retained = createRetainedWorkflowProjectionState(graph, {
+      sourceCursor: "web-authority:42",
+      projectedAt: "2026-01-10T00:00:00.000Z",
+      projectionCursor: "workflow-projection:retained-01",
+    });
+
+    expect(() =>
+      createWorkflowProjectionIndexFromRetainedState({
+        ...retained,
+        checkpoints: retained.checkpoints.map((checkpoint) =>
+          checkpoint.projectionId === workflowProjectionMetadata.branchCommitQueue.projectionId
+            ? {
+                ...checkpoint,
+                definitionHash: "projection-def:ops/workflow:branch-commit-queue:v999",
+              }
+            : checkpoint,
+        ),
+      }),
+    ).toThrow(
+      'Retained workflow projection checkpoint for "ops/workflow:branch-commit-queue" is incompatible. Expected definitionHash "projection-def:ops/workflow:branch-commit-queue:v1" but found projection-def:ops/workflow:branch-commit-queue:v999.',
+    );
   });
 });

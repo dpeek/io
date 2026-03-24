@@ -53,19 +53,21 @@ import {
   agentSession,
   compileWorkflowReviewScopeDependencyKeys,
   createWorkflowReviewInvalidationEvent,
+  createWorkflowProjectionIndexFromRetainedState,
   repositoryBranch,
   repositoryCommit,
   workflowBranch,
   workflowCommit,
   workflowProject,
   workflowRepository,
-  createWorkflowProjectionIndex,
+  createRetainedWorkflowProjectionState,
   type CommitQueueScopeFailureCode,
   type CommitQueueScopeQuery,
   type CommitQueueScopeResult,
   type ProjectBranchScopeFailureCode,
   type ProjectBranchScopeQuery,
   type ProjectBranchScopeResult,
+  type RetainedWorkflowProjectionState,
   WorkflowProjectionQueryError,
   workflowSchema,
   workflowReviewModuleReadScope,
@@ -239,6 +241,10 @@ type WebAuthorityMutationStageContext = {
  */
 export interface WebAppAuthorityStorage {
   load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null>;
+  loadWorkflowProjection(): Promise<RetainedWorkflowProjectionState | null>;
+  replaceWorkflowProjection(
+    workflowProjection: RetainedWorkflowProjectionState | null,
+  ): Promise<void>;
   inspectSecrets(): Promise<Record<string, WebAppAuthoritySecretInventoryRecord>>;
   /**
    * Load the currently live authority-only plaintext rows needed for the
@@ -252,9 +258,15 @@ export interface WebAppAuthorityStorage {
     input: PersistedAuthoritativeGraphStorageCommitInput,
     options?: {
       readonly secretWrite?: WebAppAuthoritySecretWrite;
+      readonly workflowProjection?: RetainedWorkflowProjectionState;
     },
   ): Promise<void>;
-  persist(input: PersistedAuthoritativeGraphStoragePersistInput): Promise<void>;
+  persist(
+    input: PersistedAuthoritativeGraphStoragePersistInput,
+    options?: {
+      readonly workflowProjection?: RetainedWorkflowProjectionState;
+    },
+  ): Promise<void>;
 }
 
 type WebAppAuthoritySyncFreshness = NonNullable<
@@ -333,6 +345,7 @@ export type WebAppAuthority = Omit<
     command: Command,
     options: WebAppAuthorityCommandOptions,
   ): Promise<WebAppAuthorityCommandResult<Command["kind"]>>;
+  rebuildRetainedWorkflowProjection(): Promise<void>;
   writeSecretField(
     input: WriteSecretFieldInput,
     options: WebAppAuthoritySecretFieldOptions,
@@ -531,6 +544,49 @@ function createAuthorityCursorPrefix(): string {
 
 function clonePersistedValue<T>(value: T): T {
   return structuredClone(value);
+}
+
+function headCursor(
+  writeHistory: PersistedAuthoritativeGraphStoragePersistInput["writeHistory"],
+): string {
+  return (
+    writeHistory.results.at(-1)?.cursor ??
+    `${writeHistory.cursorPrefix}${writeHistory.baseSequence}`
+  );
+}
+
+function buildRetainedWorkflowProjectionState(
+  snapshot: StoreSnapshot,
+  sourceCursor: string,
+): RetainedWorkflowProjectionState {
+  const projectionStore = createStore(snapshot);
+  return createRetainedWorkflowProjectionState(createTypeClient(projectionStore, workflowSchema), {
+    sourceCursor,
+  });
+}
+
+function sameRetainedWorkflowProjectionState(
+  left: RetainedWorkflowProjectionState,
+  right: RetainedWorkflowProjectionState,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function classifyRetainedWorkflowProjectionRecovery(
+  retained: RetainedWorkflowProjectionState | null,
+  authoritative: RetainedWorkflowProjectionState,
+): "missing" | "incompatible" | "stale" | null {
+  if (!retained) {
+    return "missing";
+  }
+
+  try {
+    createWorkflowProjectionIndexFromRetainedState(retained);
+  } catch {
+    return "incompatible";
+  }
+
+  return sameRetainedWorkflowProjectionState(retained, authoritative) ? null : "stale";
 }
 
 function trimOptionalString(value: string | undefined): string | undefined {
@@ -2662,6 +2718,7 @@ export async function applyStagedWebAuthorityMutation<TResult>(input: {
 function createAuthorityStorage(
   storage: WebAppAuthorityStorage,
   pendingSecretWriteRef: { current: WebAppAuthoritySecretWrite | null },
+  retainedWorkflowProjectionRef: { current: RetainedWorkflowProjectionState | null },
   preloadedPersistedState: PersistedAuthoritativeGraphStorageLoadResult | null,
 ): PersistedAuthoritativeGraphStorage {
   // This adapter is the explicit boundary between the stable graph/runtime
@@ -2701,15 +2758,30 @@ function createAuthorityStorage(
       const secretWrite = pendingSecretWriteRef.current
         ? clonePersistedValue(pendingSecretWriteRef.current)
         : undefined;
+      const workflowProjection = buildRetainedWorkflowProjectionState(
+        input.snapshot,
+        headCursor(input.writeHistory),
+      );
 
       try {
-        await storage.commit(clonePersistedValue(input), secretWrite ? { secretWrite } : undefined);
+        await storage.commit(clonePersistedValue(input), {
+          ...(secretWrite ? { secretWrite } : {}),
+          workflowProjection,
+        });
+        retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
       } finally {
         pendingSecretWriteRef.current = null;
       }
     },
     async persist(input): Promise<void> {
-      await storage.persist(clonePersistedValue(input));
+      const workflowProjection = buildRetainedWorkflowProjectionState(
+        input.snapshot,
+        headCursor(input.writeHistory),
+      );
+      await storage.persist(clonePersistedValue(input), {
+        workflowProjection,
+      });
+      retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
     },
   };
 }
@@ -2720,6 +2792,9 @@ export async function createWebAppAuthority(
 ): Promise<WebAppAuthority> {
   const graph = options.graph ?? webAppGraph;
   const persistedState = await storage.load();
+  const persistedWorkflowProjection = persistedState
+    ? await storage.loadWorkflowProjection()
+    : null;
   const { bootstrappedSnapshot, compiledFieldIndex, scalarByKey, typeByKey } =
     getCompiledGraphArtifacts(graph);
   const store = createStore(bootstrappedSnapshot);
@@ -2760,8 +2835,18 @@ export async function createWebAppAuthority(
   const pendingSecretWriteRef = {
     current: null as WebAppAuthoritySecretWrite | null,
   };
+  const retainedWorkflowProjectionRef = {
+    current: persistedWorkflowProjection
+      ? clonePersistedValue(persistedWorkflowProjection)
+      : (null as RetainedWorkflowProjectionState | null),
+  };
   const authority = await createPersistedAuthoritativeGraph(store, graph, {
-    storage: createAuthorityStorage(storage, pendingSecretWriteRef, persistedState),
+    storage: createAuthorityStorage(
+      storage,
+      pendingSecretWriteRef,
+      retainedWorkflowProjectionRef,
+      persistedState,
+    ),
     seed() {
       if (options.seedExampleGraph !== false) {
         seedExampleGraph(createTypeClient(store, webAppGraph));
@@ -2787,6 +2872,34 @@ export async function createWebAppAuthority(
   // `homeGraphId`. Repair them before any sync or direct graph reads materialize
   // those entities through the typed client.
   await repairLegacyPrincipalHomeGraphIds(authority);
+
+  async function replaceRetainedWorkflowProjection(
+    workflowProjection: RetainedWorkflowProjectionState,
+  ): Promise<void> {
+    await storage.replaceWorkflowProjection(clonePersistedValue(workflowProjection));
+    retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
+  }
+
+  async function rebuildRetainedWorkflowProjection(): Promise<void> {
+    const workflowProjection = buildRetainedWorkflowProjectionState(
+      authority.store.snapshot(),
+      authority.createSyncPayload().cursor,
+    );
+    await replaceRetainedWorkflowProjection(workflowProjection);
+  }
+
+  const recoveredWorkflowProjection = buildRetainedWorkflowProjectionState(
+    authority.store.snapshot(),
+    authority.createSyncPayload().cursor,
+  );
+  if (
+    classifyRetainedWorkflowProjectionRecovery(
+      retainedWorkflowProjectionRef.current,
+      recoveredWorkflowProjection,
+    )
+  ) {
+    await replaceRetainedWorkflowProjection(recoveredWorkflowProjection);
+  }
 
   function readSnapshot(options: WebAppAuthorityReadOptions): StoreSnapshot {
     return filterReadableSnapshot(
@@ -2841,7 +2954,23 @@ export async function createWebAppAuthority(
 
   function createAuthorizedWorkflowProjection(authorization: AuthorizationContext) {
     assertWorkflowProjectionReadable(authority.store, authorization, compiledFieldIndex);
-    return createWorkflowProjectionIndex(createTypeClient(authority.store, workflowSchema));
+    if (retainedWorkflowProjectionRef.current) {
+      try {
+        return createWorkflowProjectionIndexFromRetainedState(
+          retainedWorkflowProjectionRef.current,
+        );
+      } catch {
+        retainedWorkflowProjectionRef.current = null;
+      }
+    }
+
+    const workflowProjection = buildRetainedWorkflowProjectionState(
+      authority.store.snapshot(),
+      authority.createSyncPayload().cursor,
+    );
+    retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
+    void replaceRetainedWorkflowProjection(workflowProjection).catch(() => {});
+    return createWorkflowProjectionIndexFromRetainedState(workflowProjection);
   }
 
   function readProjectBranchScope(
@@ -3387,6 +3516,7 @@ export async function createWebAppAuthority(
     readPredicateValue,
     readProjectBranchScope,
     readSnapshot,
+    rebuildRetainedWorkflowProjection,
     writeSecretField,
   };
 }

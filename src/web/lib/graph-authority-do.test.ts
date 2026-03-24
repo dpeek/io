@@ -23,6 +23,7 @@ import {
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
+  workflowProjectionMetadata,
   workflowReviewModuleReadScope,
   workflowReviewSyncScopeRequest,
 } from "@io/core/graph/modules/ops/workflow";
@@ -253,6 +254,23 @@ type SecretValueRow = {
   stored_at?: string;
   value: string;
   version: number;
+};
+
+type WorkflowProjectionCheckpointRow = {
+  definition_hash: string;
+  projected_at: string;
+  projection_cursor: string;
+  projection_id: string;
+  source_cursor: string;
+};
+
+type WorkflowProjectionRow = {
+  definition_hash: string;
+  payload_json: string;
+  projection_id: string;
+  row_key: string;
+  row_kind: string;
+  sort_key: string;
 };
 
 type SyncPayload = {
@@ -1348,6 +1366,215 @@ describe("web graph authority durable object", () => {
     });
   });
 
+  it("persists workflow projection rows and checkpoints across durable object restarts", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const fixture = await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+
+    await authority.executeCommand(
+      {
+        kind: "workflow-mutation",
+        input: {
+          action: "createCommit",
+          branchId: fixture.branchId,
+          title: "Persist retained workflow rows",
+          commitKey: "commit:persist-retained-workflow-rows",
+          order: 0,
+          state: "ready",
+        },
+      },
+      {
+        authorization: testAuthorityAuthorization,
+      },
+    );
+
+    const checkpoints = queryAll<WorkflowProjectionCheckpointRow>(
+      db,
+      `SELECT projection_id, definition_hash, source_cursor, projection_cursor, projected_at
+      FROM io_workflow_projection_checkpoint
+      ORDER BY projection_id ASC`,
+    );
+    const rows = queryAll<WorkflowProjectionRow>(
+      db,
+      `SELECT projection_id, definition_hash, row_kind, row_key, sort_key, payload_json
+      FROM io_workflow_projection_row
+      ORDER BY projection_id ASC, row_kind ASC, sort_key ASC`,
+    );
+    const restarted = createTestDurableObject(state);
+    const restartedRead = await postWorkflowRead(restarted, {
+      kind: "commit-queue-scope",
+      query: {
+        branchId: fixture.branchId,
+        limit: 5,
+      },
+    });
+
+    expect(checkpoints).toEqual([
+      {
+        projection_id: "ops/workflow:branch-commit-queue",
+        definition_hash: "projection-def:ops/workflow:branch-commit-queue:v1",
+        source_cursor: checkpoints[0]?.source_cursor ?? "",
+        projection_cursor: checkpoints[0]?.projection_cursor ?? "",
+        projected_at: checkpoints[0]?.projected_at ?? "",
+      },
+      {
+        projection_id: "ops/workflow:project-branch-board",
+        definition_hash: "projection-def:ops/workflow:project-branch-board:v1",
+        source_cursor: checkpoints[1]?.source_cursor ?? "",
+        projection_cursor: checkpoints[1]?.projection_cursor ?? "",
+        projected_at: checkpoints[1]?.projected_at ?? "",
+      },
+    ]);
+    expect(checkpoints[0]?.source_cursor).toEqual(expect.any(String));
+    expect(checkpoints[0]?.projection_cursor).toEqual(expect.any(String));
+    expect(checkpoints[0]?.projected_at).toEqual(expect.any(String));
+    expect(checkpoints[0]?.source_cursor).toBe(checkpoints[1]?.source_cursor);
+    expect(checkpoints[0]?.projection_cursor).toBe(checkpoints[1]?.projection_cursor);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          projection_id: "ops/workflow:project-branch-board",
+          definition_hash: "projection-def:ops/workflow:project-branch-board:v1",
+          row_kind: "project",
+          row_key: fixture.projectId,
+        }),
+        expect.objectContaining({
+          projection_id: "ops/workflow:branch-commit-queue",
+          definition_hash: "projection-def:ops/workflow:branch-commit-queue:v1",
+          row_kind: "commit-row",
+        }),
+      ]),
+    );
+    expect(restartedRead.response.status).toBe(200);
+    expect(restartedRead.payload).toMatchObject({
+      kind: "commit-queue-scope",
+      result: {
+        branch: {
+          workflowBranch: {
+            id: fixture.branchId,
+          },
+        },
+        rows: [
+          {
+            workflowCommit: {
+              commitKey: "commit:persist-retained-workflow-rows",
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it("fails closed with projection-stale after restart rebuild invalidates a retained pagination cursor", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    let authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const fixture = await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+
+    await authority.executeCommand(
+      {
+        kind: "workflow-mutation",
+        input: {
+          action: "createCommit",
+          branchId: fixture.branchId,
+          title: "Retained cursor baseline",
+          commitKey: "commit:retained-cursor-baseline",
+          order: 0,
+          state: "ready",
+        },
+      },
+      {
+        authorization: testAuthorityAuthorization,
+      },
+    );
+    await authority.executeCommand(
+      {
+        kind: "workflow-mutation",
+        input: {
+          action: "createCommit",
+          branchId: fixture.branchId,
+          title: "Retained cursor page 2",
+          commitKey: "commit:retained-cursor-page-2",
+          order: 1,
+          state: "ready",
+        },
+      },
+      {
+        authorization: testAuthorityAuthorization,
+      },
+    );
+
+    const initialPage = await postWorkflowRead(durableObject, {
+      kind: "commit-queue-scope",
+      query: {
+        branchId: fixture.branchId,
+        limit: 1,
+      },
+    });
+    expect(initialPage.response.status).toBe(200);
+    if (!("result" in initialPage.payload) || !initialPage.payload.result.nextCursor) {
+      throw new Error("Expected a retained workflow pagination cursor before restart.");
+    }
+
+    db.exec(
+      `UPDATE io_workflow_projection_checkpoint
+      SET definition_hash = 'projection-def:ops/workflow:branch-commit-queue:v999'
+      WHERE projection_id = ?`,
+      [workflowProjectionMetadata.branchCommitQueue.projectionId],
+    );
+
+    const restarted = createTestDurableObject(state);
+    authority = await getDurableAuthority<WebAppAuthority>(restarted);
+    await authority.executeCommand(
+      {
+        kind: "workflow-mutation",
+        input: {
+          action: "createCommit",
+          branchId: fixture.branchId,
+          title: "Retained cursor invalidated after rebuild",
+          commitKey: "commit:retained-cursor-invalidated-after-rebuild",
+          order: 2,
+          state: "ready",
+        },
+      },
+      {
+        authorization: testAuthorityAuthorization,
+      },
+    );
+
+    const staleRead = await postWorkflowRead(restarted, {
+      kind: "commit-queue-scope",
+      query: {
+        branchId: fixture.branchId,
+        cursor: initialPage.payload.result.nextCursor,
+        limit: 1,
+      },
+    });
+
+    expect(staleRead.response.status).toBe(409);
+    expect(staleRead.payload).toEqual({
+      code: "projection-stale",
+      error: expect.stringContaining("is stale for the current workflow projection."),
+    });
+
+    const refreshed = await postWorkflowRead(restarted, {
+      kind: "commit-queue-scope",
+      query: {
+        branchId: fixture.branchId,
+        limit: 3,
+      },
+    });
+
+    expect(refreshed.response.status).toBe(200);
+    if (!("kind" in refreshed.payload) || refreshed.payload.kind !== "commit-queue-scope") {
+      throw new Error("Expected a workflow read result after durable restart recovery.");
+    }
+    expect(refreshed.payload.result.rows.map((row) => row.workflowCommit.commitKey)).toContain(
+      "commit:retained-cursor-invalidated-after-rebuild",
+    );
+  });
+
   it("registers and removes workflow review live scope interest over the durable workflow live route", async () => {
     const { state } = createSqliteDurableObjectState();
     const durableObject = createTestDurableObject(state);
@@ -2226,7 +2453,9 @@ describe("web graph authority durable object", () => {
       db,
       `SELECT type, name
       FROM sqlite_master
-      WHERE name LIKE 'io_graph_%' OR name = 'io_secret_value'
+      WHERE name LIKE 'io_graph_%'
+        OR name LIKE 'io_workflow_projection_%'
+        OR name = 'io_secret_value'
       ORDER BY type ASC, name ASC`,
     );
 
@@ -2237,9 +2466,13 @@ describe("web graph authority durable object", () => {
         { type: "table", name: "io_graph_tx_op" },
         { type: "table", name: "io_graph_edge" },
         { type: "table", name: "io_secret_value" },
+        { type: "table", name: "io_workflow_projection_checkpoint" },
+        { type: "table", name: "io_workflow_projection_row" },
         { type: "index", name: "io_graph_edge_subject_predicate_idx" },
         { type: "index", name: "io_graph_edge_predicate_object_idx" },
         { type: "index", name: "io_graph_edge_retracted_tx_seq_idx" },
+        { type: "index", name: "io_workflow_projection_checkpoint_source_cursor_idx" },
+        { type: "index", name: "io_workflow_projection_row_lookup_idx" },
       ]),
     );
   });
@@ -3554,6 +3787,12 @@ describe("web graph authority durable object", () => {
               load() {
                 return storage.load();
               },
+              loadWorkflowProjection() {
+                return storage.loadWorkflowProjection();
+              },
+              replaceWorkflowProjection(workflowProjection) {
+                return storage.replaceWorkflowProjection(workflowProjection);
+              },
               inspectSecrets() {
                 return storage.inspectSecrets();
               },
@@ -3567,8 +3806,8 @@ describe("web graph authority durable object", () => {
               commit(input, commitOptions) {
                 return storage.commit(input, commitOptions);
               },
-              persist(input) {
-                return storage.persist(input);
+              persist(input, persistOptions) {
+                return storage.persist(input, persistOptions);
               },
             },
             options,

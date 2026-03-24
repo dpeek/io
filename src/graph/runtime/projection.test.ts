@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   type DependencyKey,
+  findRetainedProjectionRecord,
   createDependencyKey,
   createModuleReadScope,
   createModuleReadScopeRequest,
@@ -11,6 +12,7 @@ import {
   defineInvalidationEvent,
   defineProjectionCatalog,
   defineProjectionSpec,
+  isRetainedProjectionMetadataCompatible,
   isDependencyKey,
   isInvalidationEventCompatibleWithTarget,
   matchesModuleReadScope,
@@ -173,5 +175,48 @@ describe("projection runtime contracts", () => {
     ).toThrow(
       'affectedScopeIds must include delivery.scopeId when delivery.kind is "scoped-delta".',
     );
+  });
+
+  it("detects retained projection definitionHash compatibility explicitly", () => {
+    const records = [
+      {
+        projectionId: "ops/workflow:project-branch-board",
+        definitionHash: "projection-def:ops/workflow:project-branch-board:v1",
+      },
+      {
+        projectionId: "ops/workflow:branch-commit-queue",
+        definitionHash: "projection-def:ops/workflow:branch-commit-queue:v2",
+      },
+    ] as const;
+
+    expect(
+      isRetainedProjectionMetadataCompatible(records[0], {
+        projectionId: "ops/workflow:project-branch-board",
+        definitionHash: "projection-def:ops/workflow:project-branch-board:v1",
+      }),
+    ).toBe(true);
+
+    expect(
+      findRetainedProjectionRecord(records, {
+        projectionId: "ops/workflow:branch-commit-queue",
+        definitionHash: "projection-def:ops/workflow:branch-commit-queue:v1",
+      }),
+    ).toEqual({
+      kind: "definition-hash-mismatch",
+      projectionId: "ops/workflow:branch-commit-queue",
+      expectedDefinitionHash: "projection-def:ops/workflow:branch-commit-queue:v1",
+      actualDefinitionHashes: ["projection-def:ops/workflow:branch-commit-queue:v2"],
+    });
+
+    expect(
+      findRetainedProjectionRecord(records, {
+        projectionId: "ops/workflow:missing",
+        definitionHash: "projection-def:ops/workflow:missing:v1",
+      }),
+    ).toEqual({
+      kind: "missing",
+      projectionId: "ops/workflow:missing",
+      expectedDefinitionHash: "projection-def:ops/workflow:missing:v1",
+    });
   });
 });
