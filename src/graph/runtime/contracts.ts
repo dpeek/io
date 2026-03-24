@@ -120,6 +120,58 @@ export type AuthorizeCommandInput = {
   readonly writeScope?: PredicatePolicyDescriptor["requiredWriteScope"];
 };
 
+/**
+ * Stable manifest-facing permission identifier. Module approval, grant,
+ * revocation, and install-plan surfaces all key off this value.
+ */
+export type ModulePermissionKey = string;
+
+type ModulePermissionRequestBase = {
+  readonly key: ModulePermissionKey;
+  readonly reason: string;
+  readonly required: boolean;
+};
+
+/**
+ * Canonical install-time module permission request surface shared across
+ * manifest loading, planning, and Branch 2 authorization lowering.
+ */
+export type ModulePermissionRequest =
+  | (ModulePermissionRequestBase & {
+      readonly kind: "predicate-read";
+      readonly predicateIds: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "predicate-write";
+      readonly predicateIds: readonly string[];
+      readonly writeScope: PredicatePolicyDescriptor["requiredWriteScope"];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "command-execute";
+      readonly commandKeys: readonly string[];
+      readonly touchesPredicates?: readonly PredicatePolicyDescriptor["predicateId"][];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "secret-use";
+      readonly capabilityKeys: readonly PolicyCapabilityKey[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "share-admin";
+      readonly surfaceIds?: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "external-service";
+      readonly serviceKeys: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "background-job";
+      readonly jobKeys: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "blob-class";
+      readonly blobClassKeys: readonly string[];
+    });
+
 export type ObjectViewFieldSpec = {
   readonly path: string;
   readonly label?: string;

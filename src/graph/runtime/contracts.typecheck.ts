@@ -6,6 +6,7 @@ import type {
   GraphCommandPolicy as GraphCommandPolicyFromRoot,
   GraphCommandSpec as GraphCommandSpecFromRoot,
   GraphCommandTouchedPredicate as GraphCommandTouchedPredicateFromRoot,
+  ModulePermissionRequest as ModulePermissionRequestFromRoot,
   ObjectViewSpec as ObjectViewSpecFromRoot,
   PolicyVersion as PolicyVersionFromRoot,
   PrincipalKind as PrincipalKindFromRoot,
@@ -20,6 +21,7 @@ import type {
   GraphCommandPolicy,
   GraphCommandSpec,
   GraphCommandTouchedPredicate,
+  ModulePermissionRequest,
   ObjectViewSpec,
   PolicyVersion,
   PrincipalKind,
@@ -108,10 +110,38 @@ const saveTopicCommand = {
   },
 } satisfies GraphCommandSpec<{ title: string }, { topicId: string }>;
 
+const readTopicPermission = {
+  key: "pkm.topic.read.summary",
+  kind: "predicate-read",
+  predicateIds: ["pkm:topic.name", topicContentPolicy.predicateId],
+  reason: "Read topic summary data during install-planned views.",
+  required: true,
+} satisfies ModulePermissionRequest;
+
+const saveTopicPermission = {
+  key: "pkm.topic.command.save",
+  kind: "command-execute",
+  commandKeys: [saveTopicCommand.key],
+  touchesPredicates: [topicNameTouch.predicateId, topicContentTouch.predicateId],
+  reason: "Execute the topic save command from a module workflow.",
+  required: true,
+} satisfies ModulePermissionRequest;
+
+const blobPreviewPermission = {
+  key: "pkm.topic.blob.preview",
+  kind: "blob-class",
+  blobClassKeys: ["preview-image"],
+  reason: "Access derived blob previews for topic cards.",
+  required: false,
+} satisfies ModulePermissionRequest;
+
 const rootObjectView: ObjectViewSpecFromRoot = topicSummaryView;
 const rootWorkflow: WorkflowSpecFromRoot = topicReviewWorkflow;
 const rootCommand: GraphCommandSpecFromRoot<{ title: string }, { topicId: string }> =
   saveTopicCommand;
+const rootReadPermission: ModulePermissionRequestFromRoot = readTopicPermission;
+const rootSavePermission: ModulePermissionRequestFromRoot = saveTopicPermission;
+const rootBlobPermission: ModulePermissionRequestFromRoot = blobPreviewPermission;
 
 const authSubject = {
   issuer: "better-auth",
@@ -151,10 +181,16 @@ const runtimePredicatePolicy: PredicatePolicyDescriptor = rootPredicatePolicy;
 const runtimeCommandPolicy: GraphCommandPolicy = rootCommandPolicy;
 const runtimeTouchedPredicate: GraphCommandTouchedPredicate = rootTouchedPredicate;
 const runtimePrincipalKind: PrincipalKind = rootPrincipalKind;
+const runtimeReadPermission: ModulePermissionRequest = rootReadPermission;
+const runtimeSavePermission: ModulePermissionRequest = rootSavePermission;
+const runtimeBlobPermission: ModulePermissionRequest = rootBlobPermission;
 
 void rootObjectView;
 void rootWorkflow;
 void rootCommand;
+void rootReadPermission;
+void rootSavePermission;
+void rootBlobPermission;
 void rootAuthSubject;
 void rootAuthenticatedSession;
 void rootAuthorizationContext;
@@ -170,6 +206,9 @@ void runtimePredicatePolicy;
 void runtimeCommandPolicy;
 void runtimeTouchedPredicate;
 void runtimePrincipalKind;
+void runtimeReadPermission;
+void runtimeSavePermission;
+void runtimeBlobPermission;
 
 void ({
   key: "pkm:topic:summary",
@@ -236,6 +275,34 @@ void ({
     },
   ],
 } satisfies GraphCommandPolicy);
+
+void ({
+  key: "pkm.topic.read.summary",
+  kind: "predicate-read",
+  // @ts-expect-error predicate-read permissions must use an array of predicate ids
+  predicateIds: "pkm:topic.name",
+  reason: "Read topic summary data during install-planned views.",
+  required: true,
+} satisfies ModulePermissionRequest);
+
+void ({
+  key: "pkm.topic.write.content",
+  kind: "predicate-write",
+  predicateIds: [topicContentPolicy.predicateId],
+  // @ts-expect-error predicate-write permissions must declare a shared write-scope literal
+  writeScope: "server",
+  reason: "Write topic content through a server command.",
+  required: true,
+} satisfies ModulePermissionRequest);
+
+void ({
+  key: "pkm.topic.jobs.reindex",
+  kind: "background-job",
+  // @ts-expect-error background-job permissions use jobKeys, not serviceKeys
+  serviceKeys: ["queue:reindex"],
+  reason: "Queue topic reindex work.",
+  required: false,
+} satisfies ModulePermissionRequest);
 
 void ({
   graphId: "graph-1",

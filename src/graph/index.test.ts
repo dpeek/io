@@ -6,6 +6,7 @@ import {
   probeAuthenticatedSession,
   probeAuthorizationContext,
   probeContractItem,
+  probeModulePermissionRequests,
   probeContractObjectView,
   probeContractSummaryPolicy,
   probeContractWorkflow,
@@ -306,6 +307,31 @@ describe("@io/core/graph package entry surfaces", () => {
         ],
       },
     });
+    expect(probeModulePermissionRequests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "probe.contract.read.summary",
+          kind: "predicate-read",
+          predicateIds: [probeContractSummaryPolicy.predicateId],
+          required: true,
+        }),
+        expect.objectContaining({
+          key: "probe.contract.command.save",
+          kind: "command-execute",
+          commandKeys: [probeSaveContractItemCommand.key],
+          touchesPredicates: [
+            edgeId(probeContractItem.fields.name),
+            probeContractSummaryPolicy.predicateId,
+          ],
+        }),
+        expect.objectContaining({
+          key: "probe.contract.job.rebuild",
+          kind: "background-job",
+          jobKeys: ["probe.contract.rebuild-index"],
+          required: false,
+        }),
+      ]),
+    );
   });
 
   it("keeps the canonical React runtime and host adapter entries separate", async () => {

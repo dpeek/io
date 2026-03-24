@@ -11,15 +11,15 @@ contracts that live beside graph-owned types.
 `../../src/graph/runtime/type-module.ts` defines the core type-module
 authoring surface. `../../src/graph/runtime/def.ts` re-exports the focused
 authoring subset, and `../../src/graph/runtime/contracts.ts` holds the pure
-shared contracts for authorization snapshots, object views, workflows, and
-command descriptors.
+shared contracts for authorization snapshots, module permission requests,
+object views, workflows, and command descriptors.
 
 Canonical imports:
 
 - `@io/core/graph/def`: focused schema and type-module authoring helpers from
   `../../src/graph/runtime/def.ts`
 - `@io/core/graph`: root runtime surface, including `ObjectViewSpec`,
-  `WorkflowSpec`, and `GraphCommandSpec` from
+  `WorkflowSpec`, `GraphCommandSpec`, and `ModulePermissionRequest` from
   `../../src/graph/runtime/contracts.ts`
 - `@io/core/graph/runtime`: full runtime entry surface from
   `../../src/graph/runtime/index.ts`
@@ -110,6 +110,25 @@ Current fields:
 
 The descriptor belongs in `@io/core/graph`. The authoritative implementation,
 transport wiring, and route ownership still belong in `app`.
+
+## `ModulePermissionRequest`
+
+Use `ModulePermissionRequest` for the canonical manifest-facing install-time
+permission union shared by Branch 2 authorization lowering and Branch 4 module
+planning.
+
+Current fields:
+
+- stable base fields: `key`, `reason`, and `required`
+- graph-policy kinds: `predicate-read`, `predicate-write`,
+  `command-execute`, `secret-use`, and `share-admin`
+- host-expansion placeholders that already occupy the same permission-key
+  space: `external-service`, `background-job`, and `blob-class`
+
+The stable contract is the request union itself plus the `key` space it lowers
+into for approval, grant, and revocation. Installers and UIs may summarize
+these requests, but they should not invent a second incompatible manifest
+shape.
 
 ## Canonical Module Layout
 

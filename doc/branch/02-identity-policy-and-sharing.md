@@ -263,33 +263,49 @@ interface AuthorizationContext {
   policyVersion: number;
 }
 
+type ModulePermissionKey = string;
+
+type ModulePermissionRequestBase = {
+  key: ModulePermissionKey;
+  reason: string;
+  required: boolean;
+};
+
 type ModulePermissionRequest =
-  | {
+  | (ModulePermissionRequestBase & {
       kind: "predicate-read";
       predicateIds: readonly string[];
-      reason: string;
-    }
-  | {
+    })
+  | (ModulePermissionRequestBase & {
       kind: "predicate-write";
       predicateIds: readonly string[];
       writeScope: "client-tx" | "server-command" | "authority-only";
-      reason: string;
-    }
-  | {
+    })
+  | (ModulePermissionRequestBase & {
       kind: "command-execute";
       commandKeys: readonly string[];
-      reason: string;
-    }
-  | {
+      touchesPredicates?: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
       kind: "secret-use";
       capabilityKeys: readonly string[];
-      reason: string;
-    }
-  | {
+    })
+  | (ModulePermissionRequestBase & {
       kind: "share-admin";
       surfaceIds?: readonly string[];
-      reason: string;
-    };
+    })
+  | (ModulePermissionRequestBase & {
+      kind: "external-service";
+      serviceKeys: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      kind: "background-job";
+      jobKeys: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      kind: "blob-class";
+      blobClassKeys: readonly string[];
+    });
 
 interface ShareGrant {
   id: string;
@@ -317,8 +333,9 @@ Entity and concept responsibilities:
   default owner or member rules.
 - `AuthorizationContext` is request-local derived state. It is never accepted
   from the client as authoritative input.
-- `ModulePermissionRequest` is the install-time declaration surface that Branch
-  4 consumes.
+- `ModulePermissionRequest` is the canonical manifest-facing install-time
+  declaration surface. Branch 2 evaluates the union member and records any
+  resulting approval or revocation against the stable `key`.
 - `ShareGrant` is a narrowed sharing wrapper over a capability grant.
 
 Identifier rules:
@@ -388,7 +405,7 @@ interface PolicyError {
 | `authorizeWrite(...)`            | Decide whether a mutation may touch a predicate                                    | write validator, command executor             | policy evaluator                               | `AuthorizationContext`, subject id, predicate id, write scope | allow or deny                         | `policy.write.forbidden`                                                 | `stable`                                                                   |
 | `authorizeCommand(...)`          | Enforce command capability requirements                                            | command executor                              | policy evaluator                               | `AuthorizationContext`, command key, touched predicates       | allow or deny                         | `policy.command.forbidden`                                               | `stable`                                                                   |
 | `CapabilityGrant`                | Durable delegated permission                                                       | share service, install flow, workflow runtime | authority persistence                          | resource, target, constraints                                 | stored grant id                       | `grant.invalid`                                                          | `stable` for principal targets, `provisional` for bearer and graph targets |
-| `ModulePermissionRequest`        | Declared install-time permission request                                           | module manifest loader                        | module installer and policy runtime            | request union                                                 | approval or denial                    | `policy.command.forbidden`, `grant.invalid`                              | `stable`                                                                   |
+| `ModulePermissionRequest`        | Canonical manifest-facing install-time permission request                          | module manifest loader                        | module installer and policy runtime            | stable `key`, `required`, `reason`, and kind-specific target fields | approval or denial keyed by `permissionKey` | `policy.command.forbidden`, `grant.invalid`                              | `stable` for key space plus predicate, command, and secret kinds; `provisional` for `share-admin` details and host-expansion kinds |
 | `ShareGrant`                     | Narrow grant for shareable entity predicate slices                                 | share service, future federation bridge       | authority persistence plus policy runtime      | surface selector, grant target                                | stored share grant id                 | `share.surface_invalid`, `grant.invalid`                                 | `provisional`                                                              |
 
 Contract rules:
@@ -404,6 +421,25 @@ Contract rules:
   existing Branch 1 write-scope check
 - `authorizeCommand(...)` uses command policy plus predicate policy; either may
   deny
+- `ModulePermissionRequest` is published once from
+  `src/graph/runtime/contracts.ts`; Branch 2 does not define a second install
+  request shape
+- `ModulePermissionRequest.key` is the stable permission identifier used for
+  install plans, durable grants, approval UI state, and revocation
+- approval lowers every `ModulePermissionRequest` into the same grant key space
+  by recording `CapabilityResource = { kind: "module-permission",
+  permissionKey: request.key }`; the union member determines what Branch 2
+  evaluates before that grant is issued
+- `predicate-read`, `predicate-write`, `command-execute`, and `secret-use`
+  are the stable Branch 2 authorization-backed kinds
+- `share-admin` already occupies the same `permissionKey` space, but its
+  `surfaceIds` detail remains provisional with the share-surface contract
+- `external-service`, `background-job`, and `blob-class` are provisional
+  manifest kinds that already occupy the same `permissionKey` space, but their
+  detailed approval semantics stay owned by later host and media branches
+- `command-execute.touchesPredicates`, when present, is review metadata that
+  must summarize rather than replace the authoritative
+  `GraphCommandSpec.policy.touchesPredicates` surface
 - authority-owned write and command paths must fail closed with
   `policy.stale_context` when the request-bound `AuthorizationContext` carries
   an older `policyVersion` than the authority currently serves
@@ -541,7 +577,7 @@ Not owned here:
 | ----------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Branch 1: Graph Kernel And Authority      | Branch 2 depends on Branch 1 | stable ids, transaction application, write scopes, sync filtering seams, command dispatch boundary | principal-aware policy evaluation, grant records, policy versions | allow-all principal model for early prototypes                   | write-scope enforcement hook and filtered sync hook              |
 | Branch 3: Sync Query And Projections      | Branch 3 depends on Branch 2 | `AuthorizationContext`, predicate policy, share-surface ids, policy versions                       | principal-scoped visibility semantics for scoped sync             | temporary whole-graph reads filtered by current field visibility | stable deny-by-default read contract and versioned policy filter |
-| Branch 4: Module Runtime And Installation | Branch 4 depends on Branch 2 | `ModulePermissionRequest`, grant creation, command authorization                                   | install-time approval model and durable permission grant shape    | built-in module allowlist                                        | manifest permission keys and revocation rules                    |
+| Branch 4: Module Runtime And Installation | Branch 4 depends on Branch 2 | `ModulePermissionRequest`, grant creation, command authorization                                   | install-time approval model and durable permission grant shape    | built-in module allowlist                                        | manifest permission keys, kind-specific lowering, and revocation rules |
 | Branch 5: Blob Ingestion And Media        | mutual dependency            | secret-use capabilities, command authorization, shareability rules                                 | blob and secret command keys referenced by grants                 | local operator-only secrets                                      | capability names for reveal, rotate, and ingest flows            |
 | Branch 6: Workflow And Agent Runtime      | Branch 6 depends on Branch 2 | agent and service principal kinds, command authorization, share grants                             | durable agent permission model                                    | operator-run workflows under one principal                       | service and agent principal semantics                            |
 | Branch 7: Web And Operator Surfaces       | Branch 7 depends on Branch 2 | auth bridge contract, principal summary, share grant contract                                      | capability-aware UX requirements                                  | developer-only sign-in and single-user mode                      | request context contract and explicit forbidden behavior         |
@@ -800,8 +836,9 @@ Important failure modes:
 - `src/graph/runtime/schema.ts`: keep `GraphFieldAuthority` stable and add the
   principal-aware policy descriptor surface beside it rather than inside route
   code
-- `src/graph/runtime/contracts.ts`: extend command policy contracts so command
-  authorization and touched predicates share one durable vocabulary
+- `src/graph/runtime/contracts.ts`: publish the canonical
+  `ModulePermissionRequest` plus the command-policy vocabulary it lowers
+  through
 - `src/graph/runtime/sync/replication.ts`: add principal-aware filtering on top
   of the existing replication visibility rules
 - `src/web/lib/authority.ts`: introduce request-bound `AuthorizationContext`

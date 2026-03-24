@@ -180,13 +180,49 @@ export interface ModuleCompatibility {
   readonly agentHost?: string;
 }
 
-export interface ModulePermissionRequest {
-  readonly key: string;
-  readonly kind: "capability" | "external-service" | "secret-use" | "background-job" | "blob-class";
+export type ModulePermissionKey = string;
+
+type ModulePermissionRequestBase = {
+  readonly key: ModulePermissionKey;
   readonly reason: string;
   readonly required: boolean;
-  readonly touchesPredicates?: readonly string[];
-}
+};
+
+export type ModulePermissionRequest =
+  | (ModulePermissionRequestBase & {
+      readonly kind: "predicate-read";
+      readonly predicateIds: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "predicate-write";
+      readonly predicateIds: readonly string[];
+      readonly writeScope: "client-tx" | "server-command" | "authority-only";
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "command-execute";
+      readonly commandKeys: readonly string[];
+      readonly touchesPredicates?: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "secret-use";
+      readonly capabilityKeys: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "share-admin";
+      readonly surfaceIds?: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "external-service";
+      readonly serviceKeys: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "background-job";
+      readonly jobKeys: readonly string[];
+    })
+  | (ModulePermissionRequestBase & {
+      readonly kind: "blob-class";
+      readonly blobClassKeys: readonly string[];
+    });
 
 export interface ModuleSetupField {
   readonly key: string;
@@ -208,7 +244,7 @@ export interface ModuleInstallRequest {
   readonly version?: string;
   readonly sourceLocator?: string;
   readonly setup?: Readonly<Record<string, unknown>>;
-  readonly grantKeys?: readonly string[];
+  readonly grantKeys?: readonly ModulePermissionKey[];
 }
 
 export interface ModuleContributionInventory {
@@ -225,8 +261,8 @@ export interface ModuleInstallPlan {
   readonly version: string;
   readonly bundleDigest: string;
   readonly compatibilityOk: boolean;
-  readonly requiredPermissions: readonly string[];
-  readonly optionalPermissions: readonly string[];
+  readonly requiredPermissions: readonly ModulePermissionKey[];
+  readonly optionalPermissions: readonly ModulePermissionKey[];
   readonly migrations: readonly string[];
   readonly contributions: ModuleContributionInventory;
 }
@@ -288,7 +324,7 @@ export interface InstalledModuleRecord {
   readonly sourceLocator: string;
   readonly bundleDigest: string;
   readonly state: ModuleInstallState;
-  readonly grantedPermissions: readonly string[];
+  readonly grantedPermissions: readonly ModulePermissionKey[];
   readonly installedAt?: string;
   readonly updatedAt: string;
   readonly lastSuccessfulMigration?: string;
@@ -320,7 +356,8 @@ export interface ModuleUninstallResult {
 ### Main entities
 
 - `ModuleManifest`: the durable declarative contract. It is pure data and must
-  be readable without executing host code.
+  be readable without executing host code, including its
+  `permissions: ModulePermissionRequest[]` payload.
 - `GraphModuleBundle`: the loadable package surface. It contains the manifest
   plus the concrete contributions the runtime can activate.
 - `InstalledModuleRecord`: the authoritative graph-local state. It captures
@@ -331,6 +368,9 @@ export interface ModuleUninstallResult {
 ### Identifiers
 
 - `manifest.id` is the stable module identifier across versions.
+- `ModulePermissionRequest.key` is the stable manifest-scoped permission
+  identifier reused by install plans, approval review, durable grants, and
+  revocation.
 - contribution keys inside `objectViews`, `workflows`, `commands`, `indexes`,
   and `connectors` are stable public ids within the graph.
 - `bundleDigest` is a content-derived lock value for one concrete bundle build
@@ -388,6 +428,34 @@ version, bundleDigest)` tuple
   key, or digest mismatch.
 - Stability: `stable` for `builtin` and `local`, `future` for `git` and
   `remote`.
+
+### `ModulePermissionRequest`
+
+- Purpose: canonical manifest-facing install-time permission declaration shared
+  by Branch 4 planning and Branch 2 approval.
+- Caller: module authors, module catalog, install planner, permission review UI.
+- Callee: authoritative install coordinator and Branch 2 policy runtime.
+- Inputs: stable `key`, `required`, `reason`, and kind-specific target fields.
+- Outputs: approval or denial keyed by `ModulePermissionKey`.
+- Failure shape: malformed request, duplicate `key`, unsupported kind, or
+  Branch 2 policy denial.
+- Stability: `stable` for `predicate-read`, `predicate-write`,
+  `command-execute`, `secret-use`, the shared `key` space, and lowering to
+  `module-permission` grants; `provisional` for `share-admin`,
+  `external-service`, `background-job`, and `blob-class` details.
+
+Permission contract rules:
+
+- `ModuleManifest.permissions` uses the same `ModulePermissionRequest` union
+  Branch 2 evaluates; Branch 4 does not define a second manifest permission
+  shape.
+- installers review, plan, and persist decisions by `ModulePermissionRequest.key`
+  even when the human-facing UI groups or labels requests differently.
+- approval lowers every granted request into the shared grant key space as
+  `CapabilityResource = { kind: "module-permission", permissionKey: request.key }`.
+- `command-execute.touchesPredicates`, when present, is review metadata only;
+  the referenced `GraphCommandSpec.policy` remains the authoritative command
+  policy contract.
 
 ### `ModuleInstaller`
 
@@ -516,7 +584,8 @@ registrations.
 ### Current repo mapping
 
 - `src/graph/runtime/contracts.ts` already provides root-safe
-  `ObjectViewSpec`, `WorkflowSpec`, and `GraphCommandSpec`.
+  `ModulePermissionRequest`, `ObjectViewSpec`, `WorkflowSpec`, and
+  `GraphCommandSpec`.
 - `src/graph/modules/` already provides built-in schema slices.
 - `src/web/lib/authority.ts` currently hardcodes `{ ...core, ...pkm, ...ops }`
   into one runtime graph. Branch 4 replaces that hardcoded assembly with a
@@ -606,7 +675,8 @@ own fact storage itself.
 - Provisional path: a coarse operator-only install capability is sufficient for
   the first milestone.
 - Must be stable before remote or secret-heavy modules: permission review
-  result shape and secret access boundaries.
+  result shape, manifest `permissionKey` lowering, and secret access
+  boundaries.
 
 ### Branch 3: Sync, Query, And Projections
 
@@ -624,13 +694,13 @@ own fact storage itself.
 ### Branch 5: Blob, Ingestion, And Media
 
 - Dependency direction: Branch 5 depends on Branch 4.
-- Imported contracts: connector registration, blob-class permission request,
-  module setup metadata, install lifecycle hooks.
+- Imported contracts: connector registration, provisional `blob-class`
+  permission request details, module setup metadata, install lifecycle hooks.
 - Exported contracts: install-time activation of blob-backed module families.
 - Provisional path: connector registration can be a no-op for non-ingest
   modules.
 - Must be stable before file and media families: connector registration and
-  background-job permission requests.
+  provisional background-job permission request details.
 
 ### Branch 6: Workflow And Agent Runtime
 
@@ -780,8 +850,10 @@ own fact storage itself.
   secret-backed mutations stay behind server routes or authority commands.
 - Browser-visible installed-module data is sanitized to ids, versions, safe
   status, granted-permission summaries, and non-secret setup state.
-- External-service and background-job permissions must be explicit because they
-  widen the trust boundary beyond pure graph mutation.
+- Provisional `external-service`, `background-job`, and `blob-class`
+  permission kinds must still be explicit because they widen the trust boundary
+  beyond pure graph mutation even before their downstream approval runtimes are
+  fully standardized.
 
 ## 11. Implementation Slices
 
@@ -850,9 +922,10 @@ own fact storage itself.
 
 ## 13. Recommended First Code Targets
 
-- `src/graph/runtime/module-contracts.ts`
-  Introduce the canonical manifest, install-plan, install-result, and migration
-  contract types here instead of overloading `type-module.ts`.
+- `src/graph/runtime/contracts.ts`
+  Publish the canonical `ModulePermissionRequest` plus the manifest, install-
+  plan, install-result, and migration contract types here instead of
+  overloading `type-module.ts`.
 - `src/graph/runtime/index.ts` and `src/graph/index.ts`
   Export the new module-runtime contracts from the root graph surface.
 - `src/graph/modules/ops/env-var/module.ts`

@@ -4,6 +4,7 @@ import type {
   AuthenticatedSession,
   AuthorizationContext,
   GraphCommandSpec,
+  ModulePermissionRequest,
   ObjectViewSpec,
   PredicatePolicyDescriptor,
   WorkflowSpec,
@@ -152,6 +153,56 @@ export const probeSaveContractItemCommand = {
     ],
   },
 } satisfies GraphCommandSpec<{ name: string; summary?: string }, { itemId: string }>;
+
+export const probeModulePermissionRequests = [
+  {
+    key: "probe.contract.read.summary",
+    kind: "predicate-read",
+    predicateIds: [probeContractSummaryPolicy.predicateId],
+    reason: "Read contract summaries during review.",
+    required: true,
+  },
+  {
+    key: "probe.contract.write.item",
+    kind: "predicate-write",
+    predicateIds: [probeContractNamePolicy.predicateId, probeContractSummaryPolicy.predicateId],
+    writeScope: "server-command",
+    reason: "Write contract fields through the authoritative save command.",
+    required: true,
+  },
+  {
+    key: "probe.contract.command.save",
+    kind: "command-execute",
+    commandKeys: [probeSaveContractItemCommand.key],
+    touchesPredicates: [
+      probeContractNamePolicy.predicateId,
+      probeContractSummaryPolicy.predicateId,
+    ],
+    reason: "Execute the contract save command from review surfaces.",
+    required: true,
+  },
+  {
+    key: "probe.contract.secret.sync",
+    kind: "secret-use",
+    capabilityKeys: ["probe.contract.secret.use"],
+    reason: "Use secret-backed integrations during contract sync.",
+    required: false,
+  },
+  {
+    key: "probe.contract.share.summary",
+    kind: "share-admin",
+    surfaceIds: ["probe:contractItem:summary"],
+    reason: "Manage share surfaces for reviewed contract summaries.",
+    required: false,
+  },
+  {
+    key: "probe.contract.job.rebuild",
+    kind: "background-job",
+    jobKeys: ["probe.contract.rebuild-index"],
+    reason: "Schedule asynchronous contract index rebuilds.",
+    required: false,
+  },
+] satisfies readonly ModulePermissionRequest[];
 
 export const probeContractWorkflow = {
   key: "probe:contractItem:review",
