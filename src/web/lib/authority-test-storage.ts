@@ -6,10 +6,14 @@ import {
 } from "@io/core/graph";
 
 import type {
+  WebAppAuthoritySecretInventoryRecord,
+  WebAppAuthoritySecretLoadOptions,
   WebAppAuthoritySecretRecord,
+  WebAppAuthoritySecretRepairInput,
   WebAppAuthoritySecretWrite,
   WebAppAuthorityStorage,
 } from "./authority.js";
+import { collectLiveSecretIds } from "./authority.js";
 
 export type PersistedTestWebAppAuthorityState = PersistedAuthoritativeGraphState & {
   readonly secrets?: Record<string, WebAppAuthoritySecretRecord>;
@@ -25,11 +29,30 @@ function cloneSecretRecord(secret: WebAppAuthoritySecretRecord): WebAppAuthority
 
 function serializeSecretRecords(
   secretRecords: ReadonlyMap<string, WebAppAuthoritySecretRecord>,
+  secretIds?: readonly string[],
 ): Record<string, WebAppAuthoritySecretRecord> {
+  const allowedSecretIds = secretIds ? new Set(secretIds) : null;
+
+  return Object.fromEntries(
+    [...secretRecords.entries()]
+      .filter(([secretId]) => allowedSecretIds?.has(secretId) ?? true)
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([secretId, secret]) => [secretId, cloneSecretRecord(secret)]),
+  );
+}
+
+function serializeSecretInventory(
+  secretRecords: ReadonlyMap<string, WebAppAuthoritySecretRecord>,
+): Record<string, WebAppAuthoritySecretInventoryRecord> {
   return Object.fromEntries(
     [...secretRecords.entries()]
       .sort((left, right) => left[0].localeCompare(right[0]))
-      .map(([secretId, secret]) => [secretId, cloneSecretRecord(secret)]),
+      .map(([secretId, secret]) => [
+        secretId,
+        {
+          version: secret.version,
+        },
+      ]),
   );
 }
 
@@ -48,6 +71,14 @@ function toSecretRecord(secretWrite: WebAppAuthoritySecretWrite): WebAppAuthorit
   const { secretId, ...secret } = secretWrite;
   void secretId;
   return clonePersistedValue(secret);
+}
+
+function pruneSecretRecordMap(
+  secrets: Map<string, WebAppAuthoritySecretRecord>,
+  input: WebAppAuthoritySecretRepairInput,
+): Map<string, WebAppAuthoritySecretRecord> {
+  const liveSecretIds = new Set(input.liveSecretIds);
+  return new Map([...secrets.entries()].filter(([secretId]) => liveSecretIds.has(secretId)));
 }
 
 export function createInMemoryTestWebAppAuthorityStorage(
@@ -83,17 +114,31 @@ export function createInMemoryTestWebAppAuthorityStorage(
           needsPersistence: false,
         };
       },
-      async loadSecrets(): Promise<Record<string, WebAppAuthoritySecretRecord>> {
-        return serializeSecretRecords(persistedSecrets);
+      async inspectSecrets(): Promise<Record<string, WebAppAuthoritySecretInventoryRecord>> {
+        return serializeSecretInventory(persistedSecrets);
+      },
+      async loadSecrets(
+        options?: WebAppAuthoritySecretLoadOptions,
+      ): Promise<Record<string, WebAppAuthoritySecretRecord>> {
+        return serializeSecretRecords(persistedSecrets, options?.secretIds);
+      },
+      async repairSecrets(input: WebAppAuthoritySecretRepairInput): Promise<void> {
+        persistedSecrets = pruneSecretRecordMap(persistedSecrets, input);
       },
       async commit(input, options): Promise<void> {
         writeState(input);
         if (options?.secretWrite) {
           persistedSecrets.set(options.secretWrite.secretId, toSecretRecord(options.secretWrite));
         }
+        persistedSecrets = pruneSecretRecordMap(persistedSecrets, {
+          liveSecretIds: collectLiveSecretIds(input.snapshot),
+        });
       },
       async persist(input): Promise<void> {
         writeState(input);
+        persistedSecrets = pruneSecretRecordMap(persistedSecrets, {
+          liveSecretIds: collectLiveSecretIds(input.snapshot),
+        });
       },
     },
     read() {

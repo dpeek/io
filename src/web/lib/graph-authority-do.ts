@@ -7,13 +7,20 @@ import type {
 
 import type { SessionPrincipalLookupInput } from "./auth-bridge.js";
 import type {
+  WebAppAuthoritySecretInventoryRecord,
+  WebAppAuthoritySecretLoadOptions,
   WebAppAuthority,
   WebAppAuthorityOptions,
   WebAppAuthoritySecretRecord,
+  WebAppAuthoritySecretRepairInput,
   WebAppAuthoritySecretWrite,
   WebAppAuthorityStorage,
 } from "./authority.js";
-import { createWebAppAuthority, WebAppAuthoritySessionPrincipalLookupError } from "./authority.js";
+import {
+  collectLiveSecretIds,
+  createWebAppAuthority,
+  WebAppAuthoritySessionPrincipalLookupError,
+} from "./authority.js";
 import {
   handleWebCommandRequest,
   RequestAuthorizationContextError,
@@ -437,15 +444,25 @@ function buildWriteHistoryFromSql(
 
 function readSecretsFromSql(
   sql: DurableObjectSqlStorageLike,
+  options?: WebAppAuthoritySecretLoadOptions,
 ): Record<string, WebAppAuthoritySecretRecord> {
-  return Object.fromEntries(
-    readAllRows<SecretValueRow>(
-      sql.exec(
-        `SELECT secret_id, value, version, stored_at, provider, fingerprint, external_key_id
+  const secretIds = options?.secretIds;
+  if (secretIds?.length === 0) {
+    return {};
+  }
+
+  const query =
+    secretIds && secretIds.length > 0
+      ? `SELECT secret_id, value, version, stored_at, provider, fingerprint, external_key_id
         FROM io_secret_value
-        ORDER BY secret_id ASC`,
-      ),
-    ).map((row) => [
+        WHERE secret_id IN (${secretIds.map(() => "?").join(", ")})
+        ORDER BY secret_id ASC`
+      : `SELECT secret_id, value, version, stored_at, provider, fingerprint, external_key_id
+        FROM io_secret_value
+        ORDER BY secret_id ASC`;
+
+  return Object.fromEntries(
+    readAllRows<SecretValueRow>(sql.exec(query, ...(secretIds ?? []))).map((row) => [
       requireString(row.secret_id, "io_secret_value.secret_id"),
       {
         value: requireString(row.value, "io_secret_value.value"),
@@ -457,6 +474,25 @@ function readSecretsFromSql(
         externalKeyId:
           requireNullableString(row.external_key_id, "io_secret_value.external_key_id") ??
           undefined,
+      },
+    ]),
+  );
+}
+
+function readSecretInventoryFromSql(
+  sql: DurableObjectSqlStorageLike,
+): Record<string, WebAppAuthoritySecretInventoryRecord> {
+  return Object.fromEntries(
+    readAllRows<Pick<SecretValueRow, "secret_id" | "version">>(
+      sql.exec(
+        `SELECT secret_id, version
+        FROM io_secret_value
+        ORDER BY secret_id ASC`,
+      ),
+    ).map((row) => [
+      requireString(row.secret_id, "io_secret_value.secret_id"),
+      {
+        version: requireInteger(row.version, "io_secret_value.version"),
       },
     ]),
   );
@@ -634,6 +670,30 @@ function upsertSecretValue(
   );
 }
 
+function pruneSecretValueRows(
+  sql: DurableObjectSqlStorageLike,
+  liveSecretIds: readonly string[],
+): void {
+  if (liveSecretIds.length === 0) {
+    sql.exec("DELETE FROM io_secret_value");
+    return;
+  }
+
+  const placeholders = liveSecretIds.map(() => "?").join(", ");
+  sql.exec(
+    `DELETE FROM io_secret_value
+    WHERE secret_id NOT IN (${placeholders})`,
+    ...liveSecretIds,
+  );
+}
+
+function pruneOrphanedSecretValues(
+  sql: DurableObjectSqlStorageLike,
+  snapshot: DurableAuthorityPersistInput["snapshot"],
+): void {
+  pruneSecretValueRows(sql, collectLiveSecretIds(snapshot));
+}
+
 function pruneRetainedTransactionRows(
   sql: DurableObjectSqlStorageLike,
   retainedFromSequence: number,
@@ -660,10 +720,9 @@ function rewritePersistedState(
   sql.exec("DELETE FROM io_graph_tx_op");
   sql.exec("DELETE FROM io_graph_tx");
   sql.exec("DELETE FROM io_graph_edge");
-  // Baseline rewrites rebuild graph state only. Branch 1 intentionally retains
-  // authority-only secret rows even after graph references are retracted.
   insertTransactionHistoryRows(sql, input.writeHistory, now);
   insertSnapshotEdges(sql, input.snapshot, input.writeHistory);
+  pruneOrphanedSecretValues(sql, input.snapshot);
   writeGraphMetaRow(sql, {
     cursorPrefix: input.writeHistory.cursorPrefix,
     headCursor: headCursor(input.writeHistory),
@@ -748,11 +807,10 @@ function applyCommittedTransaction(
     }
   });
 
-  // Retract-only graph commits leave prior plaintext rows intact. The current
-  // proof updates this table only for explicit secret-backed field writes.
   if (secretWrite) {
     upsertSecretValue(sql, secretWrite, now);
   }
+  pruneOrphanedSecretValues(sql, input.snapshot);
   if ((existingMeta?.historyRetainedFromSeq ?? 0) < input.writeHistory.baseSequence) {
     pruneRetainedTransactionRows(sql, input.writeHistory.baseSequence);
   }
@@ -806,8 +864,18 @@ function createSqliteDurableObjectAuthorityStorage(
         needsPersistence: hydratedHistory.needsPersistence,
       };
     },
-    async loadSecrets(): Promise<Record<string, WebAppAuthoritySecretRecord>> {
-      return readSecretsFromSql(state.storage.sql);
+    async inspectSecrets(): Promise<Record<string, WebAppAuthoritySecretInventoryRecord>> {
+      return readSecretInventoryFromSql(state.storage.sql);
+    },
+    async loadSecrets(
+      options?: WebAppAuthoritySecretLoadOptions,
+    ): Promise<Record<string, WebAppAuthoritySecretRecord>> {
+      return readSecretsFromSql(state.storage.sql, options);
+    },
+    async repairSecrets(input: WebAppAuthoritySecretRepairInput): Promise<void> {
+      await runStorageTransaction(state.storage, () => {
+        pruneSecretValueRows(state.storage.sql, input.liveSecretIds);
+      });
     },
     async commit(input, options): Promise<void> {
       await runStorageTransaction(state.storage, () => {

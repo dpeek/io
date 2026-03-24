@@ -39,8 +39,10 @@ Behavior today:
 - changed plaintext increments `secretHandle.version` and updates
   `lastRotatedAt`
 - repeated plaintext keeps the existing version
-- retracting `ops:envVar.secret` removes the replicated reference but retains
-  the authority-only secret row
+- retracting `ops:envVar.secret` removes the replicated reference; retained
+  authority-only rows are ignored during bootstrap unless the current graph
+  still references that handle, and the Durable Object adapter prunes orphaned
+  rows during cleanup
 
 ## Explicitly Provisional
 

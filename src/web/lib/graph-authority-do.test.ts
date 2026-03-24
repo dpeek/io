@@ -1967,7 +1967,7 @@ describe("web graph authority durable object", () => {
     ]);
   });
 
-  it("preserves secret side-table rows across graph-only commits and baseline persists", async () => {
+  it("preserves live secret side-table rows across graph-only commits, baseline persists, and restart", async () => {
     const { db, state } = createSqliteDurableObjectState();
     const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
@@ -2020,6 +2020,15 @@ describe("web graph authority durable object", () => {
       `SELECT rowid, secret_id, value, version, stored_at
       FROM io_secret_value`,
     );
+    const restarted = createTestDurableObject(state);
+
+    await readSyncPayload(restarted);
+
+    const secretRowsAfterRestart = queryAll<Required<SecretValueRow>>(
+      db,
+      `SELECT rowid, secret_id, value, version, stored_at
+      FROM io_secret_value`,
+    );
 
     if (!secretRowBeforeGraphUpdate) {
       throw new Error("Expected the initial secret side-table row.");
@@ -2037,9 +2046,10 @@ describe("web graph authority durable object", () => {
     ]);
     expect(secretRowsAfterGraphUpdate).toEqual(secretRowsBeforeGraphUpdate);
     expect(secretRowsAfterPersist).toEqual(secretRowsBeforeGraphUpdate);
+    expect(secretRowsAfterRestart).toEqual(secretRowsBeforeGraphUpdate);
   });
 
-  it("retains plaintext rows when a secret-backed reference is retracted", async () => {
+  it("preserves live secret side-table rows across rotation and restart", async () => {
     const { db, state } = createSqliteDurableObjectState();
     const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
@@ -2054,7 +2064,76 @@ describe("web graph authority durable object", () => {
     );
 
     await postTransaction(durableObject, createdEnvVar.transaction);
-    const secretWrite = await postSecretField(durableObject, {
+    const createdSecret = await postSecretField(durableObject, {
+      entityId: createdEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+    const rotatedSecret = await postSecretField(
+      durableObject,
+      {
+        entityId: createdEnvVar.result,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-second",
+      },
+      200,
+    );
+    const secretRowsAfterRotate = queryAll<Required<SecretValueRow>>(
+      db,
+      `SELECT rowid, secret_id, value, version, stored_at
+      FROM io_secret_value`,
+    );
+    const rotatedSecretRow = secretRowsAfterRotate[0];
+    const restarted = createTestDurableObject(state);
+    const restartedSync = await readSyncPayload(restarted);
+    const secretRowsAfterRestart = queryAll<Required<SecretValueRow>>(
+      db,
+      `SELECT rowid, secret_id, value, version, stored_at
+      FROM io_secret_value`,
+    );
+
+    if (!rotatedSecretRow) {
+      throw new Error("Expected the rotated secret side-table row.");
+    }
+
+    expect(createdSecret.secretVersion).toBe(1);
+    expect(rotatedSecret).toMatchObject({
+      created: false,
+      entityId: createdEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      rotated: true,
+      secretId: createdSecret.secretId,
+      secretVersion: 2,
+    });
+    expect(secretRowsAfterRotate).toEqual([
+      {
+        rowid: rotatedSecretRow.rowid,
+        secret_id: createdSecret.secretId,
+        value: "sk-live-second",
+        version: 2,
+        stored_at: rotatedSecretRow.stored_at,
+      },
+    ]);
+    expect(secretRowsAfterRestart).toEqual(secretRowsAfterRotate);
+    expect(JSON.stringify(restartedSync)).not.toContain("sk-live-second");
+  });
+
+  it("prunes plaintext rows when a secret-backed reference is retracted", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, createdEnvVar.transaction);
+    await postSecretField(durableObject, {
       entityId: createdEnvVar.result,
       predicateId: envVarSecretPredicateId,
       plaintext: "sk-live-first",
@@ -2095,13 +2174,7 @@ describe("web graph authority durable object", () => {
       ),
     ).toHaveLength(0);
     expect(JSON.stringify(currentSync)).not.toContain("sk-live-first");
-    expect(secretRows).toEqual([
-      {
-        secret_id: secretWrite.secretId,
-        value: "sk-live-first",
-        version: 1,
-      },
-    ]);
+    expect(secretRows).toEqual([]);
     expect(incremental.transactions).toEqual([
       expect.objectContaining({
         txId: "tx:retract-env-var-secret",
@@ -2122,7 +2195,221 @@ describe("web graph authority durable object", () => {
     expect(JSON.stringify(restartedSync)).not.toContain("sk-live-first");
   });
 
-  it("retains plaintext rows when retracting an entity that owns a secret-backed reference", async () => {
+  it("prunes orphaned side-table rows during restart when orphaned SQL rows remain", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const liveEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-live-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, liveEnvVar.transaction);
+    const afterLiveEnvVarSync = await readSyncPayload(durableObject);
+    const orphanedEnvVar = buildTransactionFromSnapshot(
+      afterLiveEnvVarSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-orphaned-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Secondary model credential",
+          name: "ANTHROPIC_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, orphanedEnvVar.transaction);
+    const liveSecret = await postSecretField(durableObject, {
+      entityId: liveEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+    const orphanedSecret = await postSecretField(durableObject, {
+      entityId: orphanedEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-orphaned-first",
+    });
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const retractTransaction = buildRetractSecretReferenceTransaction(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      orphanedEnvVar.result,
+      "tx:retract-env-var-secret:orphaned-sql-row",
+    );
+
+    await applyServerCommandTransaction(authority, retractTransaction);
+
+    expect(
+      queryAll<SecretValueRow>(
+        db,
+        `SELECT secret_id, value, version
+        FROM io_secret_value
+        ORDER BY secret_id ASC`,
+      ),
+    ).toEqual([
+      {
+        secret_id: liveSecret.secretId,
+        value: "sk-live-first",
+        version: 1,
+      },
+    ]);
+
+    db.query(
+      `INSERT INTO io_secret_value (
+        secret_id,
+        value,
+        version,
+        stored_at,
+        provider,
+        fingerprint,
+        external_key_id
+      ) VALUES (?, ?, ?, ?, NULL, NULL, NULL)`,
+    ).run(
+      orphanedSecret.secretId,
+      "sk-orphaned-first",
+      orphanedSecret.secretVersion,
+      "2026-03-24T00:00:00.000Z",
+    );
+
+    const requestedSecretIds: Array<readonly string[] | undefined> = [];
+    const restarted = createTestDurableObject(
+      state,
+      {},
+      {
+        createAuthority: async (storage, options) =>
+          createWebAppAuthority(
+            {
+              load() {
+                return storage.load();
+              },
+              inspectSecrets() {
+                return storage.inspectSecrets();
+              },
+              loadSecrets(loadOptions) {
+                requestedSecretIds.push(loadOptions?.secretIds);
+                return storage.loadSecrets(loadOptions);
+              },
+              repairSecrets(input) {
+                return storage.repairSecrets(input);
+              },
+              commit(input, commitOptions) {
+                return storage.commit(input, commitOptions);
+              },
+              persist(input) {
+                return storage.persist(input);
+              },
+            },
+            options,
+          ),
+      },
+    );
+    const restartedSync = await readSyncPayload(restarted);
+    const confirmedLive = await postSecretField(
+      restarted,
+      {
+        entityId: liveEnvVar.result,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-first",
+      },
+      200,
+    );
+
+    expect(requestedSecretIds).toEqual([[liveSecret.secretId]]);
+    const secretRowsAfterRestart = queryAll<SecretValueRow>(
+      db,
+      `SELECT secret_id, value, version
+      FROM io_secret_value
+      ORDER BY secret_id ASC`,
+    );
+
+    expect(secretRowsAfterRestart).toEqual([
+      {
+        secret_id: liveSecret.secretId,
+        value: "sk-live-first",
+        version: 1,
+      },
+    ]);
+    expect(confirmedLive).toMatchObject({
+      created: false,
+      rotated: false,
+      secretId: liveSecret.secretId,
+      secretVersion: liveSecret.secretVersion,
+    });
+    expect(
+      createStore(restartedSync.snapshot ?? { edges: [], retracted: [] }).facts(
+        orphanedEnvVar.result,
+        envVarSecretPredicateId,
+      ),
+    ).toHaveLength(0);
+    expect(JSON.stringify(restartedSync)).not.toContain("sk-orphaned-first");
+  });
+
+  it("fails restart when a live secret handle loses its plaintext side row", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-missing-secret-row-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, createdEnvVar.transaction);
+    const createdSecret = await postSecretField(durableObject, {
+      entityId: createdEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+
+    db.query("DELETE FROM io_secret_value WHERE secret_id = ?").run(createdSecret.secretId);
+
+    const restarted = createTestDurableObject(state);
+
+    await expect(readSyncPayload(restarted)).rejects.toThrow(
+      `Cannot start web authority because secret storage drift was detected: missing plaintext rows for ${createdSecret.secretId}.`,
+    );
+  });
+
+  it("fails restart when a live secret handle version drifts from its plaintext side row", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-version-drift-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, createdEnvVar.transaction);
+    const createdSecret = await postSecretField(durableObject, {
+      entityId: createdEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+
+    db.query("UPDATE io_secret_value SET version = ? WHERE secret_id = ?").run(
+      createdSecret.secretVersion + 1,
+      createdSecret.secretId,
+    );
+
+    const restarted = createTestDurableObject(state);
+
+    await expect(readSyncPayload(restarted)).rejects.toThrow(
+      `Cannot start web authority because secret storage drift was detected: version mismatch for ${createdSecret.secretId} (graph ${createdSecret.secretVersion}, stored ${createdSecret.secretVersion + 1}).`,
+    );
+  });
+
+  it("prunes plaintext rows when retracting an entity that owns a secret-backed reference", async () => {
     const { db, state } = createSqliteDurableObjectState();
     const durableObject = createTestDurableObject(state);
     const initialSync = await readSyncPayload(durableObject);
@@ -2137,7 +2424,7 @@ describe("web graph authority durable object", () => {
     );
 
     await postTransaction(durableObject, createdEnvVar.transaction);
-    const secretWrite = await postSecretField(durableObject, {
+    await postSecretField(durableObject, {
       entityId: createdEnvVar.result,
       predicateId: envVarSecretPredicateId,
       plaintext: "sk-live-first",
@@ -2164,13 +2451,7 @@ describe("web graph authority durable object", () => {
     expect(
       createStore(currentSync.snapshot ?? { edges: [], retracted: [] }).facts(createdEnvVar.result),
     ).toHaveLength(0);
-    expect(secretRows).toEqual([
-      {
-        secret_id: secretWrite.secretId,
-        value: "sk-live-first",
-        version: 1,
-      },
-    ]);
+    expect(secretRows).toEqual([]);
     expect(JSON.stringify(currentSync)).not.toContain("sk-live-first");
     expect(
       createStore(restartedSync.snapshot ?? { edges: [], retracted: [] }).facts(

@@ -452,7 +452,7 @@ describe("web authority", () => {
     });
   });
 
-  it("retains plaintext side rows when a secret-backed reference is retracted", async () => {
+  it("prunes plaintext side rows when a secret-backed reference is retracted", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createTestWebAppAuthority(storage.storage);
@@ -485,7 +485,7 @@ describe("web authority", () => {
     expect(
       readStringPredicateValue(authority, authorization, envVarId, envVarSecretPredicateId),
     ).toBeUndefined();
-    expect(storage.read()?.secrets?.[created.secretId]?.value).toBe("sk-live-first");
+    expect(storage.read()?.secrets?.[created.secretId]).toBeUndefined();
     expect(JSON.stringify(authority.createSyncPayload({ authorization }))).not.toContain(
       "sk-live-first",
     );
@@ -495,13 +495,13 @@ describe("web authority", () => {
     expect(
       readStringPredicateValue(restarted, authorization, envVarId, envVarSecretPredicateId),
     ).toBeUndefined();
-    expect(storage.read()?.secrets?.[created.secretId]?.value).toBe("sk-live-first");
+    expect(storage.read()?.secrets?.[created.secretId]).toBeUndefined();
     expect(JSON.stringify(restarted.createSyncPayload({ authorization }))).not.toContain(
       "sk-live-first",
     );
   });
 
-  it("retains plaintext side rows when retracting an entity that owns a secret-backed reference", async () => {
+  it("prunes plaintext side rows when retracting an entity that owns a secret-backed reference", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
     const authority = await createTestWebAppAuthority(storage.storage);
@@ -538,7 +538,7 @@ describe("web authority", () => {
     await applyServerCommandTransaction(authority, authorization, deleteTransaction);
 
     expect(createStore(authority.readSnapshot({ authorization })).facts(envVarId)).toHaveLength(0);
-    expect(storage.read()?.secrets?.[created.secretId]?.value).toBe("sk-live-first");
+    expect(storage.read()?.secrets?.[created.secretId]).toBeUndefined();
     expect(JSON.stringify(authority.createSyncPayload({ authorization }))).not.toContain(
       "sk-live-first",
     );
@@ -546,9 +546,186 @@ describe("web authority", () => {
     const restarted = await createTestWebAppAuthority(storage.storage);
 
     expect(createStore(restarted.readSnapshot({ authorization })).facts(envVarId)).toHaveLength(0);
-    expect(storage.read()?.secrets?.[created.secretId]?.value).toBe("sk-live-first");
+    expect(storage.read()?.secrets?.[created.secretId]).toBeUndefined();
     expect(JSON.stringify(restarted.createSyncPayload({ authorization }))).not.toContain(
       "sk-live-first",
+    );
+  });
+
+  it("prunes orphaned plaintext side rows during restart bootstrap", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const backingStorage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(backingStorage.storage);
+    const liveEnvVarId = await createEnvVar(
+      authority,
+      authorization,
+      {
+        description: "Primary model credential",
+        name: "OPENAI_API_KEY",
+      },
+      "tx:create-env-var:live-secret-bootstrap",
+    );
+    const orphanedEnvVarId = await createEnvVar(
+      authority,
+      authorization,
+      {
+        description: "Secondary model credential",
+        name: "ANTHROPIC_API_KEY",
+      },
+      "tx:create-env-var:orphan-secret-bootstrap",
+    );
+    const liveSecret = await authority.writeSecretField(
+      {
+        entityId: liveEnvVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-first",
+      },
+      { authorization },
+    );
+    await authority.writeSecretField(
+      {
+        entityId: orphanedEnvVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-orphaned-first",
+      },
+      { authorization },
+    );
+    const retractTransaction = buildRetractSecretReferenceTransaction(
+      authority.readSnapshot({ authorization }),
+      orphanedEnvVarId,
+      "tx:retract-env-var-secret:orphan-bootstrap",
+    );
+
+    await applyServerCommandTransaction(authority, authorization, retractTransaction);
+
+    const requestedSecretIds: Array<readonly string[] | undefined> = [];
+    const restarted = await createTestWebAppAuthority({
+      load() {
+        return backingStorage.storage.load();
+      },
+      inspectSecrets() {
+        return backingStorage.storage.inspectSecrets();
+      },
+      loadSecrets(options) {
+        requestedSecretIds.push(options?.secretIds);
+        return backingStorage.storage.loadSecrets(options);
+      },
+      repairSecrets(input) {
+        return backingStorage.storage.repairSecrets(input);
+      },
+      commit(input, options) {
+        return backingStorage.storage.commit(input, options);
+      },
+      persist(input) {
+        return backingStorage.storage.persist(input);
+      },
+    });
+    const confirmedLive = await restarted.writeSecretField(
+      {
+        entityId: liveEnvVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-first",
+      },
+      { authorization },
+    );
+
+    expect(requestedSecretIds).toEqual([[liveSecret.secretId]]);
+    expect(backingStorage.read()?.secrets).toEqual({
+      [liveSecret.secretId]: expect.objectContaining({
+        value: "sk-live-first",
+      }),
+    });
+    expect(confirmedLive).toMatchObject({
+      created: false,
+      rotated: false,
+      secretId: liveSecret.secretId,
+      secretVersion: liveSecret.secretVersion,
+    });
+    expect(
+      readStringPredicateValue(restarted, authorization, orphanedEnvVarId, envVarSecretPredicateId),
+    ).toBeUndefined();
+  });
+
+  it("fails closed when a live secret handle loses its plaintext row across restart", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const envVarId = await createEnvVar(
+      authority,
+      authorization,
+      {
+        description: "Primary model credential",
+        name: "OPENAI_API_KEY",
+      },
+      "tx:create-env-var:missing-secret-row",
+    );
+    const created = await authority.writeSecretField(
+      {
+        entityId: envVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-first",
+      },
+      { authorization },
+    );
+    const persisted = storage.read();
+    if (!persisted) {
+      throw new Error("Expected persisted authority state for restart drift test.");
+    }
+
+    const driftedSecrets = { ...persisted.secrets };
+    delete driftedSecrets[created.secretId];
+    const driftedStorage = createInMemoryTestWebAppAuthorityStorage({
+      ...persisted,
+      secrets: driftedSecrets,
+    });
+
+    await expect(createTestWebAppAuthority(driftedStorage.storage)).rejects.toThrow(
+      `Cannot start web authority because secret storage drift was detected: missing plaintext rows for ${created.secretId}.`,
+    );
+  });
+
+  it("fails closed when a live secret handle version drifts from side storage across restart", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const envVarId = await createEnvVar(
+      authority,
+      authorization,
+      {
+        description: "Primary model credential",
+        name: "OPENAI_API_KEY",
+      },
+      "tx:create-env-var:secret-version-drift",
+    );
+    const created = await authority.writeSecretField(
+      {
+        entityId: envVarId,
+        predicateId: envVarSecretPredicateId,
+        plaintext: "sk-live-first",
+      },
+      { authorization },
+    );
+    const persisted = storage.read();
+    if (!persisted) {
+      throw new Error("Expected persisted authority state for restart drift test.");
+    }
+
+    const driftedStorage = createInMemoryTestWebAppAuthorityStorage({
+      ...persisted,
+      secrets: {
+        ...persisted.secrets,
+        [created.secretId]: {
+          ...(persisted.secrets?.[created.secretId] ?? {
+            value: "sk-live-first",
+            version: created.secretVersion,
+          }),
+          version: created.secretVersion + 1,
+        },
+      },
+    });
+
+    await expect(createTestWebAppAuthority(driftedStorage.storage)).rejects.toThrow(
+      `Cannot start web authority because secret storage drift was detected: version mismatch for ${created.secretId} (graph ${created.secretVersion}, stored ${created.secretVersion + 1}).`,
     );
   });
 
@@ -647,8 +824,14 @@ describe("web authority", () => {
       load() {
         return backingStorage.storage.load();
       },
+      inspectSecrets() {
+        return backingStorage.storage.inspectSecrets();
+      },
       loadSecrets() {
         return backingStorage.storage.loadSecrets();
+      },
+      repairSecrets(input) {
+        return backingStorage.storage.repairSecrets(input);
       },
       async commit(input, options) {
         if (failServerCommandCommit) {

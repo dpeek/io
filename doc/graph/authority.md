@@ -250,8 +250,11 @@ well.
 - the Durable Object constructor bootstraps SQL schema synchronously, while full
   runtime hydration stays in `blockConcurrencyWhile(...)`
 - plaintext secret values live only in the authority-only `io_secret_value`
-  side table and commit in the same Durable Object storage transaction as the
-  graph write when a secret-backed field changes
+  side table, bootstrap prunes rows no longer referenced by the current graph
+  state, reloads only the remaining live rows, fails closed when a live secret
+  handle is missing or version-skewed in side storage, and commits happen in
+  the same Durable Object storage transaction as the graph write when a
+  secret-backed field changes
 
 That keeps the replicated graph model and the secret storage lifecycle coupled
 for consistency without pretending they are the same data.

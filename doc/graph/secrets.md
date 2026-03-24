@@ -23,7 +23,11 @@ Env vars consume this contract, but they do not define it.
   `server-command` write boundary and stores plaintext in authority-only side
   storage.
 - Repeating the same plaintext keeps the current handle version. Retracting the
-  replicated reference does not delete the retained authority-only secret row.
+  last live reference to a secret handle prunes the authority-only plaintext
+  row at the same durable cleanup point.
+- Restart bootstrap prunes orphaned plaintext rows automatically, but missing
+  or version-skewed side rows for live secret handles fail closed instead of
+  being guessed or silently rewritten.
 
 ## Consumer-Owned Proof
 

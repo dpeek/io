@@ -107,6 +107,18 @@ export type WebAppAuthoritySecretWrite = WebAppAuthoritySecretRecord & {
   readonly secretId: string;
 };
 
+export type WebAppAuthoritySecretLoadOptions = {
+  readonly secretIds?: readonly string[];
+};
+
+export type WebAppAuthoritySecretInventoryRecord = {
+  readonly version: number;
+};
+
+export type WebAppAuthoritySecretRepairInput = {
+  readonly liveSecretIds: readonly string[];
+};
+
 export type WebAppAuthorityGraphSyncScopeRequest = {
   readonly kind?: "graph";
 };
@@ -174,12 +186,15 @@ type WebAuthorityMutationStageContext = {
  */
 export interface WebAppAuthorityStorage {
   load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null>;
+  inspectSecrets(): Promise<Record<string, WebAppAuthoritySecretInventoryRecord>>;
   /**
-   * Branch 1 retains authority-only plaintext rows even after the replicated
-   * secret-backed reference or its owning entity is retracted. Cleanup policy
-   * stays deferred to later lifecycle work.
+   * Load the currently live authority-only plaintext rows needed for the
+   * current graph snapshot during bootstrap.
    */
-  loadSecrets(): Promise<Record<string, WebAppAuthoritySecretRecord>>;
+  loadSecrets(
+    options?: WebAppAuthoritySecretLoadOptions,
+  ): Promise<Record<string, WebAppAuthoritySecretRecord>>;
+  repairSecrets(input: WebAppAuthoritySecretRepairInput): Promise<void>;
   commit(
     input: PersistedAuthoritativeGraphStorageCommitInput,
     options?: {
@@ -401,6 +416,74 @@ class WebAppAuthorityMutationError extends Error {
     this.code = options.code;
     this.retryable = options.retryable;
     this.refreshRequired = options.refreshRequired;
+  }
+}
+
+type WebAppAuthoritySecretVersionMismatch = {
+  readonly graphVersion: number;
+  readonly secretId: string;
+  readonly storedVersion: number;
+};
+
+type WebAppAuthoritySecretStartupDrift = {
+  readonly invalidSecretIds: readonly string[];
+  readonly liveSecretIds: readonly string[];
+  readonly missingSecretIds: readonly string[];
+  readonly orphanedSecretIds: readonly string[];
+  readonly versionMismatches: readonly WebAppAuthoritySecretVersionMismatch[];
+};
+
+function hasBlockingSecretStartupDrift(drift: WebAppAuthoritySecretStartupDrift): boolean {
+  return (
+    drift.invalidSecretIds.length > 0 ||
+    drift.missingSecretIds.length > 0 ||
+    drift.versionMismatches.length > 0
+  );
+}
+
+function formatSecretStartupDriftMessage(drift: WebAppAuthoritySecretStartupDrift): string {
+  const details: string[] = [];
+  if (drift.invalidSecretIds.length > 0) {
+    details.push(`missing graph metadata for ${drift.invalidSecretIds.join(", ")}`);
+  }
+  if (drift.missingSecretIds.length > 0) {
+    details.push(`missing plaintext rows for ${drift.missingSecretIds.join(", ")}`);
+  }
+  if (drift.versionMismatches.length > 0) {
+    details.push(
+      `version mismatch for ${drift.versionMismatches
+        .map(
+          ({ secretId, graphVersion, storedVersion }) =>
+            `${secretId} (graph ${graphVersion}, stored ${storedVersion})`,
+        )
+        .join(", ")}`,
+    );
+  }
+
+  const blockingSummary = details.length > 0 ? `: ${details.join("; ")}` : ".";
+  const orphanedSummary =
+    drift.orphanedSecretIds.length > 0
+      ? ` Unreferenced side-storage rows for ${drift.orphanedSecretIds.join(", ")} were left untouched because startup repair stopped at the blocking drift.`
+      : "";
+
+  return `Cannot start web authority because secret storage drift was detected${blockingSummary}.${orphanedSummary}`;
+}
+
+class WebAppAuthoritySecretStorageDriftError extends Error {
+  readonly invalidSecretIds: readonly string[];
+  readonly liveSecretIds: readonly string[];
+  readonly missingSecretIds: readonly string[];
+  readonly orphanedSecretIds: readonly string[];
+  readonly versionMismatches: readonly WebAppAuthoritySecretVersionMismatch[];
+
+  constructor(drift: WebAppAuthoritySecretStartupDrift) {
+    super(formatSecretStartupDriftMessage(drift));
+    this.name = "WebAppAuthoritySecretStorageDriftError";
+    this.invalidSecretIds = drift.invalidSecretIds;
+    this.liveSecretIds = drift.liveSecretIds;
+    this.missingSecretIds = drift.missingSecretIds;
+    this.orphanedSecretIds = drift.orphanedSecretIds;
+    this.versionMismatches = drift.versionMismatches;
   }
 }
 
@@ -732,6 +815,101 @@ function getEntityLabel(store: Store, id: string): string {
   return (
     getFirstObject(store, id, namePredicateId) ?? getFirstObject(store, id, labelPredicateId) ?? id
   );
+}
+
+export function collectLiveSecretIds(snapshot: StoreSnapshot): readonly string[] {
+  const retractedEdgeIds = new Set(snapshot.retracted);
+  const secretHandleIds = new Set<string>();
+
+  for (const edge of snapshot.edges) {
+    if (retractedEdgeIds.has(edge.id)) continue;
+    if (edge.p === typePredicateId && edge.o === core.secretHandle.values.id) {
+      secretHandleIds.add(edge.s);
+    }
+  }
+
+  if (secretHandleIds.size === 0) {
+    return [];
+  }
+
+  const liveSecretIds = new Set<string>();
+  for (const edge of snapshot.edges) {
+    if (retractedEdgeIds.has(edge.id)) continue;
+    if (secretHandleIds.has(edge.o)) {
+      liveSecretIds.add(edge.o);
+    }
+  }
+
+  return [...liveSecretIds].sort((left, right) => left.localeCompare(right));
+}
+
+function toSecretInventory(
+  secrets:
+    | Record<string, WebAppAuthoritySecretInventoryRecord>
+    | Record<string, WebAppAuthoritySecretRecord>,
+): Record<string, WebAppAuthoritySecretInventoryRecord> {
+  return Object.fromEntries(
+    Object.entries(secrets)
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([secretId, secret]) => [
+        secretId,
+        {
+          version: secret.version,
+        },
+      ]),
+  );
+}
+
+function resolveSecretStartupDrift(
+  snapshot: StoreSnapshot,
+  graph: WebAppAuthorityGraph,
+  secretInventory: Record<string, WebAppAuthoritySecretInventoryRecord>,
+): WebAppAuthoritySecretStartupDrift {
+  const liveSecretIds = collectLiveSecretIds(snapshot);
+  const liveSecretIdSet = new Set(liveSecretIds);
+  const persistedStore = createStore(snapshot);
+  const persistedGraph = createTypeClient(persistedStore, graph);
+  const missingSecretIds: string[] = [];
+  const invalidSecretIds: string[] = [];
+  const versionMismatches: WebAppAuthoritySecretVersionMismatch[] = [];
+
+  for (const secretId of liveSecretIds) {
+    const handle = persistedGraph.secretHandle.get(secretId);
+    const rawGraphVersion = handle?.version;
+    const graphVersion =
+      typeof rawGraphVersion === "number"
+        ? rawGraphVersion
+        : Number.parseInt(rawGraphVersion ?? "", 10);
+    if (!Number.isInteger(graphVersion)) {
+      invalidSecretIds.push(secretId);
+      continue;
+    }
+
+    const stored = secretInventory[secretId];
+    if (!stored) {
+      missingSecretIds.push(secretId);
+      continue;
+    }
+    if (stored.version !== graphVersion) {
+      versionMismatches.push({
+        secretId,
+        graphVersion,
+        storedVersion: stored.version,
+      });
+    }
+  }
+
+  return {
+    invalidSecretIds,
+    liveSecretIds,
+    missingSecretIds,
+    orphanedSecretIds: Object.keys(secretInventory)
+      .filter((secretId) => !liveSecretIdSet.has(secretId))
+      .sort((left, right) => left.localeCompare(right)),
+    versionMismatches: versionMismatches.sort((left, right) =>
+      left.secretId.localeCompare(right.secretId),
+    ),
+  };
 }
 
 function hasEntityOfType(store: Store, entityId: string, typeId: string): boolean {
@@ -1306,11 +1484,28 @@ export async function applyStagedWebAuthorityMutation<TResult>(input: {
 function createAuthorityStorage(
   storage: WebAppAuthorityStorage,
   pendingSecretWriteRef: { current: WebAppAuthoritySecretWrite | null },
+  preloadedPersistedState: PersistedAuthoritativeGraphStorageLoadResult | null,
 ): PersistedAuthoritativeGraphStorage {
   // This adapter is the explicit boundary between the stable graph/runtime
   // persisted-authority contract and web-only secret side storage.
+  let preloadedLoadUsed = false;
+
   return {
     async load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null> {
+      if (!preloadedLoadUsed) {
+        preloadedLoadUsed = true;
+        const persistedState = preloadedPersistedState;
+        if (!persistedState) return null;
+
+        return {
+          snapshot: clonePersistedValue(persistedState.snapshot),
+          writeHistory: persistedState.writeHistory
+            ? clonePersistedValue(persistedState.writeHistory)
+            : undefined,
+          needsPersistence: persistedState.needsPersistence,
+        };
+      }
+
       const persistedState = await storage.load();
       if (!persistedState) return null;
 
@@ -1344,13 +1539,39 @@ export async function createWebAppAuthority(
   options: WebAppAuthorityOptions = {},
 ): Promise<WebAppAuthority> {
   const graph = options.graph ?? webAppGraph;
+  const persistedState = await storage.load();
   const { bootstrappedSnapshot, compiledFieldIndex, scalarByKey, typeByKey } =
     getCompiledGraphArtifacts(graph);
   const store = createStore(bootstrappedSnapshot);
-
-  // Load every retained plaintext row. The current proof does not garbage
-  // collect side-table entries when graph references are retracted.
-  const persistedSecrets = await storage.loadSecrets();
+  let persistedSecrets: Record<string, WebAppAuthoritySecretRecord> = {};
+  if (persistedState) {
+    const startupSecretInventory = await storage.inspectSecrets();
+    const startupDrift = resolveSecretStartupDrift(
+      persistedState.snapshot,
+      graph,
+      startupSecretInventory,
+    );
+    if (hasBlockingSecretStartupDrift(startupDrift)) {
+      throw new WebAppAuthoritySecretStorageDriftError(startupDrift);
+    }
+    if (startupDrift.orphanedSecretIds.length > 0) {
+      await storage.repairSecrets({
+        liveSecretIds: startupDrift.liveSecretIds,
+      });
+    }
+    persistedSecrets =
+      startupDrift.liveSecretIds.length > 0
+        ? await storage.loadSecrets({ secretIds: startupDrift.liveSecretIds })
+        : {};
+    const loadedSecretDrift = resolveSecretStartupDrift(
+      persistedState.snapshot,
+      graph,
+      toSecretInventory(persistedSecrets),
+    );
+    if (hasBlockingSecretStartupDrift(loadedSecretDrift)) {
+      throw new WebAppAuthoritySecretStorageDriftError(loadedSecretDrift);
+    }
+  }
   const secretValuesRef = {
     current: new Map(
       Object.entries(persistedSecrets).map(([secretId, secret]) => [secretId, secret.value]),
@@ -1360,7 +1581,7 @@ export async function createWebAppAuthority(
     current: null as WebAppAuthoritySecretWrite | null,
   };
   const authority = await createPersistedAuthoritativeGraph(store, graph, {
-    storage: createAuthorityStorage(storage, pendingSecretWriteRef),
+    storage: createAuthorityStorage(storage, pendingSecretWriteRef, persistedState),
     seed() {
       if (options.seedExampleGraph !== false) {
         seedExampleGraph(createTypeClient(store, webAppGraph));

@@ -51,8 +51,12 @@ The first raw-SQL Durable Object adapter now exists in
 Current behavior:
 
 - the Durable Object constructor bootstraps the SQLite schema synchronously
-- startup hydrates graph snapshot rows, retained transaction rows, and secret
-  side-data from SQL tables
+- startup inspects secret side-table inventory before loading plaintext,
+  prunes unreferenced secret rows, and only hydrates the plaintext rows still
+  referenced by the current graph state
+- startup fails closed when a live graph-backed secret handle is missing its
+  side-table row or carries a side-table version that no longer matches the
+  replicated graph metadata
 - optional metadata reads iterate the SQL cursor directly so an unseeded table
   cleanly returns "no row" instead of depending on `cursor.one()`
 - startup treats broken retained transaction windows as reset baselines instead
@@ -62,7 +66,8 @@ Current behavior:
   `history_retained_from_seq` and forcing old cursors onto total-sync fallback
 - accepted graph transactions commit through one Durable Object storage
   transaction that writes `io_graph_tx`, `io_graph_tx_op`, `io_graph_edge`, and
-  `io_secret_value`
+  `io_secret_value`, then prunes orphaned secret rows from the post-commit live
+  graph state
 - accepted authoritative results now carry `writeScope`, so durable state keeps
   `client-tx` versus `server-command` origin across commit, restart, and
   baseline rewrites for data written after `writeScope` existed
@@ -265,11 +270,8 @@ Purpose:
 - plaintext or sealed payload storage for secret-backed fields
 - future migration path toward an external secret provider
 - separation between graph metadata and secret material
-- current Branch 1 retract rule: removing a secret-backed reference or
-  retracting its owning entity does not delete the `io_secret_value` row;
-  current graph state forgets the relationship, while the retained plaintext
-  row survives commit, restart, replay, and baseline rewrites until later
-  lifecycle work defines cleanup
+- prune authority-only rows once no live graph edge still references the
+  corresponding `core:secretHandle` id
 
 The graph should continue to store only `secretHandle` identity and safe
 metadata. This table owns the actual secret value lifecycle.
@@ -329,7 +331,13 @@ On startup:
 5. It reads the retained transaction window from `io_graph_tx` and
    `io_graph_tx_op`.
 6. It rebuilds `AuthoritativeGraphWriteHistory` from those retained rows.
-7. It loads `io_secret_value` into the authority-owned secret map.
+7. It inspects `io_secret_value` for startup drift:
+   - side rows outside the live graph-backed secret set are pruned before
+     hydration continues
+   - live secret handles missing plaintext rows or carrying mismatched
+     side-table versions abort startup instead of silently continuing
+8. It loads only the remaining live `io_secret_value` rows into the
+   authority-owned secret map.
 
 This avoids replaying the entire historical log just to rebuild the current
 graph.
@@ -347,10 +355,11 @@ For every accepted mutation:
 5. For each `retract` op:
    - insert one `io_graph_tx_op` row
    - update `io_graph_edge.retracted_tx_seq`
-6. It writes any secret side-data updates in the same transaction; retract-only
-   graph commits intentionally leave prior `io_secret_value` rows untouched.
-7. It updates `io_graph_meta.head_seq`, `head_cursor`, and `updated_at`.
-8. It commits.
+6. It writes any secret side-data updates in the same transaction.
+7. It prunes `io_secret_value` rows whose `secret_id` is no longer reachable
+   from the post-commit live graph state.
+8. It updates `io_graph_meta.head_seq`, `head_cursor`, and `updated_at`.
+9. It commits.
 
 If the SQL transaction fails, the in-memory authority should roll back to the
 previous snapshot exactly as it does today.
@@ -400,6 +409,10 @@ The current adapter preserves that split:
 - secret writes commit alongside the graph transaction in one DO storage
   transaction
 - the graph transaction never embeds plaintext secret data
+- startup automatically prunes orphaned plaintext rows that are no longer
+  reachable from live graph-backed secret handles
+- startup refuses to continue when a live secret handle is missing plaintext or
+  disagrees with side-storage version metadata
 - the secret table schema still allows a later move to sealed payloads
   or an external provider handle
 
@@ -478,7 +491,7 @@ Important point:
   without inventing a second source of truth
 
 The web authority can then layer generic secret-backed field side-data writes
-on top of that graph commit.
+and liveness pruning on top of that graph commit.
 
 ## Implementation Status
 
@@ -488,11 +501,12 @@ Done in the current web Durable Object path:
 - `graph` exposes the `load(...)`, `commit(...)`, and `persist(...)`
   persistence boundary consumed by the adapter
 - accepted writes append `io_graph_tx` including `write_scope`, append
-  `io_graph_tx_op`, materialize `io_graph_edge`, and upsert `io_secret_value`
-  inside one Durable Object storage transaction
-- startup hydrates snapshot rows and retained transaction rows from SQL, and
-  rewrites reset baselines when retained history no longer matches the hydrated
-  head
+  `io_graph_tx_op`, materialize `io_graph_edge`, upsert `io_secret_value`, and
+  prune orphaned secret rows inside one Durable Object storage transaction
+- startup inspects the secret side-table inventory, prunes unreferenced rows,
+  fails closed on live secret drift, hydrates snapshot rows and retained
+  transaction rows from SQL, and rewrites reset baselines when retained history
+  no longer matches the hydrated head
 - retained history is bounded by transaction count, `history_retained_from_seq`
   advances with pruning, and old or unknown cursors fall back to total sync
 - file-backed persisted authorities normalize legacy write histories that lack
@@ -516,6 +530,7 @@ Still deferred:
 - one mutation no longer rewrites the whole graph
 - startup hydrates from explicit rows rather than a giant serialized blob
 - incremental sync history is retained intentionally instead of accidentally
-- secret storage stops piggybacking on the graph blob
+- secret storage stops piggybacking on the graph blob or growing without a
+  liveness boundary
 - the adapter becomes smaller, more explicit, and easier to reason about under
   load
