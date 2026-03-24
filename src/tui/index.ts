@@ -16,6 +16,12 @@ export type {
   WorkflowTuiSurfaceModel,
   WorkflowTuiWorkflowSurfaceModel,
 } from "./model.js";
+export {
+  useCommitQueueScope,
+  useProjectBranchScope,
+  useWorkflowProjectionIndex,
+} from "./projection.js";
+export type { WorkflowProjectionQueryOptions } from "./projection.js";
 export { parseWorkflowTuiCliArgs, runWorkflowTuiCli } from "./server.js";
 export type { WorkflowTuiCliOptions } from "./server.js";
 export { createWorkflowTui } from "./tui.js";

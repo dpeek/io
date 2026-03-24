@@ -40,7 +40,8 @@ package.
 ## Migration Notes
 
 - `../../src/tui/*` owns workflow branch-board, branch-detail, and commit-queue
-  composition plus shell focus and selection behavior
+  composition, projection-consumption hooks, plus shell focus and selection
+  behavior
 - `../../src/agent/tui/*` still owns the live supervisor or worker monitor,
   retained attach and replay flows, transcript shaping, and Codex event
   normalization
@@ -57,6 +58,9 @@ package.
 ## Code Surface
 
 - [tui/index.ts](../../src/tui/index.ts): public TUI surface exports
+- [tui/projection.ts](../../src/tui/projection.ts): workflow-owned React hooks
+  that bind synced graph runtimes to projection reads for branch-board and
+  commit-queue screens
 - [tui/server.ts](../../src/tui/server.ts): `io tui` CLI parsing and startup
 - [tui/model.ts](../../src/tui/model.ts): bootstrap fallback plus workflow
   screen models built from projection queries

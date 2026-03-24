@@ -8,16 +8,6 @@ import {
   type ReactNode,
 } from "react";
 
-import {
-  createWorkflowProjectionIndex,
-  type CommitQueueScopeQuery,
-  type CommitQueueScopeResult,
-  type ProjectBranchScopeQuery,
-  type ProjectBranchScopeResult,
-  type WorkflowProjectionGraphClient,
-  type WorkflowProjectionIndex,
-  type WorkflowProjectionIndexOptions,
-} from "../../modules/ops/workflow/query.js";
 import { GraphMutationRuntimeProvider } from "../../runtime/react/persisted-mutation.js";
 import type { AnyTypeOutput } from "../../runtime/schema.js";
 import {
@@ -42,16 +32,6 @@ export interface GraphRuntimeProviderProps<T extends GraphSchema> {
 export interface GraphQueryOptions<T extends GraphSchema> {
   readonly deps?: readonly unknown[];
   readonly runtime?: GraphRuntime<T> | null;
-}
-
-export type WorkflowGraphRuntime = {
-  readonly graph: WorkflowProjectionGraphClient;
-  readonly sync: SyncedTypeSyncController;
-};
-
-export interface WorkflowProjectionQueryOptions {
-  readonly options?: WorkflowProjectionIndexOptions;
-  readonly runtime?: WorkflowGraphRuntime | null;
 }
 
 const GraphRuntimeContext = createContext<AnyGraphRuntime | null>(null);
@@ -152,36 +132,4 @@ export function useGraphQuery<T extends GraphSchema, TResult>(
     () => query(resolvedRuntime),
     [query, resolvedRuntime, syncState, ...(options.deps ?? [])],
   );
-}
-
-export function useWorkflowProjectionIndex(
-  options: WorkflowProjectionQueryOptions = {},
-): WorkflowProjectionIndex {
-  return useGraphQuery(
-    (runtime) =>
-      createWorkflowProjectionIndex(
-        runtime.graph as unknown as WorkflowProjectionGraphClient,
-        options.options,
-      ),
-    {
-      deps: [options.options],
-      runtime: options.runtime as GraphRuntime<GraphSchema> | null | undefined,
-    },
-  );
-}
-
-export function useProjectBranchScope(
-  query: ProjectBranchScopeQuery,
-  options: WorkflowProjectionQueryOptions = {},
-): ProjectBranchScopeResult {
-  const projection = useWorkflowProjectionIndex(options);
-  return useMemo(() => projection.readProjectBranchScope(query), [projection, query]);
-}
-
-export function useCommitQueueScope(
-  query: CommitQueueScopeQuery,
-  options: WorkflowProjectionQueryOptions = {},
-): CommitQueueScopeResult {
-  const projection = useWorkflowProjectionIndex(options);
-  return useMemo(() => projection.readCommitQueueScope(query), [projection, query]);
 }

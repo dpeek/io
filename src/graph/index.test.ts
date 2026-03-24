@@ -130,13 +130,10 @@ const requiredReactDomExports = [
 
 const requiredReactOpenTuiExports = [
   "GraphRuntimeProvider",
-  "useCommitQueueScope",
   "useGraphQuery",
   "useGraphRuntime",
   "useGraphSyncState",
   "useOptionalGraphRuntime",
-  "useProjectBranchScope",
-  "useWorkflowProjectionIndex",
 ] as const;
 
 const requiredModulesExports = [
@@ -322,6 +319,9 @@ describe("@io/core/graph package entry surfaces", () => {
     expect(Object.keys(reactDomAdapterExports)).not.toContain("GraphMutationRuntimeProvider");
     expectNamedExports(reactOpentuiAdapterExports, requiredReactOpenTuiExports);
     expect(Object.keys(reactOpentuiAdapterExports)).not.toContain("GraphMutationRuntimeProvider");
+    expect(Object.keys(reactOpentuiAdapterExports)).not.toContain("useCommitQueueScope");
+    expect(Object.keys(reactOpentuiAdapterExports)).not.toContain("useProjectBranchScope");
+    expect(Object.keys(reactOpentuiAdapterExports)).not.toContain("useWorkflowProjectionIndex");
   });
 
   it("keeps the canonical module entry surfaces explicit", async () => {

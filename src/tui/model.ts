@@ -176,8 +176,8 @@ export function createWorkflowTuiBootstrapModel(
       {
         id: "next",
         lines: [
-          "Bind project branch and commit-queue graph scopes.",
-          "Add reusable graph-aware OpenTUI adapters behind react-opentui.",
+          "Bind workflow-owned project branch and commit-queue graph scopes.",
+          "Keep reusable OpenTUI runtime bindings behind react-opentui.",
           "Launch planning and execution sessions from selected workflow subjects.",
         ],
         title: "Next",

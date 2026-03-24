@@ -14,8 +14,8 @@ graph package's React and host-specific adapter surfaces.
   filter resolvers, icon rendering, and field-family modules
 - `@io/core/graph/adapters/react-opentui`:
   `../../src/graph/adapters/react-opentui/index.ts`; terminal adapter package
-  root for OpenTUI runtime context, sync-state subscriptions, and workflow
-  scope query hooks
+  root for OpenTUI runtime context, sync-state subscriptions, and reusable
+  graph query hooks
 
 ## Source Layout
 
@@ -34,5 +34,6 @@ graph package's React and host-specific adapter surfaces.
 - `../../src/graph/adapters/react-dom/fields/`: DOM field-family view/editor
   modules and shared preview helpers
 - `../../src/graph/adapters/react-opentui/index.ts`: terminal adapter entry
-  file that exports the OpenTUI graph runtime provider plus workflow projection
-  hooks for project-branch and commit-queue scope consumption
+  file that exports the OpenTUI graph runtime provider plus reusable graph
+  query hooks; workflow-owned projection consumption now lives in
+  `../../src/tui/projection.ts`

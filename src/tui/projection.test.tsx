@@ -7,20 +7,21 @@ import { createRoot, flushSync } from "@opentui/react";
 import { act } from "react";
 
 import {
+  GraphRuntimeProvider,
+  useGraphQuery,
+  useGraphRuntime,
+  useGraphSyncState,
+} from "../graph/adapters/react-opentui/index.js";
+import {
   bootstrap,
   createStore,
   createSyncedTypeClient,
   createTotalSyncPayload,
   createTypeClient,
-} from "../../index.js";
-import { core, ops } from "../../modules/index.js";
-import { useOptionalMutationRuntime } from "../../runtime/react/index.js";
-import {
-  GraphRuntimeProvider,
-  useGraphQuery,
-  useGraphRuntime,
-  useGraphSyncState,
-} from "./index.js";
+} from "../graph/index.js";
+import { core } from "../graph/modules/core.js";
+import { ops } from "../graph/modules/ops.js";
+import { useCommitQueueScope, useProjectBranchScope, useWorkflowProjectionIndex } from "./index.js";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -75,44 +76,40 @@ function createWorkflowRuntimeFixture() {
 
   return {
     graph,
-    ids: { branchId },
+    ids: { branchId, projectId },
     runtime,
   };
 }
 
-function GraphRuntimeProbe() {
+function WorkflowProjectionProbe({ branchId, projectId }: { branchId: string; projectId: string }) {
   const runtime = useGraphRuntime<typeof ops>();
   const syncState = useGraphSyncState<typeof ops>();
+  const projection = useWorkflowProjectionIndex();
+  const branchScope = useProjectBranchScope({ projectId });
+  const commitQueue = useCommitQueueScope({ branchId });
   const projectCount = useGraphQuery(
     (resolvedRuntime: typeof runtime) => resolvedRuntime.graph.workflowProject.list().length,
   );
-  const branchTitles = useGraphQuery((resolvedRuntime: typeof runtime) =>
-    resolvedRuntime.graph.workflowBranch
-      .list()
-      .map((branch) => branch.name)
-      .join(" | "),
-  );
-  const commitTitles = useGraphQuery((resolvedRuntime: typeof runtime) =>
-    resolvedRuntime.graph.workflowCommit
-      .list()
-      .map((commit) => commit.name)
-      .join(" | "),
-  );
-  const mutationRuntime = useOptionalMutationRuntime();
 
   return (
     <box flexDirection="column">
       <text content={`projects:${projectCount}`} />
       <text content={`runtime:${runtime.graph.workflowBranch.list().length}`} />
-      <text content={`mutation:${mutationRuntime ? "ready" : "missing"}`} />
       <text content={`pending:${syncState.pendingCount}`} />
-      <text content={`branches:${branchTitles}`} />
-      <text content={`commits:${commitTitles}`} />
+      <text
+        content={`projection:${projection.readProjectBranchScope({ projectId }).rows.length}`}
+      />
+      <text
+        content={`branches:${branchScope.rows.map((row) => row.workflowBranch.title).join(" | ")}`}
+      />
+      <text
+        content={`commits:${commitQueue.rows.map((row) => row.workflowCommit.title).join(" | ")}`}
+      />
     </box>
   );
 }
 
-test("react-opentui provider exposes synced graph query selectors", async () => {
+test("workflow-owned projection hooks read synced workflow scopes", async () => {
   const { graph, ids, runtime } = createWorkflowRuntimeFixture();
   await runtime.sync.sync();
 
@@ -127,7 +124,7 @@ test("react-opentui provider exposes synced graph query selectors", async () => 
       flushSync(() => {
         root.render(
           <GraphRuntimeProvider runtime={runtime}>
-            <GraphRuntimeProbe />
+            <WorkflowProjectionProbe branchId={ids.branchId} projectId={ids.projectId} />
           </GraphRuntimeProvider>,
         );
       });
@@ -137,8 +134,8 @@ test("react-opentui provider exposes synced graph query selectors", async () => 
     let frame = captureCharFrame();
     expect(frame).toContain("projects:1");
     expect(frame).toContain("runtime:1");
-    expect(frame).toContain("mutation:ready");
     expect(frame).toContain("pending:0");
+    expect(frame).toContain("projection:1");
     expect(frame).toContain("Workflow runtime contract");
     expect(frame).toContain("Define branch board scope");
 

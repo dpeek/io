@@ -88,7 +88,8 @@ React package subpaths split between the canonical host-neutral surface at
 `@io/core/graph/adapters/react-opentui` maps to
 `../../src/graph/adapters/react-opentui/index.ts`. It is the terminal adapter
 package root and now exports the OpenTUI graph runtime provider, sync-state
-subscriptions, and workflow projection hooks used by the workflow TUI.
+subscriptions, and reusable graph query hooks. Workflow projection hooks used
+by the workflow TUI live in `../../src/tui/projection.ts`.
 
 ## Boundary Rules
 
