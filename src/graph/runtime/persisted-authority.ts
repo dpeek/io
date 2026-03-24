@@ -37,14 +37,41 @@ export type PersistedAuthoritativeGraphState = {
 /**
  * Hydrated authority state returned by a storage adapter.
  *
- * `needsPersistence` requests a rewrite through the shared persisted-authority
- * surface after load, typically for legacy migrations or retained-history
- * normalization.
+ * `recovery` makes baseline rewrite rules explicit across adapters:
+ *
+ * - `"none"` means the persisted baseline and retained history can resume as-is
+ * - `"repair"` means the retained history still supports the hydrated
+ *   snapshot, but adapter metadata or normalized history should be rewritten
+ * - `"reset-baseline"` means the hydrated snapshot can no longer be backed by
+ *   retained history, so the runtime must publish a fresh baseline cursor
  */
+export type PersistedAuthoritativeGraphStorageRecovery = "none" | "repair" | "reset-baseline";
+
+export type PersistedAuthoritativeGraphStartupRepairReason =
+  | "retained-history-policy-normalized"
+  | "write-history-write-scope-normalized"
+  | "head-sequence-mismatch"
+  | "head-cursor-mismatch"
+  | "retained-history-boundary-mismatch";
+
+export type PersistedAuthoritativeGraphStartupResetReason =
+  | "missing-write-history"
+  | "retained-history-base-sequence-invalid"
+  | "retained-history-sequence-mismatch"
+  | "retained-history-head-mismatch"
+  | "retained-history-replay-failed";
+
+export type PersistedAuthoritativeGraphStartupDiagnostics = {
+  readonly recovery: PersistedAuthoritativeGraphStorageRecovery;
+  readonly repairReasons: readonly PersistedAuthoritativeGraphStartupRepairReason[];
+  readonly resetReasons: readonly PersistedAuthoritativeGraphStartupResetReason[];
+};
+
 export type PersistedAuthoritativeGraphStorageLoadResult = {
   readonly snapshot: StoreSnapshot;
   readonly writeHistory?: AuthoritativeGraphWriteHistory;
-  readonly needsPersistence: boolean;
+  readonly recovery: PersistedAuthoritativeGraphStorageRecovery;
+  readonly startupDiagnostics: PersistedAuthoritativeGraphStartupDiagnostics;
 };
 
 /**
@@ -105,6 +132,7 @@ export type PersistedAuthoritativeGraphOptions<T extends Record<string, AnyTypeO
 export type PersistedAuthoritativeGraph<T extends Record<string, AnyTypeOutput>> = {
   readonly store: Store;
   readonly graph: NamespaceClient<T>;
+  readonly startupDiagnostics: PersistedAuthoritativeGraphStartupDiagnostics;
   createSyncPayload(options?: {
     authorizeRead?: ReplicationReadAuthorizer;
     freshness?: SyncFreshness;
@@ -211,14 +239,20 @@ export async function createPersistedAuthoritativeGraph<
   }
 
   const persistedState = await options.storage.load();
+  let startupDiagnostics: PersistedAuthoritativeGraphStartupDiagnostics = {
+    recovery: "none",
+    repairReasons: [],
+    resetReasons: [],
+  };
   if (persistedState) {
+    startupDiagnostics = persistedState.startupDiagnostics;
     store.replace(persistedState.snapshot);
     if (persistedState.writeHistory) {
       try {
         writes = createWriteSession(persistedState.writeHistory);
         const hydratedHistory = writes.getHistory();
         if (
-          persistedState.needsPersistence ||
+          persistedState.recovery === "repair" ||
           !sameAuthoritativeGraphRetainedHistoryPolicy(
             persistedState.writeHistory.retainedHistoryPolicy,
             configuredRetainedHistoryPolicy,
@@ -229,6 +263,14 @@ export async function createPersistedAuthoritativeGraph<
           await persistCurrentState();
         }
       } catch {
+        // Any retained-history replay failure is an explicit reset-baseline
+        // rewrite because the hydrated snapshot can no longer support the old
+        // incremental cursor window.
+        startupDiagnostics = {
+          recovery: "reset-baseline",
+          repairReasons: [],
+          resetReasons: ["retained-history-replay-failed"],
+        };
         writes = createFreshWriteSession();
         await persistCurrentState();
       }
@@ -245,6 +287,7 @@ export async function createPersistedAuthoritativeGraph<
   return {
     store,
     graph,
+    startupDiagnostics,
     createSyncPayload(syncOptions = {}) {
       return createTotalSyncPayload(store, {
         authorizeRead: syncOptions.authorizeRead,

@@ -82,6 +82,9 @@ The current implementation keeps ids stable per key and treats rename as an expl
   `PersistedAuthoritativeGraphState`, the storage load/commit/persist inputs, and
   `PersistedAuthoritativeGraphStorage`
 - `PersistedAuthoritativeGraphStorage` defines the hydration, incremental commit, and explicit snapshot-persist contract for durable state
+- persisted-authority `load()` results now carry `startupDiagnostics` with stable
+  `repairReasons` and `resetReasons`, and the returned persisted authority exposes
+  the same startup outcome to callers after bootstrap
 - `createJsonPersistedAuthoritativeGraphStorage(path, namespace)` provides the shipped file-backed JSON adapter for non-DO runtimes
 - `createJsonPersistedAuthoritativeGraph(store, namespace, { path, seed?, createCursorPrefix? })` composes that file-backed adapter with the persisted authority runtime
 - `createPersistedAuthoritativeGraph(store, namespace, { storage, seed?, createCursorPrefix? })` composes seeding, reload, incremental commit, explicit snapshot persistence, and authoritative write replay

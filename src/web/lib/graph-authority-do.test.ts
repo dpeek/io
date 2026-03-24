@@ -3939,6 +3939,238 @@ describe("web graph authority durable object", () => {
     });
   });
 
+  it("rewrites stale persisted head metadata when retained history still matches the hydrated snapshot", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+    const createdTx = await postTransaction(durableObject, createdEnvVar.transaction);
+    const secretWrite = await postSecretField(durableObject, {
+      entityId: createdEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+    const expectedSnapshot = (await readSyncPayload(durableObject)).snapshot;
+
+    db.query(
+      `UPDATE io_graph_meta
+      SET head_seq = ?, head_cursor = ?
+      WHERE id = 1`,
+    ).run(1, createdTx.cursor);
+
+    const restarted = createTestDurableObject(state);
+    const restartedSync = await readSyncPayload(restarted);
+    const incremental = await readSyncPayload(restarted, createdTx.cursor);
+    const txCount = queryAll<{ count: number }>(db, `SELECT COUNT(*) AS count FROM io_graph_tx`);
+    const metaRows = queryAll<{
+      head_cursor: string;
+      head_seq: number;
+      history_retained_from_seq: number;
+    }>(
+      db,
+      `SELECT head_seq, head_cursor, history_retained_from_seq
+      FROM io_graph_meta
+      WHERE id = 1`,
+    );
+
+    expect(secretWrite.secretVersion).toBe(1);
+    expect(restartedSync.snapshot).toEqual(expectedSnapshot);
+    expect(restartedSync.cursor).not.toBe(createdTx.cursor);
+    expect(txCount).toEqual([{ count: 2 }]);
+    expect(metaRows).toEqual([
+      {
+        head_seq: 2,
+        head_cursor: restartedSync.cursor,
+        history_retained_from_seq: 0,
+      },
+    ]);
+    expect(incremental.transactions).toEqual([
+      expect.objectContaining({
+        txId: expect.stringContaining(`secret-field:${createdEnvVar.result}:`),
+        writeScope: "server-command",
+      }),
+    ]);
+    expect(incremental.fallback).toBeUndefined();
+  });
+
+  it("rewrites a stale retained-history boundary when retained transaction rows still match", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state, {
+      GRAPH_AUTHORITY_RETAINED_HISTORY_POLICY: encodeRetainedHistoryPolicy({
+        kind: "transaction-count",
+        maxTransactions: 2,
+      }),
+    });
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+
+    await postTransaction(durableObject, createdEnvVar.transaction);
+    await postSecretField(durableObject, {
+      entityId: createdEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+    const afterSecretSync = await readSyncPayload(durableObject);
+    const renameEnvVar = buildTransactionFromSnapshot(
+      afterSecretSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:update-env-var",
+      (graph) =>
+        graph.envVar.update(createdEnvVar.result, {
+          description: "Primary model credential (rotated)",
+        }),
+    );
+    const latestTx = await postTransaction(durableObject, renameEnvVar.transaction);
+    const expectedSnapshot = (await readSyncPayload(durableObject)).snapshot;
+
+    db.query(
+      `UPDATE io_graph_meta
+      SET history_retained_from_seq = ?
+      WHERE id = 1`,
+    ).run(0);
+
+    const restarted = createTestDurableObject(state, {
+      GRAPH_AUTHORITY_RETAINED_HISTORY_POLICY: encodeRetainedHistoryPolicy({
+        kind: "transaction-count",
+        maxTransactions: 2,
+      }),
+    });
+    const restartedAuthority = await (
+      restarted as unknown as {
+        getAuthority(): Promise<{ startupDiagnostics: unknown }>;
+      }
+    ).getAuthority();
+    const restartedSync = await readSyncPayload(restarted);
+    const reset = await readSyncPayload(restarted, initialSync.cursor);
+    const txRows = queryAll<{ seq: number }>(
+      db,
+      `SELECT seq
+      FROM io_graph_tx
+      ORDER BY seq ASC`,
+    );
+    const metaRows = queryAll<{
+      head_cursor: string;
+      head_seq: number;
+      history_retained_from_seq: number;
+    }>(
+      db,
+      `SELECT head_seq, head_cursor, history_retained_from_seq
+      FROM io_graph_meta
+      WHERE id = 1`,
+    );
+
+    expect(restartedSync.snapshot).toEqual(expectedSnapshot);
+    expect(restartedSync.cursor).toBe(latestTx.cursor);
+    expect(txRows).toEqual([{ seq: 2 }, { seq: 3 }]);
+    expect(metaRows).toEqual([
+      {
+        head_seq: 3,
+        head_cursor: latestTx.cursor,
+        history_retained_from_seq: 1,
+      },
+    ]);
+    expect(restartedAuthority.startupDiagnostics).toEqual({
+      recovery: "repair",
+      repairReasons: ["retained-history-boundary-mismatch"],
+      resetReasons: [],
+    });
+    expect(reset).toMatchObject({
+      fallback: "gap",
+      cursor: latestTx.cursor,
+      transactions: [],
+      diagnostics: {
+        retainedBaseCursor: expect.stringMatching(/:1$/),
+      },
+    });
+  });
+
+  it("resets the retained history baseline when persisted cursor metadata no longer matches transaction cursors", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const initialSync = await readSyncPayload(durableObject);
+    const createdEnvVar = buildTransactionFromSnapshot(
+      initialSync.snapshot ?? { edges: [], retracted: [] },
+      "tx:create-env-var",
+      (graph) =>
+        graph.envVar.create({
+          description: "Primary model credential",
+          name: "OPENAI_API_KEY",
+        }),
+    );
+    const createdTx = await postTransaction(durableObject, createdEnvVar.transaction);
+    await postSecretField(durableObject, {
+      entityId: createdEnvVar.result,
+      predicateId: envVarSecretPredicateId,
+      plaintext: "sk-live-first",
+    });
+    const expectedSnapshot = (await readSyncPayload(durableObject)).snapshot;
+
+    db.query(
+      `UPDATE io_graph_meta
+      SET cursor_prefix = ?, head_cursor = ?
+      WHERE id = 1`,
+    ).run("drifted:", "drifted:2");
+
+    const restarted = createTestDurableObject(state);
+    const restartedAuthority = await (
+      restarted as unknown as {
+        getAuthority(): Promise<{ startupDiagnostics: unknown }>;
+      }
+    ).getAuthority();
+    const restartedSync = await readSyncPayload(restarted);
+    const reset = await readSyncPayload(restarted, createdTx.cursor);
+    const txCount = queryAll<{ count: number }>(db, `SELECT COUNT(*) AS count FROM io_graph_tx`);
+    const metaRows = queryAll<{
+      cursor_prefix: string;
+      head_cursor: string;
+      head_seq: number;
+      history_retained_from_seq: number;
+    }>(
+      db,
+      `SELECT cursor_prefix, head_seq, head_cursor, history_retained_from_seq
+      FROM io_graph_meta
+      WHERE id = 1`,
+    );
+
+    expect(restartedSync.snapshot).toEqual(expectedSnapshot);
+    expect(restartedSync.cursor).not.toBe(createdTx.cursor);
+    expect(restartedSync.cursor).not.toBe("drifted:2");
+    expect(txCount).toEqual([{ count: 0 }]);
+    expect(metaRows).toEqual([
+      {
+        cursor_prefix: metaRows[0]?.cursor_prefix ?? "",
+        head_seq: 0,
+        head_cursor: restartedSync.cursor,
+        history_retained_from_seq: 0,
+      },
+    ]);
+    expect(restartedAuthority.startupDiagnostics).toEqual({
+      recovery: "reset-baseline",
+      repairReasons: [],
+      resetReasons: ["retained-history-sequence-mismatch"],
+    });
+    expect(reset).toMatchObject({
+      fallback: "reset",
+      cursor: restartedSync.cursor,
+      transactions: [],
+    });
+  });
+
   it("rewrites a reset baseline when retained transaction rows no longer reach the hydrated snapshot", async () => {
     const { db, state } = createSqliteDurableObjectState();
     const durableObject = createTestDurableObject(state);
@@ -3964,6 +4196,11 @@ describe("web graph authority durable object", () => {
     db.query(`DELETE FROM io_graph_tx WHERE seq = 2`).run();
 
     const restarted = createTestDurableObject(state);
+    const restartedAuthority = await (
+      restarted as unknown as {
+        getAuthority(): Promise<{ startupDiagnostics: unknown }>;
+      }
+    ).getAuthority();
     const restartedSync = await readSyncPayload(restarted);
     const reset = await readSyncPayload(restarted, createdTx.cursor);
     const txCount = queryAll<{ count: number }>(db, `SELECT COUNT(*) AS count FROM io_graph_tx`);
@@ -3994,6 +4231,11 @@ describe("web graph authority durable object", () => {
     expect(metaRows).toHaveLength(1);
     expect(metaRows[0]?.head_seq).toBe(0);
     expect(metaRows[0]?.history_retained_from_seq).toBe(0);
+    expect(restartedAuthority.startupDiagnostics).toEqual({
+      recovery: "reset-baseline",
+      repairReasons: [],
+      resetReasons: ["retained-history-head-mismatch"],
+    });
     expect(reset).toMatchObject({
       fallback: "reset",
       transactions: [],

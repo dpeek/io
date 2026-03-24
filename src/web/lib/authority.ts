@@ -2680,7 +2680,8 @@ function createAuthorityStorage(
           writeHistory: persistedState.writeHistory
             ? clonePersistedValue(persistedState.writeHistory)
             : undefined,
-          needsPersistence: persistedState.needsPersistence,
+          recovery: persistedState.recovery,
+          startupDiagnostics: clonePersistedValue(persistedState.startupDiagnostics),
         };
       }
 
@@ -2692,7 +2693,8 @@ function createAuthorityStorage(
         writeHistory: persistedState.writeHistory
           ? clonePersistedValue(persistedState.writeHistory)
           : undefined,
-        needsPersistence: persistedState.needsPersistence,
+        recovery: persistedState.recovery,
+        startupDiagnostics: clonePersistedValue(persistedState.startupDiagnostics),
       };
     },
     async commit(input): Promise<void> {

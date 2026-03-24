@@ -61,6 +61,12 @@ Current behavior:
   cleanly returns "no row" instead of depending on `cursor.one()`
 - startup treats broken retained transaction windows as reset baselines instead
   of advertising stale cursors after restart
+- startup validates persisted metadata against the hydrated snapshot and
+  retained transaction window explicitly with one shared recovery contract:
+  retained-history gaps, replay-window corruption, legacy snapshot-only state,
+  and cursor-prefix continuity mismatches force a reset-baseline rewrite;
+  stale head metadata, stale retained-history boundaries, and normalizable
+  policy/history metadata use a lighter in-place repair rewrite
 - retained history now carries an explicit shared runtime policy; the current
   Durable Object consumer persists the count-based baseline
   `{ kind: "transaction-count", maxTransactions: 128 }`, advances
@@ -481,7 +487,24 @@ The current shape is:
 type PersistedAuthoritativeGraphStorageLoadResult = {
   snapshot: StoreSnapshot;
   writeHistory?: AuthoritativeGraphWriteHistory;
-  needsPersistence: boolean;
+  recovery: "none" | "repair" | "reset-baseline";
+  startupDiagnostics: {
+    recovery: "none" | "repair" | "reset-baseline";
+    repairReasons: readonly (
+      | "retained-history-policy-normalized"
+      | "write-history-write-scope-normalized"
+      | "head-sequence-mismatch"
+      | "head-cursor-mismatch"
+      | "retained-history-boundary-mismatch"
+    )[];
+    resetReasons: readonly (
+      | "missing-write-history"
+      | "retained-history-base-sequence-invalid"
+      | "retained-history-sequence-mismatch"
+      | "retained-history-head-mismatch"
+      | "retained-history-replay-failed"
+    )[];
+  };
 };
 
 interface PersistedAuthoritativeGraphStorage {
@@ -507,6 +530,8 @@ Important point:
 - `AuthoritativeGraphWriteResult.writeScope` is the storage-boundary field that
   lets adapters durably retain `client-tx` versus `server-command` origin
   without inventing a second source of truth
+- `startupDiagnostics` gives callers and tests a stable explanation of which
+  startup repair or reset path ran without leaking adapter SQL details
 
 The web authority can then layer generic secret-backed field side-data writes
 and liveness pruning on top of that graph commit.

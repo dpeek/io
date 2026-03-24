@@ -111,7 +111,12 @@ export function createInMemoryTestWebAppAuthorityStorage(
         return {
           snapshot: clonePersistedValue(persistedState.snapshot),
           writeHistory: clonePersistedValue(persistedState.writeHistory),
-          needsPersistence: false,
+          recovery: "none",
+          startupDiagnostics: {
+            recovery: "none",
+            repairReasons: [],
+            resetReasons: [],
+          },
         };
       },
       async inspectSecrets(): Promise<Record<string, WebAppAuthoritySecretInventoryRecord>> {

@@ -34,7 +34,12 @@ const loadResult = {
     edges: [],
     retracted: [],
   },
-  needsPersistence: false,
+  recovery: "none",
+  startupDiagnostics: {
+    recovery: "none",
+    repairReasons: [],
+    resetReasons: [],
+  },
 } satisfies PersistedAuthoritativeGraphStorageLoadResult;
 
 const durableState = {

@@ -5,6 +5,9 @@ import {
   type PersistedAuthoritativeGraphStorageCommitInput as DurableAuthorityCommitInput,
   type PersistedAuthoritativeGraphStorageLoadResult as DurableAuthorityLoadResult,
   type PersistedAuthoritativeGraphStoragePersistInput as DurableAuthorityPersistInput,
+  type PersistedAuthoritativeGraphStartupDiagnostics,
+  type PersistedAuthoritativeGraphStartupRepairReason,
+  type PersistedAuthoritativeGraphStartupResetReason,
 } from "@io/core/graph";
 
 import {
@@ -137,6 +140,20 @@ function formatCursor(cursorPrefix: string, sequence: number): string {
   return `${cursorPrefix}${sequence}`;
 }
 
+function createStartupDiagnostics(
+  recovery: DurableAuthorityLoadResult["recovery"],
+  options: {
+    repairReasons?: readonly PersistedAuthoritativeGraphStartupRepairReason[];
+    resetReasons?: readonly PersistedAuthoritativeGraphStartupResetReason[];
+  } = {},
+): PersistedAuthoritativeGraphStartupDiagnostics {
+  return {
+    recovery,
+    repairReasons: [...(options.repairReasons ?? [])],
+    resetReasons: [...(options.resetReasons ?? [])],
+  };
+}
+
 function readRetainedHistoryPolicy(
   env: DurableObjectEnvLike,
 ): AuthoritativeGraphRetainedHistoryPolicy {
@@ -233,14 +250,16 @@ function readRetainedHistoryPolicyRow(
   >,
 ): {
   retainedHistoryPolicy: AuthoritativeGraphRetainedHistoryPolicy;
-  needsPersistence: boolean;
+  recovery: "none" | "repair";
+  repairReasons: readonly PersistedAuthoritativeGraphStartupRepairReason[];
 } {
   if (row.retained_history_policy_kind === "all") {
     return {
       retainedHistoryPolicy: {
         kind: "all",
       },
-      needsPersistence: false,
+      recovery: "none",
+      repairReasons: [],
     };
   }
 
@@ -255,13 +274,15 @@ function readRetainedHistoryPolicyRow(
         kind: "transaction-count",
         maxTransactions: row.retained_history_policy_max_transactions,
       },
-      needsPersistence: false,
+      recovery: "none",
+      repairReasons: [],
     };
   }
 
   return {
     retainedHistoryPolicy: defaultRetainedHistoryPolicy,
-    needsPersistence: true,
+    recovery: "repair",
+    repairReasons: ["retained-history-policy-normalized"],
   };
 }
 
@@ -377,7 +398,7 @@ function readGraphMetaRow(sql: DurableObjectSqlStorageLike): {
   headSeq: number;
   historyRetainedFromSeq: number;
   retainedHistoryPolicy: AuthoritativeGraphRetainedHistoryPolicy;
-  policyNeedsPersistence: boolean;
+  policyRepairReasons: readonly PersistedAuthoritativeGraphStartupRepairReason[];
   schemaVersion: number;
   seededAt: string | null;
   updatedAt: string;
@@ -409,7 +430,7 @@ function readGraphMetaRow(sql: DurableObjectSqlStorageLike): {
       "io_graph_meta.history_retained_from_seq",
     ),
     retainedHistoryPolicy: retainedHistoryPolicy.retainedHistoryPolicy,
-    policyNeedsPersistence: retainedHistoryPolicy.needsPersistence,
+    policyRepairReasons: retainedHistoryPolicy.repairReasons,
     schemaVersion: requireInteger(row.schema_version, "io_graph_meta.schema_version"),
     seededAt: requireNullableString(row.seeded_at, "io_graph_meta.seeded_at"),
     updatedAt: requireString(row.updated_at, "io_graph_meta.updated_at"),
@@ -475,7 +496,8 @@ function buildWriteHistoryFromSql(
   meta: NonNullable<ReturnType<typeof readGraphMetaRow>>,
   snapshotHeadSequence: number,
 ): {
-  needsPersistence: boolean;
+  recovery: "repair" | "reset-baseline" | "none";
+  startupDiagnostics: PersistedAuthoritativeGraphStartupDiagnostics;
   writeHistory?: DurableAuthorityLoadResult["writeHistory"];
 } {
   const transactions = readAllRows<GraphTxRow>(
@@ -505,25 +527,21 @@ function buildWriteHistoryFromSql(
     transactions.length > 0
       ? requireInteger(transactions[0]?.seq, "io_graph_tx.seq") - 1
       : snapshotHeadSequence;
-  const expectedHeadCursor = formatCursor(meta.cursorPrefix, snapshotHeadSequence);
-  const needsPersistence =
-    meta.policyNeedsPersistence ||
-    meta.headSeq !== snapshotHeadSequence ||
-    meta.headCursor !== expectedHeadCursor ||
-    meta.historyRetainedFromSeq !== baseSequence;
-
-  if (!Number.isInteger(baseSequence) || baseSequence < 0) {
-    return { needsPersistence: true };
-  }
-
   const results: Array<NonNullable<DurableAuthorityLoadResult["writeHistory"]>["results"][number]> =
     [];
   let expectedSequence = baseSequence + 1;
+  const resetReasons: PersistedAuthoritativeGraphStartupResetReason[] = [];
+
+  if (!Number.isInteger(baseSequence) || baseSequence < 0) {
+    resetReasons.push("retained-history-base-sequence-invalid");
+  }
+
   for (const row of transactions) {
     const seq = requireInteger(row.seq, "io_graph_tx.seq");
     const cursor = requireString(row.cursor, "io_graph_tx.cursor");
     if (seq !== expectedSequence || cursor !== formatCursor(meta.cursorPrefix, seq)) {
-      return { needsPersistence: true };
+      resetReasons.push("retained-history-sequence-mismatch");
+      break;
     }
 
     results.push({
@@ -561,12 +579,40 @@ function buildWriteHistoryFromSql(
     expectedSequence += 1;
   }
 
-  if (results.length > 0 && expectedSequence - 1 !== snapshotHeadSequence) {
-    return { needsPersistence: true };
+  if (
+    resetReasons.length === 0 &&
+    results.length > 0 &&
+    expectedSequence - 1 !== snapshotHeadSequence
+  ) {
+    resetReasons.push("retained-history-head-mismatch");
+  }
+
+  if (resetReasons.length > 0) {
+    return {
+      recovery: "reset-baseline",
+      startupDiagnostics: createStartupDiagnostics("reset-baseline", { resetReasons }),
+    };
+  }
+
+  const expectedHeadCursor = formatCursor(meta.cursorPrefix, snapshotHeadSequence);
+  const repairReasons: PersistedAuthoritativeGraphStartupRepairReason[] = [
+    ...meta.policyRepairReasons,
+  ];
+  if (meta.headSeq !== snapshotHeadSequence) {
+    repairReasons.push("head-sequence-mismatch");
+  }
+  if (meta.headCursor !== expectedHeadCursor) {
+    repairReasons.push("head-cursor-mismatch");
+  }
+  if (meta.historyRetainedFromSeq !== baseSequence) {
+    repairReasons.push("retained-history-boundary-mismatch");
   }
 
   return {
-    needsPersistence,
+    recovery: repairReasons.length > 0 ? "repair" : "none",
+    startupDiagnostics: createStartupDiagnostics(repairReasons.length > 0 ? "repair" : "none", {
+      repairReasons,
+    }),
     writeHistory: {
       cursorPrefix: meta.cursorPrefix,
       retainedHistoryPolicy: meta.retainedHistoryPolicy,
@@ -1006,7 +1052,8 @@ function createSqliteDurableObjectAuthorityStorage(
       return {
         snapshot: hydratedSnapshot.snapshot,
         writeHistory: hydratedHistory.writeHistory,
-        needsPersistence: hydratedHistory.needsPersistence,
+        recovery: hydratedHistory.recovery,
+        startupDiagnostics: hydratedHistory.startupDiagnostics,
       };
     },
     async inspectSecrets(): Promise<Record<string, WebAppAuthoritySecretInventoryRecord>> {

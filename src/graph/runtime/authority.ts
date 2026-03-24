@@ -6,6 +6,7 @@ import {
   persistedAuthoritativeGraphStateVersion,
   type JsonPersistedAuthoritativeGraphOptions,
   type PersistedAuthoritativeGraph,
+  type PersistedAuthoritativeGraphStartupDiagnostics,
   type PersistedAuthoritativeGraphStorageCommitInput,
   type PersistedAuthoritativeGraphStoragePersistInput,
   type PersistedAuthoritativeGraphState,
@@ -58,11 +59,17 @@ function validatePersistedSnapshot(
 
 function readPersistedWriteHistory(rawHistory: unknown): {
   readonly writeHistory?: AuthoritativeGraphWriteHistory;
-  readonly needsPersistence: boolean;
+  readonly recovery: "none" | "repair";
+  readonly startupDiagnostics: PersistedAuthoritativeGraphStartupDiagnostics;
 } {
   if (!isObjectRecord(rawHistory)) {
     return {
-      needsPersistence: false,
+      recovery: "none",
+      startupDiagnostics: {
+        recovery: "none",
+        repairReasons: [],
+        resetReasons: [],
+      },
     };
   }
   const cursorPrefix = rawHistory.cursorPrefix;
@@ -70,17 +77,32 @@ function readPersistedWriteHistory(rawHistory: unknown): {
   const results = rawHistory.results;
   if (typeof cursorPrefix !== "string") {
     return {
-      needsPersistence: false,
+      recovery: "none",
+      startupDiagnostics: {
+        recovery: "none",
+        repairReasons: [],
+        resetReasons: [],
+      },
     };
   }
   if (typeof baseSequence !== "number" || !Number.isInteger(baseSequence) || baseSequence < 0) {
     return {
-      needsPersistence: false,
+      recovery: "none",
+      startupDiagnostics: {
+        recovery: "none",
+        repairReasons: [],
+        resetReasons: [],
+      },
     };
   }
   if (!Array.isArray(results)) {
     return {
-      needsPersistence: false,
+      recovery: "none",
+      startupDiagnostics: {
+        recovery: "none",
+        repairReasons: [],
+        resetReasons: [],
+      },
     };
   }
   const retainedHistoryPolicy = rawHistory.retainedHistoryPolicy;
@@ -88,6 +110,15 @@ function readPersistedWriteHistory(rawHistory: unknown): {
     isAuthoritativeGraphRetainedHistoryPolicy(retainedHistoryPolicy)
       ? retainedHistoryPolicy
       : unboundedAuthoritativeGraphRetainedHistoryPolicy;
+  const repairReasons = [
+    ...(retainedHistoryPolicy === undefined ||
+    !isAuthoritativeGraphRetainedHistoryPolicy(retainedHistoryPolicy)
+      ? (["retained-history-policy-normalized"] as const)
+      : []),
+    ...(results.some((result) => isObjectRecord(result) && !("writeScope" in result))
+      ? (["write-history-write-scope-normalized"] as const)
+      : []),
+  ];
 
   // Legacy entries predate durable writeScope storage. They are intentionally
   // normalized to client-tx on load and then rewritten, rather than treated as
@@ -99,10 +130,12 @@ function readPersistedWriteHistory(rawHistory: unknown): {
       baseSequence,
       results: results as AuthoritativeGraphWriteResult[],
     },
-    needsPersistence:
-      retainedHistoryPolicy === undefined ||
-      !isAuthoritativeGraphRetainedHistoryPolicy(retainedHistoryPolicy) ||
-      results.some((result) => isObjectRecord(result) && !("writeScope" in result)),
+    recovery: repairReasons.length > 0 ? "repair" : "none",
+    startupDiagnostics: {
+      recovery: repairReasons.length > 0 ? "repair" : "none",
+      repairReasons,
+      resetReasons: [],
+    },
   };
 }
 
@@ -128,15 +161,29 @@ export function createJsonPersistedAuthoritativeGraphStorage<
         return {
           snapshot,
           writeHistory: persistedWriteHistory.writeHistory,
-          needsPersistence:
-            persistedWriteHistory.writeHistory === undefined ||
-            persistedWriteHistory.needsPersistence,
+          recovery:
+            persistedWriteHistory.writeHistory === undefined
+              ? "reset-baseline"
+              : persistedWriteHistory.recovery,
+          startupDiagnostics:
+            persistedWriteHistory.writeHistory === undefined
+              ? {
+                  recovery: "reset-baseline",
+                  repairReasons: [],
+                  resetReasons: ["missing-write-history"],
+                }
+              : persistedWriteHistory.startupDiagnostics,
         };
       }
 
       return {
         snapshot: validatePersistedSnapshot(parsed as StoreSnapshot, path, namespace),
-        needsPersistence: true,
+        recovery: "reset-baseline",
+        startupDiagnostics: {
+          recovery: "reset-baseline",
+          repairReasons: [],
+          resetReasons: ["missing-write-history"],
+        },
       };
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return null;

@@ -232,7 +232,12 @@ function createMemoryStorage() {
       return {
         snapshot: cloneJson(current.snapshot),
         writeHistory: cloneJson(current.writeHistory),
-        needsPersistence: false,
+        recovery: "none",
+        startupDiagnostics: {
+          recovery: "none",
+          repairReasons: [],
+          resetReasons: [],
+        },
       };
     },
     async commit(input): Promise<void> {
@@ -328,6 +333,11 @@ describe("persisted authoritative graph", () => {
     expect(authority.graph.item.list().map((entity) => entity.name)).toEqual([
       "Persisted Only Item",
     ]);
+    expect(authority.startupDiagnostics).toEqual({
+      recovery: "reset-baseline",
+      repairReasons: [],
+      resetReasons: ["missing-write-history"],
+    });
     expect(persistedState.version).toBe(1);
     expect(persistedState.writeHistory.results).toEqual([]);
     expect(restarted.createSyncPayload().cursor).toBe(authority.createSyncPayload().cursor);
@@ -373,6 +383,11 @@ describe("persisted authoritative graph", () => {
     const authority = await createJsonAuthority(snapshotPath);
     const rewrittenState = await readPersistedAuthorityState(snapshotPath);
 
+    expect(authority.startupDiagnostics).toEqual({
+      recovery: "repair",
+      repairReasons: ["retained-history-policy-normalized", "write-history-write-scope-normalized"],
+      resetReasons: [],
+    });
     expect(rewrittenState.writeHistory.retainedHistoryPolicy).toEqual({
       kind: "all",
     });
@@ -785,7 +800,12 @@ describe("persisted authoritative graph", () => {
             ? {
                 snapshot: cloneJson(current.snapshot),
                 writeHistory: cloneJson(current.writeHistory),
-                needsPersistence: false,
+                recovery: "none",
+                startupDiagnostics: {
+                  recovery: "none",
+                  repairReasons: [],
+                  resetReasons: [],
+                },
               }
             : null;
         },
@@ -871,6 +891,11 @@ describe("persisted authoritative graph", () => {
     const rewrittenState = await readPersistedAuthorityState(snapshotPath);
     const payload = authority.createSyncPayload();
 
+    expect(authority.startupDiagnostics).toEqual({
+      recovery: "reset-baseline",
+      repairReasons: [],
+      resetReasons: ["retained-history-replay-failed"],
+    });
     expect(authority.graph.item.list().map((entity) => entity.name)).toEqual([
       "Broken History Item",
     ]);
