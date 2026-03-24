@@ -343,6 +343,7 @@ export type WebAppAuthorityOptions = {
   readonly graph?: WebAppAuthorityGraph;
   readonly onWorkflowReviewInvalidation?: (invalidation: InvalidationEvent) => void;
   readonly retainedHistoryPolicy?: AuthoritativeGraphRetainedHistoryPolicy;
+  readonly onWorkflowReviewInvalidation?: (invalidation: InvalidationEvent) => void;
   readonly seedExampleGraph?: boolean;
 };
 
