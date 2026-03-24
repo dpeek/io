@@ -75,6 +75,53 @@ const secretNoteNamespace = defineNamespace(createIdMap({ secretNote }).map, {
 });
 const secretNoteGraph = { ...productGraph, ...secretNoteNamespace } as const;
 const secretNoteSecretPredicateId = edgeId(secretNote.fields.secret);
+const capabilityNote = defineType({
+  values: { key: "test:capabilityNote", name: "Capability Note" },
+  fields: {
+    readNote: {
+      ...core.node.fields.description,
+      key: "test:capabilityNote:readNote",
+      authority: {
+        visibility: "replicated",
+        write: "authority-only",
+        policy: {
+          readAudience: "capability",
+          writeAudience: "authority",
+          shareable: false,
+          requiredCapabilities: ["test.capability.note.read"],
+        },
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Read-gated note",
+      },
+    },
+    writeNote: {
+      ...core.node.fields.description,
+      key: "test:capabilityNote:writeNote",
+      authority: {
+        visibility: "replicated",
+        write: "client-tx",
+        policy: {
+          readAudience: "public",
+          writeAudience: "capability",
+          shareable: false,
+          requiredCapabilities: ["test.capability.note.write"],
+        },
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Write-gated note",
+      },
+    },
+  },
+});
+const capabilityNoteNamespace = defineNamespace(createIdMap({ capabilityNote }).map, {
+  capabilityNote,
+});
+const capabilityGraph = { ...productGraph, ...capabilityNoteNamespace } as const;
+const capabilityReadNotePredicateId = edgeId(capabilityNote.fields.readNote);
+const capabilityWriteNotePredicateId = edgeId(capabilityNote.fields.writeNote);
 
 setDefaultTimeout(20_000);
 
@@ -118,6 +165,29 @@ function createHumanAuthorizationContext(
     principalKind: "human",
     roleKeys: ["graph:member"],
     sessionId: "session:human",
+    ...overrides,
+  });
+}
+
+function createProjectedAuthorizationContext(
+  lookupInput: SessionPrincipalLookupInput,
+  projection: {
+    readonly principalId: string;
+    readonly principalKind: AuthorizationContext["principalKind"];
+    readonly roleKeys?: readonly string[];
+    readonly capabilityGrantIds?: readonly string[];
+    readonly capabilityVersion?: number;
+  },
+  overrides: Partial<AuthorizationContext> = {},
+): AuthorizationContext {
+  return createTestAuthorizationContext({
+    graphId: lookupInput.graphId,
+    principalId: projection.principalId,
+    principalKind: projection.principalKind,
+    sessionId: "session:browser",
+    roleKeys: [...(projection.roleKeys ?? [])],
+    capabilityGrantIds: [...(projection.capabilityGrantIds ?? [])],
+    capabilityVersion: projection.capabilityVersion ?? 0,
     ...overrides,
   });
 }
@@ -2620,6 +2690,317 @@ describe("web authority", () => {
         }),
       }).mode,
     ).toBe("total");
+  });
+
+  it("unlocks capability-gated predicate reads from principal-target grants", async () => {
+    const authorityAuthorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage, {
+      graph: capabilityGraph,
+    });
+    const lookupInput = createSessionPrincipalLookupInput();
+    const initialProjection = await authority.lookupSessionPrincipal(lookupInput);
+    const { mutationGraph, mutationStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      capabilityGraph,
+    );
+    const beforeCreate = mutationStore.snapshot();
+    const noteId = mutationGraph.capabilityNote.create({});
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeCreate,
+        mutationStore.snapshot(),
+        "tx:create-capability-gated-note",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+    const { mutationGraph: seedSetupGraph, mutationStore: seedSetupStore } =
+      createProductMutationStore(authority.readSnapshot({ authorization: authorityAuthorization }));
+    const beforeSeedSetup = seedSetupStore.snapshot();
+    seedSetupGraph.principalRoleBinding.create({
+      name: "Capability note authority seed role",
+      principal: initialProjection.principalId,
+      roleKey: "graph:authority",
+      status: core.principalRoleBindingStatus.values.active.id,
+    });
+    seedSetupGraph.capabilityGrant.create({
+      grantedByPrincipal: initialProjection.principalId,
+      name: "Capability note seed write grant",
+      resourceKind: core.capabilityGrantResourceKind.values.predicateWrite.id,
+      resourcePredicateId: capabilityReadNotePredicateId,
+      status: core.capabilityGrantStatus.values.active.id,
+      targetKind: core.capabilityGrantTargetKind.values.principal.id,
+      targetPrincipal: initialProjection.principalId,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeSeedSetup,
+        seedSetupStore.snapshot(),
+        "tx:grant-capability-gated-note-seed-write",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+    const seededProjection = await authority.lookupSessionPrincipal(lookupInput);
+    const seededAuthorization = createProjectedAuthorizationContext(lookupInput, seededProjection);
+    const { mutationGraph: seedGraph, mutationStore: seedStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      capabilityGraph,
+    );
+    const beforeSeedWrite = seedStore.snapshot();
+    seedGraph.capabilityNote.update(noteId, {
+      readNote: "Capability-gated note",
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeSeedWrite,
+        seedStore.snapshot(),
+        "tx:seed-capability-gated-note",
+      ),
+      {
+        authorization: seededAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+    const deniedTotal = authority.createSyncPayload({
+      authorization: seededAuthorization,
+    });
+
+    expect(
+      deniedTotal.snapshot.edges.some(
+        (edge) => edge.s === noteId && edge.p === capabilityReadNotePredicateId,
+      ),
+    ).toBe(false);
+    expect(() =>
+      authority.readPredicateValue(noteId, capabilityReadNotePredicateId, {
+        authorization: seededAuthorization,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "policy.read.forbidden",
+        status: 403,
+      }),
+    );
+
+    const { mutationGraph: readGrantGraph, mutationStore: readGrantStore } =
+      createProductMutationStore(authority.readSnapshot({ authorization: authorityAuthorization }));
+    const beforeReadGrant = readGrantStore.snapshot();
+    readGrantGraph.capabilityGrant.create({
+      grantedByPrincipal: initialProjection.principalId,
+      name: "Capability note read grant",
+      resourceKind: core.capabilityGrantResourceKind.values.predicateRead.id,
+      resourcePredicateId: capabilityReadNotePredicateId,
+      status: core.capabilityGrantStatus.values.active.id,
+      targetKind: core.capabilityGrantTargetKind.values.principal.id,
+      targetPrincipal: initialProjection.principalId,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeReadGrant,
+        readGrantStore.snapshot(),
+        "tx:grant-capability-gated-note-read",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const refreshedProjection = await authority.lookupSessionPrincipal(lookupInput);
+    const refreshedAuthorization = createProjectedAuthorizationContext(
+      lookupInput,
+      refreshedProjection,
+    );
+    const grantedTotal = authority.createSyncPayload({
+      authorization: refreshedAuthorization,
+    });
+
+    expect(
+      grantedTotal.snapshot.edges.some(
+        (edge) =>
+          edge.s === noteId &&
+          edge.p === capabilityReadNotePredicateId &&
+          edge.o === "Capability-gated note",
+      ),
+    ).toBe(true);
+    expect(
+      authority.readPredicateValue(noteId, capabilityReadNotePredicateId, {
+        authorization: refreshedAuthorization,
+      }),
+    ).toBe("Capability-gated note");
+  });
+
+  it("unlocks capability-gated writes from principal-target grants", async () => {
+    const authorityAuthorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage, {
+      graph: capabilityGraph,
+    });
+    const lookupInput = createSessionPrincipalLookupInput();
+    const initialProjection = await authority.lookupSessionPrincipal(lookupInput);
+    const signedInAuthorization = createProjectedAuthorizationContext(
+      lookupInput,
+      initialProjection,
+    );
+    const { mutationGraph, mutationStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      capabilityGraph,
+    );
+    const beforeCreate = mutationStore.snapshot();
+    const noteId = mutationGraph.capabilityNote.create({});
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeCreate,
+        mutationStore.snapshot(),
+        "tx:create-capability-write-note",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const { mutationGraph: deniedGraph, mutationStore: deniedStore } = createMutationStoreForGraph(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+      capabilityGraph,
+    );
+    const beforeDeniedWrite = deniedStore.snapshot();
+    deniedGraph.capabilityNote.update(noteId, {
+      writeNote: "Denied capability write",
+    });
+
+    await expect(
+      authority.applyTransaction(
+        buildGraphWriteTransaction(
+          beforeDeniedWrite,
+          deniedStore.snapshot(),
+          "tx:deny-capability-gated-write",
+        ),
+        {
+          authorization: signedInAuthorization,
+        },
+      ),
+    ).rejects.toMatchObject({
+      result: expect.objectContaining({
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            code: "policy.write.forbidden",
+          }),
+        ]),
+      }),
+    });
+
+    const { mutationGraph: grantGraph, mutationStore: grantStore } = createProductMutationStore(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+    );
+    const beforeGrant = grantStore.snapshot();
+    grantGraph.capabilityGrant.create({
+      grantedByPrincipal: initialProjection.principalId,
+      name: "Capability note write grant",
+      resourceKind: core.capabilityGrantResourceKind.values.predicateWrite.id,
+      resourcePredicateId: capabilityWriteNotePredicateId,
+      status: core.capabilityGrantStatus.values.active.id,
+      targetKind: core.capabilityGrantTargetKind.values.principal.id,
+      targetPrincipal: initialProjection.principalId,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeGrant,
+        grantStore.snapshot(),
+        "tx:grant-capability-gated-write",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const refreshedProjection = await authority.lookupSessionPrincipal(lookupInput);
+    const refreshedAuthorization = createProjectedAuthorizationContext(
+      lookupInput,
+      refreshedProjection,
+    );
+    const { mutationGraph: allowedGraph, mutationStore: allowedStore } =
+      createMutationStoreForGraph(
+        authority.readSnapshot({ authorization: authorityAuthorization }),
+        capabilityGraph,
+      );
+    const beforeAllowedWrite = allowedStore.snapshot();
+    allowedGraph.capabilityNote.update(noteId, {
+      writeNote: "Allowed capability write",
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeAllowedWrite,
+        allowedStore.snapshot(),
+        "tx:allow-capability-gated-write",
+      ),
+      {
+        authorization: refreshedAuthorization,
+      },
+    );
+
+    expect(() =>
+      authority.readPredicateValue(noteId, capabilityWriteNotePredicateId, {
+        authorization: refreshedAuthorization,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "policy.read.forbidden",
+        status: 403,
+      }),
+    );
+
+    const { mutationGraph: readGrantGraph, mutationStore: readGrantStore } =
+      createProductMutationStore(authority.readSnapshot({ authorization: authorityAuthorization }));
+    const beforeReadGrant = readGrantStore.snapshot();
+    readGrantGraph.capabilityGrant.create({
+      grantedByPrincipal: initialProjection.principalId,
+      name: "Capability note write readback grant",
+      resourceKind: core.capabilityGrantResourceKind.values.predicateRead.id,
+      resourcePredicateId: capabilityWriteNotePredicateId,
+      status: core.capabilityGrantStatus.values.active.id,
+      targetKind: core.capabilityGrantTargetKind.values.principal.id,
+      targetPrincipal: initialProjection.principalId,
+    });
+
+    await authority.applyTransaction(
+      buildGraphWriteTransaction(
+        beforeReadGrant,
+        readGrantStore.snapshot(),
+        "tx:grant-capability-gated-write-readback",
+      ),
+      {
+        authorization: authorityAuthorization,
+        writeScope: "authority-only",
+      },
+    );
+
+    const readableProjection = await authority.lookupSessionPrincipal(lookupInput);
+    const readableAuthorization = createProjectedAuthorizationContext(
+      lookupInput,
+      readableProjection,
+    );
+    expect(
+      readStringPredicateValue(
+        authority,
+        readableAuthorization,
+        noteId,
+        capabilityWriteNotePredicateId,
+      ),
+    ).toBe("Allowed capability write");
   });
 
   it("repairs missing exact subject projections by linking them to the existing auth-user principal", async () => {

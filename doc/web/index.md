@@ -123,7 +123,9 @@ transports.
   so required authority-only fields never leak partial invalid entities,
   direct-read helpers that omit denied predicates from snapshot-style reads and
   fail explicit protected predicate reads with stable `policy.read.forbidden`
-  errors, explicit `policyVersion` fail-closed checks for authority-owned read,
+  errors, decision-scoped lowering of active principal-target capability grants
+  into the shared read, write, and command authorizers, explicit
+  `policyVersion` fail-closed checks for authority-owned read,
   `/api/sync`, `/api/tx`, and `/api/commands` paths, authority-planned
   module-scoped sync for the first named `ops/workflow` review scope over
   `/api/sync`, authority-owned auth subject resolution with idempotent

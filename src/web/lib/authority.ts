@@ -101,6 +101,29 @@ type CompiledFieldDefinition = {
   readonly pathLabel: string;
   readonly policy: PredicatePolicyDescriptor;
 };
+type AuthorizationDecisionTarget = {
+  readonly subjectId: string;
+  readonly predicateId: string;
+  readonly policy?: PredicatePolicyDescriptor | null;
+};
+type ResolvedAuthorizationCapabilityGrant = {
+  readonly id: string;
+  readonly resourceKindId: string;
+  readonly resourcePredicateId?: string;
+  readonly resourceCommandKey?: string;
+  readonly constraintRootEntityId?: string;
+  readonly constraintPredicateIds: readonly string[];
+  readonly constraintExpiresAt?: string;
+};
+type AuthorizationCapabilityResolver = {
+  readonly readKeysFor: (target: AuthorizationDecisionTarget) => readonly string[];
+  readonly writeKeysFor: (target: AuthorizationDecisionTarget) => readonly string[];
+  readonly commandKeysFor: (input: {
+    readonly commandKey: string;
+    readonly commandPolicy: GraphCommandPolicy;
+    readonly touchedPredicates: readonly AuthorizationDecisionTarget[];
+  }) => readonly string[];
+};
 type CompiledGraphArtifacts = {
   readonly bootstrappedSnapshot: StoreSnapshot;
   readonly compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>;
@@ -314,7 +337,6 @@ const principalCapabilityVersionPredicateId = edgeId(core.principal.fields.capab
 const graphWriteTransactionValidationKey = "$sync:tx";
 const webAppAuthorityPolicyVersion = 0;
 const webAppGraphId = "graph:global";
-const webAppAuthorityCapabilityKeys: readonly string[] = [];
 const authorityRoleKey = "graph:authority";
 const writeSecretFieldCommandKey = "write-secret-field";
 const writeSecretFieldCommandBasePredicateIds = [
@@ -418,6 +440,12 @@ const activeAuthSubjectStatusId = core.authSubjectStatus.values.active.id;
 const activePrincipalRoleBindingStatusId = core.principalRoleBindingStatus.values.active.id;
 const activeCapabilityGrantStatusId = core.capabilityGrantStatus.values.active.id;
 const principalCapabilityGrantTargetKindId = core.capabilityGrantTargetKind.values.principal.id;
+const predicateReadCapabilityGrantResourceKindId =
+  core.capabilityGrantResourceKind.values.predicateRead.id;
+const predicateWriteCapabilityGrantResourceKindId =
+  core.capabilityGrantResourceKind.values.predicateWrite.id;
+const commandExecuteCapabilityGrantResourceKindId =
+  core.capabilityGrantResourceKind.values.commandExecute.id;
 const capabilityVersionTriggerPredicateIds = new Set([
   typePredicateId,
   principalRoleBindingPrincipalPredicateId,
@@ -1158,6 +1186,174 @@ function readActivePrincipalCapabilityGrantIds(
   ).sort();
 }
 
+function readAuthorizationCapabilityGrants(
+  store: Store,
+  authorization: AuthorizationContext,
+): readonly ResolvedAuthorizationCapabilityGrant[] {
+  if (!authorization.principalId || authorization.capabilityGrantIds.length === 0) {
+    return [];
+  }
+
+  const activeGrantIds = new Set(
+    readActivePrincipalCapabilityGrantIds(store, authorization.principalId),
+  );
+
+  return uniqueStrings(authorization.capabilityGrantIds)
+    .filter((capabilityGrantId) => activeGrantIds.has(capabilityGrantId))
+    .map((capabilityGrantId) => ({
+      id: capabilityGrantId,
+      resourceKindId:
+        getFirstObject(store, capabilityGrantId, capabilityGrantResourceKindPredicateId) ?? "",
+      resourcePredicateId: getFirstObject(
+        store,
+        capabilityGrantId,
+        capabilityGrantResourcePredicateIdPredicateId,
+      ),
+      resourceCommandKey: getFirstObject(
+        store,
+        capabilityGrantId,
+        capabilityGrantResourceCommandKeyPredicateId,
+      ),
+      constraintRootEntityId: getFirstObject(
+        store,
+        capabilityGrantId,
+        capabilityGrantConstraintRootEntityIdPredicateId,
+      ),
+      constraintPredicateIds: uniqueStrings(
+        store
+          .facts(capabilityGrantId, capabilityGrantConstraintPredicateIdPredicateId)
+          .map((edge) => edge.o),
+      ),
+      constraintExpiresAt: getFirstObject(
+        store,
+        capabilityGrantId,
+        capabilityGrantConstraintExpiresAtPredicateId,
+      ),
+    }))
+    .filter((grant) => grant.resourceKindId.length > 0);
+}
+
+function grantHasExpired(grant: ResolvedAuthorizationCapabilityGrant): boolean {
+  if (!grant.constraintExpiresAt) {
+    return false;
+  }
+
+  const expiresAt = Date.parse(grant.constraintExpiresAt);
+  return Number.isNaN(expiresAt) || expiresAt <= Date.now();
+}
+
+function grantMatchesPredicateTarget(
+  grant: ResolvedAuthorizationCapabilityGrant,
+  resourceKindId: string,
+  target: AuthorizationDecisionTarget,
+): boolean {
+  if (grant.resourceKindId !== resourceKindId || grantHasExpired(grant)) {
+    return false;
+  }
+  if (grant.resourcePredicateId !== target.predicateId) {
+    return false;
+  }
+  if (
+    grant.constraintRootEntityId !== undefined &&
+    grant.constraintRootEntityId !== target.subjectId
+  ) {
+    return false;
+  }
+  return (
+    grant.constraintPredicateIds.length === 0 ||
+    grant.constraintPredicateIds.includes(target.predicateId)
+  );
+}
+
+function grantMatchesCommand(
+  grant: ResolvedAuthorizationCapabilityGrant,
+  commandKey: string,
+  touchedPredicates: readonly AuthorizationDecisionTarget[],
+): boolean {
+  if (
+    grant.resourceKindId !== commandExecuteCapabilityGrantResourceKindId ||
+    grantHasExpired(grant)
+  ) {
+    return false;
+  }
+  if (grant.resourceCommandKey !== commandKey) {
+    return false;
+  }
+  if (
+    grant.constraintRootEntityId !== undefined &&
+    touchedPredicates.some((target) => target.subjectId !== grant.constraintRootEntityId)
+  ) {
+    return false;
+  }
+  return (
+    grant.constraintPredicateIds.length === 0 ||
+    touchedPredicates.every((target) => grant.constraintPredicateIds.includes(target.predicateId))
+  );
+}
+
+function appendCapabilityKeys(
+  target: Set<string>,
+  capabilityKeys: readonly string[] | undefined,
+): void {
+  if (!capabilityKeys) {
+    return;
+  }
+  for (const capabilityKey of capabilityKeys) {
+    target.add(capabilityKey);
+  }
+}
+
+function createAuthorizationCapabilityResolver(
+  store: Store,
+  authorization: AuthorizationContext,
+): AuthorizationCapabilityResolver {
+  const grants = readAuthorizationCapabilityGrants(store, authorization);
+
+  function resolvePredicateCapabilityKeys(
+    resourceKindId: string,
+    target: AuthorizationDecisionTarget,
+  ): readonly string[] {
+    const requiredCapabilities = target.policy?.requiredCapabilities;
+    if (!requiredCapabilities || requiredCapabilities.length === 0) {
+      return [];
+    }
+
+    return grants.some((grant) => grantMatchesPredicateTarget(grant, resourceKindId, target))
+      ? [...requiredCapabilities]
+      : [];
+  }
+
+  return {
+    readKeysFor(target) {
+      return resolvePredicateCapabilityKeys(predicateReadCapabilityGrantResourceKindId, target);
+    },
+    writeKeysFor(target) {
+      return resolvePredicateCapabilityKeys(predicateWriteCapabilityGrantResourceKindId, target);
+    },
+    commandKeysFor(input) {
+      const capabilityKeys = new Set<string>();
+
+      if (
+        (input.commandPolicy.capabilities?.length ?? 0) > 0 &&
+        grants.some((grant) =>
+          grantMatchesCommand(grant, input.commandKey, input.touchedPredicates),
+        )
+      ) {
+        appendCapabilityKeys(capabilityKeys, input.commandPolicy.capabilities);
+      }
+
+      for (const target of input.touchedPredicates) {
+        appendCapabilityKeys(
+          capabilityKeys,
+          resolvePredicateCapabilityKeys(predicateWriteCapabilityGrantResourceKindId, target),
+        );
+      }
+
+      return [...capabilityKeys];
+    },
+  };
+}
+
 function matchesAuthSubjectProjection(
   store: Store,
   projectionId: string,
@@ -1585,7 +1781,7 @@ function createAuthorizationTarget(
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
   subjectId: string,
   predicateId: string,
-) {
+): AuthorizationDecisionTarget {
   return {
     subjectId,
     predicateId,
@@ -1614,7 +1810,6 @@ function evaluateAuthorityOnlyIdentityRead(
 ) {
   return authorizeRead({
     authorization,
-    capabilityKeys: webAppAuthorityCapabilityKeys,
     target: {
       subjectId,
       predicateId,
@@ -1634,6 +1829,7 @@ function evaluateReadAuthorization(
   store: Store,
   authorization: AuthorizationContext,
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+  capabilityResolver: AuthorizationCapabilityResolver,
   subjectId: string,
   predicateId: string,
 ) {
@@ -1644,10 +1840,11 @@ function evaluateReadAuthorization(
     return evaluateAuthorityOnlyIdentityRead(authorization, subjectId, predicateId);
   }
 
+  const target = createAuthorizationTarget(compiledFieldIndex, subjectId, predicateId);
   return authorizeRead({
     authorization,
-    capabilityKeys: webAppAuthorityCapabilityKeys,
-    target: createAuthorizationTarget(compiledFieldIndex, subjectId, predicateId),
+    capabilityKeys: capabilityResolver.readKeysFor(target),
+    target,
   });
 }
 
@@ -1660,10 +1857,17 @@ function createReadableReplicationAuthorizer(
   if (staleContextError) {
     throw createReadPolicyError(staleContextError);
   }
+  const capabilityResolver = createAuthorizationCapabilityResolver(store, authorization);
 
   return ({ subjectId, predicateId }) =>
-    evaluateReadAuthorization(store, authorization, compiledFieldIndex, subjectId, predicateId)
-      .allowed;
+    evaluateReadAuthorization(
+      store,
+      authorization,
+      compiledFieldIndex,
+      capabilityResolver,
+      subjectId,
+      predicateId,
+    ).allowed;
 }
 
 function filterReadableSnapshot(
@@ -1710,10 +1914,11 @@ function assertWorkflowProjectionReadable(
   authorization: AuthorizationContext,
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
 ): void {
-  const staleContextError = assertCurrentPolicyVersion(authorization);
+  const staleContextError = assertCurrentAuthorizationVersion(store, authorization);
   if (staleContextError) {
     throw createWorkflowProjectionPolicyError(staleContextError);
   }
+  const capabilityResolver = createAuthorizationCapabilityResolver(store, authorization);
 
   for (const subjectId of listWorkflowProjectionSubjectIds(store)) {
     for (const edge of store.facts(subjectId)) {
@@ -1721,6 +1926,7 @@ function assertWorkflowProjectionReadable(
         store,
         authorization,
         compiledFieldIndex,
+        capabilityResolver,
         subjectId,
         edge.p,
       );
@@ -1753,13 +1959,19 @@ function assertTransactionAuthorized(
       },
     ]);
   }
+  const capabilityResolver = createAuthorizationCapabilityResolver(store, authorization);
 
   const issues = resolveTransactionTarget(transaction, snapshot)
     .map((target) => {
+      const authorizationTarget = createAuthorizationTarget(
+        compiledFieldIndex,
+        target.subjectId,
+        target.predicateId,
+      );
       const decision = authorizeWrite({
         authorization,
-        capabilityKeys: webAppAuthorityCapabilityKeys,
-        target: createAuthorizationTarget(compiledFieldIndex, target.subjectId, target.predicateId),
+        capabilityKeys: capabilityResolver.writeKeysFor(authorizationTarget),
+        target: authorizationTarget,
         writeScope,
       });
       if (decision.allowed) return undefined;
@@ -1826,10 +2038,18 @@ function assertCommandAuthorized(input: {
   if (staleContextError) {
     throw createCommandPolicyError(staleContextError);
   }
+  const capabilityResolver = createAuthorizationCapabilityResolver(
+    input.store,
+    input.authorization,
+  );
 
   const decision = authorizeCommand({
     authorization: input.authorization,
-    capabilityKeys: webAppAuthorityCapabilityKeys,
+    capabilityKeys: capabilityResolver.commandKeysFor({
+      commandKey: input.commandKey,
+      commandPolicy: input.commandPolicy,
+      touchedPredicates: input.touchedPredicates,
+    }),
     commandKey: input.commandKey,
     commandPolicy: input.commandPolicy,
     touchedPredicates: input.touchedPredicates,
@@ -2043,6 +2263,7 @@ export async function createWebAppAuthority(
       authority.store,
       options.authorization,
       compiledFieldIndex,
+      createAuthorizationCapabilityResolver(authority.store, options.authorization),
       subjectId,
       predicateId,
     );

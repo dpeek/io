@@ -122,6 +122,52 @@ const secretNoteNamespace = defineNamespace(createIdMap({ secretNote }).map, {
 });
 const secretNoteGraph = { ...productGraph, ...secretNoteNamespace } as const;
 const secretNoteSecretPredicateId = edgeId(secretNote.fields.secret);
+const capabilityNote = defineType({
+  values: { key: "test:capabilityNote", name: "Capability Note" },
+  fields: {
+    readNote: {
+      ...core.node.fields.description,
+      key: "test:capabilityNote:readNote",
+      authority: {
+        visibility: "replicated",
+        write: "authority-only",
+        policy: {
+          readAudience: "capability",
+          writeAudience: "authority",
+          shareable: false,
+          requiredCapabilities: ["test.capability.note.read"],
+        },
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Read-gated note",
+      },
+    },
+    writeNote: {
+      ...core.node.fields.description,
+      key: "test:capabilityNote:writeNote",
+      authority: {
+        visibility: "replicated",
+        write: "client-tx",
+        policy: {
+          readAudience: "public",
+          writeAudience: "capability",
+          shareable: false,
+          requiredCapabilities: ["test.capability.note.write"],
+        },
+      },
+      meta: {
+        ...core.node.fields.description.meta,
+        label: "Write-gated note",
+      },
+    },
+  },
+});
+const capabilityNoteNamespace = defineNamespace(createIdMap({ capabilityNote }).map, {
+  capabilityNote,
+});
+const capabilityProofGraph = { ...productGraph, ...capabilityNoteNamespace } as const;
+const capabilityReadNotePredicateId = edgeId(capabilityNote.fields.readNote);
 
 type SqliteMasterRow = {
   name: string;
@@ -252,6 +298,28 @@ const testOutsiderAuthorization = {
   roleKeys: [],
   sessionId: "session:outsider",
 };
+
+function createProjectedAuthorizationContext(
+  lookupInput: SessionPrincipalLookupInput,
+  projection: {
+    readonly principalId: string;
+    readonly principalKind: AuthorizationContext["principalKind"];
+    readonly roleKeys?: readonly string[];
+    readonly capabilityGrantIds?: readonly string[];
+    readonly capabilityVersion?: number;
+  },
+): AuthorizationContext {
+  return {
+    ...testAuthorization,
+    graphId: lookupInput.graphId,
+    principalId: projection.principalId,
+    principalKind: projection.principalKind,
+    roleKeys: [...(projection.roleKeys ?? [])],
+    sessionId: "session:browser",
+    capabilityGrantIds: [...(projection.capabilityGrantIds ?? [])],
+    capabilityVersion: projection.capabilityVersion ?? 0,
+  };
+}
 
 function createCursor<T extends Record<string, unknown>>(
   rows: readonly T[],
@@ -1223,6 +1291,147 @@ describe("web graph authority durable object", () => {
         status: 403,
       });
     }
+  });
+
+  it("threads principal-target capability grants into sync and direct-read authorization", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(
+      state,
+      {},
+      {
+        createAuthority(storage, options) {
+          return createWebAppAuthority(storage, {
+            ...options,
+            graph: capabilityProofGraph,
+          });
+        },
+      },
+    );
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const lookupInput = createSessionPrincipalLookupInput();
+    const initialProjection = await authority.lookupSessionPrincipal(lookupInput);
+    const createdNote = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      capabilityProofGraph,
+      "tx:create-capability-proof-note",
+      (graph) => graph.capabilityNote.create({}),
+    );
+
+    await authority.applyTransaction(createdNote.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+    const seedSetup = buildTransactionFromSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      "tx:grant-capability-proof-seed-write",
+      (graph) => ({
+        roleBindingId: graph.principalRoleBinding.create({
+          name: "Capability proof authority seed role",
+          principal: initialProjection.principalId,
+          roleKey: "graph:authority",
+          status: core.principalRoleBindingStatus.values.active.id,
+        }),
+        grantId: graph.capabilityGrant.create({
+          grantedByPrincipal: initialProjection.principalId,
+          name: "Capability proof seed write grant",
+          resourceKind: core.capabilityGrantResourceKind.values.predicateWrite.id,
+          resourcePredicateId: capabilityReadNotePredicateId,
+          status: core.capabilityGrantStatus.values.active.id,
+          targetKind: core.capabilityGrantTargetKind.values.principal.id,
+          targetPrincipal: initialProjection.principalId,
+        }),
+      }),
+    );
+
+    await authority.applyTransaction(seedSetup.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const seededProjection = await authority.lookupSessionPrincipal(lookupInput);
+    const seededAuthorization = createProjectedAuthorizationContext(lookupInput, seededProjection);
+    const seedValueTransaction = buildTransactionFromGraphSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      capabilityProofGraph,
+      "tx:seed-capability-proof-read-note",
+      (graph) =>
+        graph.capabilityNote.update(createdNote.result, {
+          readNote: "Capability-gated sync note",
+        }),
+    );
+
+    await authority.applyTransaction(seedValueTransaction.transaction, {
+      authorization: seededAuthorization,
+      writeScope: "authority-only",
+    });
+    const deniedTotal = await readSyncPayload(durableObject, undefined, seededAuthorization);
+
+    if (deniedTotal.mode !== "total") {
+      throw new Error("Expected a total sync payload before read grants are applied.");
+    }
+
+    expect(
+      deniedTotal.snapshot?.edges.some(
+        (edge) => edge.s === createdNote.result && edge.p === capabilityReadNotePredicateId,
+      ),
+    ).toBe(false);
+    try {
+      authority.readPredicateValue(createdNote.result, capabilityReadNotePredicateId, {
+        authorization: seededAuthorization,
+      });
+      throw new Error("Expected direct protected reads to fail before the read grant is applied.");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: "policy.read.forbidden",
+        message: expect.stringContaining("policy.read.forbidden"),
+        status: 403,
+      });
+    }
+
+    const readGrant = buildTransactionFromSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      "tx:grant-capability-proof-read",
+      (graph) =>
+        graph.capabilityGrant.create({
+          grantedByPrincipal: initialProjection.principalId,
+          name: "Capability proof read grant",
+          resourceKind: core.capabilityGrantResourceKind.values.predicateRead.id,
+          resourcePredicateId: capabilityReadNotePredicateId,
+          status: core.capabilityGrantStatus.values.active.id,
+          targetKind: core.capabilityGrantTargetKind.values.principal.id,
+          targetPrincipal: initialProjection.principalId,
+        }),
+    );
+
+    await authority.applyTransaction(readGrant.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const refreshedProjection = await authority.lookupSessionPrincipal(lookupInput);
+    const refreshedAuthorization = createProjectedAuthorizationContext(
+      lookupInput,
+      refreshedProjection,
+    );
+    const grantedTotal = await readSyncPayload(durableObject, undefined, refreshedAuthorization);
+
+    if (grantedTotal.mode !== "total") {
+      throw new Error("Expected a total sync payload after capability grants are applied.");
+    }
+
+    expect(
+      grantedTotal.snapshot?.edges.some(
+        (edge) =>
+          edge.s === createdNote.result &&
+          edge.p === capabilityReadNotePredicateId &&
+          edge.o === "Capability-gated sync note",
+      ),
+    ).toBe(true);
+    expect(
+      authority.readPredicateValue(createdNote.result, capabilityReadNotePredicateId, {
+        authorization: refreshedAuthorization,
+      }),
+    ).toBe("Capability-gated sync note");
   });
 
   it("bootstraps the graph tables and indexes in the constructor", () => {
