@@ -4,7 +4,7 @@ const reviewPlanningEnabled = false;
 
 export default defineIoConfig({
   agent: {
-    maxConcurrentAgents: 3,
+    maxConcurrentAgents: 4,
     maxTurns: 1,
   },
   codex: {
