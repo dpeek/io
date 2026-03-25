@@ -1,7 +1,6 @@
 import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
 import {
-  createLiveSyncActiveScopeId,
   createIdMap,
   createStore,
   createSyncedTypeClient,
@@ -584,11 +583,13 @@ function readProductGraph(authority: WebAppAuthority, authorization: Authorizati
 function createSessionPrincipalLookupInput(
   overrides: {
     readonly graphId?: string;
+    readonly email?: string;
     readonly subject?: Partial<AuthSubjectRef>;
   } = {},
 ): SessionPrincipalLookupInput {
   return {
     graphId: overrides.graphId ?? "graph:test",
+    email: overrides.email,
     subject: {
       issuer: "better-auth",
       provider: "user",
@@ -597,6 +598,55 @@ function createSessionPrincipalLookupInput(
       ...overrides.subject,
     },
   };
+}
+
+async function writeAdmissionPolicy(
+  authority: WebAppAuthority,
+  authorization: AuthorizationContext,
+  input: {
+    readonly graphId?: string;
+    readonly bootstrapMode?: string;
+    readonly signupPolicy?: string;
+    readonly allowedEmailDomain?: readonly string[];
+    readonly firstUserRoleKey?: readonly string[];
+    readonly signupRoleKey?: readonly string[];
+  } = {},
+): Promise<void> {
+  const { mutationGraph, mutationStore } = createProductMutationStore(
+    authority.readSnapshot({ authorization }),
+  );
+  const before = mutationStore.snapshot();
+  const graphId = input.graphId ?? "graph:test";
+  const existing = mutationGraph.admissionPolicy
+    .list()
+    .find((policy) => policy.graphId === graphId);
+  const nextValues = {
+    allowedEmailDomain: [...(input.allowedEmailDomain ?? [])],
+    bootstrapMode: input.bootstrapMode ?? core.admissionBootstrapMode.values.manual.id,
+    firstUserRoleKey: [...(input.firstUserRoleKey ?? ["graph:owner"])],
+    graphId,
+    name: "Admission policy",
+    signupPolicy: input.signupPolicy ?? core.admissionSignupPolicy.values.closed.id,
+    signupRoleKey: [...(input.signupRoleKey ?? ["graph:member"])],
+  };
+
+  if (existing) {
+    mutationGraph.admissionPolicy.update(existing.id, nextValues);
+  } else {
+    mutationGraph.admissionPolicy.create(nextValues);
+  }
+
+  await authority.applyTransaction(
+    buildGraphWriteTransaction(
+      before,
+      mutationStore.snapshot(),
+      `tx:write-admission-policy:${Date.now()}`,
+    ),
+    {
+      authorization,
+      writeScope: "authority-only",
+    },
+  );
 }
 describe("web authority", () => {
   it("rolls back staged side effects when staging fails before commit", async () => {
@@ -1609,6 +1659,24 @@ describe("web authority", () => {
       status: 403,
     });
     expect(storage.read()?.writeHistory.results.length ?? 0).toBe(writeCountBeforeForbiddenCommand);
+
+    await expect(
+      authority.executeCommand(
+        {
+          kind: "set-admission-approval",
+          input: {
+            email: "operator@example.com",
+            graphId: authorization.graphId,
+            roleKeys: ["graph:authority", "graph:owner"],
+          },
+        },
+        { authorization },
+      ),
+    ).rejects.toMatchObject({
+      code: "policy.command.forbidden",
+      message: expect.stringContaining("policy.command.forbidden"),
+      status: 403,
+    });
   });
 
   it("rejects stale policy versions before authoritative writes commit", async () => {
@@ -2547,11 +2615,6 @@ describe("web authority", () => {
     ).toEqual({
       sessionId: authorization.sessionId!,
       principalId: authorization.principalId!,
-      activeScopeId: createLiveSyncActiveScopeId({
-        scopeId: workflowReviewModuleReadScope.scopeId,
-        definitionHash: workflowReviewModuleReadScope.definitionHash,
-        policyFilterVersion: "policy:0",
-      }),
       scopeId: workflowReviewModuleReadScope.scopeId,
       definitionHash: workflowReviewModuleReadScope.definitionHash,
       policyFilterVersion: "policy:0",
@@ -2884,6 +2947,11 @@ describe("web authority", () => {
     const authority = await createTestWebAppAuthority(storage.storage);
     const lookupInput = createSessionPrincipalLookupInput();
 
+    await writeAdmissionPolicy(authority, authorization, {
+      bootstrapMode: core.admissionBootstrapMode.values.firstUser.id,
+      signupPolicy: core.admissionSignupPolicy.values.closed.id,
+    });
+
     const first = await authority.lookupSessionPrincipal(lookupInput);
     const second = await authority.lookupSessionPrincipal(lookupInput);
     const productGraphClient = readProductGraph(authority, authorization);
@@ -2910,6 +2978,249 @@ describe("web authority", () => {
       provider: lookupInput.subject.provider,
       providerAccountId: lookupInput.subject.providerAccountId,
       status: core.authSubjectStatus.values.active.id,
+    });
+    expect(productGraphClient.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("fails closed when admission policy denies first authenticated use", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "operator@blocked.example",
+    });
+
+    await writeAdmissionPolicy(authority, authorization, {
+      allowedEmailDomain: ["allowed.example"],
+      bootstrapMode: core.admissionBootstrapMode.values.manual.id,
+      signupPolicy: core.admissionSignupPolicy.values.closed.id,
+    });
+
+    await expect(authority.lookupSessionPrincipal(lookupInput)).rejects.toMatchObject({
+      name: "WebAppAuthoritySessionPrincipalLookupError",
+      code: "auth.principal_missing",
+      reason: "denied",
+      status: 403,
+    });
+
+    const productGraphClient = readProductGraph(authority, authorization);
+    expect(productGraphClient.principal.list()).toHaveLength(0);
+    expect(productGraphClient.authSubjectProjection.list()).toHaveLength(0);
+    expect(productGraphClient.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("allows retry after admission policy changes from denied to open signup", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "operator@allowed.example",
+    });
+
+    await writeAdmissionPolicy(authority, authorization, {
+      allowedEmailDomain: ["allowed.example"],
+      bootstrapMode: core.admissionBootstrapMode.values.manual.id,
+      signupPolicy: core.admissionSignupPolicy.values.closed.id,
+    });
+
+    await expect(authority.lookupSessionPrincipal(lookupInput)).rejects.toMatchObject({
+      reason: "denied",
+      status: 403,
+    });
+
+    await writeAdmissionPolicy(authority, authorization, {
+      allowedEmailDomain: ["allowed.example"],
+      bootstrapMode: core.admissionBootstrapMode.values.manual.id,
+      signupPolicy: core.admissionSignupPolicy.values.open.id,
+    });
+
+    const repaired = await authority.lookupSessionPrincipal(lookupInput);
+
+    expect(repaired).toMatchObject({
+      principalKind: "human",
+      roleKeys: [],
+      capabilityGrantIds: [],
+      capabilityVersion: 0,
+    });
+    expect(readProductGraph(authority, authorization).principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("keeps admitted principals unbound until initial role binding runs explicitly", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "approved@example.com",
+    });
+
+    await authority.executeCommand(
+      {
+        kind: "set-admission-approval",
+        input: {
+          email: lookupInput.email ?? "approved@example.com",
+          graphId: lookupInput.graphId,
+          roleKeys: ["graph:member"],
+        },
+      },
+      { authorization },
+    );
+
+    const projection = await authority.lookupSessionPrincipal(lookupInput);
+
+    expect(projection).toMatchObject({
+      principalKind: "human",
+      roleKeys: [],
+      capabilityVersion: 0,
+    });
+    expect(readProductGraph(authority, authorization).principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("activates member role bindings explicitly for admitted principals", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "approved@example.com",
+    });
+
+    await authority.executeCommand(
+      {
+        kind: "set-admission-approval",
+        input: {
+          email: lookupInput.email ?? "approved@example.com",
+          graphId: lookupInput.graphId,
+          roleKeys: ["graph:member"],
+        },
+      },
+      { authorization },
+    );
+    await authority.lookupSessionPrincipal(lookupInput);
+
+    const projection = await authority.activateSessionPrincipalRoleBindings(lookupInput);
+
+    expect(projection).toMatchObject({
+      principalKind: "human",
+      roleKeys: ["graph:member"],
+      capabilityVersion: 1,
+    });
+    expect(readProductGraph(authority, authorization).principalRoleBinding.list()).toHaveLength(1);
+  });
+
+  it("bootstraps the first operator through explicit admission plus explicit role binding", async () => {
+    const bootstrapAuthorization = createAnonymousAuthorizationContext({
+      graphId: "graph:test",
+      policyVersion: 0,
+    });
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "operator@example.com",
+    });
+
+    const bootstrapped = await authority.executeCommand(
+      {
+        kind: "bootstrap-operator-access",
+        input: {
+          email: lookupInput.email ?? "operator@example.com",
+          graphId: lookupInput.graphId,
+        },
+      },
+      { authorization: bootstrapAuthorization },
+    );
+    const admitted = await authority.lookupSessionPrincipal(lookupInput);
+    const projection = await authority.activateSessionPrincipalRoleBindings(lookupInput);
+    const productGraphClient = readProductGraph(
+      authority,
+      createAuthorityAuthorizationContext({ graphId: lookupInput.graphId }),
+    );
+
+    expect(bootstrapped).toMatchObject({
+      created: true,
+      email: "operator@example.com",
+      graphId: lookupInput.graphId,
+      roleKeys: ["graph:authority", "graph:owner"],
+    });
+    expect(productGraphClient.admissionPolicy.list()).toMatchObject([
+      expect.objectContaining({
+        bootstrapMode: core.admissionBootstrapMode.values.manual.id,
+        graphId: lookupInput.graphId,
+        signupPolicy: core.admissionSignupPolicy.values.closed.id,
+      }),
+    ]);
+    expect(productGraphClient.admissionApproval.list()).toMatchObject([
+      expect.objectContaining({
+        email: "operator@example.com",
+        graphId: lookupInput.graphId,
+        roleKey: ["graph:authority", "graph:owner"],
+        status: core.admissionApprovalStatus.values.active.id,
+      }),
+    ]);
+    expect(admitted).toMatchObject({
+      principalKind: "human",
+      roleKeys: [],
+      capabilityVersion: 0,
+    });
+    expect(projection).toMatchObject({
+      principalKind: "human",
+      roleKeys: ["graph:authority", "graph:owner"],
+      capabilityVersion: 1,
+    });
+  });
+
+  it("lets operators manage explicit admission approvals separately from explicit role binding", async () => {
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const authority = await createTestWebAppAuthority(storage.storage);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "approved@example.com",
+    });
+
+    const granted = await authority.executeCommand(
+      {
+        kind: "set-admission-approval",
+        input: {
+          email: lookupInput.email ?? "approved@example.com",
+          graphId: lookupInput.graphId,
+          roleKeys: ["graph:member"],
+        },
+      },
+      { authorization: createAuthorityAuthorizationContext({ graphId: lookupInput.graphId }) },
+    );
+    const admitted = await authority.lookupSessionPrincipal(lookupInput);
+    const projection = await authority.activateSessionPrincipalRoleBindings(lookupInput);
+    const revoked = await authority.executeCommand(
+      {
+        kind: "set-admission-approval",
+        input: {
+          email: lookupInput.email ?? "approved@example.com",
+          graphId: lookupInput.graphId,
+          status: "revoked",
+        },
+      },
+      { authorization: createAuthorityAuthorizationContext({ graphId: lookupInput.graphId }) },
+    );
+
+    expect(granted).toMatchObject({
+      created: true,
+      email: "approved@example.com",
+      graphId: lookupInput.graphId,
+      roleKeys: ["graph:member"],
+      status: "active",
+    });
+    expect(admitted).toMatchObject({
+      principalKind: "human",
+      roleKeys: [],
+      capabilityVersion: 0,
+    });
+    expect(projection).toMatchObject({
+      principalKind: "human",
+      roleKeys: ["graph:member"],
+      capabilityVersion: 1,
+    });
+    expect(revoked).toMatchObject({
+      created: false,
+      email: "approved@example.com",
+      roleKeys: [],
+      status: "revoked",
     });
   });
 

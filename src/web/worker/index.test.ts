@@ -1,11 +1,21 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 
-import type { AuthorizationContext } from "@io/core/graph";
+import {
+  createStore,
+  createTypeClient,
+  type AuthorizationContext,
+  type GraphWriteTransaction,
+  type StoreSnapshot,
+} from "@io/core/graph";
+import { core } from "@io/core/graph/modules";
 
-import { issueBearerShareToken } from "../lib/auth-bridge.js";
+import { createAnonymousAuthorizationContext, issueBearerShareToken } from "../lib/auth-bridge.js";
+import { createTestWebAppAuthority } from "../lib/authority-test-helpers.js";
+import type { WebAppAuthority } from "../lib/authority.js";
 import type { BetterAuthWorkerEnv } from "../lib/better-auth.js";
 import {
+  WebGraphAuthorityDurableObject,
   webGraphAuthorityBearerShareLookupPath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "../lib/graph-authority-do.js";
@@ -14,11 +24,261 @@ import { webWorkflowLivePath } from "../lib/workflow-live-transport.js";
 import { webWorkflowReadPath } from "../lib/workflow-transport.js";
 import worker, { BetterAuthSessionVerificationError, createWorkerFetchHandler } from "./index.js";
 
+type DurableObjectSqlCursor<T extends Record<string, unknown>> = Iterable<T> & {
+  one(): T;
+};
+
+const authorityAuthorization: AuthorizationContext = {
+  graphId: "graph:global",
+  principalId: "principal:authority",
+  principalKind: "service",
+  sessionId: "session:authority",
+  roleKeys: ["graph:authority"],
+  capabilityGrantIds: [],
+  capabilityVersion: 0,
+  policyVersion: 0,
+};
+
 function createBetterAuthEnv(): BetterAuthWorkerEnv {
   return {
     AUTH_DB: new Database(":memory:"),
     BETTER_AUTH_SECRET: "L5tH1pQ8xJ2mR9vN4sC7kW3yF6uB0dE!ZaG1oP5qT8xV2",
     BETTER_AUTH_URL: "https://web.local",
+  };
+}
+
+function createCursor<T extends Record<string, unknown>>(
+  rows: readonly T[],
+): DurableObjectSqlCursor<T> {
+  return {
+    one() {
+      if (rows.length !== 1) {
+        throw new Error(`Expected exactly one SQL row but received ${rows.length}.`);
+      }
+
+      const row = rows[0];
+      if (!row) {
+        throw new Error("Expected a SQL row when the cursor contains exactly one result.");
+      }
+
+      return row;
+    },
+    *[Symbol.iterator]() {
+      yield* rows;
+    },
+  };
+}
+
+function createSqliteDurableObjectState(): {
+  readonly db: Database;
+  readonly state: ConstructorParameters<typeof WebGraphAuthorityDurableObject>[0];
+} {
+  const db = new Database(":memory:");
+
+  return {
+    db,
+    state: {
+      storage: {
+        sql: {
+          exec<T extends Record<string, unknown>>(
+            query: string,
+            ...bindings: unknown[]
+          ): DurableObjectSqlCursor<T> {
+            const statement = db.query(query);
+            const trimmed = query.trimStart();
+
+            if (/^(SELECT|PRAGMA|WITH|EXPLAIN)\b/i.test(trimmed)) {
+              return createCursor(
+                statement.all(...(bindings as never as Parameters<typeof statement.all>)) as T[],
+              );
+            }
+
+            statement.run(...(bindings as never as Parameters<typeof statement.run>));
+            return createCursor([]);
+          },
+        },
+        transactionSync<T>(callback: () => T): T {
+          return db.transaction(callback)();
+        },
+      },
+      async blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T> {
+        return callback();
+      },
+    },
+  };
+}
+
+function createMutationStore(snapshot: StoreSnapshot) {
+  const mutationStore = createStore(snapshot);
+  return {
+    mutationGraph: createTypeClient(mutationStore, core),
+    mutationStore,
+  };
+}
+
+function buildGraphWriteTransaction(
+  before: StoreSnapshot,
+  after: StoreSnapshot,
+  id: string,
+): GraphWriteTransaction {
+  const previousEdgeIds = new Set(before.edges.map((edge) => edge.id));
+  const previousRetractedIds = new Set(before.retracted);
+
+  return {
+    id,
+    ops: [
+      ...after.retracted
+        .filter((edgeId) => !previousRetractedIds.has(edgeId))
+        .map((edgeId) => ({ op: "retract" as const, edgeId })),
+      ...after.edges
+        .filter((edge) => !previousEdgeIds.has(edge.id))
+        .map((edge) => ({
+          op: "assert" as const,
+          edge: { ...edge },
+        })),
+    ],
+  };
+}
+
+function readCoreGraph(authority: WebAppAuthority, authorization = authorityAuthorization) {
+  return createTypeClient(createStore(authority.readSnapshot({ authorization })), core);
+}
+
+async function getDurableAuthority(
+  durableObject: WebGraphAuthorityDurableObject,
+): Promise<WebAppAuthority> {
+  return (durableObject as unknown as { getAuthority(): Promise<WebAppAuthority> }).getAuthority();
+}
+
+async function writeAdmissionPolicy(
+  authority: WebAppAuthority,
+  input: {
+    readonly graphId?: string;
+    readonly bootstrapMode?: string;
+    readonly signupPolicy?: string;
+    readonly allowedEmailDomain?: readonly string[];
+    readonly firstUserRoleKey?: readonly string[];
+    readonly signupRoleKey?: readonly string[];
+  } = {},
+): Promise<void> {
+  const { mutationGraph, mutationStore } = createMutationStore(
+    authority.readSnapshot({ authorization: authorityAuthorization }),
+  );
+  const before = mutationStore.snapshot();
+  const graphId = input.graphId ?? "graph:global";
+  const existing = mutationGraph.admissionPolicy
+    .list()
+    .find((policy) => policy.graphId === graphId);
+  const nextValues = {
+    allowedEmailDomain: [...(input.allowedEmailDomain ?? [])],
+    bootstrapMode: input.bootstrapMode ?? core.admissionBootstrapMode.values.manual.id,
+    firstUserRoleKey: [...(input.firstUserRoleKey ?? ["graph:owner"])],
+    graphId,
+    name: "Admission policy",
+    signupPolicy: input.signupPolicy ?? core.admissionSignupPolicy.values.closed.id,
+    signupRoleKey: [...(input.signupRoleKey ?? ["graph:member"])],
+  };
+
+  if (existing) {
+    mutationGraph.admissionPolicy.update(existing.id, nextValues);
+  } else {
+    mutationGraph.admissionPolicy.create(nextValues);
+  }
+
+  await authority.applyTransaction(
+    buildGraphWriteTransaction(
+      before,
+      mutationStore.snapshot(),
+      `tx:write-admission-policy:${Date.now()}`,
+    ),
+    {
+      authorization: authorityAuthorization,
+      writeScope: "authority-only",
+    },
+  );
+}
+
+async function createProjectedPrincipalWithoutBindings(
+  authority: WebAppAuthority,
+  input: {
+    readonly email: string;
+    readonly userId: string;
+    readonly graphId?: string;
+  },
+): Promise<void> {
+  const { mutationGraph, mutationStore } = createMutationStore(
+    authority.readSnapshot({ authorization: authorityAuthorization }),
+  );
+  const before = mutationStore.snapshot();
+  const graphId = input.graphId ?? "graph:global";
+  const principalId = mutationGraph.principal.create({
+    homeGraphId: graphId,
+    kind: core.principalKind.values.human.id,
+    name: "Approved Principal",
+    status: core.principalStatus.values.active.id,
+  });
+
+  mutationGraph.authSubjectProjection.create({
+    authUserId: input.userId,
+    issuer: "better-auth",
+    mirroredAt: new Date("2026-03-24T00:00:00.000Z"),
+    name: "Approved Subject",
+    principal: principalId,
+    provider: "user",
+    providerAccountId: input.userId,
+    status: core.authSubjectStatus.values.active.id,
+  });
+
+  await authority.applyTransaction(
+    buildGraphWriteTransaction(
+      before,
+      mutationStore.snapshot(),
+      `tx:create-unbound-principal:${input.userId}:${Date.now()}`,
+    ),
+    {
+      authorization: authorityAuthorization,
+      writeScope: "authority-only",
+    },
+  );
+}
+
+function createEndToEndWorkerEnv() {
+  const { state } = createSqliteDurableObjectState();
+  const durableObject = new WebGraphAuthorityDurableObject(
+    state,
+    {},
+    {
+      createAuthority(storage, options) {
+        return createTestWebAppAuthority(storage, options);
+      },
+    },
+  );
+  const env = {
+    ...createBetterAuthEnv(),
+    ASSETS: {
+      async fetch() {
+        return new Response("asset");
+      },
+    },
+    GRAPH_AUTHORITY: {
+      idFromName(name: string) {
+        expect(name).toBe("global");
+        return "graph-authority-id";
+      },
+      get(id: unknown) {
+        expect(id).toBe("graph-authority-id");
+        return {
+          fetch(request: Request) {
+            return durableObject.fetch(request);
+          },
+        };
+      },
+    },
+  } satisfies Parameters<typeof worker.fetch>[1];
+
+  return {
+    durableObject,
+    env,
   };
 }
 
@@ -387,66 +647,6 @@ describe("web worker route forwarding", () => {
       policyVersion: 0,
     });
   });
-
-  it("forwards authenticated workflow live websocket upgrades through the web transport path", async () => {
-    const upgradeResponse = new Response(null, {
-      status: 101,
-      headers: {
-        connection: "Upgrade",
-        upgrade: "websocket",
-        "sec-websocket-protocol": "io.live-sync.v1",
-      },
-    });
-    Object.defineProperty(upgradeResponse, "webSocket", {
-      configurable: true,
-      enumerable: true,
-      value: { id: "socket:client" },
-    });
-    const { authorityPaths, env, principalLookupPaths, readForwardedAuthorization } =
-      createWorkerEnv({
-        authorityResponse: upgradeResponse,
-        principalLookupResponse: Response.json({
-          principalId: "principal:user-better-auth",
-          principalKind: "human",
-          roleKeys: ["graph:member"],
-          capabilityGrantIds: ["grant-1"],
-          capabilityVersion: 4,
-        }),
-      });
-    const handler = createWorkerFetchHandler({
-      async getBetterAuthSession() {
-        return {
-          session: { id: "session-better-auth" },
-          user: { id: "user-better-auth" },
-        };
-      },
-    });
-
-    const response = await handler.fetch(
-      new Request(`https://web.local${webWorkflowLivePath}`, {
-        method: "GET",
-        headers: {
-          upgrade: "websocket",
-          "sec-websocket-protocol": "io.live-sync.v1",
-        },
-      }),
-      env,
-    );
-
-    expect(response.status).toBe(101);
-    expect(authorityPaths).toEqual([webWorkflowLivePath]);
-    expect(principalLookupPaths).toEqual([webGraphAuthoritySessionPrincipalLookupPath]);
-    expect(readForwardedAuthorization()).toEqual({
-      graphId: "graph:global",
-      principalId: "principal:user-better-auth",
-      principalKind: "human",
-      sessionId: "session-better-auth",
-      roleKeys: ["graph:member"],
-      capabilityGrantIds: ["grant-1"],
-      capabilityVersion: 4,
-      policyVersion: 0,
-    });
-  });
   it("forwards unauthenticated graph writes with an anonymous authorization context", async () => {
     const { env, readForwardedAuthorization } = createWorkerEnv();
     const handler = createWorkerFetchHandler({
@@ -494,6 +694,7 @@ describe("web worker route forwarding", () => {
       async onPrincipalLookup(request) {
         expect(await request.json()).toEqual({
           graphId: "graph:global",
+          email: "operator@example.com",
           subject: {
             issuer: "better-auth",
             provider: "user",
@@ -507,7 +708,7 @@ describe("web worker route forwarding", () => {
       async getBetterAuthSession() {
         return {
           session: { id: "session-better-auth" },
-          user: { id: "user-better-auth" },
+          user: { id: "user-better-auth", email: "operator@example.com" },
         };
       },
     });
@@ -725,5 +926,289 @@ describe("web worker route forwarding", () => {
     expect(response.status).toBe(404);
     expect(assetPaths).toEqual(["/api/secret-fields"]);
     expect(authorityPaths).toEqual([]);
+  });
+});
+
+describe("web worker admission flows", () => {
+  it("bootstraps the first operator end to end through the worker command and lookup paths without binding roles", async () => {
+    const { durableObject, env } = createEndToEndWorkerEnv();
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-bootstrap" },
+          user: { id: "user-bootstrap", email: "operator@example.com" },
+        };
+      },
+    });
+
+    const bootstrapResponse = await handler.fetch(
+      new Request("https://web.local/api/commands", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          kind: "bootstrap-operator-access",
+          input: {
+            email: "operator@example.com",
+            graphId: "graph:global",
+          },
+        }),
+      }),
+      env,
+    );
+    const txResponse = await handler.fetch(new Request("https://web.local/api/sync"), env);
+    const authority = await getDurableAuthority(durableObject);
+    const graph = readCoreGraph(authority);
+
+    expect(bootstrapResponse.status).toBe(201);
+    expect(await bootstrapResponse.json()).toMatchObject({
+      created: true,
+      email: "operator@example.com",
+      graphId: "graph:global",
+      roleKeys: ["graph:authority", "graph:owner"],
+    });
+    expect(txResponse.status).toBe(200);
+    expect(graph.principal.list()).toHaveLength(1);
+    expect(graph.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("admits explicit allowlist approvals end to end even when self-signup remains closed", async () => {
+    const { durableObject, env } = createEndToEndWorkerEnv();
+    const authority = await getDurableAuthority(durableObject);
+
+    await authority.executeCommand(
+      {
+        kind: "bootstrap-operator-access",
+        input: {
+          email: "operator@example.com",
+          graphId: "graph:global",
+        },
+      },
+      {
+        authorization: createAnonymousAuthorizationContext({
+          graphId: "graph:global",
+          policyVersion: 0,
+        }),
+      },
+    );
+    await authority.executeCommand(
+      {
+        kind: "set-admission-approval",
+        input: {
+          email: "approved@example.com",
+          graphId: "graph:global",
+          roleKeys: ["graph:member"],
+        },
+      },
+      { authorization: authorityAuthorization },
+    );
+
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-allow" },
+          user: { id: "user-allow", email: "approved@example.com" },
+        };
+      },
+    });
+    const response = await handler.fetch(new Request("https://web.local/api/sync"), env);
+    const graph = readCoreGraph(authority);
+
+    expect(response.status).toBe(200);
+    expect(graph.principal.list()).toHaveLength(1);
+    expect(graph.authSubjectProjection.list()).toHaveLength(1);
+    expect(graph.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("admits domain-gated open signup end to end through the worker lookup path without binding roles", async () => {
+    const { durableObject, env } = createEndToEndWorkerEnv();
+    const authority = await getDurableAuthority(durableObject);
+
+    await writeAdmissionPolicy(authority, {
+      allowedEmailDomain: ["allowed.example"],
+      bootstrapMode: core.admissionBootstrapMode.values.manual.id,
+      signupPolicy: core.admissionSignupPolicy.values.open.id,
+      signupRoleKey: ["graph:member"],
+    });
+
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-domain-allow" },
+          user: { id: "user-domain-allow", email: "operator@allowed.example" },
+        };
+      },
+    });
+    const response = await handler.fetch(new Request("https://web.local/api/sync"), env);
+    const graph = readCoreGraph(authority);
+
+    expect(response.status).toBe(200);
+    expect(graph.principal.list()).toHaveLength(1);
+    expect(graph.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("fails closed end to end when the domain gate denies first authenticated use", async () => {
+    const { durableObject, env } = createEndToEndWorkerEnv();
+    const authority = await getDurableAuthority(durableObject);
+
+    await writeAdmissionPolicy(authority, {
+      allowedEmailDomain: ["allowed.example"],
+      bootstrapMode: core.admissionBootstrapMode.values.manual.id,
+      signupPolicy: core.admissionSignupPolicy.values.open.id,
+      signupRoleKey: ["graph:member"],
+    });
+
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-domain-deny" },
+          user: { id: "user-domain-deny", email: "operator@blocked.example" },
+        };
+      },
+    });
+    const response = await handler.fetch(new Request("https://web.local/api/sync"), env);
+    const graph = readCoreGraph(authority);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: "auth.principal_missing",
+      error: expect.stringContaining("Admission policy denied first authenticated use"),
+    });
+    expect(graph.principal.list()).toHaveLength(0);
+    expect(graph.authSubjectProjection.list()).toHaveLength(0);
+    expect(graph.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("keeps admitted-but-unbound principals unbound until access activation", async () => {
+    const { durableObject, env } = createEndToEndWorkerEnv();
+    const authority = await getDurableAuthority(durableObject);
+
+    await createProjectedPrincipalWithoutBindings(authority, {
+      email: "approved@example.com",
+      userId: "user-repair",
+    });
+    await authority.executeCommand(
+      {
+        kind: "set-admission-approval",
+        input: {
+          email: "approved@example.com",
+          graphId: "graph:global",
+          roleKeys: ["graph:member"],
+        },
+      },
+      { authorization: authorityAuthorization },
+    );
+
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-repair" },
+          user: { id: "user-repair", email: "approved@example.com" },
+        };
+      },
+    });
+    const response = await handler.fetch(new Request("https://web.local/api/sync"), env);
+    const graph = readCoreGraph(authority);
+
+    expect(response.status).toBe(200);
+    expect(graph.principal.list()).toHaveLength(1);
+    expect(graph.authSubjectProjection.list()).toHaveLength(1);
+    expect(graph.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("binds member access explicitly end to end for admitted principals", async () => {
+    const { durableObject, env } = createEndToEndWorkerEnv();
+    const authority = await getDurableAuthority(durableObject);
+
+    await authority.executeCommand(
+      {
+        kind: "set-admission-approval",
+        input: {
+          email: "approved@example.com",
+          graphId: "graph:global",
+          roleKeys: ["graph:member"],
+        },
+      },
+      { authorization: authorityAuthorization },
+    );
+
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-bind-member" },
+          user: { id: "user-bind-member", email: "approved@example.com" },
+        };
+      },
+    });
+
+    await handler.fetch(new Request("https://web.local/api/sync"), env);
+    const activation = await handler.fetch(
+      new Request("https://web.local/api/access/activate", {
+        method: "POST",
+      }),
+      env,
+    );
+    const graph = readCoreGraph(authority);
+
+    expect(activation.status).toBe(200);
+    expect(await activation.json()).toMatchObject({
+      roleKeys: ["graph:member"],
+      capabilityVersion: 1,
+    });
+    expect(graph.principalRoleBinding.list()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ roleKey: "graph:member" })]),
+    );
+  });
+
+  it("binds operator access explicitly end to end after bootstrap admission", async () => {
+    const { durableObject, env } = createEndToEndWorkerEnv();
+    const authority = await getDurableAuthority(durableObject);
+
+    await authority.executeCommand(
+      {
+        kind: "bootstrap-operator-access",
+        input: {
+          email: "operator@example.com",
+          graphId: "graph:global",
+        },
+      },
+      {
+        authorization: createAnonymousAuthorizationContext({
+          graphId: "graph:global",
+          policyVersion: 0,
+        }),
+      },
+    );
+
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-bind-operator" },
+          user: { id: "user-bind-operator", email: "operator@example.com" },
+        };
+      },
+    });
+
+    await handler.fetch(new Request("https://web.local/api/sync"), env);
+    const activation = await handler.fetch(
+      new Request("https://web.local/api/access/activate", {
+        method: "POST",
+      }),
+      env,
+    );
+    const graph = readCoreGraph(authority);
+
+    expect(activation.status).toBe(200);
+    expect(await activation.json()).toMatchObject({
+      roleKeys: ["graph:authority", "graph:owner"],
+      capabilityVersion: 1,
+    });
+    expect(graph.principalRoleBinding.list()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ roleKey: "graph:authority" }),
+        expect.objectContaining({ roleKey: "graph:owner" }),
+      ]),
+    );
   });
 });

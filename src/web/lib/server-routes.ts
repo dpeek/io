@@ -490,7 +490,9 @@ function isSupportedWebCommandPayload(value: unknown): value is WebAuthorityComm
   return (
     isObjectRecord(value) &&
     ((value.kind === "write-secret-field" && isObjectRecord(value.input)) ||
-      (value.kind === "workflow-mutation" && isObjectRecord(value.input)))
+      (value.kind === "workflow-mutation" && isObjectRecord(value.input)) ||
+      (value.kind === "bootstrap-operator-access" && isObjectRecord(value.input)) ||
+      (value.kind === "set-admission-approval" && isObjectRecord(value.input)))
   );
 }
 
@@ -502,6 +504,12 @@ function webCommandSuccessStatus(
     return result.created ? 201 : 200;
   }
   if (command.kind === "workflow-mutation") {
+    return result.created ? 201 : 200;
+  }
+  if (command.kind === "bootstrap-operator-access") {
+    return result.created ? 201 : 200;
+  }
+  if (command.kind === "set-admission-approval") {
     return result.created ? 201 : 200;
   }
 

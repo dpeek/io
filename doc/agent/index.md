@@ -54,10 +54,7 @@ state, and the operator-facing session stream used by the TUI.
   [builtins.ts](../../src/agent/builtins.ts): workflow config, doc resolution,
   routing, and built-in prompt docs
 - [runner/codex.ts](../../src/agent/runner/codex.ts): Codex app-server process,
-  approvals, launch handles, session logging, and sandbox defaults
-- [workflow-subject-launch.ts](../../src/agent/workflow-subject-launch.ts):
-  shared workflow-subject launch coordination across workspace preparation,
-  runner startup, and launch metadata
+  approvals, session logging, and sandbox defaults
 - [tui-runtime.ts](../../src/agent/tui-runtime.ts) and
   [tui/index.ts](../../src/agent/tui/index.ts): retained replay/attach support,
   session event schema, transcript shaping, layout, and rendering

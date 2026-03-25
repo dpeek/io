@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  defineAdmissionPolicy,
   createShareGrantConstraints,
   defineShareGrant,
   defineShareSurface,
@@ -9,6 +10,91 @@ import {
   type ShareGrantCapabilityProjection,
   type ShareSurfacePolicy,
 } from "./contracts.js";
+
+describe("admission policy runtime contracts", () => {
+  it("defines the minimal graph-owned admission policy for bootstrap and self-signup", () => {
+    const policy = defineAdmissionPolicy({
+      graphId: "graph:global",
+      bootstrapMode: "first-user",
+      signupPolicy: "open",
+      allowedEmailDomains: ["example.com", "io.test"],
+      firstUserProvisioning: {
+        roleKeys: ["graph:owner", "graph:authority"],
+      },
+      signupProvisioning: {
+        roleKeys: ["graph:member"],
+      },
+    });
+
+    expect(policy).toEqual({
+      graphId: "graph:global",
+      bootstrapMode: "first-user",
+      signupPolicy: "open",
+      allowedEmailDomains: ["example.com", "io.test"],
+      firstUserProvisioning: {
+        roleKeys: ["graph:owner", "graph:authority"],
+      },
+      signupProvisioning: {
+        roleKeys: ["graph:member"],
+      },
+    });
+    expect(Object.isFrozen(policy)).toBe(true);
+    expect(Object.isFrozen(policy.allowedEmailDomains)).toBe(true);
+    expect(Object.isFrozen(policy.firstUserProvisioning)).toBe(true);
+    expect(Object.isFrozen(policy.firstUserProvisioning.roleKeys)).toBe(true);
+    expect(Object.isFrozen(policy.signupProvisioning)).toBe(true);
+    expect(Object.isFrozen(policy.signupProvisioning.roleKeys)).toBe(true);
+  });
+
+  it("rejects malformed admission policy combinations", () => {
+    expect(() =>
+      defineAdmissionPolicy({
+        graphId: "graph:global",
+        bootstrapMode: "first-user",
+        signupPolicy: "closed",
+        allowedEmailDomains: ["Example.com"],
+        firstUserProvisioning: {
+          roleKeys: ["graph:owner"],
+        },
+        signupProvisioning: {
+          roleKeys: [],
+        },
+      }),
+    ).toThrow("allowedEmailDomains must be lowercase.");
+
+    expect(() =>
+      defineAdmissionPolicy({
+        graphId: "graph:global",
+        bootstrapMode: "first-user",
+        signupPolicy: "closed",
+        allowedEmailDomains: [],
+        firstUserProvisioning: {
+          roleKeys: [],
+        },
+        signupProvisioning: {
+          roleKeys: [],
+        },
+      }),
+    ).toThrow(
+      'firstUserProvisioning.roleKeys must not be empty when bootstrapMode is "first-user".',
+    );
+
+    expect(() =>
+      defineAdmissionPolicy({
+        graphId: "graph:global",
+        bootstrapMode: "manual",
+        signupPolicy: "open",
+        allowedEmailDomains: [],
+        firstUserProvisioning: {
+          roleKeys: [],
+        },
+        signupProvisioning: {
+          roleKeys: [],
+        },
+      }),
+    ).toThrow('signupProvisioning.roleKeys must not be empty when signupPolicy is "open".');
+  });
+});
 
 const topicNamePolicy = {
   predicateId: "pkm:topic.name",

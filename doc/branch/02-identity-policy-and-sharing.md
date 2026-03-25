@@ -34,6 +34,7 @@ module permissions, agent behavior, and any future federation surface.
 - principal identity model
 - session claim to principal projection model
 - predicate policy metadata
+- graph-backed admission policy and first-use provisioning model
 - capability grant model
 - module permission request model
 
@@ -194,6 +195,23 @@ interface PrincipalRoleBinding {
   principalId: string;
   roleKey: string;
   status: "active" | "revoked";
+}
+
+type AdmissionBootstrapMode = "manual" | "first-user";
+
+type AdmissionSignupPolicy = "closed" | "open";
+
+interface AdmissionProvisioning {
+  roleKeys: readonly string[];
+}
+
+interface AdmissionPolicy {
+  graphId: string;
+  bootstrapMode: AdmissionBootstrapMode;
+  signupPolicy: AdmissionSignupPolicy;
+  allowedEmailDomains: readonly string[];
+  firstUserProvisioning: AdmissionProvisioning;
+  signupProvisioning: AdmissionProvisioning;
 }
 ```
 
@@ -392,6 +410,9 @@ Entity and concept responsibilities:
   graph. It is not the source of truth for credentials.
 - `PrincipalRoleBinding` groups reusable permissions without hard-coding them
   into the session layer.
+- `AdmissionPolicy` is the graph-owned rule set that decides whether an
+  authenticated subject may self-admit into the current graph and which role
+  keys first-use provisioning grants.
 - `PredicatePolicyDescriptor` is the schema-owned policy contract for one
   predicate.
 - `CapabilityGrant` is the durable delegation record for extra rights beyond
@@ -477,6 +498,7 @@ interface PolicyError {
 | `GraphFieldAuthority`            | Low-level replication and write-scope metadata already used by validation and sync | schema authors, authority runtime             | graph runtime                                  | field definition                                                    | authored metadata                             | validation error if malformed                                            | `stable`                                                                                                                           |
 | `PredicatePolicyDescriptor`      | Principal-aware read, write, and sharing rule for a predicate                      | schema authors, module authors                | policy evaluator                               | predicate id, policy audiences, capabilities                        | descriptor                                    | `policy.write.forbidden` or `policy.read.forbidden` when violated        | `provisional`                                                                                                                      |
 | `AuthorizationContext`           | Request-local resolved actor and version snapshot                                  | auth bridge, authority runtime                | policy evaluator, sync, commands               | Better Auth session plus graph projection                           | principal id, roles, grants, versions         | `auth.unauthenticated`, `auth.principal_missing`, `policy.stale_context` | `stable`                                                                                                                           |
+| `AdmissionPolicy`                | Graph-owned bootstrap, signup, domain-gate, and first-use provisioning contract    | auth bridge, authority runtime, operator UX   | authority persistence plus admission evaluator | graph id, bootstrap mode, signup mode, allowed domains, role grants | durable policy snapshot                       | admission denied or policy validation error                              | `stable` for bootstrap, signup, domain, and provisioning shape                                                                     |
 | `projectSessionToPrincipal(...)` | Map a Better Auth session to graph identity                                        | Worker auth bridge                            | Better Auth store plus graph projection lookup | request session, graph id                                           | `AuthorizationContext`                        | `auth.unauthenticated`, `auth.principal_missing`                         | `stable`                                                                                                                           |
 | `authorizeRead(...)`             | Decide whether a predicate may materialize for a principal                         | query and sync paths                          | policy evaluator                               | `AuthorizationContext`, subject id, predicate id                    | allow or deny                                 | `policy.read.forbidden` on explicit reads; sync omits denied predicates  | `stable`                                                                                                                           |
 | `authorizeWrite(...)`            | Decide whether a mutation may touch a predicate                                    | write validator, command executor             | policy evaluator                               | `AuthorizationContext`, subject id, predicate id, write scope       | allow or deny                                 | `policy.write.forbidden`                                                 | `stable`                                                                                                                           |
@@ -490,6 +512,35 @@ Contract rules:
 
 - `projectSessionToPrincipal(...)` must never trust a client-supplied
   `principalId`
+- `AdmissionPolicy` is graph-owned authorization data. Better Auth runtime
+  config such as secrets, provider callbacks, database bindings, and route
+  mounts remain outside this contract even when the Worker composes both during
+  request handling.
+- `allowedEmailDomains` stores normalized domain strings only. It never stores
+  full email addresses or provider-owned account metadata.
+- `firstUserProvisioning` applies exactly once when
+  `bootstrapMode = "first-user"` and the graph has no admitted human
+  principal; `signupProvisioning` applies to later self-signups when
+  `signupPolicy = "open"` and any domain gate passes.
+- first authenticated use in the current single-graph proof follows one of five
+  durable paths:
+  - first-user bootstrap: when `bootstrapMode = "first-user"` and no admitted
+    human principal exists, the authority creates the principal, creates the
+    exact auth-subject projection, and records eligibility for a later explicit
+    role-binding step using `firstUserProvisioning.roleKeys`
+  - explicit approval allowlist: when an active `core:admissionApproval`
+    matches the normalized email, the authority admits the principal even if
+    `signupPolicy = "closed"`
+  - domain-gated open signup: when `signupPolicy = "open"` and
+    `allowedEmailDomains` is empty or contains the normalized email domain, the
+    authority creates the principal and records eligibility for a later explicit
+    role-binding step using `signupProvisioning.roleKeys`
+  - deny: when none of those gates admits the request, first authenticated use
+    fails closed with `auth.principal_missing` and no principal, projection, or
+    role binding is created
+  - explicit initial role binding: once a principal is admitted, a separate
+    authority-owned workflow creates the durable `PrincipalRoleBinding`
+    records; admission alone never grants graph membership or operator rights
 - the stable projection input is the `graphId`, `sessionId`, and auth-subject
   tuple (`issuer`, `provider`, `providerAccountId`, `authUserId`); Better Auth
   request parsing remains a provisional Worker-bridge detail
@@ -942,6 +993,8 @@ Important failure modes:
 - `src/graph/runtime/schema.ts`: keep `GraphFieldAuthority` stable and add the
   principal-aware policy descriptor surface beside it rather than inside route
   code
+- `src/graph/runtime/contracts.ts`: publish the canonical `AdmissionPolicy`
+  contract beside the existing auth and grant vocabulary
 - `src/graph/runtime/contracts.ts`: publish the canonical
   `ModulePermissionRequest` plus the command-policy vocabulary it lowers
   through
@@ -952,4 +1005,5 @@ Important failure modes:
 - `src/web/lib/auth-bridge.ts`: add the Better Auth session-to-principal
   projection seam
 - `src/graph/modules/core/`: add core principal, role, capability, and share
-  graph types that downstream branches can reference
+  graph types that downstream branches can reference, including
+  `core:admissionPolicy`

@@ -9,21 +9,13 @@ import { ops } from "../graph/modules/ops.js";
 import { createWorkflowProjectionIndex } from "../graph/modules/ops/workflow/query.js";
 import { buildWorkflowTuiRootComponentModel } from "./layout.js";
 import {
-  codexSessionLaunchDispositionValues,
-  codexSessionLaunchFailureCodeValues,
-  codexSessionLaunchKindValues,
   createWorkflowTuiStartupFailureModel,
   createWorkflowTuiStartupLoadingModel,
   createWorkflowTuiWorkflowModelFromProjection,
   normalizeWorkflowTuiSurfaceModel,
   setWorkflowTuiActionRequestState,
 } from "./model.js";
-import type {
-  CodexSessionLaunchFailure,
-  CodexSessionLaunchRequest,
-  CodexSessionLaunchSuccess,
-  WorkflowTuiWorkflowSurfaceModel,
-} from "./model.js";
+import type { WorkflowTuiWorkflowSurfaceModel } from "./model.js";
 import { createWorkflowTui } from "./tui.js";
 
 (
@@ -272,63 +264,6 @@ test("buildWorkflowTuiRootComponentModel renders the startup loading shell", () 
     "does not launch sessions",
   );
   expect(layout.footerLines).toContain("Legacy session monitor: io agent tui");
-});
-
-test("CodexSessionLaunch contract stays explicit for branch and commit workflow subjects", () => {
-  const branchRequest: CodexSessionLaunchRequest = {
-    actorId: "principal:operator",
-    kind: "planning",
-    projectId: "project:io",
-    subject: {
-      branchId: "branch:workflow-runtime-contract",
-      kind: "branch",
-    },
-  };
-  const commitRequest: CodexSessionLaunchRequest = {
-    actorId: "principal:operator",
-    kind: "execution",
-    projectId: "project:io",
-    subject: {
-      branchId: "branch:workflow-runtime-contract",
-      commitId: "commit:document-commit-queue-scope",
-      kind: "commit",
-    },
-  };
-  const success: CodexSessionLaunchSuccess = {
-    launch: {
-      attach: {
-        sessionId: "session:workflow-runtime-contract-execution-01",
-      },
-      disposition: "launched",
-      managedBranchName: "workflow/runtime-contract",
-      repositoryId: "repo:io",
-      repositoryRoot: "/tmp/io",
-      worktreePath: "/tmp/io-worktree-runtime",
-    },
-    ok: true,
-    session: {
-      id: "session:workflow-runtime-contract-execution-01",
-      kind: "execution",
-      subject: commitRequest.subject,
-    },
-  };
-  const failure: CodexSessionLaunchFailure = {
-    code: "repository-mismatch",
-    message: "The selected workflow subject is mapped to a different attached repository.",
-    ok: false,
-    subject: branchRequest.subject,
-  };
-
-  expect(codexSessionLaunchKindValues).toEqual(["planning", "execution", "review"]);
-  expect(codexSessionLaunchDispositionValues).toEqual(["launched", "attached"]);
-  expect(codexSessionLaunchFailureCodeValues).toEqual([
-    "subject-locked",
-    "workspace-state-missing",
-    "repository-mismatch",
-    "policy-denied",
-  ]);
-  expect(success.launch.attach.sessionId).toBe(success.session.id);
-  expect(failure.subject.kind).toBe("branch");
 });
 
 test("buildWorkflowTuiRootComponentModel renders the startup failure shell", () => {
@@ -1071,127 +1006,6 @@ test("createWorkflowTui ignores duplicate enter presses while the selected actio
       "Action state: Launch commit session success: Launch commit session completed for commit:document-commit-queue-scope.",
     );
     expect(triggered).toBe(1);
-  } finally {
-    await act(async () => {
-      await tui.stop();
-    });
-    renderer.destroy();
-  }
-});
-
-test("createWorkflowTui surfaces branch launch handoff metadata returned by the launch coordinator", async () => {
-  const { projectId, projection } = createWorkflowProjectionFixture();
-  const { captureCharFrame, mockInput, renderOnce, renderer } = await createTestRenderer({
-    height: 34,
-    width: 180,
-  });
-  const tui = createWorkflowTui({
-    onAction: async () => ({
-      launch: {
-        attach: {
-          sessionId: "session:workflow-runtime-contract-plan-02",
-        },
-        disposition: "attached",
-        managedBranchName: "workflow/runtime-contract",
-        repositoryId: "repo:io",
-        repositoryRoot: "/tmp/io",
-        worktreePath: "/tmp/io-worktree-runtime",
-      },
-      ok: true,
-      session: {
-        id: "session:workflow-runtime-contract-plan-02",
-        kind: "planning",
-        subject: {
-          branchId: "branch:workflow-runtime-contract",
-          kind: "branch",
-        },
-      },
-    }),
-    renderer,
-    requireTty: false,
-    surfaceModel: createWorkflowTuiWorkflowModelFromProjection({
-      projection,
-      projectId,
-    }),
-  });
-
-  try {
-    await act(async () => {
-      await tui.start();
-      await renderOnce();
-    });
-
-    await act(async () => {
-      await mockInput.typeText("a");
-      await mockInput.typeText("\r");
-      await renderOnce();
-    });
-
-    const frame = captureCharFrame();
-    expect(frame).toContain("Action state: Launch branch session success:");
-    expect(frame).toContain("session:workflow-runtime-contract-plan-02");
-    expect(frame).toContain("branch workflow/runtime-contract");
-    expect(frame).toContain("worktree /tmp/io-worktree-runtime");
-    expect(frame).toContain("Launch branch session [success] (branch)");
-
-    await act(async () => {
-      mockInput.pressArrow("right");
-      await renderOnce();
-    });
-
-    const nextFrame = captureCharFrame();
-    expect(nextFrame).toContain("Branch Detail [focused]");
-    expect(nextFrame).toContain("Action state: Launch branch session success:");
-  } finally {
-    await act(async () => {
-      await tui.stop();
-    });
-    renderer.destroy();
-  }
-});
-
-test("createWorkflowTui presents explicit launch contract failures returned by the workflow launcher", async () => {
-  const { projectId, projection } = createWorkflowProjectionFixture();
-  const { captureCharFrame, mockInput, renderOnce, renderer } = await createTestRenderer({
-    height: 34,
-    width: 180,
-  });
-  const tui = createWorkflowTui({
-    onAction: async () => ({
-      code: "repository-mismatch",
-      message:
-        'The selected workflow subject is attached to repository root "/tmp/other", but io tui is running from "/tmp/io".',
-      ok: false,
-      subject: {
-        branchId: "branch:workflow-runtime-contract",
-        kind: "branch",
-      },
-    }),
-    renderer,
-    requireTty: false,
-    surfaceModel: createWorkflowTuiWorkflowModelFromProjection({
-      projection,
-      projectId,
-    }),
-  });
-
-  try {
-    await act(async () => {
-      await tui.start();
-      await renderOnce();
-    });
-
-    await act(async () => {
-      await mockInput.typeText("a");
-      await mockInput.typeText("\r");
-      await renderOnce();
-    });
-
-    const frame = captureCharFrame();
-    expect(frame).toContain("Action state: Launch branch session failure:");
-    expect(frame).toContain('repository root "/tmp/other"');
-    expect(frame).toContain('running from "/tmp/io"');
-    expect(frame).toContain("Launch branch session [failure] (branch)");
   } finally {
     await act(async () => {
       await tui.stop();

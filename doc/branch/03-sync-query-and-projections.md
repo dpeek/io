@@ -67,9 +67,6 @@ invalidation proof.
 - the client can bootstrap a named scope instead of the whole graph
 - the scope carries explicit completeness and cursor state
 - live updates can advance the scope without forcing a whole-graph reload
-- reconnect and recovery stay fail-closed: transport loss removes the active
-  registration, only freshness degrades, and callers recover through
-  reconnect plus one explicit scoped pull
 - one collection query reads from a documented projection rather than raw
   traversal
 
@@ -77,9 +74,7 @@ invalidation proof.
 
 Open one scoped view in the browser, mutate data from another session, and
 prove the first client receives a scoped update or cursor-advanced re-pull
-without full resync. The shipped proof now treats WebSocket push as reusable
-live infrastructure for the same scoped registration model rather than a
-workflow-only experiment.
+without full resync.
 
 ### What This Unlocks
 

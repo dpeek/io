@@ -6,6 +6,7 @@ import {
   createWorkerAuthorizationContext,
   isBearerShareToken,
   projectBearerShareToken,
+  reduceBetterAuthSession,
   type BetterAuthSessionResult,
   type SessionPrincipalLookupInput,
   type SessionPrincipalProjection,
@@ -15,6 +16,7 @@ import { betterAuthBasePath, getBetterAuth, type BetterAuthWorkerEnv } from "../
 import {
   WebGraphAuthorityDurableObject,
   webGraphAuthorityBearerShareLookupPath,
+  webGraphAuthoritySessionPrincipalActivatePath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "../lib/graph-authority-do.js";
 import {
@@ -43,6 +45,7 @@ export { WebGraphAuthorityDurableObject };
 const webAppGraphId = "graph:global";
 const webAppPolicyVersion = 0;
 const betterAuthCookieMarker = "better-auth";
+const webAppActivateAccessPath = "/api/access/activate";
 
 export type WorkerBetterAuthSessionLookup = (
   request: Request,
@@ -117,6 +120,17 @@ export class BearerShareTokenRequestError extends Error {
   }
 }
 
+export class SessionActivationRequestError extends Error {
+  readonly code = "auth.unauthenticated" as const;
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "SessionActivationRequestError";
+    this.status = status;
+  }
+}
+
 function isBetterAuthRequest(url: URL): boolean {
   return url.pathname === betterAuthBasePath || url.pathname.startsWith(`${betterAuthBasePath}/`);
 }
@@ -129,6 +143,10 @@ function isGraphApiRequest(url: URL): boolean {
     url.pathname === webWorkflowLivePath ||
     url.pathname === webWorkflowReadPath
   );
+}
+
+function isSessionActivationRequest(url: URL): boolean {
+  return url.pathname === webAppActivateAccessPath;
 }
 
 function isHtmlNavigationRequest(request: Request): boolean {
@@ -220,6 +238,34 @@ async function lookupGraphPrincipal(
 
   throw new GraphPrincipalLookupError(
     payload.error ?? "Unable to resolve the graph principal for this authenticated request.",
+    response.status,
+    payload.code,
+  );
+}
+
+async function activateGraphPrincipalRoleBindings(
+  input: SessionPrincipalLookupInput,
+  context: {
+    readonly env: Env;
+    readonly request: Request;
+  },
+): Promise<SessionPrincipalProjection> {
+  const response = await getGraphAuthorityFetcher(context.env).fetch(
+    new Request(new URL(webGraphAuthoritySessionPrincipalActivatePath, context.request.url), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(input),
+    }),
+  );
+  if (response.ok) {
+    return (await response.json()) as SessionPrincipalProjection;
+  }
+
+  const payload = await readLookupPrincipalResponse(response);
+  throw new GraphPrincipalLookupError(
+    payload.error ?? "Unable to activate initial graph access for this authenticated request.",
     response.status,
     payload.code,
   );
@@ -347,6 +393,7 @@ function errorCode(error: unknown): string | undefined {
 
 function createGraphAuthorizationErrorResponse(error: unknown): Response | null {
   if (
+    !(error instanceof SessionActivationRequestError) &&
     !(error instanceof BearerShareTokenRequestError) &&
     !(error instanceof BearerShareTokenProjectionError) &&
     !(error instanceof BetterAuthSessionVerificationError) &&
@@ -396,6 +443,54 @@ async function handleGraphApiRequest(
   }
 }
 
+async function handleSessionActivationRequest(
+  request: Request,
+  env: Env,
+  dependencies: WorkerFetchDependencies,
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { allow: "POST" },
+    });
+  }
+
+  try {
+    const betterAuthSession = await (
+      dependencies.getBetterAuthSession ?? getRequestBetterAuthSession
+    )(request, env);
+    const reducedSession = reduceBetterAuthSession(betterAuthSession);
+    if (!reducedSession) {
+      throw new SessionActivationRequestError(
+        "An authenticated Better Auth session is required to activate graph access.",
+        401,
+      );
+    }
+
+    const projection = await activateGraphPrincipalRoleBindings(
+      {
+        graphId: webAppGraphId,
+        subject: reducedSession.subject,
+        email: reducedSession.email,
+      },
+      { env, request },
+    );
+
+    return Response.json(projection, {
+      headers: {
+        "cache-control": "no-store",
+      },
+    });
+  } catch (error) {
+    const authErrorResponse = createGraphAuthorizationErrorResponse(error);
+    if (authErrorResponse) {
+      return authErrorResponse;
+    }
+
+    throw error;
+  }
+}
+
 export function createWorkerFetchHandler(dependencies: WorkerFetchDependencies = {}) {
   return {
     async fetch(request: Request, env: Env): Promise<Response> {
@@ -407,6 +502,10 @@ export function createWorkerFetchHandler(dependencies: WorkerFetchDependencies =
 
       if (isGraphApiRequest(url)) {
         return handleGraphApiRequest(request, env, dependencies);
+      }
+
+      if (isSessionActivationRequest(url)) {
+        return handleSessionActivationRequest(request, env, dependencies);
       }
 
       return serveSpaAsset(request, env);

@@ -39,6 +39,7 @@ export type AuthSubjectRef = {
 export type AuthenticatedSession = {
   readonly sessionId: string;
   readonly subject: AuthSubjectRef;
+  readonly email?: string;
 };
 
 /**
@@ -163,6 +164,32 @@ export type ShareGrantCapabilityProjection = Pick<
   "id" | "resource" | "constraints" | "status"
 >;
 
+export type AdmissionBootstrapMode = "manual" | "first-user";
+
+export type AdmissionSignupPolicy = "closed" | "open";
+
+export type AdmissionProvisioning = {
+  readonly roleKeys: readonly string[];
+};
+
+/**
+ * Graph-owned admission policy for the current single-graph proof.
+ *
+ * This contract intentionally stops at durable authorization inputs the graph
+ * can own and the authority can enforce: bootstrap posture, self-signup
+ * posture, email-domain gating, and the role keys granted during first-use
+ * provisioning. Better Auth runtime secrets, provider callbacks, mount paths,
+ * and other host bootstrap settings remain outside this graph contract.
+ */
+export type AdmissionPolicy = {
+  readonly graphId: string;
+  readonly bootstrapMode: AdmissionBootstrapMode;
+  readonly signupPolicy: AdmissionSignupPolicy;
+  readonly allowedEmailDomains: readonly string[];
+  readonly firstUserProvisioning: AdmissionProvisioning;
+  readonly signupProvisioning: AdmissionProvisioning;
+};
+
 export type PrincipalRoleBindingStatus = "active" | "revoked";
 
 export type PrincipalRoleBinding = {
@@ -250,6 +277,19 @@ function freezeStringValues(values: readonly string[]): readonly string[] {
   return Object.freeze([...values]);
 }
 
+function assertDomainName(value: string, label: string): void {
+  assertNonEmptyContractString(value, label);
+  if (value !== value.toLowerCase()) {
+    throw new TypeError(`${label} must be lowercase.`);
+  }
+  if (value.includes("@")) {
+    throw new TypeError(`${label} must contain only the domain, not an email address.`);
+  }
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(value)) {
+    throw new TypeError(`${label} must be a valid domain name.`);
+  }
+}
+
 function isShareSurfacePolicyMap(
   policies: ShareSurfacePolicyLookup,
 ): policies is ReadonlyMap<string, ShareSurfacePolicy | null | undefined> {
@@ -268,6 +308,46 @@ function matchesStringSet(left: readonly string[], right: readonly string[]): bo
 
   const rightValues = new Set(right);
   return left.every((value) => rightValues.has(value));
+}
+
+export function defineAdmissionPolicy<const T extends AdmissionPolicy>(policy: T): Readonly<T> {
+  assertNonEmptyContractString(policy.graphId, "graphId");
+  assertUniqueContractStrings(
+    policy.firstUserProvisioning.roleKeys,
+    "firstUserProvisioning.roleKeys",
+  );
+  assertUniqueContractStrings(policy.signupProvisioning.roleKeys, "signupProvisioning.roleKeys");
+
+  const allowedEmailDomains = [...policy.allowedEmailDomains];
+  assertUniqueContractStrings(allowedEmailDomains, "allowedEmailDomains");
+  for (const domain of allowedEmailDomains) {
+    assertDomainName(domain, "allowedEmailDomains");
+  }
+
+  if (policy.bootstrapMode === "first-user" && policy.firstUserProvisioning.roleKeys.length === 0) {
+    throw new TypeError(
+      'firstUserProvisioning.roleKeys must not be empty when bootstrapMode is "first-user".',
+    );
+  }
+
+  if (policy.signupPolicy === "open" && policy.signupProvisioning.roleKeys.length === 0) {
+    throw new TypeError(
+      'signupProvisioning.roleKeys must not be empty when signupPolicy is "open".',
+    );
+  }
+
+  return Object.freeze({
+    ...policy,
+    allowedEmailDomains: freezeStringValues(allowedEmailDomains),
+    firstUserProvisioning: Object.freeze({
+      ...policy.firstUserProvisioning,
+      roleKeys: freezeStringValues(policy.firstUserProvisioning.roleKeys),
+    }),
+    signupProvisioning: Object.freeze({
+      ...policy.signupProvisioning,
+      roleKeys: freezeStringValues(policy.signupProvisioning.roleKeys),
+    }),
+  }) as Readonly<T>;
 }
 
 export function defineShareSurface<const T extends ShareSurface>(surface: T): Readonly<T> {

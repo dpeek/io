@@ -9,6 +9,11 @@ import { emailTypeModule } from "./core/email/index.js";
 import { enumType } from "./core/enum/index.js";
 import { icon } from "./core/icon/index.js";
 import {
+  admissionApproval,
+  admissionApprovalStatus,
+  admissionBootstrapMode,
+  admissionPolicy,
+  admissionSignupPolicy,
   authSubjectProjection,
   authSubjectStatus,
   capabilityGrant,
@@ -101,6 +106,9 @@ export const core = defineNamespace(coreIdMap, {
   enum: enumType,
   node,
   secretHandle,
+  admissionApprovalStatus,
+  admissionBootstrapMode,
+  admissionSignupPolicy,
   principalKind,
   principalStatus,
   authSubjectStatus,
@@ -112,6 +120,8 @@ export const core = defineNamespace(coreIdMap, {
   principal,
   authSubjectProjection,
   principalRoleBinding,
+  admissionPolicy,
+  admissionApproval,
   capabilityGrant,
   shareGrant,
 });

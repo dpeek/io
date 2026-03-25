@@ -3,6 +3,11 @@ import { describe, expect, it } from "bun:test";
 import { createIdMap } from "../../../runtime/identity.js";
 import { core } from "../../core.js";
 import {
+  admissionApproval,
+  admissionApprovalStatus,
+  admissionBootstrapMode,
+  admissionPolicy,
+  admissionSignupPolicy,
   authSubjectProjection,
   authSubjectStatus,
   capabilityGrant,
@@ -25,6 +30,9 @@ describe("core identity family", () => {
       principalStatus,
       authSubjectStatus,
       principalRoleBindingStatus,
+      admissionApprovalStatus,
+      admissionBootstrapMode,
+      admissionSignupPolicy,
       capabilityGrantResourceKind,
       capabilityGrantTargetKind,
       capabilityGrantStatus,
@@ -32,6 +40,8 @@ describe("core identity family", () => {
       principal,
       authSubjectProjection,
       principalRoleBinding,
+      admissionPolicy,
+      admissionApproval,
       capabilityGrant,
       shareGrant,
     });
@@ -56,6 +66,24 @@ describe("core identity family", () => {
         "core:principalStatus.disabled",
         "core:authSubjectStatus",
         "core:principalRoleBindingStatus",
+        "core:admissionApprovalStatus",
+        "core:admissionApprovalStatus.active",
+        "core:admissionBootstrapMode",
+        "core:admissionBootstrapMode.firstUser",
+        "core:admissionSignupPolicy",
+        "core:admissionSignupPolicy.open",
+        "core:admissionApproval",
+        "core:admissionApproval:email",
+        "core:admissionApproval:graphId",
+        "core:admissionApproval:roleKey",
+        "core:admissionApproval:status",
+        "core:admissionPolicy",
+        "core:admissionPolicy:graphId",
+        "core:admissionPolicy:bootstrapMode",
+        "core:admissionPolicy:signupPolicy",
+        "core:admissionPolicy:allowedEmailDomain",
+        "core:admissionPolicy:firstUserRoleKey",
+        "core:admissionPolicy:signupRoleKey",
         "core:shareGrant",
         "core:shareGrant:capabilityGrant",
         "core:shareGrant:status",
@@ -93,6 +121,15 @@ describe("core identity family", () => {
     expect(String(core.principalRoleBinding.fields.status.range)).toBe(
       core.principalRoleBindingStatus.values.id,
     );
+    expect(String(core.admissionApproval.fields.status.range)).toBe(
+      core.admissionApprovalStatus.values.id,
+    );
+    expect(String(core.admissionPolicy.fields.bootstrapMode.range)).toBe(
+      core.admissionBootstrapMode.values.id,
+    );
+    expect(String(core.admissionPolicy.fields.signupPolicy.range)).toBe(
+      core.admissionSignupPolicy.values.id,
+    );
     expect(String(core.capabilityGrant.fields.resourceKind.range)).toBe(
       core.capabilityGrantResourceKind.values.id,
     );
@@ -117,8 +154,13 @@ describe("core identity family", () => {
     expect(typeof core.principal.fields.capabilityVersion.id).toBe("string");
     expect(typeof core.authSubjectProjection.fields.mirroredAt.id).toBe("string");
     expect(typeof core.principalRoleBinding.fields.roleKey.id).toBe("string");
+    expect(typeof core.admissionApproval.fields.email.id).toBe("string");
+    expect(typeof core.admissionPolicy.fields.allowedEmailDomain.id).toBe("string");
     expect(typeof core.capabilityGrant.fields.constraintPredicateId.id).toBe("string");
     expect(typeof core.shareGrant.fields.surfacePredicateId.id).toBe("string");
+    expect(typeof core.admissionApprovalStatus.values.active.id).toBe("string");
+    expect(typeof core.admissionBootstrapMode.values.firstUser.id).toBe("string");
+    expect(typeof core.admissionSignupPolicy.values.open.id).toBe("string");
     expect(typeof core.principalKind.values.remoteGraph.id).toBe("string");
     expect(typeof core.capabilityGrantTargetKind.values.principal.id).toBe("string");
     expect(typeof core.shareSurfaceKind.values.entityPredicateSlice.id).toBe("string");
@@ -133,6 +175,14 @@ describe("core identity family", () => {
       "authority-only",
     );
     expect(core.principalRoleBinding.fields.roleKey.authority?.visibility).toBe("authority-only");
+    expect(core.admissionApproval.fields.email.authority?.visibility).toBe("authority-only");
+    expect(core.admissionApproval.fields.status.authority?.write).toBe("authority-only");
+    expect(core.admissionPolicy.fields.graphId.authority?.visibility).toBe("authority-only");
+    expect(core.admissionPolicy.fields.bootstrapMode.authority?.write).toBe("authority-only");
+    expect(core.admissionPolicy.fields.allowedEmailDomain.authority?.visibility).toBe(
+      "authority-only",
+    );
+    expect(core.admissionPolicy.fields.signupRoleKey.authority?.write).toBe("authority-only");
     expect(core.capabilityGrant.fields.resourcePredicateId.authority?.visibility).toBe(
       "authority-only",
     );

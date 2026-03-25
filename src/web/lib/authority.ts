@@ -1,39 +1,68 @@
 import {
   applyGraphWriteTransaction,
+  defineAdmissionPolicy,
   type AuthSubjectRef,
+  type AdmissionPolicy,
   type AuthorizationContext,
   type AnyTypeOutput,
   type AuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeWriteScope,
+  authorizeCommand,
+  authorizeRead,
+  authorizeWrite,
+  bootstrap,
+  collectScalarCodecs,
+  collectTypeIndex,
+  createIncrementalSyncFallback,
+  createIncrementalSyncPayload,
+  createModuleReadScope,
+  createModuleSyncScope,
+  createPersistedAuthoritativeGraph,
   createStore,
   createTypeClient,
   edgeId,
+  fieldPolicyDescriptor,
   GraphValidationError,
+  type GraphCommandPolicy,
+  type GraphFieldAuthority,
   isEntityType,
+  isSecretBackedField,
+  type ModuleSyncScope,
+  type PrincipalKind,
+  type Cardinality,
   type GraphWriteTransaction,
-  type InvalidationEvent,
   type NamespaceClient,
   type PersistedAuthoritativeGraph,
   type PersistedAuthoritativeGraphStorageCommitInput,
-  type PersistedAuthoritativeGraphStorageLoadResult,
   type PersistedAuthoritativeGraphStoragePersistInput,
-  type PrincipalKind,
+  type PersistedAuthoritativeGraphStorage,
+  type PersistedAuthoritativeGraphStorageLoadResult,
   type PolicyError,
+  type InvalidationEvent,
+  type PredicatePolicyDescriptor,
   readPredicateValue as decodePredicateValue,
+  type ReplicationReadAuthorizer,
+  type SyncDiagnostics,
   type Store,
   type StoreSnapshot,
+  type AuthoritativeGraphWriteResult,
   validateShareGrant,
+  matchesModuleReadScopeRequest,
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
   agentSession,
+  compileWorkflowReviewScopeDependencyKeys,
   createWorkflowReviewInvalidationEvent,
+  createWorkflowProjectionIndexFromRetainedState,
   repositoryBranch,
   repositoryCommit,
   workflowBranch,
   workflowCommit,
   workflowProject,
   workflowRepository,
+  createRetainedWorkflowProjectionState,
   type CommitQueueScopeFailureCode,
   type CommitQueueScopeQuery,
   type CommitQueueScopeResult,
@@ -43,6 +72,7 @@ import {
   type RetainedWorkflowProjectionState,
   WorkflowProjectionQueryError,
   workflowSchema,
+  workflowReviewModuleReadScope,
   type WorkflowMutationAction,
   type WorkflowMutationResult,
 } from "@io/core/graph/modules/ops/workflow";
@@ -54,37 +84,72 @@ import type {
   SessionPrincipalLookupInput,
   SessionPrincipalProjection,
 } from "./auth-bridge.js";
-import {
-  type ResolvedAuthorizationCapabilityGrant,
-  assertCurrentAuthorizationVersion,
-  createAuthorizationCapabilityResolver,
-  evaluateReadAuthorization,
-  filterReadableSnapshot,
-  validateTransactionAuthorization,
-} from "./authority-authorization-services.js";
-import {
-  buildRetainedWorkflowProjectionState,
-  createBootstrappedWebAuthority,
-} from "./authority-bootstrap-services.js";
-import {
-  applyStagedWebAuthorityMutation,
-  createWebAuthorityCommandServices,
-} from "./authority-command-services.js";
-import { getCompiledGraphArtifacts } from "./authority-compiled-fields.js";
-import { createScopedSyncServices } from "./authority-scoped-sync-services.js";
-import { collectTouchedTypeIdsForTransaction } from "./authority-sync-scope-planning.js";
 import { seedExampleGraph } from "./example-data.js";
 import { planRecordedMutation } from "./mutation-planning.js";
-import { type WriteSecretFieldInput, type WriteSecretFieldResult } from "./secret-fields.js";
+import {
+  buildSecretHandleName,
+  secretFieldEntityIdRequiredMessage,
+  secretFieldPlaintextRequiredMessage,
+  secretFieldPredicateIdRequiredMessage,
+  type WriteSecretFieldInput,
+  type WriteSecretFieldResult,
+} from "./secret-fields.js";
+import { runWorkflowMutationCommand } from "./workflow-authority.js";
 import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-transport.js";
-
-export { applyStagedWebAuthorityMutation } from "./authority-command-services.js";
 
 const webAppGraph = { ...core, ...pkm, ...ops } as const;
 
 type WebAppGraph = typeof webAppGraph;
 type PersistedWebAppAuthority = PersistedAuthoritativeGraph<WebAppGraph>;
 type WebAppAuthorityGraph = WebAppGraph & Record<string, AnyTypeOutput>;
+type CompiledFieldDefinition = {
+  readonly field: {
+    readonly authority?: GraphFieldAuthority;
+    readonly cardinality: Cardinality;
+    readonly key: string;
+    readonly meta?: {
+      readonly label?: string;
+    };
+    readonly range: string;
+  };
+  readonly fieldLabel: string;
+  readonly ownerTypeIds: ReadonlySet<string>;
+  readonly pathLabel: string;
+  readonly policy: PredicatePolicyDescriptor;
+};
+type AuthorizationDecisionTarget = {
+  readonly subjectId: string;
+  readonly predicateId: string;
+  readonly policy?: PredicatePolicyDescriptor | null;
+};
+type ResolvedAuthorizationCapabilityGrant = {
+  readonly id: string;
+  readonly statusId?: string;
+  readonly resourceKindId: string;
+  readonly resourcePredicateId?: string;
+  readonly resourceCommandKey?: string;
+  readonly resourceSurfaceId?: string;
+  readonly targetKindId?: string;
+  readonly constraintRootEntityId?: string;
+  readonly constraintPredicateIds: readonly string[];
+  readonly constraintExpiresAt?: string;
+};
+type AuthorizationCapabilityResolver = {
+  readonly readKeysFor: (target: AuthorizationDecisionTarget) => readonly string[];
+  readonly allowsSharedReadFor: (target: AuthorizationDecisionTarget) => boolean;
+  readonly writeKeysFor: (target: AuthorizationDecisionTarget) => readonly string[];
+  readonly commandKeysFor: (input: {
+    readonly commandKey: string;
+    readonly commandPolicy: GraphCommandPolicy;
+    readonly touchedPredicates: readonly AuthorizationDecisionTarget[];
+  }) => readonly string[];
+};
+type CompiledGraphArtifacts = {
+  readonly bootstrappedSnapshot: StoreSnapshot;
+  readonly compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>;
+  readonly scalarByKey: ReturnType<typeof collectScalarCodecs>;
+  readonly typeByKey: ReturnType<typeof collectTypeIndex>;
+};
 
 export type WebAppAuthoritySecretRecord = {
   readonly value: string;
@@ -135,13 +200,58 @@ export type WorkflowMutationWebAppAuthorityCommand = {
   readonly input: WorkflowMutationAction;
 };
 
+export type BootstrapOperatorAccessInput = {
+  readonly email: string;
+  readonly graphId?: string;
+  readonly roleKeys?: readonly string[];
+};
+
+export type BootstrapOperatorAccessWebAppAuthorityCommand = {
+  readonly kind: "bootstrap-operator-access";
+  readonly input: BootstrapOperatorAccessInput;
+};
+
+export type SetAdmissionApprovalInput = {
+  readonly email: string;
+  readonly graphId?: string;
+  readonly roleKeys?: readonly string[];
+  readonly status?: "active" | "revoked";
+};
+
+export type SetAdmissionApprovalWebAppAuthorityCommand = {
+  readonly kind: "set-admission-approval";
+  readonly input: SetAdmissionApprovalInput;
+};
+
 export type WebAppAuthorityCommand =
   | WriteSecretFieldWebAuthorityCommand
-  | WorkflowMutationWebAppAuthorityCommand;
+  | WorkflowMutationWebAppAuthorityCommand
+  | BootstrapOperatorAccessWebAppAuthorityCommand
+  | SetAdmissionApprovalWebAppAuthorityCommand;
+
+export type BootstrapOperatorAccessResult = {
+  readonly approvalId: string;
+  readonly created: boolean;
+  readonly email: string;
+  readonly graphId: string;
+  readonly policyId: string;
+  readonly roleKeys: readonly string[];
+};
+
+export type SetAdmissionApprovalResult = {
+  readonly approvalId: string;
+  readonly created: boolean;
+  readonly email: string;
+  readonly graphId: string;
+  readonly roleKeys: readonly string[];
+  readonly status: "active" | "revoked";
+};
 
 type WebAppAuthorityCommandResultMap = {
   "write-secret-field": WriteSecretFieldResult;
   "workflow-mutation": WorkflowMutationResult;
+  "bootstrap-operator-access": BootstrapOperatorAccessResult;
+  "set-admission-approval": SetAdmissionApprovalResult;
 };
 
 export type WebAppAuthorityCommandResult<
@@ -151,6 +261,8 @@ export type WebAppAuthorityCommandResult<
 export type WebAppAuthoritySessionPrincipalLookupOptions = {
   readonly allowRepair?: boolean;
 };
+
+const compiledGraphArtifactsCache = new WeakMap<WebAppAuthorityGraph, CompiledGraphArtifacts>();
 
 /**
  * Consumer-owned `/api/commands` proof envelope.
@@ -163,6 +275,11 @@ export type WebAuthorityCommand = WebAppAuthorityCommand;
 export type WebAuthorityCommandResult<
   Kind extends WebAuthorityCommand["kind"] = WebAuthorityCommand["kind"],
 > = WebAppAuthorityCommandResult<Kind>;
+
+type WebAuthorityMutationRollback = () => void;
+type WebAuthorityMutationStageContext = {
+  addRollback(rollback: WebAuthorityMutationRollback): void;
+};
 
 /**
  * Web authority storage adds secret side-storage to the shared graph/runtime
@@ -237,6 +354,9 @@ export type WebAppAuthority = Omit<
   PersistedWebAppAuthority,
   "applyTransaction" | "createSyncPayload" | "getIncrementalSyncResult" | "graph" | "store"
 > & {
+  activateSessionPrincipalRoleBindings(
+    input: SessionPrincipalLookupInput,
+  ): Promise<SessionPrincipalProjection>;
   lookupBearerShare(input: BearerShareLookupInput): Promise<BearerShareProjection>;
   lookupSessionPrincipal(
     input: SessionPrincipalLookupInput,
@@ -300,8 +420,13 @@ const principalKindPredicateId = edgeId(core.principal.fields.kind);
 const principalStatusPredicateId = edgeId(core.principal.fields.status);
 const principalCapabilityVersionPredicateId = edgeId(core.principal.fields.capabilityVersion);
 const graphWriteTransactionValidationKey = "$sync:tx";
+const webAppAuthorityPolicyVersion = 0;
 const webAppGraphId = "graph:global";
+const authorityRoleKey = "graph:authority";
+const ownerRoleKey = "graph:owner";
+const setAdmissionApprovalCommandKey = "set-admission-approval";
 const writeSecretFieldCommandKey = "write-secret-field";
+const defaultBootstrapOperatorRoleKeys = [ownerRoleKey, authorityRoleKey] as const;
 const writeSecretFieldCommandBasePredicateIds = [
   typePredicateId,
   createdAtPredicateId,
@@ -310,6 +435,7 @@ const writeSecretFieldCommandBasePredicateIds = [
   secretHandleVersionPredicateId,
   secretHandleLastRotatedAtPredicateId,
 ] as const;
+const moduleScopeCursorPrefix = "scope:";
 const workflowModuleEntityTypeIds = new Set(
   Object.values(workflowSchema)
     .filter(isEntityType)
@@ -348,6 +474,10 @@ const authSubjectProjectionStatusPredicateId = edgeId(core.authSubjectProjection
 const principalRoleBindingPrincipalPredicateId = edgeId(core.principalRoleBinding.fields.principal);
 const principalRoleBindingRoleKeyPredicateId = edgeId(core.principalRoleBinding.fields.roleKey);
 const principalRoleBindingStatusPredicateId = edgeId(core.principalRoleBinding.fields.status);
+const admissionApprovalGraphIdPredicateId = edgeId(core.admissionApproval.fields.graphId);
+const admissionApprovalEmailPredicateId = edgeId(core.admissionApproval.fields.email);
+const admissionApprovalRoleKeyPredicateId = edgeId(core.admissionApproval.fields.roleKey);
+const admissionApprovalStatusPredicateId = edgeId(core.admissionApproval.fields.status);
 const capabilityGrantResourceKindPredicateId = edgeId(core.capabilityGrant.fields.resourceKind);
 const capabilityGrantResourcePredicateIdPredicateId = edgeId(
   core.capabilityGrant.fields.resourcePredicateId,
@@ -393,22 +523,55 @@ const shareGrantSurfaceRootEntityIdPredicateId = edgeId(core.shareGrant.fields.s
 const shareGrantSurfacePredicateIdPredicateId = edgeId(core.shareGrant.fields.surfacePredicateId);
 const shareGrantCapabilityGrantPredicateId = edgeId(core.shareGrant.fields.capabilityGrant);
 const shareGrantStatusPredicateId = edgeId(core.shareGrant.fields.status);
+const admissionPolicyGraphIdPredicateId = edgeId(core.admissionPolicy.fields.graphId);
+const admissionPolicyBootstrapModePredicateId = edgeId(core.admissionPolicy.fields.bootstrapMode);
+const admissionPolicySignupPolicyPredicateId = edgeId(core.admissionPolicy.fields.signupPolicy);
+const admissionPolicyAllowedEmailDomainPredicateId = edgeId(
+  core.admissionPolicy.fields.allowedEmailDomain,
+);
+const admissionPolicyFirstUserRoleKeyPredicateId = edgeId(
+  core.admissionPolicy.fields.firstUserRoleKey,
+);
+const admissionPolicySignupRoleKeyPredicateId = edgeId(core.admissionPolicy.fields.signupRoleKey);
 const principalTypeId = core.principal.values.id;
 const authSubjectProjectionTypeId = core.authSubjectProjection.values.id;
 const principalRoleBindingTypeId = core.principalRoleBinding.values.id;
+const admissionApprovalTypeId = core.admissionApproval.values.id;
 const capabilityGrantTypeId = core.capabilityGrant.values.id;
 const shareGrantTypeId = core.shareGrant.values.id;
+const admissionPolicyTypeId = core.admissionPolicy.values.id;
+const nonAuthorityHiddenIdentityTypeIds = new Set([
+  principalTypeId,
+  authSubjectProjectionTypeId,
+  principalRoleBindingTypeId,
+  admissionApprovalTypeId,
+  capabilityGrantTypeId,
+  shareGrantTypeId,
+  admissionPolicyTypeId,
+]);
 const activePrincipalStatusId = core.principalStatus.values.active.id;
 const activeAuthSubjectStatusId = core.authSubjectStatus.values.active.id;
 const activePrincipalRoleBindingStatusId = core.principalRoleBindingStatus.values.active.id;
+const activeAdmissionApprovalStatusId = core.admissionApprovalStatus.values.active.id;
+const revokedAdmissionApprovalStatusId = core.admissionApprovalStatus.values.revoked.id;
 const activeCapabilityGrantStatusId = core.capabilityGrantStatus.values.active.id;
 const expiredCapabilityGrantStatusId = core.capabilityGrantStatus.values.expired.id;
 const principalCapabilityGrantTargetKindId = core.capabilityGrantTargetKind.values.principal.id;
 const bearerCapabilityGrantTargetKindId = core.capabilityGrantTargetKind.values.bearer.id;
 const revokedCapabilityGrantStatusId = core.capabilityGrantStatus.values.revoked.id;
+const predicateReadCapabilityGrantResourceKindId =
+  core.capabilityGrantResourceKind.values.predicateRead.id;
+const predicateWriteCapabilityGrantResourceKindId =
+  core.capabilityGrantResourceKind.values.predicateWrite.id;
+const commandExecuteCapabilityGrantResourceKindId =
+  core.capabilityGrantResourceKind.values.commandExecute.id;
 const shareSurfaceCapabilityGrantResourceKindId =
   core.capabilityGrantResourceKind.values.shareSurface.id;
 const entityPredicateSliceShareSurfaceKindId = core.shareSurfaceKind.values.entityPredicateSlice.id;
+const firstUserAdmissionBootstrapModeId = core.admissionBootstrapMode.values.firstUser.id;
+const manualAdmissionBootstrapModeId = core.admissionBootstrapMode.values.manual.id;
+const openAdmissionSignupPolicyId = core.admissionSignupPolicy.values.open.id;
+const closedAdmissionSignupPolicyId = core.admissionSignupPolicy.values.closed.id;
 const shareGrantVisibilityTriggerPredicateIds = new Set([
   typePredicateId,
   shareGrantSurfaceIdPredicateId,
@@ -460,8 +623,123 @@ function clonePersistedValue<T>(value: T): T {
   return structuredClone(value);
 }
 
+function headCursor(
+  writeHistory: PersistedAuthoritativeGraphStoragePersistInput["writeHistory"],
+): string {
+  return (
+    writeHistory.results.at(-1)?.cursor ??
+    `${writeHistory.cursorPrefix}${writeHistory.baseSequence}`
+  );
+}
+
+function buildRetainedWorkflowProjectionState(
+  snapshot: StoreSnapshot,
+  sourceCursor: string,
+): RetainedWorkflowProjectionState {
+  const projectionStore = createStore(snapshot);
+  return createRetainedWorkflowProjectionState(createTypeClient(projectionStore, workflowSchema), {
+    sourceCursor,
+  });
+}
+
+function sameRetainedWorkflowProjectionState(
+  left: RetainedWorkflowProjectionState,
+  right: RetainedWorkflowProjectionState,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function classifyRetainedWorkflowProjectionRecovery(
+  retained: RetainedWorkflowProjectionState | null,
+  authoritative: RetainedWorkflowProjectionState,
+): "missing" | "incompatible" | "stale" | null {
+  if (!retained) {
+    return "missing";
+  }
+
+  try {
+    createWorkflowProjectionIndexFromRetainedState(retained);
+  } catch {
+    return "incompatible";
+  }
+
+  return sameRetainedWorkflowProjectionState(retained, authoritative) ? null : "stale";
+}
+
+function trimOptionalString(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 function formatPolicyErrorMessage(error: PolicyError): string {
   return `${error.code}: ${error.message}`;
+}
+
+function createFallbackPolicyDescriptor(
+  field: CompiledFieldDefinition["field"],
+): PredicatePolicyDescriptor {
+  return {
+    predicateId: edgeId(field),
+    transportVisibility: field.authority?.visibility ?? "replicated",
+    requiredWriteScope: field.authority?.write ?? "client-tx",
+    readAudience:
+      (field.authority?.visibility ?? "replicated") === "authority-only" ? "authority" : "public",
+    writeAudience: "authority",
+    shareable: false,
+  } satisfies PredicatePolicyDescriptor;
+}
+
+function resolveCompiledFieldPolicy(
+  field: CompiledFieldDefinition["field"],
+): PredicatePolicyDescriptor {
+  return fieldPolicyDescriptor(field) ?? createFallbackPolicyDescriptor(field);
+}
+
+function assertCurrentPolicyVersion(authorization: AuthorizationContext): PolicyError | undefined {
+  if (authorization.policyVersion === webAppAuthorityPolicyVersion) {
+    return undefined;
+  }
+
+  return {
+    code: "policy.stale_context",
+    message: `Authorization context policy version "${authorization.policyVersion}" does not match authority policy version "${webAppAuthorityPolicyVersion}". Refresh the authorization context and retry.`,
+    retryable: false,
+    refreshRequired: true,
+  };
+}
+
+function assertCurrentCapabilityVersion(
+  store: Store,
+  authorization: AuthorizationContext,
+): PolicyError | undefined {
+  if (!authorization.principalId) {
+    return undefined;
+  }
+  if (!hasEntityOfType(store, authorization.principalId, principalTypeId)) {
+    return undefined;
+  }
+
+  const currentCapabilityVersion = readPrincipalCapabilityVersion(store, authorization.principalId);
+  if (authorization.capabilityVersion === currentCapabilityVersion) {
+    return undefined;
+  }
+
+  return {
+    code: "policy.stale_context",
+    message: `Authorization context capability version "${authorization.capabilityVersion}" does not match principal capability version "${currentCapabilityVersion}" for principal "${authorization.principalId}". Refresh the authorization context and retry.`,
+    retryable: false,
+    refreshRequired: true,
+  };
+}
+
+function assertCurrentAuthorizationVersion(
+  store: Store,
+  authorization: AuthorizationContext,
+): PolicyError | undefined {
+  return (
+    assertCurrentPolicyVersion(authorization) ??
+    assertCurrentCapabilityVersion(store, authorization)
+  );
 }
 
 class WebAppAuthorityMutationError extends Error {
@@ -550,6 +828,95 @@ class WebAppAuthoritySecretStorageDriftError extends Error {
     this.orphanedSecretIds = drift.orphanedSecretIds;
     this.versionMismatches = drift.versionMismatches;
   }
+}
+
+function isDefinitionField(
+  value: unknown,
+): value is CompiledFieldDefinition["field"] & Record<string, unknown> {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<CompiledFieldDefinition["field"]>;
+  return (
+    typeof candidate.key === "string" &&
+    typeof candidate.range === "string" &&
+    typeof candidate.cardinality === "string"
+  );
+}
+
+function getFieldLabel(field: CompiledFieldDefinition["field"]): string {
+  if (field.meta?.label) return field.meta.label;
+  const segments = field.key.split(":");
+  return segments.at(-1) ?? field.key;
+}
+
+function flattenSecretFieldDefinitions(
+  tree: Record<string, unknown>,
+  ownerTypeId: string,
+  path: string[] = [],
+  entries = new Map<string, CompiledFieldDefinition>(),
+): Map<string, CompiledFieldDefinition> {
+  for (const [fieldName, value] of Object.entries(tree)) {
+    if (isDefinitionField(value)) {
+      const predicateId = edgeId(value);
+      const existing = entries.get(predicateId);
+      if (existing) {
+        entries.set(predicateId, {
+          ...existing,
+          ownerTypeIds: new Set([...existing.ownerTypeIds, ownerTypeId]),
+        });
+        continue;
+      }
+
+      entries.set(predicateId, {
+        field: value,
+        fieldLabel: getFieldLabel(value),
+        ownerTypeIds: new Set([ownerTypeId]),
+        pathLabel: [...path, fieldName].join("."),
+        policy: resolveCompiledFieldPolicy(value),
+      });
+      continue;
+    }
+
+    if (!value || typeof value !== "object") continue;
+    flattenSecretFieldDefinitions(
+      value as Record<string, unknown>,
+      ownerTypeId,
+      [...path, fieldName],
+      entries,
+    );
+  }
+
+  return entries;
+}
+
+function buildCompiledFieldIndex(
+  graph: Record<string, AnyTypeOutput>,
+): ReadonlyMap<string, CompiledFieldDefinition> {
+  const entries = new Map<string, CompiledFieldDefinition>();
+
+  for (const typeDef of Object.values(graph)) {
+    if (!isEntityType(typeDef)) continue;
+    const typeValues = typeDef.values as { readonly key: string; readonly id?: string };
+    flattenSecretFieldDefinitions(typeDef.fields, typeValues.id ?? typeValues.key, [], entries);
+  }
+
+  return entries;
+}
+
+function getCompiledGraphArtifacts(graph: WebAppAuthorityGraph): CompiledGraphArtifacts {
+  const cached = compiledGraphArtifactsCache.get(graph);
+  if (cached) return cached;
+
+  const bootstrappedStore = createStore();
+  bootstrap(bootstrappedStore, graph);
+  const compiled = {
+    bootstrappedSnapshot: bootstrappedStore.snapshot(),
+    compiledFieldIndex: buildCompiledFieldIndex(graph),
+    scalarByKey: collectScalarCodecs(graph),
+    typeByKey: collectTypeIndex(graph),
+  };
+
+  compiledGraphArtifactsCache.set(graph, compiled);
+  return compiled;
 }
 
 function buildTransactionValidationError(
@@ -711,12 +1078,208 @@ export class WebAppAuthorityWorkflowLiveScopeError extends Error {
   }
 }
 
+type PlannedWebAppAuthorityScope = {
+  readonly scope: ModuleSyncScope;
+  readonly typeIds: ReadonlySet<string>;
+};
+
+function isGraphScopeRequest(
+  scope: WebAppAuthoritySyncScopeRequest | undefined,
+): scope is WebAppAuthorityGraphSyncScopeRequest | undefined {
+  return scope === undefined || scope.kind === undefined || scope.kind === "graph";
+}
+
+function createPolicyFilterVersion(policyVersion: number): string {
+  return `policy:${policyVersion}`;
+}
+
+function formatScopedModuleCursor(scope: ModuleSyncScope, cursor: string): string {
+  const params = new URLSearchParams();
+  params.set("kind", scope.kind);
+  params.set("moduleId", scope.moduleId);
+  params.set("scopeId", scope.scopeId);
+  params.set("definitionHash", scope.definitionHash);
+  params.set("policyFilterVersion", scope.policyFilterVersion);
+  params.set("cursor", cursor);
+  return `${moduleScopeCursorPrefix}${params.toString()}`;
+}
+
+function formatScopedSyncDiagnostics(
+  scope: ModuleSyncScope,
+  diagnostics: SyncDiagnostics | undefined,
+): SyncDiagnostics | undefined {
+  if (!diagnostics) return undefined;
+  return {
+    ...diagnostics,
+    retainedBaseCursor: formatScopedModuleCursor(scope, diagnostics.retainedBaseCursor),
+  };
+}
+
+function parseScopedModuleCursor(
+  cursor: string,
+): (ModuleSyncScope & { readonly cursor: string }) | null {
+  if (!cursor.startsWith(moduleScopeCursorPrefix)) return null;
+
+  const params = new URLSearchParams(cursor.slice(moduleScopeCursorPrefix.length));
+  if (params.get("kind") !== "module") return null;
+  const moduleId = params.get("moduleId");
+  const scopeId = params.get("scopeId");
+  const definitionHash = params.get("definitionHash");
+  const policyFilterVersion = params.get("policyFilterVersion");
+  const graphCursor = params.get("cursor");
+  if (!moduleId || !scopeId || !definitionHash || !policyFilterVersion || !graphCursor) {
+    return null;
+  }
+
+  return {
+    ...createModuleSyncScope({
+      moduleId,
+      scopeId,
+      definitionHash,
+      policyFilterVersion,
+    }),
+    cursor: graphCursor,
+  };
+}
+
+function requireWorkflowLiveRegistrationPrincipal(authorization: AuthorizationContext): {
+  readonly principalId: string;
+  readonly sessionId: string;
+} {
+  if (!authorization.principalId || !authorization.sessionId) {
+    throw new WebAppAuthorityWorkflowLiveScopeError(
+      401,
+      "Workflow live registrations require an authenticated session principal.",
+      "auth.unauthenticated",
+    );
+  }
+
+  return {
+    principalId: authorization.principalId,
+    sessionId: authorization.sessionId,
+  };
+}
+
+function resolveScopedSubjectId(
+  operation: GraphWriteTransaction["ops"][number],
+  edgeById: Map<string, StoreSnapshot["edges"][number]>,
+): string | undefined {
+  if (operation.op === "assert") return operation.edge.s;
+  return edgeById.get(operation.edgeId)?.s;
+}
+
+function subjectTypeId(store: Store, subjectId: string): string | undefined {
+  return store.get(subjectId, typePredicateId) ?? store.find(subjectId, typePredicateId)[0]?.o;
+}
+
+function addTouchedSubjectTypeId(
+  typeIds: Set<string>,
+  store: Store,
+  subjectId: string | undefined,
+): void {
+  if (!subjectId) {
+    return;
+  }
+
+  const typeId = subjectTypeId(store, subjectId);
+  if (typeId) {
+    typeIds.add(typeId);
+  }
+}
+
+function collectTouchedTypeIdsForTransaction(
+  snapshot: StoreSnapshot,
+  store: Store,
+  transaction: GraphWriteTransaction,
+): readonly string[] {
+  const edgeById = new Map(snapshot.edges.map((edge) => [edge.id, edge]));
+  const typeIds = new Set<string>();
+
+  for (const operation of transaction.ops) {
+    if (operation.op === "assert" && operation.edge.p === typePredicateId) {
+      typeIds.add(operation.edge.o);
+    }
+    addTouchedSubjectTypeId(typeIds, store, resolveScopedSubjectId(operation, edgeById));
+  }
+
+  return [...typeIds];
+}
+
+function scopeIncludesSubject(
+  store: Store,
+  typeIds: ReadonlySet<string>,
+  subjectId: string,
+): boolean {
+  const currentTypeId = subjectTypeId(store, subjectId);
+  return currentTypeId !== undefined && typeIds.has(currentTypeId);
+}
+
+function filterModuleScopedSnapshot(
+  snapshot: StoreSnapshot,
+  store: Store,
+  plannedScope: PlannedWebAppAuthorityScope,
+): StoreSnapshot {
+  const edges = snapshot.edges
+    .filter((edge) => scopeIncludesSubject(store, plannedScope.typeIds, edge.s))
+    .map((edge) => ({ ...edge }));
+  const visibleEdgeIds = new Set(edges.map((edge) => edge.id));
+
+  return {
+    edges,
+    retracted: snapshot.retracted.filter((edgeId) => visibleEdgeIds.has(edgeId)),
+  };
+}
+
+function filterModuleScopedWriteResult(
+  result: AuthoritativeGraphWriteResult,
+  store: Store,
+  edgeById: Map<string, StoreSnapshot["edges"][number]>,
+  plannedScope: PlannedWebAppAuthorityScope,
+): AuthoritativeGraphWriteResult | undefined {
+  const ops = result.transaction.ops.filter((operation) => {
+    const scopedSubjectId = resolveScopedSubjectId(operation, edgeById);
+    if (!scopedSubjectId) return true;
+    return scopeIncludesSubject(store, plannedScope.typeIds, scopedSubjectId);
+  });
+  if (ops.length === 0) return undefined;
+
+  return {
+    ...result,
+    cursor: formatScopedModuleCursor(plannedScope.scope, result.cursor),
+    transaction: {
+      ...result.transaction,
+      ops,
+    },
+  };
+}
+
+function planSyncScope(
+  scope: WebAppAuthoritySyncScopeRequest | undefined,
+  authorization: AuthorizationContext,
+): PlannedWebAppAuthorityScope | undefined {
+  if (isGraphScopeRequest(scope)) return undefined;
+
+  if (!matchesModuleReadScopeRequest(scope, workflowReviewModuleReadScope)) {
+    throw new WebAppAuthorityReadError(
+      404,
+      `Scope "${scope.scopeId}" was not found for module "${scope.moduleId}".`,
+    );
+  }
+
+  return {
+    scope: createModuleReadScope(
+      workflowReviewModuleReadScope,
+      createPolicyFilterVersion(authorization.policyVersion),
+    ),
+    typeIds: workflowModuleEntityTypeIds,
+  };
+}
 export class WebAppAuthoritySessionPrincipalLookupError extends Error {
   readonly status: number;
   readonly code = "auth.principal_missing" as const;
-  readonly reason: "conflict" | "missing";
+  readonly reason: "conflict" | "denied" | "missing";
 
-  constructor(status: number, reason: "conflict" | "missing", message: string) {
+  constructor(status: number, reason: "conflict" | "denied" | "missing", message: string) {
     super(message);
     this.name = "WebAppAuthoritySessionPrincipalLookupError";
     this.status = status;
@@ -774,6 +1337,75 @@ export function collectLiveSecretIds(snapshot: StoreSnapshot): readonly string[]
   }
 
   return [...liveSecretIds].sort((left, right) => left.localeCompare(right));
+}
+
+function toSecretInventory(
+  secrets:
+    | Record<string, WebAppAuthoritySecretInventoryRecord>
+    | Record<string, WebAppAuthoritySecretRecord>,
+): Record<string, WebAppAuthoritySecretInventoryRecord> {
+  return Object.fromEntries(
+    Object.entries(secrets)
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([secretId, secret]) => [
+        secretId,
+        {
+          version: secret.version,
+        },
+      ]),
+  );
+}
+
+function resolveSecretStartupDrift(
+  snapshot: StoreSnapshot,
+  graph: WebAppAuthorityGraph,
+  secretInventory: Record<string, WebAppAuthoritySecretInventoryRecord>,
+): WebAppAuthoritySecretStartupDrift {
+  const liveSecretIds = collectLiveSecretIds(snapshot);
+  const liveSecretIdSet = new Set(liveSecretIds);
+  const persistedStore = createStore(snapshot);
+  const persistedGraph = createTypeClient(persistedStore, graph);
+  const missingSecretIds: string[] = [];
+  const invalidSecretIds: string[] = [];
+  const versionMismatches: WebAppAuthoritySecretVersionMismatch[] = [];
+
+  for (const secretId of liveSecretIds) {
+    const handle = persistedGraph.secretHandle.get(secretId);
+    const rawGraphVersion = handle?.version;
+    const graphVersion =
+      typeof rawGraphVersion === "number"
+        ? rawGraphVersion
+        : Number.parseInt(rawGraphVersion ?? "", 10);
+    if (!Number.isInteger(graphVersion)) {
+      invalidSecretIds.push(secretId);
+      continue;
+    }
+
+    const stored = secretInventory[secretId];
+    if (!stored) {
+      missingSecretIds.push(secretId);
+      continue;
+    }
+    if (stored.version !== graphVersion) {
+      versionMismatches.push({
+        secretId,
+        graphVersion,
+        storedVersion: stored.version,
+      });
+    }
+  }
+
+  return {
+    invalidSecretIds,
+    liveSecretIds,
+    missingSecretIds,
+    orphanedSecretIds: Object.keys(secretInventory)
+      .filter((secretId) => !liveSecretIdSet.has(secretId))
+      .sort((left, right) => left.localeCompare(right)),
+    versionMismatches: versionMismatches.sort((left, right) =>
+      left.secretId.localeCompare(right.secretId),
+    ),
+  };
 }
 
 function hasEntityOfType(store: Store, entityId: string, typeId: string): boolean {
@@ -1137,6 +1769,146 @@ function readBearerShareProjection(
   createMissingBearerShareLookupError(input);
 }
 
+function grantMatchesPredicateTarget(
+  grant: ResolvedAuthorizationCapabilityGrant,
+  resourceKindId: string,
+  target: AuthorizationDecisionTarget,
+): boolean {
+  if (grant.resourceKindId !== resourceKindId || grantHasExpired(grant)) {
+    return false;
+  }
+  if (grant.resourcePredicateId !== target.predicateId) {
+    return false;
+  }
+  if (
+    grant.constraintRootEntityId !== undefined &&
+    grant.constraintRootEntityId !== target.subjectId
+  ) {
+    return false;
+  }
+  return (
+    grant.constraintPredicateIds.length === 0 ||
+    grant.constraintPredicateIds.includes(target.predicateId)
+  );
+}
+
+function grantMatchesSharedPredicateTarget(
+  store: Store,
+  grant: ResolvedAuthorizationCapabilityGrant,
+  target: AuthorizationDecisionTarget,
+): boolean {
+  const resourceSurfaceId = grant.resourceSurfaceId;
+  if (
+    grant.resourceKindId !== shareSurfaceCapabilityGrantResourceKindId ||
+    grantHasExpired(grant) ||
+    resourceSurfaceId === undefined ||
+    grant.constraintRootEntityId === undefined ||
+    grant.constraintPredicateIds.length === 0 ||
+    target.policy?.shareable !== true ||
+    target.policy.transportVisibility !== "replicated"
+  ) {
+    return false;
+  }
+
+  return readValidatedActiveShareGrants(store, grant).some(
+    (shareGrant) =>
+      shareGrant.rootEntityId === target.subjectId &&
+      shareGrant.predicateIds.includes(target.predicateId),
+  );
+}
+
+function grantMatchesCommand(
+  grant: ResolvedAuthorizationCapabilityGrant,
+  commandKey: string,
+  touchedPredicates: readonly AuthorizationDecisionTarget[],
+): boolean {
+  if (
+    grant.resourceKindId !== commandExecuteCapabilityGrantResourceKindId ||
+    grantHasExpired(grant)
+  ) {
+    return false;
+  }
+  if (grant.resourceCommandKey !== commandKey) {
+    return false;
+  }
+  if (
+    grant.constraintRootEntityId !== undefined &&
+    touchedPredicates.some((target) => target.subjectId !== grant.constraintRootEntityId)
+  ) {
+    return false;
+  }
+  return (
+    grant.constraintPredicateIds.length === 0 ||
+    touchedPredicates.every((target) => grant.constraintPredicateIds.includes(target.predicateId))
+  );
+}
+
+function appendCapabilityKeys(
+  target: Set<string>,
+  capabilityKeys: readonly string[] | undefined,
+): void {
+  if (!capabilityKeys) {
+    return;
+  }
+  for (const capabilityKey of capabilityKeys) {
+    target.add(capabilityKey);
+  }
+}
+
+function createAuthorizationCapabilityResolver(
+  store: Store,
+  authorization: AuthorizationContext,
+): AuthorizationCapabilityResolver {
+  const grants = readAuthorizationCapabilityGrants(store, authorization);
+
+  function resolvePredicateCapabilityKeys(
+    resourceKindId: string,
+    target: AuthorizationDecisionTarget,
+  ): readonly string[] {
+    const requiredCapabilities = target.policy?.requiredCapabilities;
+    if (!requiredCapabilities || requiredCapabilities.length === 0) {
+      return [];
+    }
+
+    return grants.some((grant) => grantMatchesPredicateTarget(grant, resourceKindId, target))
+      ? [...requiredCapabilities]
+      : [];
+  }
+
+  return {
+    readKeysFor(target) {
+      return resolvePredicateCapabilityKeys(predicateReadCapabilityGrantResourceKindId, target);
+    },
+    allowsSharedReadFor(target) {
+      return grants.some((grant) => grantMatchesSharedPredicateTarget(store, grant, target));
+    },
+    writeKeysFor(target) {
+      return resolvePredicateCapabilityKeys(predicateWriteCapabilityGrantResourceKindId, target);
+    },
+    commandKeysFor(input) {
+      const capabilityKeys = new Set<string>();
+
+      if (
+        (input.commandPolicy.capabilities?.length ?? 0) > 0 &&
+        grants.some((grant) =>
+          grantMatchesCommand(grant, input.commandKey, input.touchedPredicates),
+        )
+      ) {
+        appendCapabilityKeys(capabilityKeys, input.commandPolicy.capabilities);
+      }
+
+      for (const target of input.touchedPredicates) {
+        appendCapabilityKeys(
+          capabilityKeys,
+          resolvePredicateCapabilityKeys(predicateWriteCapabilityGrantResourceKindId, target),
+        );
+      }
+
+      return [...capabilityKeys];
+    },
+  };
+}
+
 function matchesAuthSubjectProjection(
   store: Store,
   projectionId: string,
@@ -1305,6 +2077,329 @@ function buildAuthSubjectProjectionName(subject: AuthSubjectRef): string {
 
 function buildPrincipalName(subject: AuthSubjectRef): string {
   return `Principal ${subject.authUserId}`;
+}
+
+function listAdmissionPolicyIds(store: Store, graphId: string): string[] {
+  return uniqueStrings(
+    store
+      .facts(undefined, admissionPolicyGraphIdPredicateId, graphId)
+      .map((edge) => edge.s)
+      .filter((policyId) => hasEntityOfType(store, policyId, admissionPolicyTypeId)),
+  );
+}
+
+function readAdmissionPolicy(store: Store, graphId: string): AdmissionPolicy | null {
+  const policyIds = listAdmissionPolicyIds(store, graphId);
+  if (policyIds.length === 0) {
+    return null;
+  }
+  if (policyIds.length > 1) {
+    throw new WebAppAuthoritySessionPrincipalLookupError(
+      409,
+      "conflict",
+      `Multiple admission policies exist for graph "${graphId}".`,
+    );
+  }
+
+  const policyId = policyIds[0];
+  if (!policyId) {
+    throw new WebAppAuthoritySessionPrincipalLookupError(
+      404,
+      "missing",
+      `Admission policy for graph "${graphId}" was not found.`,
+    );
+  }
+  const bootstrapModeId = getFirstObject(store, policyId, admissionPolicyBootstrapModePredicateId);
+  const signupPolicyId = getFirstObject(store, policyId, admissionPolicySignupPolicyPredicateId);
+  const bootstrapMode =
+    bootstrapModeId === firstUserAdmissionBootstrapModeId
+      ? "first-user"
+      : bootstrapModeId === manualAdmissionBootstrapModeId
+        ? "manual"
+        : null;
+  const signupPolicy =
+    signupPolicyId === openAdmissionSignupPolicyId
+      ? "open"
+      : signupPolicyId === closedAdmissionSignupPolicyId
+        ? "closed"
+        : null;
+
+  if (!bootstrapMode || !signupPolicy) {
+    throw new WebAppAuthoritySessionPrincipalLookupError(
+      409,
+      "conflict",
+      `Admission policy for graph "${graphId}" is missing required enum values.`,
+    );
+  }
+
+  return defineAdmissionPolicy({
+    graphId,
+    bootstrapMode,
+    signupPolicy,
+    allowedEmailDomains: uniqueStrings(
+      store
+        .facts(policyId, admissionPolicyAllowedEmailDomainPredicateId)
+        .map((edge) => edge.o)
+        .filter((domain): domain is string => typeof domain === "string"),
+    ).sort(),
+    firstUserProvisioning: {
+      roleKeys: uniqueStrings(
+        store
+          .facts(policyId, admissionPolicyFirstUserRoleKeyPredicateId)
+          .map((edge) => edge.o)
+          .filter((roleKey): roleKey is string => typeof roleKey === "string"),
+      ).sort(),
+    },
+    signupProvisioning: {
+      roleKeys: uniqueStrings(
+        store
+          .facts(policyId, admissionPolicySignupRoleKeyPredicateId)
+          .map((edge) => edge.o)
+          .filter((roleKey): roleKey is string => typeof roleKey === "string"),
+      ).sort(),
+    },
+  });
+}
+
+type AdmissionApprovalProjection = {
+  readonly approvalId: string;
+  readonly email: string;
+  readonly roleKeys: readonly string[];
+};
+
+function normalizeAdmissionEmail(email: string): string {
+  const normalized = email.trim().toLowerCase();
+  if (normalized.length === 0) {
+    throw new WebAppAuthorityMutationError(400, "Admission approval email must not be blank.");
+  }
+  return normalized;
+}
+
+function normalizeRoleKeys(
+  roleKeys: readonly string[] | undefined,
+  options: {
+    readonly fallback?: readonly string[];
+    readonly requireNonEmpty?: boolean;
+  } = {},
+): readonly string[] {
+  const normalized = uniqueStrings(
+    (roleKeys ?? options.fallback ?? [])
+      .map((roleKey) => roleKey.trim())
+      .filter((roleKey) => roleKey.length > 0),
+  ).sort();
+
+  if (options.requireNonEmpty && normalized.length === 0) {
+    throw new WebAppAuthorityMutationError(400, "Admission approval role keys must not be empty.");
+  }
+
+  return normalized;
+}
+
+function listAdmissionApprovalIds(store: Store, graphId: string, email: string): string[] {
+  return uniqueStrings(
+    store
+      .facts(undefined, admissionApprovalGraphIdPredicateId, graphId)
+      .map((edge) => edge.s)
+      .filter(
+        (approvalId) =>
+          hasEntityOfType(store, approvalId, admissionApprovalTypeId) &&
+          getFirstObject(store, approvalId, admissionApprovalEmailPredicateId) === email,
+      ),
+  );
+}
+
+function readActiveAdmissionApproval(
+  store: Store,
+  graphId: string,
+  email: string | undefined,
+): AdmissionApprovalProjection | null {
+  if (!email) {
+    return null;
+  }
+
+  const approvalIds = listAdmissionApprovalIds(
+    store,
+    graphId,
+    normalizeAdmissionEmail(email),
+  ).filter(
+    (approvalId) =>
+      getFirstObject(store, approvalId, admissionApprovalStatusPredicateId) ===
+      activeAdmissionApprovalStatusId,
+  );
+
+  if (approvalIds.length === 0) {
+    return null;
+  }
+  if (approvalIds.length > 1) {
+    throw new WebAppAuthoritySessionPrincipalLookupError(
+      409,
+      "conflict",
+      `Multiple admission approvals exist for email "${email}" in graph "${graphId}".`,
+    );
+  }
+
+  const approvalId = approvalIds[0];
+  if (!approvalId) {
+    return null;
+  }
+
+  return {
+    approvalId,
+    email: normalizeAdmissionEmail(email),
+    roleKeys: uniqueStrings(
+      store
+        .facts(approvalId, admissionApprovalRoleKeyPredicateId)
+        .map((edge) => edge.o)
+        .filter((roleKey): roleKey is string => typeof roleKey === "string"),
+    ).sort(),
+  };
+}
+
+function countActiveAuthorityPrincipals(store: Store, graphId: string): number {
+  return uniqueStrings(
+    store
+      .facts(undefined, principalRoleBindingRoleKeyPredicateId, authorityRoleKey)
+      .map((edge) => edge.s)
+      .filter(
+        (bindingId) =>
+          hasEntityOfType(store, bindingId, principalRoleBindingTypeId) &&
+          getFirstObject(store, bindingId, principalRoleBindingStatusPredicateId) ===
+            activePrincipalRoleBindingStatusId,
+      )
+      .map((bindingId) =>
+        getFirstObject(store, bindingId, principalRoleBindingPrincipalPredicateId),
+      )
+      .filter(
+        (principalId): principalId is string =>
+          typeof principalId === "string" &&
+          readSessionPrincipalProjection(store, principalId, graphId) !== null,
+      ),
+  ).length;
+}
+
+function countAdmittedHumanPrincipals(store: Store, graphId: string): number {
+  return uniqueStrings(
+    store
+      .facts(undefined, typePredicateId, principalTypeId)
+      .map((edge) => edge.s)
+      .filter(
+        (principalId) =>
+          readSessionPrincipalProjection(store, principalId, graphId)?.principalKind === "human",
+      ),
+  ).length;
+}
+
+function readEmailDomain(email: string | undefined): string | null {
+  if (!email) return null;
+
+  const atIndex = email.lastIndexOf("@");
+  if (atIndex <= 0 || atIndex === email.length - 1) {
+    return null;
+  }
+
+  return email.slice(atIndex + 1).toLowerCase();
+}
+
+function resolveAdmissionRoleKeys(
+  store: Store,
+  input: SessionPrincipalLookupInput,
+): readonly string[] {
+  const approval = readActiveAdmissionApproval(store, input.graphId, input.email);
+  if (approval) {
+    return approval.roleKeys;
+  }
+
+  const policy = readAdmissionPolicy(store, input.graphId);
+  if (!policy) {
+    return [];
+  }
+
+  if (
+    policy.bootstrapMode === "first-user" &&
+    countAdmittedHumanPrincipals(store, input.graphId) === 0
+  ) {
+    return policy.firstUserProvisioning.roleKeys;
+  }
+
+  if (policy.signupPolicy === "open") {
+    if (policy.allowedEmailDomains.length === 0) {
+      return policy.signupProvisioning.roleKeys;
+    }
+
+    const emailDomain = readEmailDomain(input.email);
+    if (emailDomain && policy.allowedEmailDomains.includes(emailDomain)) {
+      return policy.signupProvisioning.roleKeys;
+    }
+  }
+
+  throw new WebAppAuthoritySessionPrincipalLookupError(
+    403,
+    "denied",
+    `Admission policy denied first authenticated use for subject "${authSubjectLookupLabel(input.subject)}" in graph "${input.graphId}".`,
+  );
+}
+
+function resolveInitialRoleBindingRoleKeys(
+  store: Store,
+  input: SessionPrincipalLookupInput,
+  principalId: string,
+): readonly string[] {
+  const existingRoleKeys = new Set(readPrincipalRoleKeys(store, principalId));
+  const approval = readActiveAdmissionApproval(store, input.graphId, input.email);
+  if (approval) {
+    return approval.roleKeys.filter((roleKey) => !existingRoleKeys.has(roleKey));
+  }
+
+  const policy = readAdmissionPolicy(store, input.graphId);
+  if (!policy) {
+    return [];
+  }
+
+  if (
+    policy.bootstrapMode === "first-user" &&
+    countAdmittedHumanPrincipals(store, input.graphId) === 1 &&
+    existingRoleKeys.size === 0
+  ) {
+    return policy.firstUserProvisioning.roleKeys;
+  }
+
+  if (policy.signupPolicy === "open") {
+    if (policy.allowedEmailDomains.length === 0) {
+      return policy.signupProvisioning.roleKeys.filter((roleKey) => !existingRoleKeys.has(roleKey));
+    }
+
+    const emailDomain = readEmailDomain(input.email);
+    if (emailDomain && policy.allowedEmailDomains.includes(emailDomain)) {
+      return policy.signupProvisioning.roleKeys.filter((roleKey) => !existingRoleKeys.has(roleKey));
+    }
+  }
+
+  throw new WebAppAuthoritySessionPrincipalLookupError(
+    403,
+    "denied",
+    `Initial role binding denied for subject "${authSubjectLookupLabel(input.subject)}" in graph "${input.graphId}".`,
+  );
+}
+
+function ensurePrincipalRoleBindings(
+  mutationGraph: NamespaceClient<WebAppGraph>,
+  mutationStore: Store,
+  principalId: string,
+  roleKeys: readonly string[],
+): void {
+  const existingRoleKeys = new Set(readPrincipalRoleKeys(mutationStore, principalId));
+  for (const roleKey of uniqueStrings(roleKeys).sort()) {
+    if (existingRoleKeys.has(roleKey)) {
+      continue;
+    }
+    mutationGraph.principalRoleBinding.create({
+      name: `${roleKey} for ${principalId}`,
+      principal: principalId,
+      roleKey,
+      status: activePrincipalRoleBindingStatusId,
+    });
+    existingRoleKeys.add(roleKey);
+  }
 }
 
 function createMissingSessionPrincipalLookupError(input: SessionPrincipalLookupInput): never {
@@ -1584,6 +2679,34 @@ function resolveOperationTarget(
   };
 }
 
+function resolveTransactionTarget(
+  transaction: GraphWriteTransaction,
+  snapshot: StoreSnapshot,
+): ReadonlyArray<{
+  readonly path: readonly string[];
+  readonly subjectId: string;
+  readonly predicateId: string;
+}> {
+  const edgeById = createTransactionEdgeIndex(snapshot);
+  const targets: Array<{
+    readonly path: readonly string[];
+    readonly subjectId: string;
+    readonly predicateId: string;
+  }> = [];
+
+  for (const [index, operation] of transaction.ops.entries()) {
+    const target = resolveOperationTarget(operation, edgeById);
+    if (!target) continue;
+    targets.push({
+      path: [`ops[${index}]`],
+      subjectId: target.subjectId,
+      predicateId: target.predicateId,
+    });
+  }
+
+  return targets;
+}
+
 function changesRequireVisibilityReset(
   store: Store,
   snapshot: StoreSnapshot,
@@ -1650,6 +2773,128 @@ function changesRequireVisibilityReset(
   return false;
 }
 
+function createAuthorizationTarget(
+  compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+  subjectId: string,
+  predicateId: string,
+): AuthorizationDecisionTarget {
+  return {
+    subjectId,
+    predicateId,
+    policy: compiledFieldIndex.get(predicateId)?.policy,
+  };
+}
+
+function authorizationHasAuthorityAccess(authorization: AuthorizationContext): boolean {
+  return (
+    authorization.principalKind === "service" ||
+    authorization.principalKind === "agent" ||
+    authorization.roleKeys.includes(authorityRoleKey)
+  );
+}
+
+function subjectIsHiddenIdentityEntity(store: Store, subjectId: string): boolean {
+  return store
+    .facts(subjectId, typePredicateId)
+    .some((edge) => nonAuthorityHiddenIdentityTypeIds.has(edge.o));
+}
+
+function evaluateAuthorityOnlyIdentityRead(
+  authorization: AuthorizationContext,
+  subjectId: string,
+  predicateId: string,
+) {
+  return authorizeRead({
+    authorization,
+    target: {
+      subjectId,
+      predicateId,
+      policy: {
+        predicateId,
+        transportVisibility: "authority-only",
+        requiredWriteScope: "authority-only",
+        readAudience: "authority",
+        writeAudience: "authority",
+        shareable: false,
+      },
+    },
+  });
+}
+
+function evaluateReadAuthorization(
+  store: Store,
+  authorization: AuthorizationContext,
+  compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+  capabilityResolver: AuthorizationCapabilityResolver,
+  subjectId: string,
+  predicateId: string,
+) {
+  if (
+    !authorizationHasAuthorityAccess(authorization) &&
+    subjectIsHiddenIdentityEntity(store, subjectId)
+  ) {
+    return evaluateAuthorityOnlyIdentityRead(authorization, subjectId, predicateId);
+  }
+
+  const target = createAuthorizationTarget(compiledFieldIndex, subjectId, predicateId);
+  return authorizeRead({
+    authorization,
+    capabilityKeys: capabilityResolver.readKeysFor(target),
+    sharedRead: capabilityResolver.allowsSharedReadFor(target),
+    target,
+  });
+}
+
+function createReadableReplicationAuthorizer(
+  store: Store,
+  authorization: AuthorizationContext,
+  compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+): ReplicationReadAuthorizer {
+  const staleContextError = assertCurrentAuthorizationVersion(store, authorization);
+  if (staleContextError) {
+    throw createReadPolicyError(staleContextError);
+  }
+  const capabilityResolver = createAuthorizationCapabilityResolver(store, authorization);
+
+  return ({ subjectId, predicateId }) =>
+    evaluateReadAuthorization(
+      store,
+      authorization,
+      compiledFieldIndex,
+      capabilityResolver,
+      subjectId,
+      predicateId,
+    ).allowed;
+}
+
+function filterReadableSnapshot(
+  store: Store,
+  snapshot: StoreSnapshot,
+  authorization: AuthorizationContext,
+  compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+): StoreSnapshot {
+  const authorizeReadablePredicate = createReadableReplicationAuthorizer(
+    store,
+    authorization,
+    compiledFieldIndex,
+  );
+
+  const edges = snapshot.edges
+    .filter((edge) =>
+      authorizeReadablePredicate({
+        subjectId: edge.s,
+        predicateId: edge.p,
+      }),
+    )
+    .map((edge) => ({ ...edge }));
+  const visibleEdgeIds = new Set(edges.map((edge) => edge.id));
+
+  return {
+    edges,
+    retracted: snapshot.retracted.filter((edgeId) => visibleEdgeIds.has(edgeId)),
+  };
+}
+
 function listWorkflowProjectionSubjectIds(store: Store): string[] {
   const subjectIds = new Set<string>();
   for (const edge of store.snapshot().edges) {
@@ -1661,42 +2906,386 @@ function listWorkflowProjectionSubjectIds(store: Store): string[] {
   return [...subjectIds];
 }
 
+function assertWorkflowProjectionReadable(
+  store: Store,
+  authorization: AuthorizationContext,
+  compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+): void {
+  const staleContextError = assertCurrentAuthorizationVersion(store, authorization);
+  if (staleContextError) {
+    throw createWorkflowProjectionPolicyError(staleContextError);
+  }
+  const capabilityResolver = createAuthorizationCapabilityResolver(store, authorization);
+
+  for (const subjectId of listWorkflowProjectionSubjectIds(store)) {
+    for (const edge of store.facts(subjectId)) {
+      const decision = evaluateReadAuthorization(
+        store,
+        authorization,
+        compiledFieldIndex,
+        capabilityResolver,
+        subjectId,
+        edge.p,
+      );
+      if (!decision.allowed) {
+        throw createWorkflowProjectionPolicyError(decision.error);
+      }
+    }
+  }
+}
+
+function assertTransactionAuthorized(
+  transaction: GraphWriteTransaction,
+  snapshot: StoreSnapshot,
+  authorization: AuthorizationContext,
+  writeScope: AuthoritativeWriteScope,
+  compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+): void {
+  const store = createStore(snapshot);
+  const policyVersionError = assertCurrentPolicyVersion(authorization);
+  const capabilityVersionError = policyVersionError
+    ? undefined
+    : assertCurrentCapabilityVersion(store, authorization);
+  const staleContextError = policyVersionError ?? capabilityVersionError;
+  if (staleContextError) {
+    throw buildTransactionValidationError(transaction, [
+      {
+        code: staleContextError.code,
+        message: formatPolicyErrorMessage(staleContextError),
+        path: ["authorization", capabilityVersionError ? "capabilityVersion" : "policyVersion"],
+      },
+    ]);
+  }
+  const capabilityResolver = createAuthorizationCapabilityResolver(store, authorization);
+
+  const issues = resolveTransactionTarget(transaction, snapshot)
+    .map((target) => {
+      const authorizationTarget = createAuthorizationTarget(
+        compiledFieldIndex,
+        target.subjectId,
+        target.predicateId,
+      );
+      const decision = authorizeWrite({
+        authorization,
+        capabilityKeys: capabilityResolver.writeKeysFor(authorizationTarget),
+        target: authorizationTarget,
+        writeScope,
+      });
+      if (decision.allowed) return undefined;
+      return {
+        code: decision.error.code,
+        message: formatPolicyErrorMessage(decision.error),
+        path: target.path,
+      };
+    })
+    .filter((issue): issue is NonNullable<typeof issue> => issue !== undefined);
+
+  if (issues.length > 0) {
+    throw buildTransactionValidationError(transaction, issues);
+  }
+}
+
+function buildWriteSecretFieldCommandTargets(
+  input: {
+    readonly entityId: string;
+    readonly predicateId: string;
+    readonly secretId: string;
+  },
+  compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+) {
+  return [
+    createAuthorizationTarget(compiledFieldIndex, input.secretId, typePredicateId),
+    createAuthorizationTarget(compiledFieldIndex, input.secretId, createdAtPredicateId),
+    createAuthorizationTarget(compiledFieldIndex, input.secretId, namePredicateId),
+    createAuthorizationTarget(compiledFieldIndex, input.secretId, updatedAtPredicateId),
+    createAuthorizationTarget(compiledFieldIndex, input.secretId, secretHandleVersionPredicateId),
+    createAuthorizationTarget(
+      compiledFieldIndex,
+      input.secretId,
+      secretHandleLastRotatedAtPredicateId,
+    ),
+    createAuthorizationTarget(compiledFieldIndex, input.entityId, input.predicateId),
+  ];
+}
+
+function buildAdmissionApprovalCommandTargets(
+  approvalId: string,
+  compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+) {
+  return [
+    createAuthorizationTarget(compiledFieldIndex, approvalId, typePredicateId),
+    createAuthorizationTarget(compiledFieldIndex, approvalId, createdAtPredicateId),
+    createAuthorizationTarget(compiledFieldIndex, approvalId, namePredicateId),
+    createAuthorizationTarget(compiledFieldIndex, approvalId, updatedAtPredicateId),
+    createAuthorizationTarget(compiledFieldIndex, approvalId, admissionApprovalGraphIdPredicateId),
+    createAuthorizationTarget(compiledFieldIndex, approvalId, admissionApprovalEmailPredicateId),
+    createAuthorizationTarget(compiledFieldIndex, approvalId, admissionApprovalRoleKeyPredicateId),
+    createAuthorizationTarget(compiledFieldIndex, approvalId, admissionApprovalStatusPredicateId),
+  ];
+}
+
+function createWriteSecretFieldCommandPolicy(predicateId: string): GraphCommandPolicy {
+  return {
+    // Branch 1 publishes a generic secret-backed field boundary here. The web
+    // command envelope stays consumer-owned, but the touched predicate must be
+    // the concrete secret-backed field being written rather than an env-var
+    // proof-specific predicate id.
+    touchesPredicates: [
+      ...writeSecretFieldCommandBasePredicateIds.map((touchedPredicateId) => ({
+        predicateId: touchedPredicateId,
+      })),
+      { predicateId },
+    ],
+  };
+}
+
+function createAdmissionApprovalCommandPolicy(): GraphCommandPolicy {
+  return {
+    touchesPredicates: [
+      typePredicateId,
+      createdAtPredicateId,
+      namePredicateId,
+      updatedAtPredicateId,
+      admissionApprovalGraphIdPredicateId,
+      admissionApprovalEmailPredicateId,
+      admissionApprovalRoleKeyPredicateId,
+      admissionApprovalStatusPredicateId,
+    ].map((predicateId) => ({ predicateId })),
+  };
+}
+
+function assertCommandAuthorized(input: {
+  readonly authorization: AuthorizationContext;
+  readonly store: Store;
+  readonly commandKey: string;
+  readonly commandPolicy: GraphCommandPolicy;
+  readonly touchedPredicates: readonly AuthorizationDecisionTarget[];
+  readonly writeScope: AuthoritativeWriteScope;
+}): void {
+  const staleContextError = assertCurrentAuthorizationVersion(input.store, input.authorization);
+  if (staleContextError) {
+    throw createCommandPolicyError(staleContextError);
+  }
+  const capabilityResolver = createAuthorizationCapabilityResolver(
+    input.store,
+    input.authorization,
+  );
+
+  const decision = authorizeCommand({
+    authorization: input.authorization,
+    capabilityKeys: capabilityResolver.commandKeysFor({
+      commandKey: input.commandKey,
+      commandPolicy: input.commandPolicy,
+      touchedPredicates: input.touchedPredicates,
+    }),
+    commandKey: input.commandKey,
+    commandPolicy: input.commandPolicy,
+    touchedPredicates: input.touchedPredicates,
+    writeScope: input.writeScope,
+  });
+  if (!decision.allowed) {
+    throw createCommandPolicyError(decision.error);
+  }
+}
+
+function runWebAuthorityMutationRollbacks(
+  rollbacks: readonly WebAuthorityMutationRollback[],
+): void {
+  const rollbackErrors: unknown[] = [];
+  for (let index = rollbacks.length - 1; index >= 0; index -= 1) {
+    const rollback = rollbacks[index];
+    if (!rollback) continue;
+    try {
+      rollback();
+    } catch (error) {
+      rollbackErrors.push(error);
+    }
+  }
+
+  if (rollbackErrors.length === 1) {
+    throw rollbackErrors[0];
+  }
+  if (rollbackErrors.length > 1) {
+    throw new AggregateError(rollbackErrors, "Web authority mutation rollback failed.");
+  }
+}
+
+/**
+ * Applies a staged web authority mutation and unwinds any authority-local side
+ * effects if the authoritative commit fails.
+ */
+export async function applyStagedWebAuthorityMutation<TResult>(input: {
+  readonly changed: boolean;
+  readonly result: TResult;
+  readonly writeScope: AuthoritativeWriteScope;
+  readonly commit: (writeScope: AuthoritativeWriteScope) => Promise<void>;
+  readonly stage?: (result: TResult, context: WebAuthorityMutationStageContext) => void;
+}): Promise<TResult> {
+  if (!input.changed) return input.result;
+
+  const rollbacks: WebAuthorityMutationRollback[] = [];
+  try {
+    input.stage?.(input.result, {
+      addRollback(rollback) {
+        rollbacks.push(rollback);
+      },
+    });
+    await input.commit(input.writeScope);
+  } catch (error) {
+    try {
+      runWebAuthorityMutationRollbacks(rollbacks);
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        "Web authority mutation failed and rollback did not complete.",
+      );
+    }
+    throw error;
+  }
+
+  return input.result;
+}
+
+function createAuthorityStorage(
+  storage: WebAppAuthorityStorage,
+  pendingSecretWriteRef: { current: WebAppAuthoritySecretWrite | null },
+  retainedWorkflowProjectionRef: { current: RetainedWorkflowProjectionState | null },
+  preloadedPersistedState: PersistedAuthoritativeGraphStorageLoadResult | null,
+): PersistedAuthoritativeGraphStorage {
+  // This adapter is the explicit boundary between the stable graph/runtime
+  // persisted-authority contract and web-only secret side storage.
+  let preloadedLoadUsed = false;
+
+  return {
+    async load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null> {
+      if (!preloadedLoadUsed) {
+        preloadedLoadUsed = true;
+        const persistedState = preloadedPersistedState;
+        if (!persistedState) return null;
+
+        return {
+          snapshot: clonePersistedValue(persistedState.snapshot),
+          writeHistory: persistedState.writeHistory
+            ? clonePersistedValue(persistedState.writeHistory)
+            : undefined,
+          recovery: persistedState.recovery,
+          startupDiagnostics: clonePersistedValue(persistedState.startupDiagnostics),
+        };
+      }
+
+      const persistedState = await storage.load();
+      if (!persistedState) return null;
+
+      return {
+        snapshot: clonePersistedValue(persistedState.snapshot),
+        writeHistory: persistedState.writeHistory
+          ? clonePersistedValue(persistedState.writeHistory)
+          : undefined,
+        recovery: persistedState.recovery,
+        startupDiagnostics: clonePersistedValue(persistedState.startupDiagnostics),
+      };
+    },
+    async commit(input): Promise<void> {
+      const secretWrite = pendingSecretWriteRef.current
+        ? clonePersistedValue(pendingSecretWriteRef.current)
+        : undefined;
+      const workflowProjection = buildRetainedWorkflowProjectionState(
+        input.snapshot,
+        headCursor(input.writeHistory),
+      );
+
+      try {
+        await storage.commit(clonePersistedValue(input), {
+          ...(secretWrite ? { secretWrite } : {}),
+          workflowProjection,
+        });
+        retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
+      } finally {
+        pendingSecretWriteRef.current = null;
+      }
+    },
+    async persist(input): Promise<void> {
+      const workflowProjection = buildRetainedWorkflowProjectionState(
+        input.snapshot,
+        headCursor(input.writeHistory),
+      );
+      await storage.persist(clonePersistedValue(input), {
+        workflowProjection,
+      });
+      retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
+    },
+  };
+}
+
 export async function createWebAppAuthority(
   storage: WebAppAuthorityStorage,
   options: WebAppAuthorityOptions = {},
 ): Promise<WebAppAuthority> {
   const graph = options.graph ?? webAppGraph;
+  const persistedState = await storage.load();
+  const persistedWorkflowProjection = persistedState
+    ? await storage.loadWorkflowProjection()
+    : null;
   const { bootstrappedSnapshot, compiledFieldIndex, scalarByKey, typeByKey } =
     getCompiledGraphArtifacts(graph);
   const store = createStore(bootstrappedSnapshot);
-  const {
-    authority,
-    persistedSecrets,
-    refs: { pendingSecretWriteRef, retainedWorkflowProjectionRef },
-    rebuildRetainedWorkflowProjection,
-    replaceRetainedWorkflowProjection,
-  } = await createBootstrappedWebAuthority({
-    createCursorPrefix: createAuthorityCursorPrefix,
-    createSecretStorageDriftError: (drift) => new WebAppAuthoritySecretStorageDriftError(drift),
-    graph,
-    hasBlockingSecretStartupDrift,
-    retainedHistoryPolicy: options.retainedHistoryPolicy,
-    secretHandleTypeId: core.secretHandle.values.id,
-    secretHandleVersionPredicateId,
-    seed() {
-      if (options.seedExampleGraph !== false) {
-        seedExampleGraph(createTypeClient(store, webAppGraph));
-      }
-    },
-    storage,
-    store,
-    typePredicateId,
-  });
+  let persistedSecrets: Record<string, WebAppAuthoritySecretRecord> = {};
+  if (persistedState) {
+    const startupSecretInventory = await storage.inspectSecrets();
+    const startupDrift = resolveSecretStartupDrift(
+      persistedState.snapshot,
+      graph,
+      startupSecretInventory,
+    );
+    if (hasBlockingSecretStartupDrift(startupDrift)) {
+      throw new WebAppAuthoritySecretStorageDriftError(startupDrift);
+    }
+    if (startupDrift.orphanedSecretIds.length > 0) {
+      await storage.repairSecrets({
+        liveSecretIds: startupDrift.liveSecretIds,
+      });
+    }
+    persistedSecrets =
+      startupDrift.liveSecretIds.length > 0
+        ? await storage.loadSecrets({ secretIds: startupDrift.liveSecretIds })
+        : {};
+    const loadedSecretDrift = resolveSecretStartupDrift(
+      persistedState.snapshot,
+      graph,
+      toSecretInventory(persistedSecrets),
+    );
+    if (hasBlockingSecretStartupDrift(loadedSecretDrift)) {
+      throw new WebAppAuthoritySecretStorageDriftError(loadedSecretDrift);
+    }
+  }
   const secretValuesRef = {
     current: new Map(
       Object.entries(persistedSecrets).map(([secretId, secret]) => [secretId, secret.value]),
     ),
   };
+  const pendingSecretWriteRef = {
+    current: null as WebAppAuthoritySecretWrite | null,
+  };
+  const retainedWorkflowProjectionRef = {
+    current: persistedWorkflowProjection
+      ? clonePersistedValue(persistedWorkflowProjection)
+      : (null as RetainedWorkflowProjectionState | null),
+  };
+  const authority = await createPersistedAuthoritativeGraph(store, graph, {
+    storage: createAuthorityStorage(
+      storage,
+      pendingSecretWriteRef,
+      retainedWorkflowProjectionRef,
+      persistedState,
+    ),
+    seed() {
+      if (options.seedExampleGraph !== false) {
+        seedExampleGraph(createTypeClient(store, webAppGraph));
+      }
+    },
+    createCursorPrefix: createAuthorityCursorPrefix,
+    retainedHistoryPolicy: options.retainedHistoryPolicy,
+  });
   if (options.seedExampleGraph !== false) {
     const seeded = planAuthorityMutation(
       authority.store.snapshot(),
@@ -1715,20 +3304,41 @@ export async function createWebAppAuthority(
   // those entities through the typed client.
   await repairLegacyPrincipalHomeGraphIds(authority);
 
+  async function replaceRetainedWorkflowProjection(
+    workflowProjection: RetainedWorkflowProjectionState,
+  ): Promise<void> {
+    await storage.replaceWorkflowProjection(clonePersistedValue(workflowProjection));
+    retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
+  }
+
+  async function rebuildRetainedWorkflowProjection(): Promise<void> {
+    const workflowProjection = buildRetainedWorkflowProjectionState(
+      authority.store.snapshot(),
+      authority.createSyncPayload().cursor,
+    );
+    await replaceRetainedWorkflowProjection(workflowProjection);
+  }
+
+  const recoveredWorkflowProjection = buildRetainedWorkflowProjectionState(
+    authority.store.snapshot(),
+    authority.createSyncPayload().cursor,
+  );
+  if (
+    classifyRetainedWorkflowProjectionRecovery(
+      retainedWorkflowProjectionRef.current,
+      recoveredWorkflowProjection,
+    )
+  ) {
+    await replaceRetainedWorkflowProjection(recoveredWorkflowProjection);
+  }
+
   function readSnapshot(options: WebAppAuthorityReadOptions): StoreSnapshot {
-    const readable = filterReadableSnapshot({
-      store: authority.store,
-      snapshot: authority.store.snapshot(),
-      authorization: options.authorization,
+    return filterReadableSnapshot(
+      authority.store,
+      authority.store.snapshot(),
+      options.authorization,
       compiledFieldIndex,
-    });
-    if (readable.error) {
-      throw createReadPolicyError(readable.error);
-    }
-    if (!readable.snapshot) {
-      throw new Error("Readable snapshot filtering returned no snapshot.");
-    }
-    return readable.snapshot;
+    );
   }
 
   function readPredicateValue(
@@ -1773,43 +3383,34 @@ export async function createWebAppAuthority(
     );
   }
 
-  const scopedSyncServices = createScopedSyncServices({
-    authority,
-    compiledFieldIndex,
-    createReadPolicyError,
-    createScopeNotFoundError: (scopeId, moduleId) =>
-      new WebAppAuthorityReadError(
-        404,
-        `Scope "${scopeId}" was not found for module "${moduleId}".`,
-      ),
-    createWorkflowProjectionPolicyError,
-    createWorkflowLiveScopeError: (status, message, code) =>
-      new WebAppAuthorityWorkflowLiveScopeError(status, message, code),
-    getCurrentProjectionState: () => retainedWorkflowProjectionRef.current,
-    isVisibilityResetRequired: (snapshot, changes, authorization) =>
-      changesRequireVisibilityReset(authority.store, snapshot, changes, authorization),
-    listWorkflowProjectionSubjectIds,
-    rebuildProjectionState() {
-      const workflowProjection = buildRetainedWorkflowProjectionState(
-        authority.store.snapshot(),
-        authority.createSyncPayload().cursor,
-      );
-      void replaceRetainedWorkflowProjection(workflowProjection).catch(() => {});
-      return workflowProjection;
-    },
-    setProjectionState(workflowProjection) {
-      retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
-    },
-    typePredicateId,
-    workflowModuleEntityTypeIds,
-  });
+  function createAuthorizedWorkflowProjection(authorization: AuthorizationContext) {
+    assertWorkflowProjectionReadable(authority.store, authorization, compiledFieldIndex);
+    if (retainedWorkflowProjectionRef.current) {
+      try {
+        return createWorkflowProjectionIndexFromRetainedState(
+          retainedWorkflowProjectionRef.current,
+        );
+      } catch {
+        retainedWorkflowProjectionRef.current = null;
+      }
+    }
+
+    const workflowProjection = buildRetainedWorkflowProjectionState(
+      authority.store.snapshot(),
+      authority.createSyncPayload().cursor,
+    );
+    retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
+    void replaceRetainedWorkflowProjection(workflowProjection).catch(() => {});
+    return createWorkflowProjectionIndexFromRetainedState(workflowProjection);
+  }
 
   function readProjectBranchScope(
     query: ProjectBranchScopeQuery,
     options: WebAppAuthorityReadOptions,
   ): ProjectBranchScopeResult {
+    const projection = createAuthorizedWorkflowProjection(options.authorization);
     try {
-      return scopedSyncServices.readProjectBranchScope(query, options.authorization);
+      return projection.readProjectBranchScope(query);
     } catch (error) {
       return throwWorkflowProjectionReadError(error);
     }
@@ -1819,8 +3420,9 @@ export async function createWebAppAuthority(
     query: CommitQueueScopeQuery,
     options: WebAppAuthorityReadOptions,
   ): CommitQueueScopeResult {
+    const projection = createAuthorizedWorkflowProjection(options.authorization);
     try {
-      return scopedSyncServices.readCommitQueueScope(query, options.authorization);
+      return projection.readCommitQueueScope(query);
     } catch (error) {
       return throwWorkflowProjectionReadError(error);
     }
@@ -1830,11 +3432,84 @@ export async function createWebAppAuthority(
     cursor: string,
     options: WebAppAuthorityReadOptions,
   ): WorkflowReviewLiveRegistrationTarget {
-    return scopedSyncServices.planWorkflowReviewLiveRegistration(cursor, options.authorization);
+    const staleContextError = assertCurrentAuthorizationVersion(
+      authority.store,
+      options.authorization,
+    );
+    if (staleContextError) {
+      throw createReadPolicyError(staleContextError);
+    }
+
+    const parsedCursor = parseScopedModuleCursor(cursor);
+    if (!parsedCursor) {
+      throw new WebAppAuthorityWorkflowLiveScopeError(
+        400,
+        "Workflow live registration requires the current scoped workflow-review cursor.",
+      );
+    }
+
+    const plannedScope = planSyncScope(workflowReviewModuleReadScope, options.authorization);
+    if (!plannedScope) {
+      throw new WebAppAuthorityWorkflowLiveScopeError(
+        500,
+        "Workflow live registration planning requires the shipped workflow review scope.",
+      );
+    }
+
+    if (
+      parsedCursor.moduleId !== plannedScope.scope.moduleId ||
+      parsedCursor.scopeId !== plannedScope.scope.scopeId ||
+      parsedCursor.definitionHash !== plannedScope.scope.definitionHash
+    ) {
+      throw new WebAppAuthorityWorkflowLiveScopeError(
+        409,
+        `Workflow live registration cursor no longer matches scope "${plannedScope.scope.scopeId}". Re-sync and register again.`,
+        "scope-changed",
+      );
+    }
+
+    if (parsedCursor.policyFilterVersion !== plannedScope.scope.policyFilterVersion) {
+      throw new WebAppAuthorityWorkflowLiveScopeError(
+        409,
+        `Workflow live registration cursor policy "${parsedCursor.policyFilterVersion}" does not match the current workflow review policy filter "${plannedScope.scope.policyFilterVersion}". Re-sync and register again.`,
+        "policy-changed",
+      );
+    }
+
+    const principal = requireWorkflowLiveRegistrationPrincipal(options.authorization);
+
+    return Object.freeze({
+      sessionId: principal.sessionId,
+      principalId: principal.principalId,
+      scopeId: plannedScope.scope.scopeId,
+      definitionHash: plannedScope.scope.definitionHash,
+      policyFilterVersion: plannedScope.scope.policyFilterVersion,
+      dependencyKeys: Object.freeze([...compileWorkflowReviewScopeDependencyKeys()]),
+    });
   }
 
   function createSyncPayload(options: WebAppAuthoritySyncOptions) {
-    return scopedSyncServices.createSyncPayload(options);
+    const authorizeRead = createReadableReplicationAuthorizer(
+      authority.store,
+      options.authorization,
+      compiledFieldIndex,
+    );
+    const plannedScope = planSyncScope(options.scope, options.authorization);
+    const payload = authority.createSyncPayload({
+      authorizeRead,
+      freshness: options.freshness,
+    });
+    if (!plannedScope) {
+      return payload;
+    }
+
+    return {
+      ...payload,
+      scope: plannedScope.scope,
+      snapshot: filterModuleScopedSnapshot(payload.snapshot, authority.store, plannedScope),
+      cursor: formatScopedModuleCursor(plannedScope.scope, payload.cursor),
+      diagnostics: formatScopedSyncDiagnostics(plannedScope.scope, payload.diagnostics),
+    };
   }
 
   async function applyTransaction(
@@ -1847,21 +3522,15 @@ export async function createWebAppAuthority(
     const touchedTypeIds = collectTouchedTypeIdsForTransaction(
       snapshot,
       authority.store,
-      typePredicateId,
       plannedTransaction,
     );
-    const authorizationError = validateTransactionAuthorization({
+    assertTransactionAuthorized(
       transaction,
       snapshot,
-      authorization: options.authorization,
+      options.authorization,
       writeScope,
       compiledFieldIndex,
-      buildValidationError: (issues) => buildTransactionValidationError(transaction, issues),
-      formatPolicyErrorMessage,
-    });
-    if (authorizationError) {
-      throw authorizationError;
-    }
+    );
     const result = await authority.applyTransaction(plannedTransaction, {
       writeScope,
     });
@@ -1888,7 +3557,117 @@ export async function createWebAppAuthority(
     after: string | undefined,
     options: WebAppAuthoritySyncOptions,
   ) {
-    return scopedSyncServices.getIncrementalSyncResult(after, options);
+    const requestedAfter = after;
+    const snapshot = authority.store.snapshot();
+    const authorizeRead = createReadableReplicationAuthorizer(
+      authority.store,
+      options.authorization,
+      compiledFieldIndex,
+    );
+    const plannedScope = planSyncScope(options.scope, options.authorization);
+    if (after && plannedScope) {
+      const currentPayload = authority.createSyncPayload({
+        authorizeRead,
+        freshness: options.freshness,
+      });
+      const currentScopedCursor = formatScopedModuleCursor(
+        plannedScope.scope,
+        currentPayload.cursor,
+      );
+      const currentDiagnostics = formatScopedSyncDiagnostics(
+        plannedScope.scope,
+        currentPayload.diagnostics,
+      );
+      const parsedAfter = parseScopedModuleCursor(after);
+      if (!parsedAfter) {
+        return createIncrementalSyncFallback("scope-changed", {
+          after,
+          cursor: currentScopedCursor,
+          freshness: options.freshness,
+          scope: plannedScope.scope,
+          diagnostics: currentDiagnostics,
+        });
+      }
+      if (
+        parsedAfter.moduleId !== plannedScope.scope.moduleId ||
+        parsedAfter.scopeId !== plannedScope.scope.scopeId ||
+        parsedAfter.definitionHash !== plannedScope.scope.definitionHash
+      ) {
+        return createIncrementalSyncFallback("scope-changed", {
+          after,
+          cursor: currentScopedCursor,
+          freshness: options.freshness,
+          scope: plannedScope.scope,
+          diagnostics: currentDiagnostics,
+        });
+      }
+      if (parsedAfter.policyFilterVersion !== plannedScope.scope.policyFilterVersion) {
+        return createIncrementalSyncFallback("policy-changed", {
+          after,
+          cursor: currentScopedCursor,
+          freshness: options.freshness,
+          scope: plannedScope.scope,
+          diagnostics: currentDiagnostics,
+        });
+      }
+      after = parsedAfter.cursor;
+    }
+
+    if (after) {
+      const changes = authority.getChangesAfter(after);
+      if (
+        changesRequireVisibilityReset(authority.store, snapshot, changes, options.authorization)
+      ) {
+        const cursor = plannedScope
+          ? formatScopedModuleCursor(plannedScope.scope, changes.cursor)
+          : changes.cursor;
+
+        return createIncrementalSyncFallback(plannedScope ? "policy-changed" : "reset", {
+          after: requestedAfter ?? after,
+          cursor,
+          freshness: options.freshness,
+          ...(plannedScope ? { scope: plannedScope.scope } : {}),
+        });
+      }
+    }
+
+    const result = authority.getIncrementalSyncResult(after, {
+      authorizeRead,
+      freshness: options.freshness,
+    });
+    if (!plannedScope) {
+      return result;
+    }
+    const resultAfter = formatScopedModuleCursor(plannedScope.scope, result.after);
+    const resultCursor = formatScopedModuleCursor(plannedScope.scope, result.cursor);
+    if ("fallback" in result) {
+      return createIncrementalSyncFallback(result.fallback, {
+        after: resultAfter,
+        cursor: resultCursor,
+        freshness: result.freshness,
+        scope: plannedScope.scope,
+        diagnostics: formatScopedSyncDiagnostics(plannedScope.scope, result.diagnostics),
+      });
+    }
+
+    const edgeById = new Map(authority.store.snapshot().edges.map((edge) => [edge.id, edge]));
+    const transactions = result.transactions.flatMap((transaction) => {
+      const scoped = filterModuleScopedWriteResult(
+        transaction,
+        authority.store,
+        edgeById,
+        plannedScope,
+      );
+      return scoped ? [scoped] : [];
+    });
+
+    return createIncrementalSyncPayload(transactions, {
+      after: resultAfter,
+      cursor: resultCursor,
+      freshness: result.freshness,
+      scope: plannedScope.scope,
+      diagnostics: formatScopedSyncDiagnostics(plannedScope.scope, result.diagnostics),
+    });
   }
 
   async function lookupBearerShare(input: BearerShareLookupInput): Promise<BearerShareProjection> {
@@ -1911,7 +3690,9 @@ export async function createWebAppAuthority(
         exactProjectionId,
         input.graphId,
       );
-      if (resolved) return resolved;
+      if (resolved) {
+        return resolved;
+      }
     }
 
     const authUserPrincipalIds = readAuthUserPrincipalIds(
@@ -1925,6 +3706,10 @@ export async function createWebAppAuthority(
 
     if (options.allowRepair === false) {
       createMissingSessionPrincipalLookupError(input);
+    }
+
+    if (authUserPrincipalIds.length === 0) {
+      resolveAdmissionRoleKeys(authority.store, input);
     }
 
     const repaired = planAuthorityMutation(
@@ -1971,9 +3756,13 @@ export async function createWebAppAuthority(
     );
 
     if (repaired.changed) {
-      await authority.applyTransaction(repaired.transaction, {
-        writeScope: "authority-only",
-      });
+      const snapshot = authority.store.snapshot();
+      await authority.applyTransaction(
+        planCapabilityVersionInvalidationTransaction(snapshot, repaired.transaction),
+        {
+          writeScope: "authority-only",
+        },
+      );
     }
 
     const resolved = readProjectionSessionPrincipalProjection(
@@ -1986,45 +3775,416 @@ export async function createWebAppAuthority(
     createMissingSessionPrincipalLookupError(input);
   }
 
-  const commandServices = createWebAuthorityCommandServices({
-    applyStagedMutation: applyStagedWebAuthorityMutation,
-    applyTransaction,
-    authorityStore: authority.store,
-    buildMutation: (txId, mutate) =>
-      planAuthorityMutation(authority.store.snapshot(), txId, mutate),
-    compiledFieldIndex,
-    createCommandPolicyError,
-    createMutationError: (status, message) => new WebAppAuthorityMutationError(status, message),
-    getEntityLabel,
-    getFirstObject,
-    pendingSecretWriteRef,
-    secretHandleLastRotatedAtPredicateId,
-    secretHandleVersionPredicateId,
-    secretValuesRef,
-    setSingleReferenceField,
-    typePredicateId,
-    writeSecretFieldCommandBasePredicateIds,
-    writeSecretFieldCommandKey,
-  });
+  async function activateSessionPrincipalRoleBindings(
+    input: SessionPrincipalLookupInput,
+  ): Promise<SessionPrincipalProjection> {
+    const resolved = await lookupSessionPrincipal(input);
+    const missingRoleKeys = resolveInitialRoleBindingRoleKeys(
+      authority.store,
+      input,
+      resolved.principalId,
+    );
+
+    if (missingRoleKeys.length === 0) {
+      return resolved;
+    }
+
+    const planned = planAuthorityMutation(
+      authority.store.snapshot(),
+      `activate-session-principal-roles:${resolved.principalId}:${Date.now()}`,
+      (mutationGraph, mutationStore) => {
+        ensurePrincipalRoleBindings(
+          mutationGraph,
+          mutationStore,
+          resolved.principalId,
+          missingRoleKeys,
+        );
+        return resolved.principalId;
+      },
+    );
+
+    if (planned.changed) {
+      const snapshot = authority.store.snapshot();
+      await authority.applyTransaction(
+        planCapabilityVersionInvalidationTransaction(snapshot, planned.transaction),
+        {
+          writeScope: "authority-only",
+        },
+      );
+    }
+
+    return (
+      readSessionPrincipalProjection(authority.store, resolved.principalId, input.graphId) ??
+      resolved
+    );
+  }
+
+  async function runWriteSecretFieldCommand(
+    input: WriteSecretFieldInput,
+    options: WebAppAuthoritySecretFieldOptions,
+  ): Promise<WriteSecretFieldResult> {
+    const entityId = trimOptionalString(input.entityId);
+    const predicateId = trimOptionalString(input.predicateId);
+    const plaintext = trimOptionalString(input.plaintext);
+
+    if (!entityId) {
+      throw new WebAppAuthorityMutationError(400, secretFieldEntityIdRequiredMessage);
+    }
+    if (!predicateId) {
+      throw new WebAppAuthorityMutationError(400, secretFieldPredicateIdRequiredMessage);
+    }
+    if (!plaintext) {
+      throw new WebAppAuthorityMutationError(400, secretFieldPlaintextRequiredMessage);
+    }
+
+    const fieldDefinition = compiledFieldIndex.get(predicateId);
+    if (!fieldDefinition) {
+      throw new WebAppAuthorityMutationError(404, `Predicate "${predicateId}" was not found.`);
+    }
+    if (!isSecretBackedField(fieldDefinition.field)) {
+      throw new WebAppAuthorityMutationError(
+        400,
+        `Predicate "${predicateId}" is not a secret-backed field.`,
+      );
+    }
+    if (fieldDefinition.field.cardinality === "many") {
+      throw new WebAppAuthorityMutationError(
+        400,
+        `Secret-backed field "${fieldDefinition.pathLabel}" does not support multi-value writes.`,
+      );
+    }
+
+    const entityTypeIds = authority.store.facts(entityId, typePredicateId).map((edge) => edge.o);
+    if (entityTypeIds.length === 0) {
+      throw new WebAppAuthorityMutationError(404, `Entity "${entityId}" was not found.`);
+    }
+    if (!entityTypeIds.some((typeId) => fieldDefinition.ownerTypeIds.has(typeId))) {
+      throw new WebAppAuthorityMutationError(
+        400,
+        `Predicate "${predicateId}" is not defined on entity "${entityId}".`,
+      );
+    }
+
+    const existingSecretId = getFirstObject(authority.store, entityId, predicateId);
+    const rotated =
+      existingSecretId !== undefined && secretValuesRef.current.get(existingSecretId) !== plaintext;
+    const secretName = buildSecretHandleName(
+      getEntityLabel(authority.store, entityId),
+      fieldDefinition.fieldLabel,
+    );
+    const planned = planAuthorityMutation(
+      authority.store.snapshot(),
+      `secret-field:${entityId}:${predicateId}:${Date.now()}`,
+      (mutationGraph, mutationStore) => {
+        let secretId = existingSecretId;
+        let secretVersion = secretId ? (mutationGraph.secretHandle.get(secretId)?.version ?? 0) : 0;
+
+        if (!secretId) {
+          secretId = mutationGraph.secretHandle.create({
+            name: secretName,
+            version: 1,
+            lastRotatedAt: new Date(),
+          });
+          setSingleReferenceField(mutationStore, entityId, predicateId, secretId);
+          secretVersion = 1;
+        } else if (rotated) {
+          secretVersion = (mutationGraph.secretHandle.get(secretId)?.version ?? 0) + 1;
+          mutationGraph.secretHandle.update(secretId, {
+            name: secretName,
+            version: secretVersion,
+            lastRotatedAt: new Date(),
+          });
+          setSingleReferenceField(mutationStore, entityId, predicateId, secretId);
+        } else {
+          mutationGraph.secretHandle.update(secretId, {
+            name: secretName,
+          });
+          setSingleReferenceField(mutationStore, entityId, predicateId, secretId);
+          secretVersion = mutationGraph.secretHandle.get(secretId)?.version ?? secretVersion;
+        }
+
+        return {
+          created: existingSecretId === undefined,
+          entityId,
+          predicateId,
+          rotated,
+          secretId,
+          secretVersion,
+        } satisfies WriteSecretFieldResult;
+      },
+    );
+    assertCommandAuthorized({
+      authorization: options.authorization,
+      store: authority.store,
+      commandKey: writeSecretFieldCommandKey,
+      commandPolicy: createWriteSecretFieldCommandPolicy(predicateId),
+      touchedPredicates: buildWriteSecretFieldCommandTargets(
+        {
+          entityId,
+          predicateId,
+          secretId: planned.result.secretId,
+        },
+        compiledFieldIndex,
+      ),
+      writeScope: "server-command",
+    });
+    return applyStagedWebAuthorityMutation({
+      changed: planned.changed,
+      result: planned.result,
+      writeScope: "server-command",
+      async commit(writeScope) {
+        await applyTransaction(planned.transaction, {
+          authorization: options.authorization,
+          writeScope,
+        });
+      },
+      stage(result, context) {
+        const previousSecretValues = secretValuesRef.current;
+        context.addRollback(() => {
+          secretValuesRef.current = previousSecretValues;
+          pendingSecretWriteRef.current = null;
+        });
+
+        const nextSecretValues = new Map(previousSecretValues);
+        nextSecretValues.set(result.secretId, plaintext);
+        secretValuesRef.current = nextSecretValues;
+        pendingSecretWriteRef.current = {
+          secretId: result.secretId,
+          value: plaintext,
+          version: result.secretVersion,
+        };
+      },
+    });
+  }
+
+  async function runBootstrapOperatorAccessCommand(
+    input: BootstrapOperatorAccessInput,
+  ): Promise<BootstrapOperatorAccessResult> {
+    const graphId = input.graphId?.trim() || webAppGraphId;
+    const email = normalizeAdmissionEmail(input.email);
+    const roleKeys = normalizeRoleKeys(input.roleKeys, {
+      fallback: defaultBootstrapOperatorRoleKeys,
+      requireNonEmpty: true,
+    });
+
+    if (!roleKeys.includes(authorityRoleKey)) {
+      throw new WebAppAuthorityMutationError(
+        400,
+        `Bootstrap operator access must include "${authorityRoleKey}".`,
+      );
+    }
+    if (countActiveAuthorityPrincipals(authority.store, graphId) > 0) {
+      throw new WebAppAuthorityMutationError(
+        409,
+        `Bootstrap operator access is unavailable because graph "${graphId}" already has an active operator.`,
+      );
+    }
+
+    const planned = planAuthorityMutation(
+      authority.store.snapshot(),
+      `bootstrap-operator-access:${email}:${Date.now()}`,
+      (mutationGraph, mutationStore) => {
+        const existingPolicyIds = listAdmissionPolicyIds(mutationStore, graphId);
+        if (existingPolicyIds.length > 1) {
+          throw new WebAppAuthorityMutationError(
+            409,
+            `Multiple admission policies exist for graph "${graphId}".`,
+          );
+        }
+
+        const policyId = existingPolicyIds[0]
+          ? (mutationGraph.admissionPolicy.update(existingPolicyIds[0], {
+              bootstrapMode: manualAdmissionBootstrapModeId,
+              signupPolicy: closedAdmissionSignupPolicyId,
+              firstUserRoleKey: [],
+              signupRoleKey: [],
+            }),
+            existingPolicyIds[0])
+          : mutationGraph.admissionPolicy.create({
+              bootstrapMode: manualAdmissionBootstrapModeId,
+              firstUserRoleKey: [],
+              graphId,
+              name: `Admission policy for ${graphId}`,
+              signupPolicy: closedAdmissionSignupPolicyId,
+              signupRoleKey: [],
+            });
+
+        const existingApprovalIds = listAdmissionApprovalIds(mutationStore, graphId, email);
+        if (existingApprovalIds.length > 1) {
+          throw new WebAppAuthorityMutationError(
+            409,
+            `Multiple admission approvals exist for email "${email}" in graph "${graphId}".`,
+          );
+        }
+
+        const approvalId = existingApprovalIds[0]
+          ? (mutationGraph.admissionApproval.update(existingApprovalIds[0], {
+              email,
+              graphId,
+              name: `Admission approval for ${email}`,
+              roleKey: [...roleKeys],
+              status: activeAdmissionApprovalStatusId,
+            }),
+            existingApprovalIds[0])
+          : mutationGraph.admissionApproval.create({
+              email,
+              graphId,
+              name: `Admission approval for ${email}`,
+              roleKey: [...roleKeys],
+              status: activeAdmissionApprovalStatusId,
+            });
+
+        return {
+          approvalId,
+          created: existingApprovalIds.length === 0,
+          email,
+          graphId,
+          policyId,
+          roleKeys,
+        } satisfies BootstrapOperatorAccessResult;
+      },
+    );
+
+    return applyStagedWebAuthorityMutation({
+      changed: planned.changed,
+      result: planned.result,
+      writeScope: "authority-only",
+      async commit(writeScope) {
+        const snapshot = authority.store.snapshot();
+        const plannedTransaction = planCapabilityVersionInvalidationTransaction(
+          snapshot,
+          planned.transaction,
+        );
+        await authority.applyTransaction(plannedTransaction, {
+          writeScope,
+        });
+      },
+    });
+  }
+
+  async function runSetAdmissionApprovalCommand(
+    input: SetAdmissionApprovalInput,
+    options: WebAppAuthorityCommandOptions,
+  ): Promise<SetAdmissionApprovalResult> {
+    const graphId = input.graphId?.trim() || webAppGraphId;
+    const email = normalizeAdmissionEmail(input.email);
+    const status = input.status ?? "active";
+    const roleKeys =
+      status === "active"
+        ? normalizeRoleKeys(input.roleKeys, { requireNonEmpty: true })
+        : normalizeRoleKeys([], {});
+
+    const planned = planAuthorityMutation(
+      authority.store.snapshot(),
+      `set-admission-approval:${email}:${Date.now()}`,
+      (mutationGraph, mutationStore) => {
+        const existingApprovalIds = listAdmissionApprovalIds(mutationStore, graphId, email);
+        if (existingApprovalIds.length > 1) {
+          throw new WebAppAuthorityMutationError(
+            409,
+            `Multiple admission approvals exist for email "${email}" in graph "${graphId}".`,
+          );
+        }
+
+        const nextStatusId =
+          status === "active" ? activeAdmissionApprovalStatusId : revokedAdmissionApprovalStatusId;
+        const approvalId = existingApprovalIds[0]
+          ? (mutationGraph.admissionApproval.update(existingApprovalIds[0], {
+              email,
+              graphId,
+              name: `Admission approval for ${email}`,
+              roleKey: [...roleKeys],
+              status: nextStatusId,
+            }),
+            existingApprovalIds[0])
+          : mutationGraph.admissionApproval.create({
+              email,
+              graphId,
+              name: `Admission approval for ${email}`,
+              roleKey: [...roleKeys],
+              status: nextStatusId,
+            });
+
+        return {
+          approvalId,
+          created: existingApprovalIds.length === 0,
+          email,
+          graphId,
+          roleKeys,
+          status,
+        } satisfies SetAdmissionApprovalResult;
+      },
+    );
+
+    assertCommandAuthorized({
+      authorization: options.authorization,
+      store: authority.store,
+      commandKey: setAdmissionApprovalCommandKey,
+      commandPolicy: createAdmissionApprovalCommandPolicy(),
+      touchedPredicates: buildAdmissionApprovalCommandTargets(
+        planned.result.approvalId,
+        compiledFieldIndex,
+      ),
+      writeScope: "authority-only",
+    });
+
+    return applyStagedWebAuthorityMutation({
+      changed: planned.changed,
+      result: planned.result,
+      writeScope: "authority-only",
+      async commit(writeScope) {
+        await applyTransaction(planned.transaction, {
+          authorization: options.authorization,
+          writeScope,
+        });
+      },
+    });
+  }
 
   async function executeCommand<Command extends WebAppAuthorityCommand>(
     command: Command,
     options: WebAppAuthorityCommandOptions,
   ): Promise<WebAppAuthorityCommandResult<Command["kind"]>> {
-    return commandServices.executeCommand(command, options);
+    if (command.kind === "write-secret-field") {
+      return runWriteSecretFieldCommand(command.input, options) as Promise<
+        WebAppAuthorityCommandResult<Command["kind"]>
+      >;
+    }
+    if (command.kind === "workflow-mutation") {
+      return runWorkflowMutationCommand(
+        command.input,
+        {
+          store: authority.store,
+          applyTransaction,
+        },
+        options,
+      ) as Promise<WebAppAuthorityCommandResult<Command["kind"]>>;
+    }
+    if (command.kind === "bootstrap-operator-access") {
+      return runBootstrapOperatorAccessCommand(command.input) as Promise<
+        WebAppAuthorityCommandResult<Command["kind"]>
+      >;
+    }
+    if (command.kind === "set-admission-approval") {
+      return runSetAdmissionApprovalCommand(command.input, options) as Promise<
+        WebAppAuthorityCommandResult<Command["kind"]>
+      >;
+    }
+    throw new Error("Unsupported web authority command.");
   }
 
   async function writeSecretField(
     input: WriteSecretFieldInput,
     options: WebAppAuthoritySecretFieldOptions,
   ): Promise<WriteSecretFieldResult> {
-    return commandServices.runWriteSecretFieldCommand(input, options);
+    return runWriteSecretFieldCommand(input, options);
   }
 
   const { graph: _graph, store: _store, ...authorityApi } = authority;
 
   return {
     ...authorityApi,
+    activateSessionPrincipalRoleBindings,
     executeCommand,
     applyTransaction,
     createSyncPayload,

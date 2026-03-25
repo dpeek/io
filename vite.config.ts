@@ -25,11 +25,4 @@ export default defineConfig({
   build: {
     outDir: resolve("./out/web"),
   },
-  server: {
-    watch: {
-      // Agent worktrees live under tmp/workspace and should not trigger web
-      // dev-server reloads for the main repo checkout.
-      ignored: ["**/tmp/workspace/**"],
-    },
-  },
 });

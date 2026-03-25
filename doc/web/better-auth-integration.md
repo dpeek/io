@@ -59,6 +59,7 @@ Repo:
   - `AuthSubjectRef`
   - `AuthenticatedSession`
   - `AuthorizationContext`
+  - `AdmissionPolicy`
 - `src/web/lib/auth-bridge.ts` already defines the stable request-time
   projection seam:
   - `projectSessionToPrincipal(...)`
@@ -76,6 +77,7 @@ Repo:
   - `core:principal`
   - `core:authSubjectProjection`
   - `core:principalRoleBinding`
+  - `core:admissionPolicy`
 
 ### What Is Already Implemented In Code
 
@@ -141,6 +143,13 @@ Repo:
   are missing the required `homeGraphId`, and non-authority sync/read paths now
   exclude graph-owned identity entities entirely so required authority-only
   fields never reach browser replication as partial invalid entities.
+- graph-backed admission policy now has one stable Branch 2 contract:
+  `AdmissionPolicy` in `src/graph/runtime/contracts.ts` and the authority-owned
+  `core:admissionPolicy` entity plus enum vocabulary in
+  `src/graph/modules/core/identity/index.ts`.
+- graph-backed initial-access approvals now also have one explicit contract:
+  the authority-owned `core:admissionApproval` entity and the bootstrap or
+  approval command paths in `src/web/lib/authority.ts`.
 - `capabilityGrantIds` and capability grant lookup are only placeholders today.
 - `policyVersion` is a hardcoded constant (`0`) in both the Worker and the
   authority runtime.
@@ -164,6 +173,11 @@ Repo:
   - `status`
   - `homeGraphId`
   - `personId`
+- first authenticated use now consults graph-owned admission policy and
+  approval state during authority-side projection repair. The current proof
+  enforces bootstrap mode, signup mode, allowed-email-domain gates, and
+  explicit email approvals before creating a new principal or projection, and
+  it now provisions first-use role bindings from those durable rules.
 - `doc/web/index.md` now matches the current Worker behavior: anonymous graph
   requests stay anonymous, authenticated requests reduce through the auth
   bridge, and authenticated requests without a graph principal projection fail
@@ -1235,6 +1249,12 @@ Recommended graph-backed scope:
 - invite-only versus open signup policy
 - domain allowlists
 - graph-side first-use provisioning rules
+- the stable `AdmissionPolicy` fields:
+  - `bootstrapMode`
+  - `signupPolicy`
+  - `allowedEmailDomains`
+  - `firstUserProvisioning.roleKeys`
+  - `signupProvisioning.roleKeys`
 
 Recommended non-graph scope:
 
@@ -1261,12 +1281,42 @@ The repo already has the right long-term contract boundary:
 - the Worker reduces and forwards request auth context
 - the graph authority authorizes
 
+The repo now also has a stable graph-owned admission-policy shape for the next
+authority slice: bootstrap mode, signup mode, domain gating, and first-use role
+provisioning live in graph data, while Better Auth secrets, callbacks, mount
+paths, and other runtime bootstrap settings stay out of that contract.
+
+That authority slice now also includes an explicit bootstrap path for the first
+operator plus durable approval management commands for initial access.
+
+Current first authenticated-use outcomes in the shipped single-graph proof:
+
+- first-user bootstrap: a graph with `bootstrapMode = "first-user"` and no
+  admitted human principal provisions the first matching account with
+  an admitted principal that is still waiting on explicit role binding
+- explicit approval allowlist: an active `core:admissionApproval` admits the
+  matching normalized email even when self-signup remains closed
+- domain-gated open signup: `signupPolicy = "open"` admits a new account only
+  when `allowedEmailDomains` is empty or contains the normalized email domain;
+  those accounts remain unbound until the explicit initial role-binding
+  workflow runs
+- deny: when bootstrap, approval, and open-signup gates all miss, authority-side
+  projection repair fails closed with `auth.principal_missing` and creates no
+  principal, projection, or role binding
+- explicit initial role binding: once an admitted principal exists, the browser
+  calls `POST /api/access/activate` so the authority can bind the approved
+  initial roles in a separate durable step
+- proof anchors:
+  - `src/web/worker/index.test.ts` covers those branches through the real
+    Worker-to-Durable-Object request path
+  - `src/web/lib/graph-authority-do.test.ts` covers the same branches at the
+    Durable Object lookup-and-repair seam
+
 What it still does not have yet is the full end-user auth product surface. The
 remaining work is:
 
 - refining the minimal Better Auth client shell into a fuller account and auth
   product surface
-- adding an explicit bootstrap or allowlist rule for initial role assignment
 - adding capability grants and non-zero `capabilityVersion`
 
 The repo now has the core runtime path needed for real authenticated principal

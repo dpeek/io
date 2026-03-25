@@ -8,7 +8,6 @@ import { buildWorkflowTuiRootComponentModel } from "./layout.js";
 import {
   createWorkflowTuiStartupFailureModel,
   createWorkflowTuiStartupLoadingModel,
-  type CodexSessionLaunchResult,
   getWorkflowTuiActionRequestState,
   getSelectedWorkflowTuiAction,
   moveWorkflowTuiActionSelection,
@@ -28,13 +27,9 @@ const WIDE_LAYOUT_MIN_COLUMNS = 132;
 
 export type WorkflowTuiTerminal = NodeJS.WriteStream;
 
-type WorkflowTuiActionResult = void | CodexSessionLaunchResult;
-
 export interface WorkflowTuiOptions {
   input?: NodeJS.ReadStream;
-  onAction?: (
-    action: WorkflowTuiActionModel,
-  ) => WorkflowTuiActionResult | Promise<WorkflowTuiActionResult>;
+  onAction?: (action: WorkflowTuiActionModel) => void | Promise<void>;
   onExitRequest?: () => void | Promise<void>;
   output?: WorkflowTuiTerminal;
   renderer?: CliRenderer;
@@ -103,31 +98,6 @@ function formatActionSubjectLabel(model: WorkflowTuiSurfaceModel, action: Workfl
     (row) => row.workflowBranch.id === action.subject.branchId,
   );
   return branchRow?.workflowBranch.branchKey ?? action.subject.branchId;
-}
-
-function isCodexSessionLaunchResult(
-  value: WorkflowTuiActionResult,
-): value is CodexSessionLaunchResult {
-  return (
-    typeof value === "object" && value !== null && "ok" in value && typeof value.ok === "boolean"
-  );
-}
-
-function formatLaunchActionMessage(result: CodexSessionLaunchResult) {
-  if (!result.ok) {
-    return result.message;
-  }
-
-  const disposition = result.launch.disposition === "attached" ? "Attached to" : "Launched";
-  const details = [
-    `session ${result.launch.attach.sessionId}`,
-    `branch ${result.launch.managedBranchName}`,
-    `repo ${result.launch.repositoryId}`,
-  ];
-  if (result.launch.worktreePath) {
-    details.push(`worktree ${result.launch.worktreePath}`);
-  }
-  return `${disposition} branch session (${details.join(", ")}).`;
 }
 
 function WorkflowTuiApp({ model }: WorkflowTuiAppProps) {
@@ -321,17 +291,7 @@ export function createWorkflowTui(options?: WorkflowTuiOptions): WorkflowTui {
 
         if (onAction) {
           void Promise.resolve(onAction(action))
-            .then((result) => {
-              if (isCodexSessionLaunchResult(result)) {
-                surfaceModel = setWorkflowTuiActionRequestState(surfaceModel, {
-                  actionId: action.id,
-                  message: formatLaunchActionMessage(result),
-                  status: result.ok ? "success" : "failure",
-                  subject: action.subject,
-                });
-                scheduleRender();
-                return;
-              }
+            .then(() => {
               surfaceModel = setWorkflowTuiActionRequestState(surfaceModel, {
                 actionId: action.id,
                 message: `${action.label} completed for ${subjectKey}.`,

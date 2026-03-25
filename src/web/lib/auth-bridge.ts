@@ -25,12 +25,28 @@ function readNonEmptyStringField(value: unknown, label: "session.id" | "user.id"
   return value;
 }
 
+function readOptionalEmailField(value: unknown): string | undefined {
+  if (value == null) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new BetterAuthSessionReductionError(
+      'Better Auth session payload must include a string "user.email" when present.',
+    );
+  }
+
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export type BetterAuthSessionResult = {
   readonly session: {
     readonly id: string;
   };
   readonly user: {
     readonly id: string;
+    readonly email?: string | null;
   };
 };
 
@@ -42,6 +58,7 @@ export type BetterAuthSessionResult = {
 export type SessionPrincipalLookupInput = {
   readonly graphId: string;
   readonly subject: AuthSubjectRef;
+  readonly email?: string;
 };
 
 /**
@@ -222,6 +239,7 @@ export function reduceBetterAuthSession(
       providerAccountId: userId,
       authUserId: userId,
     },
+    email: readOptionalEmailField(session.user?.email),
   };
 }
 
@@ -238,6 +256,7 @@ export async function projectSessionToPrincipal(
   const lookupInput = {
     graphId: input.graphId,
     subject: input.session.subject,
+    email: input.session.email,
   } satisfies SessionPrincipalLookupInput;
   const projection = await input.lookupPrincipal(lookupInput);
 

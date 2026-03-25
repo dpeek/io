@@ -52,8 +52,7 @@ package.
   actions
 - action triggering now tracks subject-scoped request state in-shell so the
   selected branch or commit can show disabled, pending, success, and failure
-  presentation while branch-scoped and commit-scoped launch now flow through
-  the shared runtime launch coordinator
+  presentation without yet wiring the later launch transport or lifecycle work
 - presents startup failures in-shell when graph initialization or initial-scope
   resolution cannot materialize the first workflow surface, rather than
   falling back to static startup copy or the legacy agent monitor
@@ -117,49 +116,12 @@ Non-goals for this action slice:
 
 - no arbitrary workflow mutation actions such as reorder, block, archive, or
   rich field editing
-- no launch-history, replay, finalization, or retained-transcript UX in
-  `src/tui/*`; launching and attach handoff are wired, but retained-session
-  follow-up still lives outside this shell
+- no session launch transport yet; the shell only exposes and reports the
+  selected action request, plus local pending/success/failure presentation
 - no general editing surface for branch goals, commit titles, or repository
   metadata
-
-## Launch Contract Boundary
-
-The first workflow launch contract is explicit, and the workflow shell now uses
-it for branch-scoped and commit-scoped launch or attach.
-
-- request:
-  `projectId`, `actorId`, launch `kind`, and a workflow `subject` union for
-  branch or commit launch
-- success:
-  one session envelope plus launch metadata containing the attached repository
-  id, managed branch name, optional repository root or worktree path, and the
-  `attach.sessionId` handoff the TUI should follow
-- failure:
-  `subject-locked`, `workspace-state-missing`, `repository-mismatch`, or
-  `policy-denied`
-
-Current shell behavior after a launch request is also explicit:
-
-- on success, the workflow shell stays open, keeps the current branch or commit
-  selection, and records the returned attach handoff in the action state
-- `launch.disposition: "attached"` means the selected subject already had the
-  running session and the shell reports that reuse instead of relaunching
-- `launch.disposition: "launched"` means the first session started and the
-  shell reports the returned `attach.sessionId`, repository, managed branch,
-  and worktree metadata
-- there is no automatic jump into retained session replay from `io tui` in
-  this slice; follow-up attach and replay UX still lives in `io agent tui`
-
-The launch contract stays intentionally narrow:
-
-- branch launch targets `{ kind: "branch", branchId }`, and `io tui` now routes
-  the selected branch action through the shared coordinator
-- commit launch targets `{ kind: "commit", branchId, commitId }`
-- the first attach handoff is just a session id, not replay or retained-history
-  navigation
-- launch does not repair workspaces, reconcile git, or define later transcript
-  browsing behavior
+- no launch-history, replay, finalization, or retained-transcript UX in
+  `src/tui/*`; those remain outside this minimal action slice until later work
 
 ## Startup Contract
 
@@ -198,8 +160,7 @@ tui: {
 
 Non-goals for this first contract:
 
-- no retained-session follow or replay transport after the initial attach
-  handoff
+- no session launch transport or keybinding wiring
 - no git reconcile or worktree reservation behavior
 - no custom branch-board filter or ordering inputs
 - no alternate runtime kinds beyond one HTTP graph base URL
@@ -214,8 +175,7 @@ Non-goals for this first contract:
   normalization
 - later session-launch work should start from `../../src/tui/*` because the
   workflow shell already owns branch and commit selection; launch wiring should
-  call the shared coordinator in `../../src/agent/workflow-subject-launch.ts`
-  rather than copy legacy session-monitor UI
+  reuse shared runtime services rather than copy legacy session-monitor UI
 - later replay work should stay in `../../src/agent/tui/*` until the workflow
   shell can read graph-backed `AgentSession` and `AgentSessionEvent` history
   directly

@@ -11,7 +11,6 @@ import {
   defineSecretField,
   defineType,
   edgeId,
-  webSocketLiveSyncProtocol,
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthSubjectRef,
   type AnyTypeOutput,
@@ -45,6 +44,7 @@ import {
 import {
   WebGraphAuthorityDurableObject,
   webGraphAuthorityBearerShareLookupPath,
+  webGraphAuthoritySessionPrincipalActivatePath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "./graph-authority-do.js";
 import {
@@ -52,10 +52,6 @@ import {
   webAppAuthorizationContextHeader,
 } from "./server-routes.js";
 import { webWorkflowLivePath, type WorkflowLiveResponse } from "./workflow-live-transport.js";
-import {
-  createTestWorkflowLiveWebSocketPair,
-  type TestWorkflowLiveWebSocket,
-} from "./workflow-live-websocket.js";
 import { webWorkflowReadPath, type WorkflowReadResponse } from "./workflow-transport.js";
 
 setDefaultTimeout(20_000);
@@ -446,11 +442,13 @@ function createAuthorizedRequest(
 function createSessionPrincipalLookupInput(
   overrides: {
     readonly graphId?: string;
+    readonly email?: string;
     readonly subject?: Partial<AuthSubjectRef>;
   } = {},
 ): SessionPrincipalLookupInput {
   return {
     graphId: overrides.graphId ?? "graph:test",
+    email: overrides.email,
     subject: {
       issuer: "better-auth",
       provider: "user",
@@ -467,6 +465,23 @@ function createSessionPrincipalLookupRequest(
 ): Request {
   return new Request(
     `https://graph-authority.local${webGraphAuthoritySessionPrincipalLookupPath}`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(input),
+      ...init,
+    },
+  );
+}
+
+function createSessionPrincipalActivationRequest(
+  input: SessionPrincipalLookupInput,
+  init: RequestInit = {},
+): Request {
+  return new Request(
+    `https://graph-authority.local${webGraphAuthoritySessionPrincipalActivatePath}`,
     {
       method: "POST",
       headers: {
@@ -889,77 +904,6 @@ async function postWorkflowLive(
   return { response, payload };
 }
 
-function createWorkflowLiveSocketRequest(
-  authorization: AuthorizationContext = testAuthorityAuthorization,
-): Request {
-  return createAuthorizedRequest(
-    `https://graph-authority.local${webWorkflowLivePath}`,
-    {
-      method: "GET",
-      headers: {
-        upgrade: "websocket",
-        "sec-websocket-protocol": webSocketLiveSyncProtocol,
-      },
-    },
-    authorization,
-  );
-}
-
-function readSocketMessages(socket: TestWorkflowLiveWebSocket): unknown[] {
-  return socket.sentMessages.map((message) => JSON.parse(message));
-}
-
-function sendSocketHandshake(socket: TestWorkflowLiveWebSocket, socketSessionId: string): void {
-  socket.send(
-    JSON.stringify({
-      direction: "client",
-      kind: "handshake",
-      protocol: webSocketLiveSyncProtocol,
-      session: {
-        socketSessionId,
-        sessionId: testAuthorityAuthorization.sessionId,
-        principalId: testAuthorityAuthorization.principalId,
-      },
-    }),
-  );
-}
-
-function sendSocketRegister(
-  socket: TestWorkflowLiveWebSocket,
-  input: {
-    readonly cursor: string;
-    readonly definitionHash: string;
-    readonly policyFilterVersion: string;
-    readonly scopeId: string;
-    readonly socketSessionId: string;
-  },
-): void {
-  socket.send(
-    JSON.stringify({
-      direction: "client",
-      kind: "register",
-      protocol: webSocketLiveSyncProtocol,
-      session: {
-        socketSessionId: input.socketSessionId,
-        sessionId: testAuthorityAuthorization.sessionId,
-        principalId: testAuthorityAuthorization.principalId,
-      },
-      scope: {
-        activeScopeId: `${input.scopeId}:${input.definitionHash}:${input.policyFilterVersion}`,
-        scopeId: input.scopeId,
-        definitionHash: input.definitionHash,
-        policyFilterVersion: input.policyFilterVersion,
-      },
-      cursor: input.cursor,
-      dependencyKeys: [
-        "scope:ops/workflow:review",
-        "projection:ops/workflow:project-branch-board",
-        "projection:ops/workflow:branch-commit-queue",
-      ],
-    }),
-  );
-}
-
 async function getDurableAuthority(durableObject: WebGraphAuthorityDurableObject): Promise<{
   persist(): Promise<void>;
   readSnapshot(options: { authorization: AuthorizationContext }): StoreSnapshot;
@@ -1067,6 +1011,300 @@ describe("web graph authority durable object", () => {
       providerAccountId: lookupInput.subject.providerAccountId,
       status: core.authSubjectStatus.values.active.id,
     });
+  });
+
+  it("admits the first operator through the internal lookup route without binding roles", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "operator@example.com",
+    });
+    const seeded = buildTransactionFromSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      "tx:create-first-user-admission-policy",
+      (graph) => {
+        graph.admissionPolicy.create({
+          bootstrapMode: core.admissionBootstrapMode.values.firstUser.id,
+          firstUserRoleKey: ["graph:authority", "graph:owner"],
+          graphId: lookupInput.graphId,
+          name: "Admission policy",
+          signupPolicy: core.admissionSignupPolicy.values.closed.id,
+          signupRoleKey: ["graph:member"],
+        });
+      },
+    );
+
+    await authority.applyTransaction(seeded.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const response = await durableObject.fetch(createSessionPrincipalLookupRequest(lookupInput));
+    const projection = (await response.json()) as {
+      readonly principalId: string;
+      readonly principalKind: string;
+      readonly roleKeys: readonly string[];
+      readonly capabilityVersion: number;
+    };
+    const persistedGraph = readProductGraph(authority, testAuthorityAuthorization);
+
+    expect(response.status).toBe(200);
+    expect(projection).toMatchObject({
+      principalId: expect.any(String),
+      principalKind: "human",
+      roleKeys: [],
+      capabilityVersion: 0,
+    });
+    expect(persistedGraph.principal.list()).toHaveLength(1);
+    expect(persistedGraph.authSubjectProjection.list()).toHaveLength(1);
+    expect(persistedGraph.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("admits explicit allowlist approvals through the internal lookup route without binding roles", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "approved@example.com",
+    });
+    const seeded = buildTransactionFromSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      "tx:create-manual-admission-policy-and-approval",
+      (graph) => {
+        graph.admissionPolicy.create({
+          bootstrapMode: core.admissionBootstrapMode.values.manual.id,
+          firstUserRoleKey: ["graph:owner"],
+          graphId: lookupInput.graphId,
+          name: "Admission policy",
+          signupPolicy: core.admissionSignupPolicy.values.closed.id,
+          signupRoleKey: ["graph:member"],
+        });
+        graph.admissionApproval.create({
+          email: "approved@example.com",
+          graphId: lookupInput.graphId,
+          name: "Approved operator",
+          roleKey: ["graph:member"],
+          status: core.admissionApprovalStatus.values.active.id,
+        });
+      },
+    );
+
+    await authority.applyTransaction(seeded.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const response = await durableObject.fetch(createSessionPrincipalLookupRequest(lookupInput));
+    const projection = (await response.json()) as {
+      readonly principalId: string;
+      readonly roleKeys: readonly string[];
+      readonly capabilityVersion: number;
+    };
+    const persistedGraph = readProductGraph(authority, testAuthorityAuthorization);
+
+    expect(response.status).toBe(200);
+    expect(projection).toMatchObject({
+      principalId: expect.any(String),
+      roleKeys: [],
+      capabilityVersion: 0,
+    });
+    expect(persistedGraph.principal.list()).toHaveLength(1);
+    expect(persistedGraph.authSubjectProjection.list()).toHaveLength(1);
+    expect(persistedGraph.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("admits domain-gated open signup through the internal lookup route without binding roles", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "operator@allowed.example",
+    });
+    const seeded = buildTransactionFromSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      "tx:create-domain-gated-open-signup-policy",
+      (graph) => {
+        graph.admissionPolicy.create({
+          allowedEmailDomain: ["allowed.example"],
+          bootstrapMode: core.admissionBootstrapMode.values.manual.id,
+          firstUserRoleKey: ["graph:owner"],
+          graphId: lookupInput.graphId,
+          name: "Admission policy",
+          signupPolicy: core.admissionSignupPolicy.values.open.id,
+          signupRoleKey: ["graph:member"],
+        });
+      },
+    );
+
+    await authority.applyTransaction(seeded.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const response = await durableObject.fetch(createSessionPrincipalLookupRequest(lookupInput));
+    const projection = (await response.json()) as {
+      readonly principalId: string;
+      readonly roleKeys: readonly string[];
+      readonly capabilityVersion: number;
+    };
+    const persistedGraph = readProductGraph(authority, testAuthorityAuthorization);
+
+    expect(response.status).toBe(200);
+    expect(projection).toMatchObject({
+      principalId: expect.any(String),
+      roleKeys: [],
+      capabilityVersion: 0,
+    });
+    expect(persistedGraph.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("fails closed when admission policy denies first authenticated use through the internal lookup route", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "operator@blocked.example",
+    });
+    const seeded = buildTransactionFromSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      "tx:create-admission-policy",
+      (graph) => {
+        graph.admissionPolicy.create({
+          allowedEmailDomain: ["allowed.example"],
+          bootstrapMode: core.admissionBootstrapMode.values.manual.id,
+          firstUserRoleKey: ["graph:owner"],
+          graphId: lookupInput.graphId,
+          name: "Admission policy",
+          signupPolicy: core.admissionSignupPolicy.values.closed.id,
+          signupRoleKey: ["graph:member"],
+        });
+      },
+    );
+
+    await authority.applyTransaction(seeded.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const response = await durableObject.fetch(createSessionPrincipalLookupRequest(lookupInput));
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      code: "auth.principal_missing",
+      error: expect.stringContaining("Admission policy denied first authenticated use"),
+    });
+  });
+
+  it("keeps admitted-but-unbound principals unbound through the internal lookup route", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "approved@example.com",
+    });
+    const seeded = buildTransactionFromSnapshot(
+      authority.readSnapshot({ authorization: testAuthorityAuthorization }),
+      "tx:create-unbound-principal-and-admission-approval",
+      (graph) => {
+        const principalId = graph.principal.create({
+          homeGraphId: lookupInput.graphId,
+          kind: core.principalKind.values.human.id,
+          name: "Approved Principal",
+          status: core.principalStatus.values.active.id,
+        });
+
+        graph.authSubjectProjection.create({
+          authUserId: lookupInput.subject.authUserId,
+          issuer: lookupInput.subject.issuer,
+          mirroredAt: new Date("2026-03-24T00:00:00.000Z"),
+          name: "Approved Subject",
+          principal: principalId,
+          provider: lookupInput.subject.provider,
+          providerAccountId: lookupInput.subject.providerAccountId,
+          status: core.authSubjectStatus.values.active.id,
+        });
+
+        graph.admissionApproval.create({
+          email: "approved@example.com",
+          graphId: lookupInput.graphId,
+          name: "Approved operator",
+          roleKey: ["graph:member"],
+          status: core.admissionApprovalStatus.values.active.id,
+        });
+      },
+    );
+
+    await authority.applyTransaction(seeded.transaction, {
+      authorization: testAuthorityAuthorization,
+      writeScope: "authority-only",
+    });
+
+    const response = await durableObject.fetch(createSessionPrincipalLookupRequest(lookupInput));
+    const projection = (await response.json()) as {
+      readonly principalId: string;
+      readonly roleKeys: readonly string[];
+      readonly capabilityVersion: number;
+    };
+    const persistedGraph = readProductGraph(authority, testAuthorityAuthorization);
+
+    expect(response.status).toBe(200);
+    expect(projection).toMatchObject({
+      principalId: expect.any(String),
+      roleKeys: [],
+      capabilityVersion: 0,
+    });
+    expect(persistedGraph.principal.list()).toHaveLength(1);
+    expect(persistedGraph.authSubjectProjection.list()).toHaveLength(1);
+    expect(persistedGraph.principalRoleBinding.list()).toHaveLength(0);
+  });
+
+  it("binds admitted principals explicitly through the internal activation route", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "approved@example.com",
+    });
+
+    await authority.executeCommand(
+      {
+        kind: "set-admission-approval",
+        input: {
+          email: "approved@example.com",
+          graphId: lookupInput.graphId,
+          roleKeys: ["graph:member"],
+        },
+      },
+      { authorization: testAuthorityAuthorization },
+    );
+    await durableObject.fetch(createSessionPrincipalLookupRequest(lookupInput));
+
+    const response = await durableObject.fetch(
+      createSessionPrincipalActivationRequest(lookupInput),
+    );
+    const projection = (await response.json()) as {
+      readonly principalId: string;
+      readonly roleKeys: readonly string[];
+      readonly capabilityVersion: number;
+    };
+    const persistedGraph = readProductGraph(authority, testAuthorityAuthorization);
+
+    expect(response.status).toBe(200);
+    expect(projection).toMatchObject({
+      principalId: expect.any(String),
+      roleKeys: ["graph:member"],
+      capabilityVersion: 1,
+    });
+    expect(persistedGraph.principalRoleBinding.list()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          principal: projection.principalId,
+          roleKey: "graph:member",
+          status: core.principalRoleBindingStatus.values.active.id,
+        }),
+      ]),
+    );
   });
 
   it("returns explicit conflict failures from the internal lookup route", async () => {
@@ -1675,10 +1913,9 @@ describe("web graph authority durable object", () => {
     expect(registered.payload).toMatchObject({
       kind: "workflow-review-register",
       result: {
-        registrationId: `workflow-review:${testAuthorityAuthorization.sessionId}:${workflowReviewModuleReadScope.scopeId}:${workflowReviewModuleReadScope.definitionHash}:policy:0`,
+        registrationId: `workflow-review:${testAuthorityAuthorization.sessionId}:${workflowReviewModuleReadScope.scopeId}`,
         sessionId: testAuthorityAuthorization.sessionId,
         principalId: testAuthorityAuthorization.principalId,
-        activeScopeId: `${workflowReviewModuleReadScope.scopeId}:${workflowReviewModuleReadScope.definitionHash}:policy:0`,
         scopeId: workflowReviewModuleReadScope.scopeId,
         definitionHash: workflowReviewModuleReadScope.definitionHash,
         policyFilterVersion: "policy:0",
@@ -1693,184 +1930,6 @@ describe("web graph authority durable object", () => {
         sessionId: testAuthorityAuthorization.sessionId,
       },
     });
-  });
-
-  it("pushes workflow live invalidations over websocket and recovers missed freshness with reconnect plus scoped re-pull", async () => {
-    const { state } = createSqliteDurableObjectState();
-    const firstSockets = createTestWorkflowLiveWebSocketPair();
-    const durableObject = createTestDurableObject(
-      state,
-      {},
-      {
-        workflowLiveWebSocket: {
-          createSocketPair: () => firstSockets.pair,
-          createSocketSessionId: () => "socket:test:1",
-          now: () => new Date("2026-03-25T00:00:00.000Z"),
-        },
-      },
-    );
-    let authority = await getDurableAuthority<WebAppAuthority>(durableObject);
-    const fixture = await createTestWorkflowFixture(authority, testAuthorityAuthorization);
-    const total = await readSyncPayload(
-      durableObject,
-      undefined,
-      testAuthorityAuthorization,
-      workflowModuleScope,
-    );
-
-    const upgrade = await durableObject.fetch(createWorkflowLiveSocketRequest());
-    expect(upgrade.status).toBe(101);
-    expect(firstSockets.server.accepted).toBe(true);
-    expect((upgrade as Response & { webSocket?: unknown }).webSocket).toBe(firstSockets.client);
-
-    sendSocketHandshake(firstSockets.client, "socket:test:1");
-    sendSocketRegister(firstSockets.client, {
-      socketSessionId: "socket:test:1",
-      cursor: total.cursor,
-      scopeId: workflowReviewModuleReadScope.scopeId,
-      definitionHash: workflowReviewModuleReadScope.definitionHash,
-      policyFilterVersion: "policy:0",
-    });
-
-    const firstCommit = (await authority.executeCommand(
-      {
-        kind: "workflow-mutation",
-        input: {
-          action: "createCommit",
-          branchId: fixture.branchId,
-          title: "Durable websocket invalidation",
-          commitKey: "commit:durable-websocket-invalidation",
-          order: 0,
-          state: "ready",
-        },
-      },
-      {
-        authorization: testAuthorityAuthorization,
-      },
-    )) as { readonly cursor: string };
-
-    expect(readSocketMessages(firstSockets.server)).toMatchObject([
-      {
-        kind: "handshake",
-        session: {
-          socketSessionId: "socket:test:1",
-        },
-      },
-      {
-        kind: "registration",
-        registration: {
-          sessionId: "socket:test:1",
-          scopeId: workflowReviewModuleReadScope.scopeId,
-        },
-      },
-      {
-        kind: "invalidation",
-        session: {
-          socketSessionId: "socket:test:1",
-        },
-        scope: {
-          scopeId: workflowReviewModuleReadScope.scopeId,
-        },
-        invalidation: {
-          sourceCursor: firstCommit.cursor,
-          delivery: { kind: "cursor-advanced" },
-        },
-      },
-    ]);
-
-    const firstRefresh = await readSyncPayload(
-      durableObject,
-      total.cursor,
-      testAuthorityAuthorization,
-      workflowModuleScope,
-    );
-    if (firstRefresh.mode !== "incremental" || "fallback" in firstRefresh) {
-      throw new Error("Expected a scoped incremental refresh after websocket invalidation.");
-    }
-
-    firstSockets.client.close(1011, "connection lost");
-
-    const restartedSockets = createTestWorkflowLiveWebSocketPair();
-    const restarted = createTestDurableObject(
-      state,
-      {},
-      {
-        workflowLiveWebSocket: {
-          createSocketPair: () => restartedSockets.pair,
-          createSocketSessionId: () => "socket:test:2",
-          now: () => new Date("2026-03-25T00:00:05.000Z"),
-        },
-      },
-    );
-    authority = await getDurableAuthority<WebAppAuthority>(restarted);
-    const secondCommit = (await authority.executeCommand(
-      {
-        kind: "workflow-mutation",
-        input: {
-          action: "createCommit",
-          branchId: fixture.branchId,
-          title: "Durable websocket reconnect recovery",
-          commitKey: "commit:durable-websocket-reconnect-recovery",
-          order: 1,
-          state: "ready",
-        },
-      },
-      {
-        authorization: testAuthorityAuthorization,
-      },
-    )) as { readonly summary: { readonly id: string } };
-
-    const reconnect = await restarted.fetch(createWorkflowLiveSocketRequest());
-    expect(reconnect.status).toBe(101);
-
-    sendSocketHandshake(restartedSockets.client, "socket:test:2");
-    sendSocketRegister(restartedSockets.client, {
-      socketSessionId: "socket:test:2",
-      cursor: firstRefresh.cursor,
-      scopeId: workflowReviewModuleReadScope.scopeId,
-      definitionHash: workflowReviewModuleReadScope.definitionHash,
-      policyFilterVersion: "policy:0",
-    });
-
-    expect(readSocketMessages(restartedSockets.server)).toMatchObject([
-      {
-        kind: "handshake",
-        session: {
-          socketSessionId: "socket:test:2",
-        },
-      },
-      {
-        kind: "registration",
-        registration: {
-          sessionId: "socket:test:2",
-          scopeId: workflowReviewModuleReadScope.scopeId,
-        },
-      },
-    ]);
-
-    const recovered = await readSyncPayload(
-      restarted,
-      firstRefresh.cursor,
-      testAuthorityAuthorization,
-      workflowModuleScope,
-    );
-    if (recovered.mode !== "incremental" || "fallback" in recovered) {
-      throw new Error("Expected reconnect recovery to stay on the scoped incremental path.");
-    }
-    if (!recovered.transactions) {
-      throw new Error("Expected scoped incremental transactions after reconnect recovery.");
-    }
-
-    expect(recovered.scope).toEqual(firstRefresh.scope);
-    expect(recovered.transactions).toHaveLength(1);
-    expect(
-      recovered.transactions[0]?.transaction.ops.some(
-        (operation) =>
-          operation.op === "assert" &&
-          operation.edge.s === secondCommit.summary.id &&
-          operation.edge.p === edgeId(core.node.fields.name),
-      ),
-    ).toBe(true);
   });
 
   it("delivers workflow review invalidations and recovers with scoped re-pull after router loss", async () => {
@@ -2919,6 +2978,68 @@ describe("web graph authority durable object", () => {
         writeScope: "server-command",
       }),
     ]);
+  });
+
+  it("accepts admission-approval command envelopes over /api/commands", async () => {
+    const { db, state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const lookupInput = createSessionPrincipalLookupInput({
+      email: "operator@example.com",
+    });
+
+    const response = await durableObject.fetch(
+      createAuthorizedRequest("https://graph-authority.local/api/commands", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          kind: "set-admission-approval",
+          input: {
+            email: lookupInput.email,
+            graphId: lookupInput.graphId,
+            roleKeys: ["graph:authority", "graph:owner"],
+          },
+        }),
+      }),
+    );
+    const lookupResponse = await durableObject.fetch(
+      createSessionPrincipalLookupRequest(lookupInput),
+    );
+    const commandRows = queryAll<GraphTxRow>(
+      db,
+      `SELECT seq, tx_id, cursor, write_scope
+      FROM io_graph_tx
+      ORDER BY seq ASC`,
+    );
+    const commandRow = commandRows.find((row) =>
+      row.tx_id.startsWith("set-admission-approval:operator@example.com:"),
+    );
+
+    if (!commandRow) {
+      throw new Error("Expected the admission approval command to append a durable transaction.");
+    }
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({
+      created: true,
+      email: "operator@example.com",
+      graphId: lookupInput.graphId,
+      roleKeys: ["graph:authority", "graph:owner"],
+      status: "active",
+    });
+    expect(lookupResponse.status).toBe(200);
+    expect(await lookupResponse.json()).toMatchObject({
+      principalKind: "human",
+      roleKeys: [],
+      capabilityVersion: 0,
+    });
+    expect(commandRow).toEqual({
+      seq: 1,
+      tx_id: expect.stringContaining("set-admission-approval:operator@example.com:"),
+      cursor: commandRow.cursor,
+      write_scope: "authority-only",
+    });
   });
 
   it("surfaces stable deny vocabulary for unauthorized transaction requests", async () => {

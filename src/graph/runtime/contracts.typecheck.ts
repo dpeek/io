@@ -1,4 +1,8 @@
 import type {
+  AdmissionBootstrapMode as AdmissionBootstrapModeFromRoot,
+  AdmissionPolicy as AdmissionPolicyFromRoot,
+  AdmissionProvisioning as AdmissionProvisioningFromRoot,
+  AdmissionSignupPolicy as AdmissionSignupPolicyFromRoot,
   AuthSubjectRef as AuthSubjectRefFromRoot,
   AuthenticatedSession as AuthenticatedSessionFromRoot,
   AuthorizationContext as AuthorizationContextFromRoot,
@@ -25,6 +29,10 @@ import type {
   WorkflowSpec as WorkflowSpecFromRoot,
 } from "../index.js";
 import type {
+  AdmissionBootstrapMode,
+  AdmissionPolicy,
+  AdmissionProvisioning,
+  AdmissionSignupPolicy,
   AuthSubjectRef,
   AuthenticatedSession,
   AuthorizationContext,
@@ -188,6 +196,21 @@ const authorizationContext = {
   policyVersion: 5,
 } satisfies AuthorizationContext;
 
+const admissionProvisioning = {
+  roleKeys: ["graph:member"],
+} satisfies AdmissionProvisioning;
+
+const admissionPolicy = {
+  graphId: "graph:global",
+  bootstrapMode: "first-user",
+  signupPolicy: "open",
+  allowedEmailDomains: ["example.com"],
+  firstUserProvisioning: {
+    roleKeys: ["graph:owner", "graph:authority"],
+  },
+  signupProvisioning: admissionProvisioning,
+} satisfies AdmissionPolicy;
+
 const capabilityGrantResource = {
   kind: "predicate-read",
   predicateId: "pkm:topic.content",
@@ -318,6 +341,10 @@ const topicShareGrant = {
 const rootAuthSubject: AuthSubjectRefFromRoot = authSubject;
 const rootAuthenticatedSession: AuthenticatedSessionFromRoot = authenticatedSession;
 const rootAuthorizationContext: AuthorizationContextFromRoot = authorizationContext;
+const rootAdmissionPolicy: AdmissionPolicyFromRoot = admissionPolicy;
+const rootAdmissionProvisioning: AdmissionProvisioningFromRoot = admissionProvisioning;
+const rootAdmissionBootstrapMode: AdmissionBootstrapModeFromRoot = admissionPolicy.bootstrapMode;
+const rootAdmissionSignupPolicy: AdmissionSignupPolicyFromRoot = admissionPolicy.signupPolicy;
 const rootCapabilityGrantResource: CapabilityGrantResourceFromRoot = capabilityGrantResource;
 const rootCapabilityGrantTarget: CapabilityGrantTargetFromRoot = capabilityGrantTarget;
 const rootCapabilityGrantConstraints: CapabilityGrantConstraintsFromRoot =
@@ -334,6 +361,10 @@ const rootPolicyVersion: PolicyVersionFromRoot = authorizationContext.policyVers
 const rootPrincipalKind: PrincipalKindFromRoot = "remoteGraph";
 const runtimeCapabilityVersion: CapabilityVersion = rootCapabilityVersion;
 const runtimePolicyVersion: PolicyVersion = rootPolicyVersion;
+const runtimeAdmissionPolicy: AdmissionPolicy = rootAdmissionPolicy;
+const runtimeAdmissionProvisioning: AdmissionProvisioning = rootAdmissionProvisioning;
+const runtimeAdmissionBootstrapMode: AdmissionBootstrapMode = rootAdmissionBootstrapMode;
+const runtimeAdmissionSignupPolicy: AdmissionSignupPolicy = rootAdmissionSignupPolicy;
 const runtimeCapabilityGrantResource: CapabilityGrantResource = rootCapabilityGrantResource;
 const runtimeCapabilityGrantTarget: CapabilityGrantTarget = rootCapabilityGrantTarget;
 const runtimeCapabilityGrantConstraints: CapabilityGrantConstraints =
@@ -376,6 +407,10 @@ void rootRevokedModulePermissionRecord;
 void rootAuthSubject;
 void rootAuthenticatedSession;
 void rootAuthorizationContext;
+void rootAdmissionPolicy;
+void rootAdmissionProvisioning;
+void rootAdmissionBootstrapMode;
+void rootAdmissionSignupPolicy;
 void rootCapabilityGrantResource;
 void rootCapabilityGrantTarget;
 void rootCapabilityGrantConstraints;
@@ -391,6 +426,10 @@ void rootPolicyVersion;
 void rootPrincipalKind;
 void runtimeCapabilityVersion;
 void runtimePolicyVersion;
+void runtimeAdmissionPolicy;
+void runtimeAdmissionProvisioning;
+void runtimeAdmissionBootstrapMode;
+void runtimeAdmissionSignupPolicy;
 void runtimeCapabilityGrantResource;
 void runtimeCapabilityGrantTarget;
 void runtimeCapabilityGrantConstraints;
@@ -411,6 +450,20 @@ void runtimeRevokedModulePermissionRecord;
 void runtimeReadPermission;
 void runtimeSavePermission;
 void runtimeBlobPermission;
+
+void ({
+  graphId: "graph:global",
+  // @ts-expect-error bootstrap mode follows the shared admission contract literals
+  bootstrapMode: "bootstrap",
+  signupPolicy: "closed",
+  allowedEmailDomains: [],
+  firstUserProvisioning: {
+    roleKeys: [],
+  },
+  signupProvisioning: {
+    roleKeys: [],
+  },
+} satisfies AdmissionPolicy);
 
 void ({
   key: "pkm:topic:summary",

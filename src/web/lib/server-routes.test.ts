@@ -1,10 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import {
-  createLiveSyncActiveScopeId,
-  defineInvalidationEvent,
-  type AuthorizationContext,
-} from "@io/core/graph";
+import { defineInvalidationEvent, type AuthorizationContext } from "@io/core/graph";
 import { workflowReviewModuleReadScope } from "@io/core/graph/modules/ops/workflow";
 
 import {
@@ -201,11 +197,6 @@ describe("workflow live server routes", () => {
           return {
             sessionId: "session:test",
             principalId: "principal:test",
-            activeScopeId: createLiveSyncActiveScopeId({
-              scopeId: workflowReviewModuleReadScope.scopeId,
-              definitionHash: workflowReviewModuleReadScope.definitionHash,
-              policyFilterVersion: "policy:0",
-            }),
             scopeId: workflowReviewModuleReadScope.scopeId,
             definitionHash: workflowReviewModuleReadScope.definitionHash,
             policyFilterVersion: "policy:0",
@@ -224,11 +215,9 @@ describe("workflow live server routes", () => {
     expect(await response.json()).toEqual({
       kind: "workflow-review-register",
       result: {
-        registrationId:
-          "workflow-review:session:test:scope:ops/workflow:review:scope-def:ops/workflow:review:v1:policy:0",
+        registrationId: "workflow-review:session:test:scope:ops/workflow:review",
         sessionId: "session:test",
         principalId: "principal:test",
-        activeScopeId: "scope:ops/workflow:review:scope-def:ops/workflow:review:v1:policy:0",
         scopeId: workflowReviewModuleReadScope.scopeId,
         definitionHash: workflowReviewModuleReadScope.definitionHash,
         policyFilterVersion: "policy:0",
@@ -249,11 +238,6 @@ describe("workflow live server routes", () => {
     router.register({
       sessionId: "session:test",
       principalId: "principal:test",
-      activeScopeId: createLiveSyncActiveScopeId({
-        scopeId: workflowReviewModuleReadScope.scopeId,
-        definitionHash: workflowReviewModuleReadScope.definitionHash,
-        policyFilterVersion: "policy:0",
-      }),
       scopeId: workflowReviewModuleReadScope.scopeId,
       definitionHash: workflowReviewModuleReadScope.definitionHash,
       policyFilterVersion: "policy:0",
@@ -306,11 +290,6 @@ describe("workflow live server routes", () => {
     router.register({
       sessionId: "session:test",
       principalId: "principal:test",
-      activeScopeId: createLiveSyncActiveScopeId({
-        scopeId: workflowReviewModuleReadScope.scopeId,
-        definitionHash: workflowReviewModuleReadScope.definitionHash,
-        policyFilterVersion: "policy:0",
-      }),
       scopeId: workflowReviewModuleReadScope.scopeId,
       definitionHash: workflowReviewModuleReadScope.definitionHash,
       policyFilterVersion: "policy:0",

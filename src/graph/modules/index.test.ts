@@ -22,6 +22,9 @@ import {
   resolveTypeDefinitionIconId,
 } from "./core/icon/index.js";
 import {
+  admissionBootstrapMode,
+  admissionPolicy,
+  admissionSignupPolicy,
   authSubjectProjection,
   authSubjectStatus,
   principal,
@@ -132,9 +135,12 @@ describe("module entry surfaces", () => {
     expect(principalStatus.values.key).toBe("core:principalStatus");
     expect(authSubjectStatus.values.key).toBe("core:authSubjectStatus");
     expect(principalRoleBindingStatus.values.key).toBe("core:principalRoleBindingStatus");
+    expect(admissionBootstrapMode.values.key).toBe("core:admissionBootstrapMode");
+    expect(admissionSignupPolicy.values.key).toBe("core:admissionSignupPolicy");
     expect(principal.values.key).toBe("core:principal");
     expect(authSubjectProjection.values.key).toBe("core:authSubjectProjection");
     expect(principalRoleBinding.values.key).toBe("core:principalRoleBinding");
+    expect(admissionPolicy.values.key).toBe("core:admissionPolicy");
     expect(stringTypeModule.type.values.icon).toBe(graphIconSeeds.string);
     expect(resolveTypeDefinitionIconId(cardinality)).toBe(graphIconSeeds.tag.id);
     expect(resolvePredicateDefinitionIconId(node.fields.type, coreType)).toBe(
@@ -164,9 +170,12 @@ describe("module entry surfaces", () => {
     expect(canonicalCore.principalRoleBindingStatus.values.key).toBe(
       principalRoleBindingStatus.values.key,
     );
+    expect(canonicalCore.admissionBootstrapMode.values.key).toBe(admissionBootstrapMode.values.key);
+    expect(canonicalCore.admissionSignupPolicy.values.key).toBe(admissionSignupPolicy.values.key);
     expect(canonicalCore.principal.values.key).toBe(principal.values.key);
     expect(canonicalCore.authSubjectProjection.values.key).toBe(authSubjectProjection.values.key);
     expect(canonicalCore.principalRoleBinding.values.key).toBe(principalRoleBinding.values.key);
+    expect(canonicalCore.admissionPolicy.values.key).toBe(admissionPolicy.values.key);
     expect(String(canonicalCore.type.fields.icon.range)).toBe(resolvedTypeId(icon));
     expect(String(canonicalCore.predicate.fields.icon.range)).toBe(resolvedTypeId(icon));
     expect(String(canonicalCore.principal.fields.kind.range)).toBe(resolvedTypeId(principalKind));
@@ -184,6 +193,12 @@ describe("module entry surfaces", () => {
     );
     expect(String(canonicalCore.principalRoleBinding.fields.status.range)).toBe(
       resolvedTypeId(principalRoleBindingStatus),
+    );
+    expect(String(canonicalCore.admissionPolicy.fields.bootstrapMode.range)).toBe(
+      resolvedTypeId(admissionBootstrapMode),
+    );
+    expect(String(canonicalCore.admissionPolicy.fields.signupPolicy.range)).toBe(
+      resolvedTypeId(admissionSignupPolicy),
     );
     expect(canonicalPkm.topic.values.key).toBe(topic.values.key);
     expect(canonicalPkm.topicKind.values.key).toBe(topicKind.values.key);

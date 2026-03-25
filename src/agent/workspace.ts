@@ -69,14 +69,11 @@ export interface IssueRuntimeState {
   parentIssueId?: string;
   parentIssueIdentifier?: string;
   runtimePath: string;
-  sessionId?: string;
   sourceRepoPath?: string;
   status: IssueRuntimeStatus;
   streamIssueId: string;
   streamIssueIdentifier: string;
   streamRuntimePath: string;
-  threadId?: string;
-  turnId?: string;
   updatedAt: string;
   workerId: string;
   worktreePath: string;
@@ -364,25 +361,6 @@ export class CheckoutManager {
 
   async cleanup(workspace: PreparedWorkspace) {
     await this.#writeState(workspace, "idle");
-  }
-
-  async readIssueState(issueIdentifier: string) {
-    return await readIssueRuntimeState(this.#rootDir, issueIdentifier);
-  }
-
-  async recordSessionLaunch(
-    issueIdentifier: string,
-    session: {
-      sessionId: string;
-      threadId: string;
-      turnId: string;
-    },
-  ) {
-    const issue = await this.readIssueState(issueIdentifier);
-    if (!issue) {
-      throw new Error(`issue_runtime_missing:${issueIdentifier}`);
-    }
-    await this.#updateIssueRuntimeState(issue, session);
   }
 
   async complete(workspace: PreparedWorkspace, issue: AgentIssue) {
@@ -1663,15 +1641,12 @@ export class CheckoutManager {
       parentIssueId: issue.parentIssueId,
       parentIssueIdentifier: issue.parentIssueIdentifier,
       runtimePath,
-      sessionId: previousState?.sessionId,
       sourceRepoPath: workspace.sourceRepoPath,
       status,
       streamIssueId: streamIssue.id,
       streamIssueIdentifier: streamIssue.identifier,
       streamRuntimePath:
         workspace.streamRuntimePath ?? this.getStreamRuntimePath(branchOwnerIssue.identifier),
-      threadId: previousState?.threadId,
-      turnId: previousState?.turnId,
       updatedAt: new Date().toISOString(),
       workerId: workspace.workerId,
       worktreePath: workspace.path,
@@ -1691,10 +1666,7 @@ export class CheckoutManager {
         | "interruptedReason"
         | "landedAt"
         | "landedCommitSha"
-        | "sessionId"
         | "status"
-        | "threadId"
-        | "turnId"
       >
     >,
   ) {

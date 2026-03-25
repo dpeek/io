@@ -34,7 +34,7 @@ describe("web auth bridge", () => {
     expect(
       reduceBetterAuthSession({
         session: { id: "session-better-auth" },
-        user: { id: "user-better-auth" },
+        user: { id: "user-better-auth", email: "Operator@Example.com " },
       }),
     ).toEqual({
       sessionId: "session-better-auth",
@@ -44,6 +44,7 @@ describe("web auth bridge", () => {
         providerAccountId: "user-better-auth",
         authUserId: "user-better-auth",
       },
+      email: "operator@example.com",
     });
   });
 
@@ -142,9 +143,9 @@ describe("web auth bridge", () => {
       policyVersion: 5,
       betterAuthSession: {
         session: { id: "session-better-auth" },
-        user: { id: "user-better-auth" },
+        user: { id: "user-better-auth", email: "operator@example.com" },
       },
-      lookupPrincipal({ graphId, subject }) {
+      lookupPrincipal({ graphId, subject, email }) {
         expect(graphId).toBe("graph-1");
         expect(subject).toEqual({
           issuer: "better-auth",
@@ -152,6 +153,7 @@ describe("web auth bridge", () => {
           providerAccountId: "user-better-auth",
           authUserId: "user-better-auth",
         });
+        expect(email).toBe("operator@example.com");
 
         return {
           principalId: "principal-1",

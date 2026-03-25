@@ -14,11 +14,9 @@ describe("workflow live transport client", () => {
     const payload = {
       kind: "workflow-review-register",
       result: {
-        registrationId:
-          "workflow-review:session:test:scope:ops/workflow:review:scope-def:ops/workflow:review:v1:policy:0",
+        registrationId: "workflow-review:session:test:scope:ops/workflow:review",
         sessionId: "session:test",
         principalId: "principal:test",
-        activeScopeId: "scope:ops/workflow:review:scope-def:ops/workflow:review:v1:policy:0",
         scopeId: "scope:ops/workflow:review",
         definitionHash: "scope-def:ops/workflow:review:v1",
         policyFilterVersion: "policy:0",

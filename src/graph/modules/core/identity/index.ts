@@ -149,6 +149,58 @@ export const principalRoleBindingStatusTypeModule = defineDefaultEnumTypeModule(
   principalRoleBindingStatus,
 );
 
+export const admissionApprovalStatus = defineEnum({
+  values: {
+    key: "core:admissionApprovalStatus",
+    name: "Admission Approval Status",
+  },
+  options: {
+    active: {
+      name: "Active",
+    },
+    revoked: {
+      name: "Revoked",
+    },
+  },
+});
+
+export const admissionApprovalStatusTypeModule =
+  defineDefaultEnumTypeModule(admissionApprovalStatus);
+
+export const admissionBootstrapMode = defineEnum({
+  values: {
+    key: "core:admissionBootstrapMode",
+    name: "Admission Bootstrap Mode",
+  },
+  options: {
+    manual: {
+      name: "Manual",
+    },
+    firstUser: {
+      name: "First user",
+    },
+  },
+});
+
+export const admissionBootstrapModeTypeModule = defineDefaultEnumTypeModule(admissionBootstrapMode);
+
+export const admissionSignupPolicy = defineEnum({
+  values: {
+    key: "core:admissionSignupPolicy",
+    name: "Admission Signup Policy",
+  },
+  options: {
+    closed: {
+      name: "Closed",
+    },
+    open: {
+      name: "Open",
+    },
+  },
+});
+
+export const admissionSignupPolicyTypeModule = defineDefaultEnumTypeModule(admissionSignupPolicy);
+
 export const capabilityGrantResourceKind = defineEnum({
   values: {
     key: "core:capabilityGrantResourceKind",
@@ -301,6 +353,97 @@ export const principalRoleBinding = defineType({
         label: "Status",
       },
     }),
+  },
+});
+
+export const admissionPolicy = defineType({
+  values: { key: "core:admissionPolicy", name: "Admission Policy" },
+  fields: {
+    ...node.fields,
+    graphId: requiredIdentityStringField("Graph id"),
+    bootstrapMode: admissionBootstrapModeTypeModule.field({
+      cardinality: "one",
+      meta: {
+        label: "Bootstrap mode",
+      },
+      authority: authorityOwnedIdentityFieldAuthority,
+    }),
+    signupPolicy: admissionSignupPolicyTypeModule.field({
+      cardinality: "one",
+      meta: {
+        label: "Signup policy",
+      },
+      authority: authorityOwnedIdentityFieldAuthority,
+    }),
+    allowedEmailDomain: stringTypeModule.field({
+      cardinality: "many",
+      validate: ({ value }) => validateRequiredStringList("Allowed email domain", value),
+      meta: {
+        label: "Allowed email domain",
+      },
+      filter: {
+        operators: ["equals", "prefix"] as const,
+        defaultOperator: "equals",
+      },
+      authority: authorityOwnedIdentityFieldAuthority,
+    }),
+    firstUserRoleKey: stringTypeModule.field({
+      cardinality: "many",
+      validate: ({ value }) => validateRequiredStringList("First user role key", value),
+      meta: {
+        label: "First user role key",
+      },
+      filter: {
+        operators: ["equals", "prefix"] as const,
+        defaultOperator: "equals",
+      },
+      authority: authorityOwnedIdentityFieldAuthority,
+    }),
+    signupRoleKey: stringTypeModule.field({
+      cardinality: "many",
+      validate: ({ value }) => validateRequiredStringList("Signup role key", value),
+      meta: {
+        label: "Signup role key",
+      },
+      filter: {
+        operators: ["equals", "prefix"] as const,
+        defaultOperator: "equals",
+      },
+      authority: authorityOwnedIdentityFieldAuthority,
+    }),
+  },
+});
+
+export const admissionApproval = defineType({
+  values: { key: "core:admissionApproval", name: "Admission Approval" },
+  fields: {
+    ...node.fields,
+    graphId: requiredIdentityStringField("Graph id"),
+    email: requiredIdentityStringField("Email"),
+    roleKey: stringTypeModule.field({
+      cardinality: "many",
+      validate: ({ value }) => validateRequiredStringList("Role key", value),
+      meta: {
+        label: "Role key",
+      },
+      filter: {
+        operators: ["equals", "prefix"] as const,
+        defaultOperator: "equals",
+      },
+      authority: authorityOwnedIdentityFieldAuthority,
+    }),
+    status: {
+      ...admissionApprovalStatusTypeModule.field({
+        cardinality: "one",
+        onCreate: ({ incoming }) =>
+          incoming ?? resolvedEnumValue(admissionApprovalStatus.values.active),
+        meta: {
+          label: "Status",
+        },
+        authority: authorityOwnedIdentityFieldAuthority,
+      }),
+      createOptional: true as const,
+    },
   },
 });
 

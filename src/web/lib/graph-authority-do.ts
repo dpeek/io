@@ -43,10 +43,6 @@ import {
 } from "./server-routes.js";
 import { createWorkflowReviewLiveScopeRouter } from "./workflow-live-scope-router.js";
 import { webWorkflowLivePath } from "./workflow-live-transport.js";
-import {
-  handleWorkflowLiveWebSocketUpgrade,
-  type WorkflowLiveWebSocketDependencies,
-} from "./workflow-live-websocket.js";
 import { webWorkflowReadPath } from "./workflow-transport.js";
 
 type SqlRow = Record<string, unknown>;
@@ -147,6 +143,8 @@ type WorkflowProjectionRow = {
 const durableObjectAuthoritySchemaVersion = 1;
 const defaultMaxRetainedTransactions = 128;
 export const webGraphAuthorityBearerShareLookupPath = "/_internal/bearer-share";
+export const webGraphAuthoritySessionPrincipalActivatePath =
+  "/_internal/session-principal/activate";
 const defaultRetainedHistoryPolicy = {
   kind: "transaction-count",
   maxTransactions: defaultMaxRetainedTransactions,
@@ -386,6 +384,10 @@ async function readSessionPrincipalLookupInput(
       ),
       authUserId: requireNonEmptyRequestString(subject.authUserId, "subject.authUserId"),
     },
+    email:
+      typeof decoded.email === "string" && decoded.email.trim().length > 0
+        ? decoded.email.trim().toLowerCase()
+        : undefined,
   };
 }
 
@@ -1395,7 +1397,6 @@ export class WebGraphAuthorityDurableObject {
   private readonly state: DurableObjectStateLike;
   private readonly retainedHistoryPolicy: AuthoritativeGraphRetainedHistoryPolicy;
   private readonly createAuthority: WebGraphAuthorityFactory;
-  private readonly workflowLiveWebSocket: WorkflowLiveWebSocketDependencies;
   private readonly workflowReviewLiveScopeRouter = createWorkflowReviewLiveScopeRouter();
   private authorityPromise: Promise<WebAppAuthority> | null = null;
 
@@ -1404,13 +1405,11 @@ export class WebGraphAuthorityDurableObject {
     env: DurableObjectEnvLike = {},
     options: {
       createAuthority?: WebGraphAuthorityFactory;
-      workflowLiveWebSocket?: WorkflowLiveWebSocketDependencies;
     } = {},
   ) {
     this.state = state;
     this.retainedHistoryPolicy = readRetainedHistoryPolicy(env);
     this.createAuthority = options.createAuthority ?? createWebAppAuthority;
-    this.workflowLiveWebSocket = options.workflowLiveWebSocket ?? {};
     bootstrapDurableObjectAuthoritySchema(this.state.storage);
   }
 
@@ -1464,6 +1463,58 @@ export class WebGraphAuthorityDurableObject {
     try {
       const authority = await this.getAuthority();
       return Response.json(await authority.lookupSessionPrincipal(input), {
+        headers: {
+          "cache-control": "no-store",
+        },
+      });
+    } catch (error) {
+      if (error instanceof WebAppAuthoritySessionPrincipalLookupError) {
+        return Response.json(
+          {
+            error: error.message,
+            code: error.code,
+          },
+          {
+            status: error.status,
+            headers: {
+              "cache-control": "no-store",
+            },
+          },
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async handleSessionPrincipalActivateRequest(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return new Response("Method Not Allowed", {
+        status: 405,
+        headers: { allow: "POST" },
+      });
+    }
+
+    let input: SessionPrincipalLookupInput;
+    try {
+      input = await readSessionPrincipalLookupInput(request);
+    } catch (error) {
+      if (error instanceof SessionPrincipalLookupRequestError) {
+        return Response.json(
+          { error: error.message },
+          {
+            status: error.status,
+            headers: {
+              "cache-control": "no-store",
+            },
+          },
+        );
+      }
+      throw error;
+    }
+
+    try {
+      const authority = await this.getAuthority();
+      return Response.json(await authority.activateSessionPrincipalRoleBindings(input), {
         headers: {
           "cache-control": "no-store",
         },
@@ -1545,6 +1596,12 @@ export class WebGraphAuthorityDurableObject {
       return this.state.blockConcurrencyWhile(() => this.handleBearerShareLookupRequest(request));
     }
 
+    if (url.pathname === webGraphAuthoritySessionPrincipalActivatePath) {
+      return this.state.blockConcurrencyWhile(() =>
+        this.handleSessionPrincipalActivateRequest(request),
+      );
+    }
+
     if (url.pathname === webGraphAuthoritySessionPrincipalLookupPath) {
       return this.state.blockConcurrencyWhile(() =>
         this.handleSessionPrincipalLookupRequest(request),
@@ -1594,16 +1651,6 @@ export class WebGraphAuthorityDurableObject {
     }
 
     if (url.pathname === webWorkflowLivePath) {
-      if ((request.headers.get("upgrade") ?? "").toLowerCase() === "websocket") {
-        return handleWorkflowLiveWebSocketUpgrade(
-          request,
-          authority,
-          this.workflowReviewLiveScopeRouter,
-          authorization,
-          this.workflowLiveWebSocket,
-        );
-      }
-
       return handleWorkflowLiveRequest(
         request,
         authority,
