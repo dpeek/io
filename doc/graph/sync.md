@@ -38,8 +38,14 @@ side:
 - delivered scope:
   `{ kind: "module", moduleId, scopeId, definitionHash, policyFilterVersion }`
 - current materialization:
-  the `ops/workflow` entity family only, using the current request
-  `AuthorizationContext.policyVersion` as the planned `policyFilterVersion`
+  the `ops/workflow` entity family only, using the authority-resolved policy
+  version as the planned `policyFilterVersion`
+- current proof note:
+  that `policyFilterVersion` is sourced from the authority-resolved
+  `getPolicyVersion()` value, which currently defaults to the shared compiled
+  contract in `src/web/lib/policy-version.ts`, so scoped callers must treat a
+  version change as a policy-contract rebuild rather than an ordinary data
+  delta
 
 That first scoped proof is now defined from one shared graph-owned seam:
 

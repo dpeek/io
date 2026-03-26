@@ -19,6 +19,7 @@ import type { BetterAuthWorkerEnv } from "../lib/better-auth.js";
 import {
   WebGraphAuthorityDurableObject,
   webGraphAuthorityBearerShareLookupPath,
+  webGraphAuthorityPolicyVersionPath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "../lib/graph-authority-do.js";
 import { webSerializedQueryPath } from "../lib/query-transport.js";
@@ -324,16 +325,23 @@ function createWorkerEnv(
     readonly assetResponse?: Response;
     readonly authorityResponse?: Response;
     readonly bearerLookupResponse?: Response;
+    readonly policyVersionLookupResponse?: Response;
+    readonly resolvePolicyVersionLookupResponse?: (
+      request: Request,
+    ) => Response | Promise<Response>;
     readonly principalLookupResponse?: Response;
     readonly onAuthorityFetch?: (request: Request) => Promise<void> | void;
     readonly onBearerLookup?: (request: Request) => Promise<void> | void;
+    readonly onPolicyVersionLookup?: (request: Request) => Promise<void> | void;
     readonly onPrincipalLookup?: (request: Request) => Promise<void> | void;
   } = {},
 ) {
   const assetPaths: string[] = [];
   const authorityPaths: string[] = [];
   const bearerLookupPaths: string[] = [];
+  const policyVersionLookupPaths: string[] = [];
   const principalLookupPaths: string[] = [];
+  const forwardedAuthorizations: AuthorizationContext[] = [];
   let forwardedAuthorization: AuthorizationContext | null = null;
 
   const env = {
@@ -357,19 +365,34 @@ function createWorkerEnv(
             if (pathname === webGraphAuthorityBearerShareLookupPath) {
               bearerLookupPaths.push(pathname);
               await input.onBearerLookup?.(request);
-              return input.bearerLookupResponse ?? new Response(null, { status: 404 });
+              return input.bearerLookupResponse?.clone() ?? new Response(null, { status: 404 });
+            }
+
+            if (pathname === webGraphAuthorityPolicyVersionPath) {
+              policyVersionLookupPaths.push(pathname);
+              await input.onPolicyVersionLookup?.(request);
+              if (input.resolvePolicyVersionLookupResponse) {
+                return input.resolvePolicyVersionLookupResponse(request);
+              }
+              return (
+                input.policyVersionLookupResponse?.clone() ??
+                Response.json({
+                  policyVersion: 17,
+                })
+              );
             }
 
             if (pathname === webGraphAuthoritySessionPrincipalLookupPath) {
               principalLookupPaths.push(pathname);
               await input.onPrincipalLookup?.(request);
-              return input.principalLookupResponse ?? new Response(null, { status: 404 });
+              return input.principalLookupResponse?.clone() ?? new Response(null, { status: 404 });
             }
 
             authorityPaths.push(pathname);
             forwardedAuthorization = readRequestAuthorizationContext(request);
+            forwardedAuthorizations.push(forwardedAuthorization);
             await input.onAuthorityFetch?.(request);
-            return input.authorityResponse ?? new Response("ok");
+            return input.authorityResponse?.clone() ?? new Response("ok");
           },
         };
       },
@@ -381,9 +404,13 @@ function createWorkerEnv(
     authorityPaths,
     bearerLookupPaths,
     env,
+    policyVersionLookupPaths,
     principalLookupPaths,
     readForwardedAuthorization() {
       return forwardedAuthorization;
+    },
+    readForwardedAuthorizations() {
+      return [...forwardedAuthorizations];
     },
   };
 }
@@ -572,10 +599,15 @@ describe("web worker route forwarding", () => {
   });
 
   it("forwards authenticated workflow reads over the first web transport route", async () => {
-    const { authorityPaths, env, principalLookupPaths, readForwardedAuthorization } =
-      createWorkerEnv({
-        principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
-      });
+    const {
+      authorityPaths,
+      env,
+      policyVersionLookupPaths,
+      principalLookupPaths,
+      readForwardedAuthorization,
+    } = createWorkerEnv({
+      principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
+    });
     const handler = createWorkerFetchHandler({
       async getBetterAuthSession() {
         return {
@@ -603,6 +635,7 @@ describe("web worker route forwarding", () => {
 
     expect(response.status).toBe(200);
     expect(authorityPaths).toEqual([webWorkflowReadPath]);
+    expect(policyVersionLookupPaths).toEqual([webGraphAuthorityPolicyVersionPath]);
     expect(principalLookupPaths).toEqual([webGraphAuthoritySessionPrincipalLookupPath]);
     expect(readForwardedAuthorization()).toEqual({
       graphId: "graph:global",
@@ -612,15 +645,20 @@ describe("web worker route forwarding", () => {
       roleKeys: ["graph:member"],
       capabilityGrantIds: ["grant-1"],
       capabilityVersion: 4,
-      policyVersion: 0,
+      policyVersion: 17,
     });
   });
 
   it("forwards authenticated generic serialized queries over the shared query route", async () => {
-    const { authorityPaths, env, principalLookupPaths, readForwardedAuthorization } =
-      createWorkerEnv({
-        principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
-      });
+    const {
+      authorityPaths,
+      env,
+      policyVersionLookupPaths,
+      principalLookupPaths,
+      readForwardedAuthorization,
+    } = createWorkerEnv({
+      principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
+    });
     const handler = createWorkerFetchHandler({
       async getBetterAuthSession() {
         return {
@@ -649,6 +687,7 @@ describe("web worker route forwarding", () => {
 
     expect(response.status).toBe(200);
     expect(authorityPaths).toEqual([webSerializedQueryPath]);
+    expect(policyVersionLookupPaths).toEqual([webGraphAuthorityPolicyVersionPath]);
     expect(principalLookupPaths).toEqual([webGraphAuthoritySessionPrincipalLookupPath]);
     expect(readForwardedAuthorization()).toEqual({
       graphId: "graph:global",
@@ -658,7 +697,7 @@ describe("web worker route forwarding", () => {
       roleKeys: ["graph:member"],
       capabilityGrantIds: ["grant-1"],
       capabilityVersion: 4,
-      policyVersion: 0,
+      policyVersion: 17,
     });
   });
 
@@ -668,6 +707,7 @@ describe("web worker route forwarding", () => {
       authorityPaths,
       bearerLookupPaths,
       env,
+      policyVersionLookupPaths,
       principalLookupPaths,
       readForwardedAuthorization,
     } = createWorkerEnv({
@@ -703,6 +743,7 @@ describe("web worker route forwarding", () => {
     expect(response.status).toBe(200);
     expect(authorityPaths).toEqual(["/api/sync"]);
     expect(bearerLookupPaths).toEqual([webGraphAuthorityBearerShareLookupPath]);
+    expect(policyVersionLookupPaths).toEqual([webGraphAuthorityPolicyVersionPath]);
     expect(principalLookupPaths).toEqual([]);
     expect(readForwardedAuthorization()).toEqual({
       graphId: "graph:global",
@@ -712,7 +753,7 @@ describe("web worker route forwarding", () => {
       roleKeys: [],
       capabilityGrantIds: ["grant:bearer-share"],
       capabilityVersion: 0,
-      policyVersion: 0,
+      policyVersion: 17,
     });
   });
 
@@ -734,6 +775,45 @@ describe("web worker route forwarding", () => {
     expect(bearerLookupPaths).toEqual([]);
     expect(await response.json()).toMatchObject({
       code: "grant.invalid",
+    });
+  });
+
+  it("fails closed when the authority cannot resolve the current policy version", async () => {
+    const { authorityPaths, env, policyVersionLookupPaths, principalLookupPaths } = createWorkerEnv(
+      {
+        policyVersionLookupResponse: Response.json(
+          {
+            error: "Policy version unavailable during authority restart.",
+            code: "policy.unavailable",
+          },
+          {
+            status: 503,
+          },
+        ),
+      },
+    );
+    const handler = createWorkerFetchHandler();
+
+    const response = await handler.fetch(
+      new Request("https://web.local/api/tx", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          id: "tx:web:policy-version-failure",
+          ops: [],
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(503);
+    expect(authorityPaths).toEqual([]);
+    expect(policyVersionLookupPaths).toEqual([webGraphAuthorityPolicyVersionPath]);
+    expect(principalLookupPaths).toEqual([]);
+    expect(await response.json()).toMatchObject({
+      code: "policy.unavailable",
     });
   });
 
@@ -829,10 +909,15 @@ describe("web worker route forwarding", () => {
   });
 
   it("forwards authenticated workflow live registrations over the first web transport route", async () => {
-    const { authorityPaths, env, principalLookupPaths, readForwardedAuthorization } =
-      createWorkerEnv({
-        principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
-      });
+    const {
+      authorityPaths,
+      env,
+      policyVersionLookupPaths,
+      principalLookupPaths,
+      readForwardedAuthorization,
+    } = createWorkerEnv({
+      principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
+    });
     const handler = createWorkerFetchHandler({
       async getBetterAuthSession() {
         return {
@@ -859,6 +944,7 @@ describe("web worker route forwarding", () => {
 
     expect(response.status).toBe(200);
     expect(authorityPaths).toEqual([webWorkflowLivePath]);
+    expect(policyVersionLookupPaths).toEqual([webGraphAuthorityPolicyVersionPath]);
     expect(principalLookupPaths).toEqual([webGraphAuthoritySessionPrincipalLookupPath]);
     expect(readForwardedAuthorization()).toEqual({
       graphId: "graph:global",
@@ -868,11 +954,11 @@ describe("web worker route forwarding", () => {
       roleKeys: ["graph:member"],
       capabilityGrantIds: ["grant-1"],
       capabilityVersion: 4,
-      policyVersion: 0,
+      policyVersion: 17,
     });
   });
   it("forwards unauthenticated graph writes with an anonymous authorization context", async () => {
-    const { env, readForwardedAuthorization } = createWorkerEnv();
+    const { env, policyVersionLookupPaths, readForwardedAuthorization } = createWorkerEnv();
     const handler = createWorkerFetchHandler({
       async getBetterAuthSession() {
         return null;
@@ -894,6 +980,7 @@ describe("web worker route forwarding", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(policyVersionLookupPaths).toEqual([webGraphAuthorityPolicyVersionPath]);
     expect(readForwardedAuthorization()).toEqual({
       graphId: "graph:global",
       principalId: null,
@@ -902,26 +989,27 @@ describe("web worker route forwarding", () => {
       roleKeys: [],
       capabilityGrantIds: [],
       capabilityVersion: 0,
-      policyVersion: 0,
+      policyVersion: 17,
     });
   });
 
   it("forwards authenticated graph writes with a session-derived authorization context", async () => {
-    const { env, principalLookupPaths, readForwardedAuthorization } = createWorkerEnv({
-      principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
-      async onPrincipalLookup(request) {
-        expect(await request.json()).toEqual({
-          graphId: "graph:global",
-          email: "operator@example.com",
-          subject: {
-            issuer: "better-auth",
-            provider: "user",
-            providerAccountId: "user-better-auth",
-            authUserId: "user-better-auth",
-          },
-        });
-      },
-    });
+    const { env, policyVersionLookupPaths, principalLookupPaths, readForwardedAuthorization } =
+      createWorkerEnv({
+        principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
+        async onPrincipalLookup(request) {
+          expect(await request.json()).toEqual({
+            graphId: "graph:global",
+            email: "operator@example.com",
+            subject: {
+              issuer: "better-auth",
+              provider: "user",
+              providerAccountId: "user-better-auth",
+              authUserId: "user-better-auth",
+            },
+          });
+        },
+      });
     const handler = createWorkerFetchHandler({
       async getBetterAuthSession() {
         return {
@@ -946,6 +1034,7 @@ describe("web worker route forwarding", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(policyVersionLookupPaths).toEqual([webGraphAuthorityPolicyVersionPath]);
     expect(principalLookupPaths).toEqual([webGraphAuthoritySessionPrincipalLookupPath]);
     expect(readForwardedAuthorization()).toEqual({
       graphId: "graph:global",
@@ -955,8 +1044,78 @@ describe("web worker route forwarding", () => {
       roleKeys: ["graph:member"],
       capabilityGrantIds: ["grant-1"],
       capabilityVersion: 4,
-      policyVersion: 0,
+      policyVersion: 17,
     });
+  });
+
+  it("refreshes the forwarded authorization context when the authority policy version changes between requests", async () => {
+    let policyVersionLookupCount = 0;
+    const { env, policyVersionLookupPaths, principalLookupPaths, readForwardedAuthorizations } =
+      createWorkerEnv({
+        principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
+        resolvePolicyVersionLookupResponse() {
+          policyVersionLookupCount += 1;
+          return Response.json({
+            policyVersion: policyVersionLookupCount === 1 ? 17 : 18,
+          });
+        },
+      });
+    const handler = createWorkerFetchHandler({
+      async getBetterAuthSession() {
+        return {
+          session: { id: "session-better-auth" },
+          user: { id: "user-better-auth" },
+        };
+      },
+    });
+
+    const firstResponse = await handler.fetch(
+      new Request("https://web.local/api/tx", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          id: "tx:web:policy-v17",
+          ops: [],
+        }),
+      }),
+      env,
+    );
+    const secondResponse = await handler.fetch(
+      new Request("https://web.local/api/tx", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          id: "tx:web:policy-v18",
+          ops: [],
+        }),
+      }),
+      env,
+    );
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(policyVersionLookupPaths).toEqual([
+      webGraphAuthorityPolicyVersionPath,
+      webGraphAuthorityPolicyVersionPath,
+    ]);
+    expect(principalLookupPaths).toEqual([
+      webGraphAuthoritySessionPrincipalLookupPath,
+      webGraphAuthoritySessionPrincipalLookupPath,
+    ]);
+    expect(readForwardedAuthorizations()).toEqual([
+      expect.objectContaining({
+        principalId: "principal:user-better-auth",
+        policyVersion: 17,
+      }),
+      expect.objectContaining({
+        principalId: "principal:user-better-auth",
+        policyVersion: 18,
+      }),
+    ]);
   });
 
   it("fails closed when an authenticated request has no graph principal projection", async () => {

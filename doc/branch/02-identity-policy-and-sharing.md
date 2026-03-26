@@ -444,8 +444,38 @@ Identifier rules:
 - graph-target and bearer-target grants publish durable records now, but they do
   not invalidate a principal `capabilityVersion` until those target kinds
   become live inputs to principal projection.
-- `policyVersion` is monotonic for the graph and changes whenever predicate
-  policy or share-surface contracts change.
+- `policyVersion` is the authority-served policy snapshot version for one graph.
+  In the current single-graph web proof, the authoritative source is the
+  compiled contract snapshot in `src/web/lib/policy-version.ts`, not a graph
+  row or client cache.
+- the Worker auth bridge and the authority runtime must import that same
+  `policyVersion` source so request projection and stale-context checks compare
+  against one compiled policy contract.
+- derive `policyVersion` from one explicit compiled path that includes:
+  - resolved predicate policy descriptors for the shipped web graph, so
+    authored policy changes automatically change the served version
+  - an explicit fallback-policy contract epoch for predicates without authored
+    policy metadata
+  - an explicit share-surface contract epoch for validation or lowering changes
+  - an explicit authority policy-evaluator epoch for
+    `authorizeRead(...)`, `authorizeWrite(...)`, `authorizeCommand(...)`, or
+    scoped-sync `policyFilterVersion` semantics
+- do not increment `policyVersion` for ordinary graph-content writes, Better
+  Auth session churn, principal or role mutations, capability grant mutations,
+  or other changes already covered by `capabilityVersion` or normal data sync.
+- current proof behavior:
+  - the Worker fetches the current served value through the Durable Object's
+    internal `GET /_internal/policy-version` seam before it forwards each graph
+    API request
+  - authority-owned read, write, command, and scoped-sync entrypoints reject
+    mismatched request contexts with `policy.stale_context`
+  - a fresh request built after that lookup succeeds without any separate
+    invalidation channel
+- proof anchors:
+  - `src/web/lib/policy-version.test.ts`
+  - `src/web/worker/index.test.ts`
+  - `src/web/lib/authority.test.ts`
+  - `src/web/lib/graph-authority-do.test.ts`
 
 Lifecycle rules:
 
@@ -699,7 +729,11 @@ Stored in the Branch 1 graph tables:
 - capability grants
 - share grants
 - module permission grants or approvals
-- graph-level `policyVersion`
+
+Stored in the current single-graph web authority code:
+
+- the authoritative compiled `policyVersion` constant in
+  `src/web/lib/policy-version.ts`
 
 Stored in the Better Auth store:
 
@@ -738,6 +772,10 @@ Not owned here:
   current graph state before serving protected reads
 - policy model changes must be additive and versioned; older sessions must fail
   closed when they cannot satisfy the current `policyVersion`
+- in the current proof, a `policyVersion` mismatch means the caller projected
+  against an older compiled authority policy contract and must rebuild request
+  authorization context before retrying protected reads, writes, commands, or
+  scoped sync
 - bearer share tokens are stored only as token hashes; plaintext bearer tokens
   are write-only at issuance time
 - the current single-graph bearer proof requires an explicit `expiresAt`

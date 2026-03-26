@@ -6,6 +6,7 @@ import {
   handleWebGraphAuthorityInternalRequest,
   isWebGraphAuthorityInternalPath,
   webGraphAuthorityBearerShareLookupPath,
+  webGraphAuthorityPolicyVersionPath,
   webGraphAuthoritySessionPrincipalActivatePath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "./graph-authority-internal-routes.js";
@@ -36,6 +37,7 @@ type DurableObjectStateLike = SqlDurableObjectStateLike & {
 };
 export {
   webGraphAuthorityBearerShareLookupPath,
+  webGraphAuthorityPolicyVersionPath,
   webGraphAuthoritySessionPrincipalActivatePath,
   webGraphAuthoritySessionPrincipalLookupPath,
 };

@@ -154,8 +154,9 @@ Repo:
   the authority-owned `core:admissionApproval` entity and the bootstrap or
   approval command paths in `src/web/lib/authority.ts`.
 - `capabilityGrantIds` and capability grant lookup are only placeholders today.
-- `policyVersion` is a hardcoded constant (`0`) in both the Worker and the
-  authority runtime.
+- `policyVersion` is currently sourced from one shared authority-owned
+  compiled constant in `src/web/lib/policy-version.ts`, which still serves
+  version `0` for the current proof.
 
 ### Contract And Implementation Gaps That Matter
 
@@ -790,7 +791,9 @@ Current first-slice values still expected in this repo:
 
 - `capabilityGrantIds = []`
 - `capabilityVersion = 0`
-- `policyVersion = 0`
+- `policyVersion =` the current compiled value returned by
+  `GET /_internal/policy-version`, sourced from
+  `src/web/lib/policy-version.ts`
 
 ### Forwarding To The Durable Object
 
@@ -913,7 +916,9 @@ Repo:
 
 Recommended first slice:
 
-- keep `policyVersion = 0` in Worker and authority
+- keep one shared Worker-and-authority `policyVersion` source in
+  `src/web/lib/policy-version.ts`, and have the Worker refresh it from the
+  authority's `GET /_internal/policy-version` route on each graph request
 - keep `capabilityVersion = 0`
 - do not invent partial capability-version semantics before the graph model
   exists
@@ -1112,7 +1117,8 @@ Recommended new or updated tests:
    synchronous first-use repair.
 5. Load role bindings from the graph.
 6. Keep:
-   - `policyVersion = 0`
+   - `policyVersion` sourced from the shared compiled contract snapshot in
+     `src/web/lib/policy-version.ts`
    - `capabilityGrantIds = []`
    - `capabilityVersion = 0`
 7. Do not auto-grant roles on sign-in.
@@ -1199,13 +1205,31 @@ Recommendation:
 
 Current repo state:
 
-- Worker and authority both hardcode `0`
+- Worker and authority both currently use the shared compiled source in
+  `src/web/lib/policy-version.ts`
+- the current proof needs one authoritative source so request projection and
+  stale-context enforcement cannot drift
 
 Recommendation:
 
-- keep `0` for the first slice so the contract stays intact
-- later move to a graph-owned or authority-owned monotonic value shared by both
-  the Worker auth bridge and the authority runtime
+- use one shared authority-owned source now:
+  `src/web/lib/policy-version.ts`
+- treat that value as the compiled policy snapshot version for the current
+  single-graph proof
+- have the Worker fetch the current served value from
+  `GET /_internal/policy-version` before it forwards each graph request so
+  retried requests naturally pick up policy-version bumps
+- import it from both the Worker auth bridge and the authority runtime
+- derive it from one explicit contract snapshot path:
+  resolved predicate policies for the shipped web graph plus dedicated epoch
+  inputs for fallback-policy lowering, share-surface validation/lowering, and
+  authority evaluator semantics
+- do not advance it for ordinary graph data writes, Better Auth session
+  changes, or principal-target capability changes; those already invalidate
+  through normal request refresh and `capabilityVersion`
+- later, if the proof grows a durable graph-owned policy snapshot record, that
+  record must become the only source both layers read instead of redefining the
+  contract
 
 ### 5. Should Projection Repair Happen Synchronously Or Through Async Mirroring?
 

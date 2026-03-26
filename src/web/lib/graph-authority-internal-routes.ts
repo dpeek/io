@@ -10,6 +10,7 @@ import {
 } from "./authority.js";
 
 export const webGraphAuthorityBearerShareLookupPath = "/_internal/bearer-share";
+export const webGraphAuthorityPolicyVersionPath = "/_internal/policy-version";
 export const webGraphAuthoritySessionPrincipalActivatePath =
   "/_internal/session-principal/activate";
 export const webGraphAuthoritySessionPrincipalLookupPath = "/_internal/session-principal";
@@ -140,6 +141,7 @@ async function readBearerShareLookupInput(request: Request): Promise<BearerShare
 export function isWebGraphAuthorityInternalPath(pathname: string): boolean {
   return (
     pathname === webGraphAuthorityBearerShareLookupPath ||
+    pathname === webGraphAuthorityPolicyVersionPath ||
     pathname === webGraphAuthoritySessionPrincipalActivatePath ||
     pathname === webGraphAuthoritySessionPrincipalLookupPath
   );
@@ -150,6 +152,16 @@ export async function handleWebGraphAuthorityInternalRequest(
   pathname: string,
   authority: Promise<WebAppAuthority>,
 ): Promise<Response> {
+  if (pathname === webGraphAuthorityPolicyVersionPath) {
+    if (request.method !== "GET") {
+      return createMethodNotAllowedResponse("GET");
+    }
+
+    return createNoStoreJsonResponse({
+      policyVersion: (await authority).getPolicyVersion(),
+    });
+  }
+
   if (pathname === webGraphAuthoritySessionPrincipalLookupPath) {
     if (request.method !== "POST") {
       return createMethodNotAllowedResponse("POST");

@@ -18,6 +18,7 @@ import { betterAuthBasePath, getBetterAuth, type BetterAuthWorkerEnv } from "../
 import {
   WebGraphAuthorityDurableObject,
   webGraphAuthorityBearerShareLookupPath,
+  webGraphAuthorityPolicyVersionPath,
   webGraphAuthoritySessionPrincipalActivatePath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "../lib/graph-authority-do.js";
@@ -46,7 +47,6 @@ interface Env extends BetterAuthWorkerEnv {
 export { WebGraphAuthorityDurableObject };
 
 const webAppGraphId = "graph:global";
-const webAppPolicyVersion = 0;
 const betterAuthCookieMarker = "better-auth";
 const webAppActivateAccessPath = "/api/access/activate";
 export const webAppBootstrapPath = "/api/bootstrap";
@@ -72,10 +72,16 @@ export type WorkerBearerShareLookup = (
   },
 ) => Promise<BearerShareProjection | null>;
 
+export type WorkerPolicyVersionLookup = (context: {
+  readonly env: Env;
+  readonly request: Request;
+}) => Promise<number>;
+
 export type WorkerFetchDependencies = {
   readonly getBetterAuthSession?: WorkerBetterAuthSessionLookup;
   readonly lookupPrincipal?: WorkerPrincipalLookup;
   readonly lookupBearerShare?: WorkerBearerShareLookup;
+  readonly lookupPolicyVersion?: WorkerPolicyVersionLookup;
 };
 
 export class BetterAuthSessionVerificationError extends Error {
@@ -108,6 +114,18 @@ export class GraphBearerShareLookupError extends Error {
   constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "GraphBearerShareLookupError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export class GraphPolicyVersionLookupError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "GraphPolicyVersionLookupError";
     this.status = status;
     this.code = code;
   }
@@ -312,6 +330,36 @@ async function lookupGraphBearerShare(
   );
 }
 
+async function lookupGraphPolicyVersion(context: {
+  readonly env: Env;
+  readonly request: Request;
+}): Promise<number> {
+  const response = await getGraphAuthorityFetcher(context.env).fetch(
+    new Request(new URL(webGraphAuthorityPolicyVersionPath, context.request.url)),
+  );
+  if (response.ok) {
+    const payload = (await response.json()) as {
+      readonly policyVersion?: unknown;
+    };
+    if (typeof payload.policyVersion === "number" && Number.isInteger(payload.policyVersion)) {
+      return payload.policyVersion;
+    }
+
+    throw new GraphPolicyVersionLookupError(
+      "Graph authority returned an invalid policy-version payload.",
+      503,
+      "policy.invalid",
+    );
+  }
+
+  const payload = await readLookupPrincipalResponse(response);
+  throw new GraphPolicyVersionLookupError(
+    payload.error ?? "Unable to resolve the current graph policy version for this request.",
+    response.status,
+    payload.code,
+  );
+}
+
 function readRequestBearerShareToken(request: Request): string | undefined {
   const authorization = request.headers.get("authorization");
   if (!authorization) {
@@ -338,6 +386,10 @@ export async function createRequestAuthorizationContext(
   env: Env,
   dependencies: WorkerFetchDependencies = {},
 ) {
+  const policyVersion = await (dependencies.lookupPolicyVersion ?? lookupGraphPolicyVersion)({
+    env,
+    request,
+  });
   const bearerShareToken = readRequestBearerShareToken(request);
   if (bearerShareToken) {
     const url = new URL(request.url);
@@ -350,7 +402,7 @@ export async function createRequestAuthorizationContext(
 
     return projectBearerShareToken({
       graphId: webAppGraphId,
-      policyVersion: webAppPolicyVersion,
+      policyVersion,
       token: bearerShareToken,
       lookupBearerShare(input) {
         return (dependencies.lookupBearerShare ?? lookupGraphBearerShare)(input, {
@@ -363,7 +415,7 @@ export async function createRequestAuthorizationContext(
 
   return createWorkerAuthorizationContext({
     graphId: webAppGraphId,
-    policyVersion: webAppPolicyVersion,
+    policyVersion,
     betterAuthSession: await (dependencies.getBetterAuthSession ?? getRequestBetterAuthSession)(
       request,
       env,
@@ -408,6 +460,7 @@ function createGraphAuthorizationErrorResponse(error: unknown): Response | null 
     !(error instanceof BetterAuthSessionVerificationError) &&
     !(error instanceof BetterAuthSessionReductionError) &&
     !(error instanceof GraphBearerShareLookupError) &&
+    !(error instanceof GraphPolicyVersionLookupError) &&
     !(error instanceof GraphPrincipalLookupError) &&
     !(error instanceof SessionPrincipalProjectionError)
   ) {

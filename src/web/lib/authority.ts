@@ -21,7 +21,6 @@ import {
   createStore,
   createTypeClient,
   edgeId,
-  fieldPolicyDescriptor,
   GraphValidationError,
   type GraphCommandPolicy,
   type GraphFieldAuthority,
@@ -45,6 +44,7 @@ import {
   type QueryResultPage,
   type WebPrincipalSummary,
   readPredicateValue as decodePredicateValue,
+  resolveFieldPolicyDescriptor,
   type SerializedQueryRequest,
   type SerializedQueryResponse,
   SerializedQueryValidationError,
@@ -99,6 +99,7 @@ import type {
 } from "./auth-bridge.js";
 import { seedExampleGraph } from "./example-data.js";
 import { planRecordedMutation } from "./mutation-planning.js";
+import { webAppPolicyVersion } from "./policy-version.js";
 import {
   buildSecretHandleName,
   secretFieldEntityIdRequiredMessage,
@@ -370,6 +371,7 @@ export type WebAppAuthority = Omit<
   activateSessionPrincipalRoleBindings(
     input: SessionPrincipalLookupInput,
   ): Promise<SessionPrincipalProjection>;
+  getPolicyVersion(): number;
   lookupBearerShare(input: BearerShareLookupInput): Promise<BearerShareProjection>;
   lookupSessionPrincipal(
     input: SessionPrincipalLookupInput,
@@ -422,6 +424,7 @@ export type WebAppAuthority = Omit<
 export type WebAppAuthorityOptions = {
   readonly graph?: WebAppAuthorityGraph;
   readonly onWorkflowReviewInvalidation?: (invalidation: InvalidationEvent) => void;
+  readonly policyVersion?: number;
   readonly retainedHistoryPolicy?: AuthoritativeGraphRetainedHistoryPolicy;
   readonly seedExampleGraph?: boolean;
 };
@@ -436,7 +439,6 @@ const principalKindPredicateId = edgeId(core.principal.fields.kind);
 const principalStatusPredicateId = edgeId(core.principal.fields.status);
 const principalCapabilityVersionPredicateId = edgeId(core.principal.fields.capabilityVersion);
 const graphWriteTransactionValidationKey = "$sync:tx";
-const webAppAuthorityPolicyVersion = 0;
 const webAppGraphId = "graph:global";
 const authorityRoleKey = "graph:authority";
 const graphMemberRoleKey = "graph:member";
@@ -696,35 +698,17 @@ function formatPolicyErrorMessage(error: PolicyError): string {
   return `${error.code}: ${error.message}`;
 }
 
-function createFallbackPolicyDescriptor(
-  field: CompiledFieldDefinition["field"],
-): PredicatePolicyDescriptor {
-  const transportVisibility = field.authority?.visibility ?? "replicated";
-  const requiredWriteScope = field.authority?.write ?? "client-tx";
-  return {
-    predicateId: edgeId(field),
-    transportVisibility,
-    requiredWriteScope,
-    readAudience: transportVisibility === "authority-only" ? "authority" : "public",
-    writeAudience: requiredWriteScope === "client-tx" ? "graph-member-edit" : "authority",
-    shareable: false,
-  } satisfies PredicatePolicyDescriptor;
-}
-
-function resolveCompiledFieldPolicy(
-  field: CompiledFieldDefinition["field"],
-): PredicatePolicyDescriptor {
-  return fieldPolicyDescriptor(field) ?? createFallbackPolicyDescriptor(field);
-}
-
-function assertCurrentPolicyVersion(authorization: AuthorizationContext): PolicyError | undefined {
-  if (authorization.policyVersion === webAppAuthorityPolicyVersion) {
+function assertCurrentPolicyVersion(
+  authorization: AuthorizationContext,
+  authorityPolicyVersion: number,
+): PolicyError | undefined {
+  if (authorization.policyVersion === authorityPolicyVersion) {
     return undefined;
   }
 
   return {
     code: "policy.stale_context",
-    message: `Authorization context policy version "${authorization.policyVersion}" does not match authority policy version "${webAppAuthorityPolicyVersion}". Refresh the authorization context and retry.`,
+    message: `Authorization context policy version "${authorization.policyVersion}" does not match authority policy version "${authorityPolicyVersion}". Refresh the authorization context and retry.`,
     retryable: false,
     refreshRequired: true,
   };
@@ -757,9 +741,10 @@ function assertCurrentCapabilityVersion(
 function assertCurrentAuthorizationVersion(
   store: Store,
   authorization: AuthorizationContext,
+  authorityPolicyVersion: number,
 ): PolicyError | undefined {
   return (
-    assertCurrentPolicyVersion(authorization) ??
+    assertCurrentPolicyVersion(authorization, authorityPolicyVersion) ??
     assertCurrentCapabilityVersion(store, authorization)
   );
 }
@@ -893,7 +878,7 @@ function flattenSecretFieldDefinitions(
         fieldLabel: getFieldLabel(value),
         ownerTypeIds: new Set([ownerTypeId]),
         pathLabel: [...path, fieldName].join("."),
-        policy: resolveCompiledFieldPolicy(value),
+        policy: resolveFieldPolicyDescriptor(value)!,
       });
       continue;
     }
@@ -1301,7 +1286,7 @@ function filterModuleScopedWriteResult(
 
 function planSyncScope(
   scope: WebAppAuthoritySyncScopeRequest | undefined,
-  authorization: AuthorizationContext,
+  authorityPolicyVersion: number,
 ): PlannedWebAppAuthorityScope | undefined {
   if (isGraphScopeRequest(scope)) return undefined;
 
@@ -1315,7 +1300,7 @@ function planSyncScope(
   return {
     scope: createModuleReadScope(
       workflowReviewModuleReadScope,
-      createPolicyFilterVersion(authorization.policyVersion),
+      createPolicyFilterVersion(authorityPolicyVersion),
     ),
     typeIds: workflowModuleEntityTypeIds,
   };
@@ -2082,13 +2067,9 @@ function readSessionPrincipalProjection(
   store: Store,
   principalId: string,
   graphId: string,
+  policyVersion: number = webAppPolicyVersion,
 ): SessionPrincipalProjection | null {
-  const summary = readWebPrincipalSummary(
-    store,
-    principalId,
-    graphId,
-    webAppAuthorityPolicyVersion,
-  );
+  const summary = readWebPrincipalSummary(store, principalId, graphId, policyVersion);
   if (!summary) return null;
 
   return {
@@ -2105,13 +2086,16 @@ function readProjectionSessionPrincipalProjection(
   store: Store,
   projectionId: string,
   graphId: string,
+  policyVersion: number = webAppPolicyVersion,
 ): SessionPrincipalProjection | null {
   const principalId = getFirstObject(
     store,
     projectionId,
     authSubjectProjectionPrincipalPredicateId,
   );
-  return principalId ? readSessionPrincipalProjection(store, principalId, graphId) : null;
+  return principalId
+    ? readSessionPrincipalProjection(store, principalId, graphId, policyVersion)
+    : null;
 }
 
 function readAuthUserPrincipalIds(store: Store, graphId: string, authUserId: string): string[] {
@@ -2953,8 +2937,13 @@ function createReadableReplicationAuthorizer(
   store: Store,
   authorization: AuthorizationContext,
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+  authorityPolicyVersion: number = webAppPolicyVersion,
 ): ReplicationReadAuthorizer {
-  const staleContextError = assertCurrentAuthorizationVersion(store, authorization);
+  const staleContextError = assertCurrentAuthorizationVersion(
+    store,
+    authorization,
+    authorityPolicyVersion,
+  );
   if (staleContextError) {
     throw createReadPolicyError(staleContextError);
   }
@@ -3014,8 +3003,13 @@ function assertWorkflowProjectionReadable(
   store: Store,
   authorization: AuthorizationContext,
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+  authorityPolicyVersion: number = webAppPolicyVersion,
 ): void {
-  const staleContextError = assertCurrentAuthorizationVersion(store, authorization);
+  const staleContextError = assertCurrentAuthorizationVersion(
+    store,
+    authorization,
+    authorityPolicyVersion,
+  );
   if (staleContextError) {
     throw createWorkflowProjectionPolicyError(staleContextError);
   }
@@ -3042,11 +3036,12 @@ function assertTransactionAuthorized(
   transaction: GraphWriteTransaction,
   snapshot: StoreSnapshot,
   authorization: AuthorizationContext,
+  authorityPolicyVersion: number,
   writeScope: AuthoritativeWriteScope,
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
 ): void {
   const store = createStore(snapshot);
-  const policyVersionError = assertCurrentPolicyVersion(authorization);
+  const policyVersionError = assertCurrentPolicyVersion(authorization, authorityPolicyVersion);
   const capabilityVersionError = policyVersionError
     ? undefined
     : assertCurrentCapabilityVersion(store, authorization);
@@ -3161,12 +3156,17 @@ function createAdmissionApprovalCommandPolicy(): GraphCommandPolicy {
 function assertCommandAuthorized(input: {
   readonly authorization: AuthorizationContext;
   readonly store: Store;
+  readonly authorityPolicyVersion?: number;
   readonly commandKey: string;
   readonly commandPolicy: GraphCommandPolicy;
   readonly touchedPredicates: readonly AuthorizationDecisionTarget[];
   readonly writeScope: AuthoritativeWriteScope;
 }): void {
-  const staleContextError = assertCurrentAuthorizationVersion(input.store, input.authorization);
+  const staleContextError = assertCurrentAuthorizationVersion(
+    input.store,
+    input.authorization,
+    input.authorityPolicyVersion ?? webAppPolicyVersion,
+  );
   if (staleContextError) {
     throw createCommandPolicyError(staleContextError);
   }
@@ -3325,6 +3325,7 @@ export async function createWebAppAuthority(
   storage: WebAppAuthorityStorage,
   options: WebAppAuthorityOptions = {},
 ): Promise<WebAppAuthority> {
+  const authorityPolicyVersion = options.policyVersion ?? webAppPolicyVersion;
   const graph = options.graph ?? webAppGraph;
   const persistedState = await storage.load();
   const persistedWorkflowProjection = persistedState
@@ -3458,6 +3459,7 @@ export async function createWebAppAuthority(
     const staleContextError = assertCurrentAuthorizationVersion(
       authority.store,
       options.authorization,
+      authorityPolicyVersion,
     );
     if (staleContextError) {
       throw createReadPolicyError(staleContextError);
@@ -4017,7 +4019,7 @@ export async function createWebAppAuthority(
           ...(options.authorization.principalId
             ? { principalId: options.authorization.principalId }
             : {}),
-          policyFilterVersion: createPolicyFilterVersion(options.authorization.policyVersion),
+          policyFilterVersion: createPolicyFilterVersion(authorityPolicyVersion),
         },
       });
 
@@ -4046,7 +4048,12 @@ export async function createWebAppAuthority(
   }
 
   function createAuthorizedWorkflowProjection(authorization: AuthorizationContext) {
-    assertWorkflowProjectionReadable(authority.store, authorization, compiledFieldIndex);
+    assertWorkflowProjectionReadable(
+      authority.store,
+      authorization,
+      compiledFieldIndex,
+      authorityPolicyVersion,
+    );
     if (retainedWorkflowProjectionRef.current) {
       try {
         return createWorkflowProjectionIndexFromRetainedState(
@@ -4097,6 +4104,7 @@ export async function createWebAppAuthority(
     const staleContextError = assertCurrentAuthorizationVersion(
       authority.store,
       options.authorization,
+      authorityPolicyVersion,
     );
     if (staleContextError) {
       throw createReadPolicyError(staleContextError);
@@ -4110,7 +4118,7 @@ export async function createWebAppAuthority(
       );
     }
 
-    const plannedScope = planSyncScope(workflowReviewModuleReadScope, options.authorization);
+    const plannedScope = planSyncScope(workflowReviewModuleReadScope, authorityPolicyVersion);
     if (!plannedScope) {
       throw new WebAppAuthorityWorkflowLiveScopeError(
         500,
@@ -4155,8 +4163,9 @@ export async function createWebAppAuthority(
       authority.store,
       options.authorization,
       compiledFieldIndex,
+      authorityPolicyVersion,
     );
-    const plannedScope = planSyncScope(options.scope, options.authorization);
+    const plannedScope = planSyncScope(options.scope, authorityPolicyVersion);
     const payload = authority.createSyncPayload({
       authorizeRead,
       freshness: options.freshness,
@@ -4190,6 +4199,7 @@ export async function createWebAppAuthority(
       transaction,
       snapshot,
       options.authorization,
+      authorityPolicyVersion,
       writeScope,
       compiledFieldIndex,
     );
@@ -4225,8 +4235,9 @@ export async function createWebAppAuthority(
       authority.store,
       options.authorization,
       compiledFieldIndex,
+      authorityPolicyVersion,
     );
-    const plannedScope = planSyncScope(options.scope, options.authorization);
+    const plannedScope = planSyncScope(options.scope, authorityPolicyVersion);
     if (after && plannedScope) {
       const currentPayload = authority.createSyncPayload({
         authorizeRead,
@@ -4336,6 +4347,10 @@ export async function createWebAppAuthority(
     return readBearerShareProjection(authority.store, input);
   }
 
+  function getPolicyVersion(): number {
+    return authorityPolicyVersion;
+  }
+
   async function lookupSessionPrincipal(
     input: SessionPrincipalLookupInput,
     options: WebAppAuthoritySessionPrincipalLookupOptions = {},
@@ -4351,6 +4366,7 @@ export async function createWebAppAuthority(
         authority.store,
         exactProjectionId,
         input.graphId,
+        authorityPolicyVersion,
       );
       if (resolved) {
         return resolved;
@@ -4431,6 +4447,7 @@ export async function createWebAppAuthority(
       authority.store,
       repaired.result.projectionId,
       input.graphId,
+      authorityPolicyVersion,
     );
     if (resolved) return resolved;
 
@@ -4476,8 +4493,12 @@ export async function createWebAppAuthority(
     }
 
     return (
-      readSessionPrincipalProjection(authority.store, resolved.principalId, input.graphId) ??
-      resolved
+      readSessionPrincipalProjection(
+        authority.store,
+        resolved.principalId,
+        input.graphId,
+        authorityPolicyVersion,
+      ) ?? resolved
     );
   }
 
@@ -4577,6 +4598,7 @@ export async function createWebAppAuthority(
     );
     assertCommandAuthorized({
       authorization: options.authorization,
+      authorityPolicyVersion,
       store: authority.store,
       commandKey: writeSecretFieldCommandKey,
       commandPolicy: createWriteSecretFieldCommandPolicy(predicateId),
@@ -4780,6 +4802,7 @@ export async function createWebAppAuthority(
 
     assertCommandAuthorized({
       authorization: options.authorization,
+      authorityPolicyVersion,
       store: authority.store,
       commandKey: setAdmissionApprovalCommandKey,
       commandPolicy: createAdmissionApprovalCommandPolicy(),
@@ -4852,6 +4875,7 @@ export async function createWebAppAuthority(
     applyTransaction,
     createSyncPayload,
     getIncrementalSyncResult,
+    getPolicyVersion,
     lookupBearerShare,
     lookupSessionPrincipal,
     planWorkflowReviewLiveRegistration,

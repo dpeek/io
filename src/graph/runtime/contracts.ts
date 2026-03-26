@@ -174,6 +174,15 @@ export type CapabilityGrant = {
 
 export const shareSurfaceKinds = ["entity-predicate-slice"] as const;
 
+/**
+ * Explicit policy-contract epoch for share-surface validation and lowering.
+ *
+ * Bump this when share-surface shape, validation, or linked capability-grant
+ * lowering changes in a way that affects whether the same stored graph state
+ * is readable or valid.
+ */
+export const shareSurfaceContractVersion = 0;
+
 export type ShareSurfaceKind = (typeof shareSurfaceKinds)[number];
 
 /**

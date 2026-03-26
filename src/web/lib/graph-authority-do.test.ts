@@ -44,9 +44,11 @@ import {
 import {
   WebGraphAuthorityDurableObject,
   webGraphAuthorityBearerShareLookupPath,
+  webGraphAuthorityPolicyVersionPath,
   webGraphAuthoritySessionPrincipalActivatePath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "./graph-authority-do.js";
+import { webAppPolicyVersion } from "./policy-version.js";
 import { webSerializedQueryPath } from "./query-transport.js";
 import {
   encodeRequestAuthorizationContext,
@@ -353,7 +355,7 @@ type TestDurableObjectOptions = NonNullable<
 
 const testAuthorization = createAnonymousAuthorizationContext({
   graphId: "graph:test",
-  policyVersion: 0,
+  policyVersion: webAppPolicyVersion,
 });
 
 const testAuthorityAuthorization = {
@@ -500,6 +502,13 @@ function createSessionPrincipalActivationRequest(
       ...init,
     },
   );
+}
+
+function createPolicyVersionRequest(init: RequestInit = {}): Request {
+  return new Request(`https://graph-authority.local${webGraphAuthorityPolicyVersionPath}`, {
+    method: "GET",
+    ...init,
+  });
 }
 
 function createBearerShareLookupRequest(
@@ -1045,6 +1054,18 @@ describe("web graph authority durable object", () => {
       principal: first.principalId,
       providerAccountId: lookupInput.subject.providerAccountId,
       status: core.authSubjectStatus.values.active.id,
+    });
+  });
+
+  it("returns the authority policy version through the internal lookup route", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+
+    const response = await durableObject.fetch(createPolicyVersionRequest());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      policyVersion: webAppPolicyVersion,
     });
   });
 
@@ -1624,6 +1645,86 @@ describe("web graph authority durable object", () => {
     });
   });
 
+  it("serves the new policy version, rejects stale sync contexts, and succeeds again after refresh", async () => {
+    const initialPolicyVersion = 7;
+    const nextPolicyVersion = 8;
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(
+      state,
+      {},
+      {
+        createAuthority(storage, authorityOptions) {
+          return createTestWebAppAuthority(storage, {
+            ...authorityOptions,
+            policyVersion: initialPolicyVersion,
+          });
+        },
+      },
+    );
+
+    const initialResponse = await durableObject.fetch(
+      createAuthorizedRequest(
+        "https://graph-authority.local/api/sync",
+        {},
+        {
+          ...testAuthorityAuthorization,
+          policyVersion: initialPolicyVersion,
+        },
+      ),
+    );
+
+    expect(initialResponse.status).toBe(200);
+
+    const restarted = createTestDurableObject(
+      state,
+      {},
+      {
+        createAuthority(storage, authorityOptions) {
+          return createTestWebAppAuthority(storage, {
+            ...authorityOptions,
+            policyVersion: nextPolicyVersion,
+          });
+        },
+      },
+    );
+
+    const staleResponse = await restarted.fetch(
+      createAuthorizedRequest(
+        "https://graph-authority.local/api/sync",
+        {},
+        {
+          ...testAuthorityAuthorization,
+          policyVersion: initialPolicyVersion,
+        },
+      ),
+    );
+
+    expect(staleResponse.status).toBe(409);
+    expect(await staleResponse.json()).toEqual({
+      error: expect.stringContaining("policy.stale_context"),
+    });
+
+    const policyVersionResponse = await restarted.fetch(createPolicyVersionRequest());
+
+    expect(policyVersionResponse.status).toBe(200);
+    expect(await policyVersionResponse.json()).toEqual({
+      policyVersion: nextPolicyVersion,
+    });
+
+    const refreshedResponse = await restarted.fetch(
+      createAuthorizedRequest(
+        "https://graph-authority.local/api/sync",
+        {},
+        {
+          ...testAuthorityAuthorization,
+          policyVersion: nextPolicyVersion,
+        },
+      ),
+    );
+
+    expect(refreshedResponse.status).toBe(200);
+  });
+
   it("serves project branch scope reads over the durable workflow route", async () => {
     const { state } = createSqliteDurableObjectState();
     const durableObject = createTestDurableObject(state);
@@ -2172,7 +2273,7 @@ describe("web graph authority durable object", () => {
         principalId: testAuthorityAuthorization.principalId,
         scopeId: workflowReviewModuleReadScope.scopeId,
         definitionHash: workflowReviewModuleReadScope.definitionHash,
-        policyFilterVersion: "policy:0",
+        policyFilterVersion: `policy:${webAppPolicyVersion}`,
       },
     });
     expect(removed.response.status).toBe(200);
@@ -2390,7 +2491,7 @@ describe("web graph authority durable object", () => {
         moduleId: workflowModuleScope.moduleId,
         scopeId: workflowModuleScope.scopeId,
         definitionHash: workflowReviewModuleReadScope.definitionHash,
-        policyFilterVersion: "policy:0",
+        policyFilterVersion: `policy:${webAppPolicyVersion}`,
       },
       completeness: "complete",
       freshness: "current",

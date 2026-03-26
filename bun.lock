@@ -48,6 +48,13 @@
         "wrangler": "^4.74.0",
       },
     },
+    "lib/graph-kernel": {
+      "name": "@io/graph-kernel",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@typescript/native-preview": "^7.0.0-dev.20260226.1",
+      },
+    },
     "lib/web": {
       "name": "@io/web",
       "version": "0.0.1",
@@ -336,6 +343,8 @@
     "@inquirer/figures": ["@inquirer/figures@1.0.15", "", {}, "sha512-t2IEY+unGHOzAaVM5Xx6DEWKeXlDDcNPeDyUpsRc6CUhBfU3VQOEl+Vssh7VNp1dR8MdUJBWhuObjXCsVpjN5g=="],
 
     "@inquirer/type": ["@inquirer/type@3.0.10", "", { "peerDependencies": { "@types/node": ">=18" }, "optionalPeers": ["@types/node"] }, "sha512-BvziSRxfz5Ov8ch0z/n3oijRSEcEsHnhggm4xFZe93DHcUCTlutlq9Ox4SVENAfcRD22UQq7T/atg9Wr3k09eA=="],
+
+    "@io/graph-kernel": ["@io/graph-kernel@workspace:lib/graph-kernel"],
 
     "@io/web": ["@io/web@workspace:lib/web"],
 

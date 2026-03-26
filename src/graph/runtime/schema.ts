@@ -22,6 +22,15 @@ export type PredicatePolicyDescriptor = PredicatePolicyDefinition & {
 };
 
 /**
+ * Explicit policy-contract epoch for fallback descriptor lowering.
+ *
+ * Bump this when the fallback mapping for predicates without authored policy
+ * metadata changes in a way that affects allow/deny or scoped visibility for
+ * the same stored graph state.
+ */
+export const fieldPolicyFallbackContractVersion = 0;
+
+/**
  * Stable field-visibility values published by the shared graph/runtime layer.
  *
  * Downstream branches may depend on this set without coupling to a transport,
@@ -255,6 +264,28 @@ export function fieldPolicyDescriptor(
       ? { requiredCapabilities: [...policy.requiredCapabilities] }
       : {}),
   } satisfies PredicatePolicyDescriptor;
+}
+
+export function createFallbackPolicyDescriptor(
+  field: FieldWithAuthorityPolicy,
+): PredicatePolicyDescriptor {
+  const transportVisibility = fieldVisibility(field);
+  const requiredWriteScope = fieldWritePolicy(field);
+  return {
+    predicateId: edgeId(field),
+    transportVisibility,
+    requiredWriteScope,
+    readAudience: transportVisibility === "authority-only" ? "authority" : "public",
+    writeAudience: requiredWriteScope === "client-tx" ? "graph-member-edit" : "authority",
+    shareable: false,
+  } satisfies PredicatePolicyDescriptor;
+}
+
+export function resolveFieldPolicyDescriptor(
+  field: FieldWithAuthorityPolicy | undefined,
+): PredicatePolicyDescriptor | undefined {
+  if (!field) return undefined;
+  return fieldPolicyDescriptor(field) ?? createFallbackPolicyDescriptor(field);
 }
 export function fieldSecretMetadataVisibility(
   field: { authority?: GraphFieldAuthority } | undefined,

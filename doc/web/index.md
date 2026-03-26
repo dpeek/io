@@ -174,8 +174,9 @@ command registries.
 - `../../src/web/lib/query-transport.ts`: web-owned `POST /api/query` path
   constant plus the shared generic serialized-query client helper re-export
 - `../../src/web/lib/graph-authority-internal-routes.ts`: web-only
-  session-principal lookup-and-repair plus bearer-share hash lookup handlers
-  kept separate from the Durable Object storage composition entrypoint
+  session-principal lookup-and-repair, bearer-share hash lookup, and
+  authoritative policy-version handlers kept separate from the Durable Object
+  storage composition entrypoint
 - `../../src/web/lib/better-auth.ts`: shared Better Auth option/factory helper
   for the dedicated `AUTH_DB` binding, optional trusted-origin wiring, the
   stable `/api/auth` base path, and the minimal email/password browser demo
@@ -267,8 +268,12 @@ command registries.
   that stable contract to the Durable Object authority path. The current worker
   now verifies Better Auth sessions with cookie-cache bypass for graph
   requests, reduces them into the repo's stable `AuthenticatedSession` shape,
-  forwards anonymous requests as anonymous, resolves authenticated subjects
-  through the Durable Object's internal lookup-and-repair seam, serves
+  resolves the current authoritative `policyVersion` through the Durable
+  Object's internal lookup seam before projecting request auth, with that
+  served version sourced from the compiled contract snapshot in
+  `../../src/web/lib/policy-version.ts`, forwards
+  anonymous requests as anonymous, resolves authenticated subjects through the
+  Durable Object's internal lookup-and-repair seam, serves
   `GET /api/bootstrap` as the explicit
   `WebPrincipalBootstrapPayload` seam for anonymous, authenticated, and stale
   browser sessions, exposes the explicit `POST /api/access/activate` initial

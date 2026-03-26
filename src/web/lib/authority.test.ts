@@ -53,6 +53,7 @@ import {
   type WebAppAuthoritySyncOptions,
   type WebAppAuthorityTransactionOptions,
 } from "./authority.js";
+import { webAppPolicyVersion } from "./policy-version.js";
 import {
   handleWebCommandRequest,
   handleSyncRequest,
@@ -205,7 +206,7 @@ function createTestAuthorizationContext(
   return {
     ...createAnonymousAuthorizationContext({
       graphId: "graph:test",
-      policyVersion: 0,
+      policyVersion: webAppPolicyVersion,
     }),
     ...overrides,
   };
@@ -1731,6 +1732,63 @@ describe("web authority", () => {
     expect(storage.read()?.writeHistory.results.length ?? 0).toBe(0);
   });
 
+  it("rejects stale read contexts and invalidates scoped cursors after authority policy-version changes", async () => {
+    const storage = createInMemoryTestWebAppAuthorityStorage();
+    const initialPolicyVersion = 7;
+    const nextPolicyVersion = 8;
+    const initialAuthorization = createAuthorityAuthorizationContext({
+      policyVersion: initialPolicyVersion,
+    });
+    const initialAuthority = await createTestWebAppAuthority(storage.storage, {
+      policyVersion: initialPolicyVersion,
+    });
+    const scopedTotal = initialAuthority.createSyncPayload({
+      authorization: initialAuthorization,
+      scope: workflowModuleScope,
+    });
+
+    expect(initialAuthority.getPolicyVersion()).toBe(initialPolicyVersion);
+    expect(scopedTotal).toMatchObject({
+      scope: expect.objectContaining({
+        policyFilterVersion: `policy:${initialPolicyVersion}`,
+      }),
+    });
+
+    const updatedAuthority = await createTestWebAppAuthority(storage.storage, {
+      policyVersion: nextPolicyVersion,
+    });
+
+    expect(() =>
+      updatedAuthority.createSyncPayload({
+        authorization: initialAuthorization,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: "policy.stale_context",
+        message: expect.stringContaining(`"${nextPolicyVersion}"`),
+        status: 409,
+      }),
+    );
+
+    const refreshedAuthorization = createAuthorityAuthorizationContext({
+      policyVersion: nextPolicyVersion,
+    });
+    const invalidated = updatedAuthority.getIncrementalSyncResult(scopedTotal.cursor, {
+      authorization: refreshedAuthorization,
+      scope: workflowModuleScope,
+    });
+
+    expect(updatedAuthority.getPolicyVersion()).toBe(nextPolicyVersion);
+    expect(invalidated).toMatchObject({
+      mode: "incremental",
+      fallback: "policy-changed",
+      after: scopedTotal.cursor,
+      scope: expect.objectContaining({
+        policyFilterVersion: `policy:${nextPolicyVersion}`,
+      }),
+    });
+  });
+
   it("creates workflow entities through the shared workflow mutation command", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const storage = createInMemoryTestWebAppAuthorityStorage();
@@ -2883,7 +2941,7 @@ describe("web authority", () => {
         moduleId: workflowModuleScope.moduleId,
         scopeId: workflowModuleScope.scopeId,
         definitionHash: workflowReviewModuleReadScope.definitionHash,
-        policyFilterVersion: "policy:0",
+        policyFilterVersion: `policy:${webAppPolicyVersion}`,
       },
       completeness: "complete",
       freshness: "current",
@@ -2982,7 +3040,7 @@ describe("web authority", () => {
       principalId: authorization.principalId!,
       scopeId: workflowReviewModuleReadScope.scopeId,
       definitionHash: workflowReviewModuleReadScope.definitionHash,
-      policyFilterVersion: "policy:0",
+      policyFilterVersion: `policy:${webAppPolicyVersion}`,
       dependencyKeys: workflowReviewDependencyKeys,
     });
   });
@@ -3119,8 +3177,7 @@ describe("web authority", () => {
       expect(error).toMatchObject({
         status: 409,
         code: "policy-changed",
-        message:
-          'Workflow live registration cursor policy "policy:999" does not match the current workflow review policy filter "policy:0". Re-sync and register again.',
+        message: `Workflow live registration cursor policy "policy:999" does not match the current workflow review policy filter "policy:${webAppPolicyVersion}". Re-sync and register again.`,
       });
     }
   });
