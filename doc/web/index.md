@@ -4,8 +4,7 @@
 
 `web` owns the TanStack Router SPA that runs on the Worker shell. It provides
 operator-facing browser surfaces on top of the synced graph runtime, including
-the workflow branch browser, the graph explorer, and the dedicated sync
-monitor.
+the workflow review route, the graph explorer, and the dedicated sync monitor.
 The current explorer now uses the canonical type-first `/graph` route and
 search-param selection model described in `./explorer.md`, plus a shared
 inspector shell, draft-backed generic create flow for supported entity types,
@@ -129,7 +128,18 @@ command registries.
   explorer's generic draft-backed create flow inside a shared dialog with the
   base dialog header and footer primitives
 - `../../src/web/components/workflow-page.tsx`: `/workflow` composition that
-  mounts the shared type browser for `ops:workflowBranch`
+  binds the browser route to the shipped `workflow-review` sync scope and
+  hands startup off to the workflow-native review contract
+- `../../src/web/components/workflow-review-page.tsx`: route-level workflow
+  review startup surface that resolves the initial project, reads
+  `ProjectBranchScope` and `CommitQueueScope`, re-pulls them after
+  workflow-review invalidations through the scoped live transport, and keeps
+  missing or partial workflow-review data explicit instead of widening to
+  whole-graph bootstrap
+- `../../src/web/lib/workflow-review-contract.ts`: explicit `/workflow`
+  startup contract covering scoped bootstrap, route search selection, initial
+  project inference, first-branch selection, and missing-data handling before
+  richer browser workflow composition lands
 - `../../src/web/components/explorer/index.ts`: explorer entrypoint for the
   graph and sync pages
 - `../../src/web/components/explorer/`: graph explorer modules split by
@@ -186,6 +196,10 @@ command registries.
   client so workflow-review callers can register once, scoped-refresh on
   `cursor-advanced`, and recover from inactive pulls with re-registration plus
   another scoped re-pull
+- `../../src/web/lib/workflow-review-refresh.ts`: small browser route refresh
+  loop that keeps `/workflow` registered against workflow-review live
+  invalidations, triggers scoped refreshes only, and tears the registration
+  down on route exit
 - `../../src/web/lib/authority.ts`: shared web authority behavior, secret-field
   mutation flow, the current web-owned `/api/commands` envelope, the shared
   write/command authorization seam, principal-aware sync filtering that omits

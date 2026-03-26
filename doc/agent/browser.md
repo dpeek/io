@@ -57,25 +57,25 @@ surface:
   `src/agent/tui/session-events.ts` and a live subscription seam in
   `src/agent/service.ts`
 
-### What the current browser route actually does
+### What the current browser route does now
 
-The current `/workflow` route is not a workflow-native operator surface.
+The current `/workflow` route now lands on a workflow-native review layout for
+phase 1.
 
-- `src/web/components/workflow-page.tsx` mounts `EntityTypeBrowser` for
-  `ops.workflowBranch`
-- `EntityTypeBrowser` is the generic explorer list/detail shell in
-  `src/web/components/entity-type-browser.tsx`
-- `GraphRuntimeBootstrap` defaults to the whole-graph sync scope, so the route
-  currently boots a general graph runtime rather than the narrow
-  `ops/workflow` review scope
+- `src/web/components/workflow-page.tsx` boots the shipped workflow-review
+  scoped runtime before the page renders
+- `src/web/components/workflow-review-page.tsx` renders browser-owned branch
+  board, branch detail, and commit queue panels
+- startup and empty states stay explicit instead of widening back to the whole
+  graph or dropping into the generic entity browser
 
-This means the current page is:
+That means the browser route now covers the first product-shaped workflow read
+surface, but it still stops short of ship:
 
-- a generic branch record browser
-- driven by raw synced entities rather than the stable workflow review shapes
-- missing branch detail and commit queue composition
-- missing action policy and launch/finalization affordances
-- missing any browser-native session timeline
+- it is read-focused and does not yet launch or finalize work
+- it does not yet render a browser-native retained session feed
+- it still depends on follow-on phases for authoritative session persistence and
+  browser-agent execution
 
 ### What the current TUI proves
 
@@ -252,6 +252,16 @@ The first browser workflow screen should:
   `ProjectBranchScope` and `CommitQueueScope`
 - re-pull on workflow-review invalidations using the existing web live sync
   transport
+
+The current browser proof now includes that invalidation-driven scoped refresh
+path for `/workflow`: the route stays on the shipped workflow-review sync scope,
+registers live interest, and re-runs the workflow review reads after
+`cursor-advanced` invalidations without widening back to whole-graph sync.
+
+The route now also canonicalizes inferred singleton project and branch
+selection back into `/workflow` URL state, while keeping explicitly stale route
+selections visible as degraded review state instead of silently switching to a
+different branch.
 
 Implementation notes:
 

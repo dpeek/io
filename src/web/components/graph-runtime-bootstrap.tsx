@@ -107,6 +107,8 @@ export function useGraphRuntime(): GraphRuntime {
 type GraphRuntimeBootstrapProps = {
   children: ReactNode;
   loadRuntime?: (requestedScope: SyncScopeRequest) => Promise<GraphRuntime>;
+  loadingDescription?: string;
+  loadingTitle?: string;
   requestedScope?: SyncScopeRequest;
 };
 
@@ -120,7 +122,13 @@ function formatBootstrapError(error: unknown): string {
   return String(error);
 }
 
-function LoadingState() {
+function LoadingState({
+  description = `Waiting for the first authoritative snapshot from ${syncUrl}.`,
+  title = "Loading graph runtime",
+}: {
+  readonly description?: string;
+  readonly title?: string;
+}) {
   return (
     <main
       className="flex min-h-[60svh] items-center justify-center px-6"
@@ -128,10 +136,8 @@ function LoadingState() {
     >
       <Card className="border-border/70 bg-card/95 w-full max-w-lg border shadow-sm">
         <CardHeader>
-          <CardTitle>Loading graph runtime</CardTitle>
-          <CardDescription>
-            Waiting for the first authoritative snapshot from <code>{syncUrl}</code>.
-          </CardDescription>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
           <Skeleton className="h-4 w-32" />
@@ -185,6 +191,8 @@ export function GraphRuntimeProvider({
 
 export function GraphRuntimeBootstrap({
   children,
+  loadingDescription,
+  loadingTitle,
   requestedScope = graphSyncScope,
   loadRuntime = loadSharedGraphRuntime,
 }: GraphRuntimeBootstrapProps) {
@@ -212,7 +220,7 @@ export function GraphRuntimeBootstrap({
   }, [attempt, loadRuntime, requestedScope, requestedScopeKey]);
 
   if (state.status === "loading") {
-    return <LoadingState />;
+    return <LoadingState description={loadingDescription} title={loadingTitle} />;
   }
 
   if (state.status === "error") {
