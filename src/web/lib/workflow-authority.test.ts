@@ -372,4 +372,66 @@ describe("workflow authority", () => {
     },
     workflowAuthorityTimeout,
   );
+
+  it(
+    "finalizes a workflow commit and clears the branch active commit through attachCommitResult",
+    async () => {
+      const authorization = createTestAuthorizationContext();
+      const { authority, fixture } =
+        await createTestWebAppAuthorityWithWorkflowFixture(authorization);
+      const commit = await executeWorkflowMutation(authority, authorization, {
+        action: "createCommit",
+        branchId: fixture.branchId,
+        title: "Finalized commit",
+        commitKey: "commit:finalized-commit",
+        order: 0,
+        state: "ready",
+      });
+
+      await executeWorkflowMutation(authority, authorization, {
+        action: "setCommitState",
+        commitId: commit.summary.id,
+        state: "active",
+      });
+      const repositoryCommit = await executeWorkflowMutation(authority, authorization, {
+        action: "createRepositoryCommit",
+        repositoryId: fixture.repositoryId,
+        workflowCommitId: commit.summary.id,
+        title: "Finalized commit",
+        state: "attached",
+        worktree: {
+          path: "/tmp/io-worktree",
+          branchName: "workflow-authority",
+        },
+      });
+
+      const finalized = await executeWorkflowMutation(authority, authorization, {
+        action: "attachCommitResult",
+        repositoryCommitId: repositoryCommit.summary.id,
+        sha: "abc1234",
+      });
+
+      expect(finalized).toMatchObject({
+        action: "attachCommitResult",
+        created: false,
+        summary: {
+          entity: "repository-commit",
+          id: repositoryCommit.summary.id,
+          state: "committed",
+          workflowCommitId: commit.summary.id,
+        },
+      });
+      expect(
+        readProductGraph(authority, authorization).workflowCommit.get(commit.summary.id).state,
+      ).toBe(ops.workflowCommitState.values.committed.id);
+      expect(
+        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId).state,
+      ).toBe(ops.workflowBranchState.values.done.id);
+      expect(
+        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId)
+          .activeCommit,
+      ).toBeUndefined();
+    },
+    workflowAuthorityTimeout,
+  );
 });

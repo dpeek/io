@@ -218,6 +218,14 @@ command registries.
   authenticated session identity, conservative `cursor-advanced` invalidation
   emission for accepted workflow writes through the shared transaction hook
   plus dependency-key fan-out into matching live registrations,
+- `../../src/web/lib/workflow-authority.ts`,
+  `../../src/web/lib/workflow-authority-aggregate-handlers.ts`,
+  `../../src/web/lib/workflow-authority-commit-handlers.ts`,
+  `../../src/web/lib/workflow-authority-shared.ts`: workflow mutation authority
+  routing split between the public mutation dispatcher, aggregate-local
+  project/repository/branch handlers, commit lifecycle handlers, and shared
+  entity lookup plus uniqueness guards so branch reconciliation and
+  repository-commit finalization stay isolated from unrelated mutation paths
   authority-owned auth subject resolution with idempotent first-use
   principal/projection repair plus active role binding lookup, explicit
   bootstrap-operator and admission-approval command paths that seed the first
