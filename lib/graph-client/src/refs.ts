@@ -1,3 +1,4 @@
+import { requireGraphBootstrapCoreSchema } from "@io/graph-bootstrap";
 import type { GraphStore } from "@io/graph-kernel";
 import { edgeId, isEntityType } from "@io/graph-kernel";
 import type {
@@ -18,7 +19,6 @@ import {
   isEdgeOutput,
   isTree,
   readPredicateValue,
-  requireGraphClientCoreSchema,
   sameLogicalValue,
   setNestedValue,
   type GraphClientCoreSchema,
@@ -273,7 +273,7 @@ export function createEntityRef<T extends TypeOutput, Defs extends Record<string
   enumValuesByRange: Map<string, Set<string>>,
   entityLookup: EntityLookup<Defs>,
 ): EntityRef<T, Defs> {
-  const coreSchema = requireGraphClientCoreSchema(namespace);
+  const coreSchema = requireGraphBootstrapCoreSchema(namespace);
   const applyMutation = (
     path: string[],
     fieldName: string,

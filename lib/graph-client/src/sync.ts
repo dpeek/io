@@ -1,3 +1,4 @@
+import { createBootstrappedSnapshot, type GraphBootstrapOptions } from "@io/graph-bootstrap";
 import {
   cloneGraphWriteTransaction,
   createGraphStore,
@@ -27,7 +28,6 @@ import {
   type SyncStatus as PackageSyncStatus,
 } from "@io/graph-sync";
 
-import { createBootstrappedSnapshot } from "./bootstrap-snapshot";
 import {
   GraphValidationError,
   createGraphClient,
@@ -140,6 +140,7 @@ export function createSyncedGraphClient<
   options: {
     pull: SyncSource;
     push?: GraphWriteSink;
+    bootstrap?: GraphBootstrapOptions;
     createTxId?: () => string;
     definitions?: TDefs;
     requestedScope?: SyncScopeRequest;
@@ -147,7 +148,8 @@ export function createSyncedGraphClient<
   },
 ): SyncedGraphClient<TNamespace, TDefs> {
   const definitions = (options.definitions ?? (namespace as unknown as TDefs)) as TDefs;
-  const schemaSnapshot = options.schemaSnapshot ?? createBootstrappedSnapshot(definitions);
+  const schemaSnapshot =
+    options.schemaSnapshot ?? createBootstrappedSnapshot(definitions, options.bootstrap);
   const store = createGraphStore(schemaSnapshot);
   const authoritativeStore = createGraphStore(schemaSnapshot);
   const rawGraph = createGraphClient(store, namespace, definitions);

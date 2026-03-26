@@ -4,6 +4,7 @@ import {
   createAuthoritativeGraphWriteSession,
   createAuthoritativeTotalSyncPayload,
 } from "@io/graph-authority";
+import { bootstrap } from "@io/graph-bootstrap";
 import {
   createHttpGraphClient,
   createSyncedGraphClient,
@@ -31,8 +32,8 @@ import {
   type SyncPayload,
 } from "@io/graph-sync";
 
+import { coreGraphBootstrapOptions } from "../modules/index.js";
 import { pkm } from "../modules/pkm.js";
-import { bootstrap } from "./bootstrap";
 import { core } from "./core";
 import { createIdMap, applyIdMap } from "./identity";
 import { defineType, edgeId, typeId } from "./schema";
@@ -74,8 +75,8 @@ const hiddenGraph = { ...core, ...hiddenCursorNamespace } as const;
 
 function createAuthority() {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, testGraph);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, testGraph, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, testGraph, testDefs);
   graph.item.create({ name: "Seeded item" });
   const writes = createAuthoritativeGraphWriteSession(store, testGraph, {
@@ -134,7 +135,7 @@ function createHiddenCursorAuthority(
   } = {},
 ) {
   const store = createStore();
-  bootstrap(store, hiddenGraph);
+  bootstrap(store, hiddenGraph, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, hiddenGraph);
   const probeId = graph.hiddenCursorProbe.create({
     name: "Hidden Cursor Probe",
@@ -175,6 +176,7 @@ describe("createHttpGraphClient", () => {
     const fetch = createMockFetch(authority);
 
     const client = await createHttpGraphClient(testGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: testDefs,
       fetch,
       createTxId: () => "cli:1",
@@ -192,6 +194,7 @@ describe("createHttpGraphClient", () => {
     ]);
 
     const peer = await createHttpGraphClient(testGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: testDefs,
       fetch,
       createTxId: () => "cli:2",
@@ -233,6 +236,7 @@ describe("createHttpGraphClient", () => {
 
     const client = await createHttpGraphClient(testGraph, {
       bearerToken: "share-token",
+      bootstrap: coreGraphBootstrapOptions,
       createTxId: () => "cli:auth:1",
       definitions: testDefs,
       fetch,
@@ -275,6 +279,7 @@ describe("createHttpGraphClient", () => {
     };
 
     const client = await createHttpGraphClient(testGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: testDefs,
       fetch,
       createTxId: () => "cli:credentials:1",
@@ -337,6 +342,7 @@ describe("createHttpGraphClient", () => {
     };
 
     const client = await createHttpGraphClient(testGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: testDefs,
       fetch,
       requestedScope,
@@ -415,6 +421,7 @@ describe("createHttpGraphClient", () => {
     };
 
     const scopedClient = await createHttpGraphClient(testGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: testDefs,
       fetch,
       requestedScope,
@@ -432,6 +439,7 @@ describe("createHttpGraphClient", () => {
     });
 
     const recovered = await createHttpGraphClient(testGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: testDefs,
       fetch,
     });
@@ -477,6 +485,7 @@ describe("createHttpGraphClient", () => {
     };
 
     const client = await createHttpGraphClient(hiddenGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       fetch,
     });
     const baseCursor = client.sync.getState().cursor;
@@ -568,6 +577,7 @@ describe("createHttpGraphClient", () => {
     };
 
     const client = await createHttpGraphClient(hiddenGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       fetch,
     });
     const baseCursor = client.sync.getState().cursor;
@@ -681,6 +691,7 @@ describe("createHttpGraphClient", () => {
       };
 
       const client = await createHttpGraphClient(testGraph, {
+        bootstrap: coreGraphBootstrapOptions,
         definitions: testDefs,
         fetch,
       });
@@ -707,6 +718,7 @@ describe("createHttpGraphClient", () => {
       });
 
       const recovered = await createHttpGraphClient(testGraph, {
+        bootstrap: coreGraphBootstrapOptions,
         definitions: testDefs,
         fetch,
       });
@@ -728,8 +740,8 @@ describe("createHttpGraphClient", () => {
 
   it("does not resurrect bootstrapped retracted facts during total sync", async () => {
     const authorityStore = createStore();
-    bootstrap(authorityStore, core);
-    bootstrap(authorityStore, pkm);
+    bootstrap(authorityStore, core, coreGraphBootstrapOptions);
+    bootstrap(authorityStore, pkm, coreGraphBootstrapOptions);
 
     const documentTypeId = typeId(pkm.document);
     const documentNamePredicateId = edgeId(core.node.fields.name);
@@ -747,6 +759,7 @@ describe("createHttpGraphClient", () => {
     });
 
     const client = createSyncedGraphClient(pkm, {
+      bootstrap: coreGraphBootstrapOptions,
       createTxId: () => "cli:1",
       definitions: { ...core, ...pkm },
       pull: async () => payload,

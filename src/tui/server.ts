@@ -2,6 +2,7 @@ import { handleExit } from "@io/core/lib";
 import { createHttpGraphClient } from "@io/graph-client";
 
 import { loadWorkflowFile } from "../agent/workflow.js";
+import { coreGraphBootstrapOptions } from "../graph/modules/index.js";
 import {
   createWorkflowProjectionIndex,
   WorkflowProjectionQueryError,
@@ -242,7 +243,11 @@ export async function createWorkflowTuiRuntimeBootstrap(
 ): Promise<WorkflowTuiRuntimeBootstrap> {
   const createGraphClient =
     dependencies.createGraphClient ??
-    (async (namespace, options) => createHttpGraphClient(namespace, options));
+    (async (namespace, options) =>
+      createHttpGraphClient(namespace, {
+        bootstrap: coreGraphBootstrapOptions,
+        ...options,
+      }));
   const createProjection = dependencies.createProjectionIndex ?? createWorkflowProjectionIndex;
 
   let runtimeClient: WorkflowTuiRuntimeClient;

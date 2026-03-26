@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { bootstrap, createStore } from "@io/core/graph";
+import { createStore } from "@io/core/graph";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
 import { core } from "../../core.js";
+import { coreGraphBootstrapOptions } from "../../core/bootstrap.js";
 import { ops } from "../../ops.js";
 import { pkm } from "../../pkm.js";
 import {
@@ -32,9 +34,9 @@ type WorkflowQueryFixtureOptions = {
 
 function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, pkm);
-  bootstrap(store, ops);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, pkm, coreGraphBootstrapOptions);
+  bootstrap(store, ops, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
   const includeRepository = options.includeRepository ?? true;
   const includeRepositoryBranches = options.includeRepositoryBranches ?? includeRepository;

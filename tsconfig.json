@@ -15,6 +15,7 @@
     "resolveJsonModule": true,
     "paths": {
       "@io/graph-authority": ["./lib/graph-authority/src/index.ts"],
+      "@io/graph-bootstrap": ["./lib/graph-bootstrap/src/index.ts"],
       "@io/graph-client": ["./lib/graph-client/src/index.ts"],
       "@io/graph-kernel": ["./lib/graph-kernel/src/index.ts"],
       "@io/graph-projection": ["./lib/graph-projection/src/index.ts"],

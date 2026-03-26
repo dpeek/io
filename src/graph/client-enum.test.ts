@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import { bootstrap, createStore } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { createStore } from "@io/core/graph";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, GraphValidationError, formatValidationPath } from "@io/graph-client";
 
 import { kitchenSink } from "./testing/kitchen-sink.js";
@@ -11,8 +12,8 @@ const kitchenSinkDefs = { ...core, ...kitchenSink } as const;
 describe("enum range client behavior", () => {
   it("accepts valid enum value ids", () => {
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, kitchenSink);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, kitchenSink, coreGraphBootstrapOptions);
     const graph = createGraphClient(store, kitchenSink, kitchenSinkDefs);
 
     const id = graph.record.create({
@@ -28,8 +29,8 @@ describe("enum range client behavior", () => {
 
   it("surfaces unknown enum value ids through the shared validation contract", () => {
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, kitchenSink);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, kitchenSink, coreGraphBootstrapOptions);
     const graph = createGraphClient(store, kitchenSink, kitchenSinkDefs);
 
     let error: unknown;
@@ -66,8 +67,8 @@ describe("enum range client behavior", () => {
 
   it("surfaces invalid many-enum updates through GraphValidationError instead of raw errors", () => {
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, kitchenSink);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, kitchenSink, coreGraphBootstrapOptions);
     const graph = createGraphClient(store, kitchenSink, kitchenSinkDefs);
     const id = graph.record.create({
       name: "Contract",

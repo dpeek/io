@@ -11,7 +11,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 
-import { core } from "../graph/modules/index.js";
+import { core, coreGraphBootstrapOptions } from "../graph/modules/index.js";
 import { ops } from "../graph/modules/ops.js";
 import { pkm } from "../graph/modules/pkm.js";
 import {
@@ -448,6 +448,7 @@ export async function createGraphMcpSession(
   const createClient = async () =>
     (await createHttpGraphClient(namespace, {
       bearerToken: options.bearerToken,
+      bootstrap: coreGraphBootstrapOptions,
       definitions: namespace === graphNamespace ? graphDefinitions : { ...core, ...namespace },
       fetch: options.fetch,
       url: baseUrl,

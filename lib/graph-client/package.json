@@ -17,6 +17,7 @@
     "types": "tsgo --noEmit"
   },
   "dependencies": {
+    "@io/graph-bootstrap": "workspace:*",
     "@io/graph-kernel": "workspace:*",
     "@io/graph-sync": "workspace:*"
   },

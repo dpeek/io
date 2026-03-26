@@ -1,3 +1,7 @@
+import {
+  requireGraphBootstrapCoreSchema,
+  type GraphBootstrapCoreSchema,
+} from "@io/graph-bootstrap";
 import { createGraphStore, type GraphStore } from "@io/graph-kernel";
 import { edgeId, isEntityType, isEnumType, typeId } from "@io/graph-kernel";
 import type {
@@ -43,14 +47,14 @@ import {
   type ClearFieldValue,
   type CreateInputOfType,
   type FlatPredicateEntry,
-  type GraphClientCoreSchema,
   type GraphDeleteValidationResult,
   type GraphMutationValidationResult,
   type GraphValidationIssue,
   type GraphValidationResult,
-  requireGraphClientCoreSchema,
 } from "./core";
 import { commitCreateEntity, commitUpdateEntity } from "./entity-store";
+
+type GraphClientCoreSchema = GraphBootstrapCoreSchema;
 
 function normalizeValidationIssueInputs(
   issues: ValidationIssueInput | ValidationIssueInput[] | void,
@@ -937,7 +941,7 @@ export function validateCreateEntity<T extends TypeOutput>(
     nodeId?: string;
   } = {},
 ): GraphMutationValidationResult {
-  const coreSchema = requireGraphClientCoreSchema(namespace);
+  const coreSchema = requireGraphBootstrapCoreSchema(namespace);
   const now = getStableValidationNow(store);
   const validationNodeId = options.nodeId ?? getStableCreateNodeId(store);
   const validationStore = cloneStoreForValidation(store);
@@ -1124,7 +1128,7 @@ export function validateUpdateEntity<T extends TypeOutput>(
   enumValuesByRange: Map<string, Set<string>>,
   namespace: Record<string, AnyTypeOutput>,
 ): GraphMutationValidationResult {
-  const coreSchema = requireGraphClientCoreSchema(namespace);
+  const coreSchema = requireGraphBootstrapCoreSchema(namespace);
   const requestedChangedPredicateKeys = collectChangedPredicateKeys(
     patch,
     flattenPredicates(typeDef.fields),
@@ -1179,7 +1183,7 @@ export function prepareDeleteEntity<
   typeByKey: Map<string, AnyTypeOutput>,
   namespace: Defs,
 ): GraphDeleteValidationResult {
-  const coreSchema = requireGraphClientCoreSchema(namespace);
+  const coreSchema = requireGraphBootstrapCoreSchema(namespace);
   const handleIssues = validateTypedHandleTarget(store, id, typeDef, typeByKey, coreSchema);
   if (handleIssues.length > 0) {
     return invalidResult(
@@ -1220,7 +1224,7 @@ export function validateGraphStore<const T extends Record<string, AnyTypeOutput>
     event?: ValidationEvent;
   } = {},
 ): GraphValidationResult<void> {
-  const coreSchema = requireGraphClientCoreSchema(namespace);
+  const coreSchema = requireGraphBootstrapCoreSchema(namespace);
   const now = options.now ? cloneDate(options.now) : new Date();
   const phase = options.phase ?? "authoritative";
   const event = options.event ?? "reconcile";

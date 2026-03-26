@@ -1,3 +1,4 @@
+import type { GraphBootstrapOptions } from "@io/graph-bootstrap";
 import type {
   AuthoritativeGraphWriteResult,
   GraphStoreSnapshot,
@@ -31,6 +32,7 @@ export type HttpGraphClientOptions<
   readonly transactionPath?: string;
   readonly fetch?: FetchImpl;
   readonly createTxId?: () => string;
+  readonly bootstrap?: GraphBootstrapOptions;
   readonly requestedScope?: SyncScopeRequest;
 };
 
@@ -217,6 +219,7 @@ export async function createHttpGraphClient<
   }
 
   const client = createSyncedGraphClient(namespace, {
+    bootstrap: options.bootstrap,
     createTxId,
     definitions: options.definitions,
     requestedScope: options.requestedScope,

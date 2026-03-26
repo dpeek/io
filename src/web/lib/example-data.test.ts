@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { bootstrap, createStore } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { createStore } from "@io/core/graph";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
 import { seedExampleGraph } from "./example-data.js";
@@ -12,9 +13,9 @@ const productGraph = { ...core, ...pkm, ...ops } as const;
 
 test("seedExampleGraph backfills workflow data without duplicating older example documents", () => {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, pkm);
-  bootstrap(store, ops);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, pkm, coreGraphBootstrapOptions);
+  bootstrap(store, ops, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
 
   const graphTag = graph.tag.create({

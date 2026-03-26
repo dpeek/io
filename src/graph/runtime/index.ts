@@ -1,4 +1,3 @@
-export * from "./bootstrap";
 export * from "./contracts";
 export * from "./id";
 export * from "./identity";

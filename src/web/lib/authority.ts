@@ -1,7 +1,6 @@
 import {
   type AuthSubjectRef,
   type AnyTypeOutput,
-  bootstrap,
   createStore,
   edgeId,
   type GraphFieldAuthority,
@@ -14,7 +13,7 @@ import {
   type GraphStore,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
   agentSession,
@@ -64,6 +63,7 @@ import {
   type ReplicationReadAuthorizer,
   validateShareGrant,
 } from "@io/graph-authority";
+import { bootstrap } from "@io/graph-bootstrap";
 import {
   collectScalarCodecs,
   collectTypeIndex,
@@ -923,7 +923,7 @@ function getCompiledGraphArtifacts(graph: WebAppAuthorityGraph): CompiledGraphAr
   if (cached) return cached;
 
   const bootstrappedStore = createStore();
-  bootstrap(bootstrappedStore, graph);
+  bootstrap(bootstrappedStore, graph, coreGraphBootstrapOptions);
   const compiled = {
     bootstrappedSnapshot: bootstrappedStore.snapshot(),
     compiledFieldIndex: buildCompiledFieldIndex(graph),

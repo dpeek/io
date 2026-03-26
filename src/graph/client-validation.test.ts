@@ -1,14 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import {
-  bootstrap,
-  createStore,
-  applyIdMap,
-  defineReferenceField,
-  defineType,
-  edgeId,
-} from "@io/core/graph";
-import { core, stringTypeModule } from "@io/core/graph/modules";
+import { createStore, applyIdMap, defineReferenceField, defineType, edgeId } from "@io/core/graph";
+import { core, coreGraphBootstrapOptions, stringTypeModule } from "@io/core/graph/modules";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, GraphValidationError, formatValidationPath } from "@io/graph-client";
 
 import { createTestGraph, testNamespace } from "./test-graph.js";
@@ -56,8 +50,8 @@ function setupGraphWithProtectedNickname() {
   const namespace = applyIdMap({}, { employee }, { strict: false });
   const definitions = { ...core, ...namespace } as const;
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, namespace);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, namespace, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, namespace, definitions);
   const employeeId = graph.employee.create({
     name: "Ada",
@@ -116,8 +110,8 @@ describe("graph validation", () => {
     const namespace = applyIdMap({}, { reviewItem }, { strict: false });
     const definitions = { ...core, ...namespace } as const;
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, namespace);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, namespace, coreGraphBootstrapOptions);
     const graph = createGraphClient(store, namespace, definitions);
 
     for (const edge of store.facts(namespace.reviewItem.values.id)) {
@@ -229,8 +223,8 @@ describe("graph validation", () => {
     const namespace = applyIdMap({}, { employee }, { strict: false });
     const definitions = { ...core, ...namespace } as const;
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, namespace);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, namespace, coreGraphBootstrapOptions);
     const graph = createGraphClient(store, namespace, definitions);
 
     const result = graph.employee.validateCreate({

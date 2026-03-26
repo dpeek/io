@@ -1,12 +1,13 @@
-import { bootstrap, createStore } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { createStore } from "@io/core/graph";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
 import { testDefs, testNamespace } from "./test-graph.js";
 
 const store = createStore();
-bootstrap(store, core);
-bootstrap(store, testNamespace);
+bootstrap(store, core, coreGraphBootstrapOptions);
+bootstrap(store, testNamespace, coreGraphBootstrapOptions);
 
 const graph = createGraphClient(store, testNamespace, testDefs);
 const coreGraph = createGraphClient(store, core);

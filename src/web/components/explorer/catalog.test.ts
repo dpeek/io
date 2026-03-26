@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { bootstrap, createStore, isEntityType } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { createStore, isEntityType } from "@io/core/graph";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
 import { seedExampleGraph } from "../../lib/example-data.js";
@@ -16,9 +17,9 @@ function byKey<T extends { key: string }>(entries: readonly T[]) {
 
 function createCatalogFixture() {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, pkm);
-  bootstrap(store, ops);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, pkm, coreGraphBootstrapOptions);
+  bootstrap(store, ops, coreGraphBootstrapOptions);
 
   const graph = createGraphClient(store, { ...core, ...pkm, ...ops });
   seedExampleGraph(graph);

@@ -2,6 +2,7 @@
 
 import { expect, setDefaultTimeout, test } from "bun:test";
 
+import { bootstrap } from "@io/graph-bootstrap";
 import { createSyncedGraphClient, createGraphClient } from "@io/graph-client";
 import { createTotalSyncPayload } from "@io/graph-sync";
 import { createTestRenderer } from "@opentui/core/testing";
@@ -14,10 +15,8 @@ import {
   useGraphRuntime,
   useGraphSyncState,
 } from "../graph/adapters/react-opentui/index.js";
-import { bootstrap, createStore } from "../graph/index.js";
-import { core } from "../graph/modules/core.js";
-import { ops } from "../graph/modules/ops.js";
-import { pkm } from "../graph/modules/pkm.js";
+import { createStore } from "../graph/index.js";
+import { core, coreGraphBootstrapOptions, ops, pkm } from "../graph/modules/index.js";
 import { useCommitQueueScope, useProjectBranchScope, useWorkflowProjectionIndex } from "./index.js";
 
 (
@@ -34,7 +33,7 @@ function date(value: string): Date {
 
 function createWorkflowRuntimeFixture() {
   const store = createStore();
-  bootstrap(store, productGraph);
+  bootstrap(store, productGraph, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
 
   const projectId = graph.workflowProject.create({
@@ -75,6 +74,7 @@ function createWorkflowRuntimeFixture() {
   });
 
   const runtime = createSyncedGraphClient(productGraph, {
+    bootstrap: coreGraphBootstrapOptions,
     pull: () => createTotalSyncPayload(store, { cursor: "server:workflow:1" }),
   });
 

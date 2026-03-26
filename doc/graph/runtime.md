@@ -5,9 +5,10 @@
 This document is the entry point for agents working on schema authoring, stable
 ids, additive bootstrap, store behavior, or root-safe runtime contracts.
 Authority-owned APIs now live in `@io/graph-authority`, and client-owned APIs
-such as `createGraphClient(...)`,
-`createSyncedGraphClient(...)`, `createHttpGraphClient(...)`, and
-`createBootstrappedSnapshot(...)` now live in `@io/graph-client`.
+such as `createGraphClient(...)`, `createSyncedGraphClient(...)`, and
+`createHttpGraphClient(...)` now live in `@io/graph-client`.
+Bootstrap-owned APIs such as `bootstrap(...)` and
+`createBootstrappedSnapshot(...)` now live in `@io/graph-bootstrap`.
 Shared Branch 3 projection/runtime metadata contracts now live in
 `@io/graph-projection`.
 
@@ -59,30 +60,37 @@ The current implementation keeps ids stable per key and treats rename as an expl
 
 ### Core schema and bootstrap
 
-`../../src/graph/modules/core.ts` and `../../src/graph/runtime/bootstrap.ts` define and materialize the base graph model:
+`../../src/graph/modules/core.ts`, `../../src/graph/modules/core/bootstrap.ts`,
+and `../../lib/graph-bootstrap/src/index.ts` define and materialize the base
+graph model:
 
 - core scalars include string, number, date, boolean, url, email, and slug
 - core entities include `core:node`, `core:type`, `core:predicate`, and `core:enum`
 - the canonical namespace id map lives beside that entrypoint at `../../src/graph/modules/core.json`
-- bootstrap materializes seeded schema entities through the shared validated create path when it
-  owns the full typed shape, then writes the remaining schema metadata facts into the store
-- `bootstrap(store, namespace)` is additive and idempotent for a resolved namespace: reapplying
-  it after repeated startup or restart does not duplicate schema facts or rewrite already
-  materialized schema state
+- `@io/graph-bootstrap` materializes seeded schema entities through the shared
+  validated create path when it owns the full typed shape, then writes the
+  remaining schema metadata facts into the store
+- `bootstrap(store, definitions, options)` is additive and idempotent for a
+  resolved definition slice: reapplying it after repeated startup or restart
+  does not duplicate schema facts or rewrite already materialized schema state
 - bootstrap-owned typed entities pin `createdAt` and `updatedAt` to the canonical
   `2000-01-01T00:00:00.000Z` timestamp so independently bootstrapped stores converge on the same
   logical schema facts during sync and preserve-snapshot merges
 - runtime-created entities keep their ordinary lifecycle timestamps; bootstrap-owned timestamps are
   limited to schema entities and seed entities that bootstrap materializes itself
+- concrete icon catalogs remain domain-owned inputs; the built-in core icon
+  seed catalog and default resolvers live in `../../src/graph/modules/core/icon/seed.ts`
+  and plug into bootstrap through `../../src/graph/modules/core/bootstrap.ts`
 - `core:type.icon` and `core:predicate.icon` track definition-level icons, with inferred defaults
   for enum types (`tag.svg`) and entity-reference predicates (`edge.svg`) before falling back to
   `unknown.svg`
 - schema itself is represented as graph data, not only TypeScript structure
 
-`../../lib/graph-client/src/bootstrap-snapshot.ts` now owns the client-safe
-`createBootstrappedSnapshot(...)` helper. It materializes a fully bootstrapped
-snapshot for local and synced clients without widening the shared runtime back
-into a client barrel.
+`../../lib/graph-bootstrap/src/index.ts` now owns both the additive live-store
+bootstrap runtime and the client-safe `createBootstrappedSnapshot(...)` helper.
+`../../src/graph/modules/core/bootstrap.ts` is the domain-owned adapter that
+supplies the built-in core schema requirements and icon catalog to that package
+without making the catalog part of bootstrap's public identity.
 
 ### Authoritative persistence
 

@@ -1,10 +1,10 @@
 import { createIdMap, applyIdMap, defineType, createStore } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 import { createAuthoritativeGraphWriteSession } from "@io/graph-authority";
+import { createBootstrappedSnapshot } from "@io/graph-bootstrap";
 import {
-  createBootstrappedSnapshot,
   createSyncedGraphClient,
   createGraphClient,
   type SyncedGraphClient,
@@ -59,7 +59,7 @@ type ExampleAuthorityBaseline = {
 let exampleAuthorityBaseline: ExampleAuthorityBaseline | null = null;
 
 function createExampleStore() {
-  return createStore(createBootstrappedSnapshot(exampleGraph));
+  return createStore(createBootstrappedSnapshot(exampleGraph, coreGraphBootstrapOptions));
 }
 
 function getExampleAuthorityBaseline(): ExampleAuthorityBaseline {
@@ -175,6 +175,7 @@ export function createExampleRuntime(
     let client: ExampleSyncedClient;
     const queuedTxIds: string[] = [];
     client = createSyncedGraphClient(exampleGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       pull: (state) =>
         state.cursor ? getIncrementalSyncResult(state.cursor) : createAuthorityTotalSyncPayload(),
       createTxId() {

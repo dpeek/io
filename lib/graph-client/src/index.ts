@@ -7,10 +7,6 @@
  */
 export { createEntityWithId, createGraphClient, validateGraphStore } from "./graph.js";
 export {
-  createBootstrappedSnapshot,
-  type GraphClientBootstrapOptions,
-} from "./bootstrap-snapshot.js";
-export {
   collectScalarCodecs,
   collectTypeIndex,
   fieldGroupMeta,

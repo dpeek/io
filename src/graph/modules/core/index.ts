@@ -1,5 +1,6 @@
 export * from "./address/index.js";
 export * from "./boolean/index.js";
+export * from "./bootstrap.js";
 export * from "./cardinality/index.js";
 export * from "./color/index.js";
 export * from "./country/index.js";

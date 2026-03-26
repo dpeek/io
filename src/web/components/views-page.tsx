@@ -1,6 +1,6 @@
 "use client";
 
-import { bootstrap, createIdMap, createStore, applyIdMap } from "@io/core/graph";
+import { createIdMap, createStore, applyIdMap } from "@io/core/graph";
 import {
   PredicateFieldEditor,
   PredicateFieldView,
@@ -8,12 +8,18 @@ import {
   genericWebFieldViewCapabilities,
 } from "@io/core/graph/adapters/react-dom";
 import { defineType } from "@io/core/graph/def";
-import { core, defaultMoneyCurrencyKey, urlTypeModule } from "@io/core/graph/modules";
+import {
+  core,
+  coreGraphBootstrapOptions,
+  defaultMoneyCurrencyKey,
+  urlTypeModule,
+} from "@io/core/graph/modules";
 import {
   getPredicateDisplayKind,
   getPredicateEditorKind,
   usePredicateField,
 } from "@io/core/graph/runtime/react";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, serializedQueryVersion, type PredicateRef } from "@io/graph-client";
 import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
@@ -121,9 +127,9 @@ function formatDebugValue(value: unknown): string {
 
 function createViewsPageFixture(): ViewsPageFixture {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, kitchenSink);
-  bootstrap(store, viewsPageNamespace);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, kitchenSink, coreGraphBootstrapOptions);
+  bootstrap(store, viewsPageNamespace, coreGraphBootstrapOptions);
 
   const graph = createGraphClient(store, viewsPageGraph);
   const draftStatusId = kitchenSink.status.values.draft.id;

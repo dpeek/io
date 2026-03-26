@@ -1,3 +1,4 @@
+import { requireGraphBootstrapCoreSchema } from "@io/graph-bootstrap";
 import type { GraphStore } from "@io/graph-kernel";
 import { edgeId, typeId } from "@io/graph-kernel";
 import type { AnyTypeOutput, EdgeOutput, TypeOutput } from "@io/graph-kernel";
@@ -13,7 +14,6 @@ import {
   type EntityRef,
   type GraphClient,
   type TypeQuerySpec,
-  requireGraphClientCoreSchema,
 } from "./core";
 import { createEntity, createEntityAtId, deleteEntity, updateEntity } from "./entity-actions";
 import { createQueryProjector } from "./query";
@@ -62,7 +62,7 @@ export function createGraphClient<
   definitionsArg?: TDefs,
 ): GraphClient<TNamespace, TDefs> {
   const definitions = (definitionsArg ?? (namespace as unknown as TDefs)) as TDefs;
-  const coreSchema = requireGraphClientCoreSchema(definitions);
+  const coreSchema = requireGraphBootstrapCoreSchema(definitions);
   const nodeTypePredicate = coreSchema.node.fields.type as EdgeOutput;
   const nodeTypePredicateId = edgeId(nodeTypePredicate);
   const scalarByKey = collectScalarCodecs(definitions);

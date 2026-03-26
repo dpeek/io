@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
+import { createBootstrappedSnapshot } from "@io/graph-bootstrap";
 import {
-  createBootstrappedSnapshot,
   createGraphClient,
   type FetchImpl,
   type GraphClient,
@@ -21,7 +21,7 @@ import {
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
-import { core } from "../graph/modules/index.js";
+import { core, coreGraphBootstrapOptions } from "../graph/modules/index.js";
 import { ops } from "../graph/modules/ops.js";
 import { pkm } from "../graph/modules/pkm.js";
 import { kitchenSink } from "../graph/testing/kitchen-sink.js";
@@ -53,7 +53,9 @@ function createAuthority<const T extends GraphNamespace>(
   seed: (graph: GraphClient<typeof core & T>) => void,
 ) {
   const definitions = { ...core, ...namespace } as const;
-  const store = createGraphStore(createBootstrappedSnapshot(definitions));
+  const store = createGraphStore(
+    createBootstrappedSnapshot(definitions, coreGraphBootstrapOptions),
+  );
   const graph = createGraphClient(store, definitions, definitions) as unknown as GraphClient<
     typeof core & T
   >;

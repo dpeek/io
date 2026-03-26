@@ -1,4 +1,3 @@
-export * from "./runtime/bootstrap.js";
 export * from "./runtime/contracts.js";
 export * from "./runtime/id.js";
 export * from "./runtime/identity.js";

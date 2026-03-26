@@ -1,15 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import {
-  bootstrap,
-  createStore,
-  applyIdMap,
-  defineScalar,
-  defineType,
-  edgeId,
-} from "@io/core/graph";
-import { core, stringTypeModule } from "@io/core/graph/modules";
+import { createStore, applyIdMap, defineScalar, defineType, edgeId } from "@io/core/graph";
+import { core, coreGraphBootstrapOptions, stringTypeModule } from "@io/core/graph/modules";
 import { createAuthoritativeGraphWriteSession as createResolvedAuthoritativeGraphWriteSession } from "@io/graph-authority";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createSyncedGraphClient, createGraphClient, GraphValidationError } from "@io/graph-client";
 import { createTotalSyncPayload } from "@io/graph-sync";
 
@@ -113,9 +107,9 @@ function createValidationLifecycleFixture() {
 
   function createGraph() {
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, testNamespace);
-    bootstrap(store, namespace);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, testNamespace, coreGraphBootstrapOptions);
+    bootstrap(store, namespace, coreGraphBootstrapOptions);
 
     return {
       store,
@@ -175,8 +169,8 @@ function createDeleteValidationLifecycleFixture() {
 
   function createGraph() {
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, namespace);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, namespace, coreGraphBootstrapOptions);
 
     return {
       store,
@@ -359,6 +353,7 @@ describe("validation lifecycle contract", () => {
     server.store.assert(serverId, edgeId(fixture.namespace.reviewItem.fields.score), "Infinity");
 
     const client = createSyncedGraphClient(fixture.namespace, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: fixture.definitions,
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });
@@ -686,6 +681,7 @@ describe("validation lifecycle contract", () => {
     }
 
     const client = createSyncedGraphClient(fixture.namespace, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: fixture.definitions,
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });

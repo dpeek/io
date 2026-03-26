@@ -1,17 +1,18 @@
 import { describe, expect, it } from "bun:test";
 
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { bootstrap, createStore } from "../../index.js";
-import { core, defaultMoneyCurrencyKey } from "../../modules/index.js";
+import { createStore } from "../../index.js";
+import { core, coreGraphBootstrapOptions, defaultMoneyCurrencyKey } from "../../modules/index.js";
 import { kitchenSink } from "../../testing/kitchen-sink.js";
 import { PredicateFieldEditor, PredicateFieldView, defaultWebFieldResolver } from "./resolver.js";
 
 function createRecordFields() {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, kitchenSink);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, kitchenSink, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, { ...core, ...kitchenSink });
   const platformTagId = graph.tag.create({
     color: "#2563eb",

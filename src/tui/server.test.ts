@@ -1,13 +1,12 @@
 import { expect, mock, test } from "bun:test";
 
-import { bootstrap, createStore } from "@io/core/graph";
+import { createStore } from "@io/core/graph";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
 import type { Workflow } from "../agent/types.js";
-import { core } from "../graph/modules/core.js";
-import { ops } from "../graph/modules/ops.js";
+import { core, coreGraphBootstrapOptions, ops, pkm } from "../graph/modules/index.js";
 import { workflowProjectionSchema } from "../graph/modules/ops/workflow/schema.js";
-import { pkm } from "../graph/modules/pkm.js";
 import {
   createWorkflowTuiStartupFailureModel,
   createWorkflowTuiStartupLoadingModel,
@@ -98,9 +97,9 @@ function createWorkflowGraphFixture(
   const branchCount = options.branchCount ?? 1;
   const projectCount = options.projectCount ?? 1;
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, pkm);
-  bootstrap(store, ops);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, pkm, coreGraphBootstrapOptions);
+  bootstrap(store, ops, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
   const projectIds: string[] = [];
   const branchIds: string[] = [];

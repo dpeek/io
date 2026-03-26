@@ -1,14 +1,15 @@
 import { describe, expect, it } from "bun:test";
 
-import { bootstrap, createStore, sanitizeSvgMarkup, typeId } from "@io/core/graph";
-import { core, graphIconSeeds } from "@io/core/graph/modules";
+import { createStore, sanitizeSvgMarkup, typeId } from "@io/core/graph";
+import { core, coreGraphBootstrapOptions, graphIconSeeds } from "@io/core/graph/modules";
 import { pkm } from "@io/core/graph/modules/pkm";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, GraphValidationError } from "@io/graph-client";
 
 function createGraph() {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, pkm);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, pkm, coreGraphBootstrapOptions);
   return createGraphClient(store, { ...core, ...pkm });
 }
 

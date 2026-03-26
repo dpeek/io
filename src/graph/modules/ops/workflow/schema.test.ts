@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import { bootstrap, createStore } from "@io/core/graph";
+import { createStore } from "@io/core/graph";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
 import { createIdMap } from "../../../runtime/identity.js";
 import { core } from "../../core.js";
+import { coreGraphBootstrapOptions } from "../../core/bootstrap.js";
 import { ops } from "../../ops.js";
 import { pkm } from "../../pkm.js";
 import {
@@ -588,9 +590,9 @@ describe("ops workflow schema", () => {
 
   it("preserves retained execution provenance across sessions, artifacts, decisions, and bundles", () => {
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, pkm);
-    bootstrap(store, ops);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, pkm, coreGraphBootstrapOptions);
+    bootstrap(store, ops, coreGraphBootstrapOptions);
     const graph = createGraphClient(store, productGraph);
 
     const projectId = graph.workflowProject.create({

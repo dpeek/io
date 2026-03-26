@@ -6,7 +6,6 @@ describe("graph-client package surface", () => {
   it("publishes graph-prefixed client factories and synced graph helpers", () => {
     expect(Object.keys(graphClient)).toEqual(
       expect.arrayContaining([
-        "createBootstrappedSnapshot",
         "createEntityWithId",
         "createGraphClient",
         "createHttpGraphClient",
@@ -20,5 +19,6 @@ describe("graph-client package surface", () => {
 
     expect(Object.keys(graphClient)).not.toContain("createSyncedTypeClient");
     expect(Object.keys(graphClient)).not.toContain("createTypeClient");
+    expect(Object.keys(graphClient)).not.toContain("createBootstrappedSnapshot");
   });
 });

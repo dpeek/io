@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, GraphValidationError } from "@io/graph-client";
 
-import { bootstrap, createIdMap, createStore, applyIdMap, defineType } from "../../index.js";
-import { core } from "../../modules/index.js";
+import { createIdMap, createStore, applyIdMap, defineType } from "../../index.js";
+import { core, coreGraphBootstrapOptions } from "../../modules/index.js";
 import {
   createWebFieldResolver,
   createWebFilterResolver,
@@ -24,8 +25,8 @@ const itemDefinitions = { ...core, ...itemNamespace } as const;
 
 function createNameRef() {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, itemNamespace);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, itemNamespace, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, itemNamespace, itemDefinitions);
   const itemId = graph.item.create({ name: "Probe item" });
   return { itemId, nameRef: graph.item.ref(itemId).fields.name };

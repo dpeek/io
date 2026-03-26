@@ -21,7 +21,6 @@ transport helpers.
 - client-facing validation results and `GraphValidationError`
 - synced client composition on top of `@io/graph-sync`
 - client-facing HTTP graph transport and serialized-query helpers
-- client bootstrap snapshots for local and synced clients
 
 ## What It Does Not Own
 
@@ -29,18 +28,18 @@ transport helpers.
 - authorization context, policy contracts, or share-grant flows
 - projection planning, live-scope routing, or module workflow projections
 - React bindings or host-specific runtime bootstrap shells
-- the richer additive schema `bootstrap(store, ...)` helper that still lives in
-  `@io/core/graph`
+- schema bootstrap or bootstrap icon catalogs
 
 ## Important Semantics
 
 - These APIs expect definitions that include the built-in core graph schema
-  whenever validation or bootstrap needs core node/predicate contracts.
+  whenever validation or synced-client bootstrap needs core node/predicate
+  contracts.
 - `createGraphClient()` exposes handles from the `namespace` argument and resolves
   references against `options.definitions ?? namespace`.
-- `createBootstrappedSnapshot()` seeds a client-safe schema snapshot for local
-  mutation and sync replay. It does not own the root runtime's richer icon-seed
-  bootstrap flow.
+- `createSyncedGraphClient()` and `createHttpGraphClient()` accept bootstrap
+  options or a prebuilt schema snapshot when callers need
+  `@io/graph-bootstrap`-owned schema materialization.
 - `GraphClientSyncStatus` widens sync-core status with `"pushing"` while pending
   writes are flushing.
 - `flush()` preserves optimistic local mutations until each pending transaction
@@ -53,7 +52,7 @@ transport helpers.
 - typed client helpers: `createGraphClient`, `createEntityWithId`
 - client refs and result types: `GraphClient`, `EntityRef`, `PredicateRef`,
   `FieldGroupRef`, `GraphValidationResult`, `GraphValidationError`
-- validation and bootstrap: `validateGraphStore`, `createBootstrappedSnapshot`
+- validation: `validateGraphStore`
 - synced client helpers: `createSyncedGraphClient`, `GraphClientSyncController`,
   `GraphClientSyncState`, `GraphClientSyncStatus`, `GraphSyncWriteError`
 - HTTP helpers: `createHttpGraphClient`, `createHttpGraphTxIdFactory`,

@@ -1,6 +1,6 @@
 import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
-import { core } from "@io/core/graph/modules";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { workflowReviewSyncScopeRequest } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
@@ -103,6 +103,7 @@ describe("workflow review live sync", () => {
     const fixture = await createTestWorkflowFixture(authority, authorization);
     const harness = createWorkflowLiveHarness(authority, router);
     const client = await createHttpGraphClient(graphSchema, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: graphDefinitions,
       fetch: harness.fetch,
       requestedScope: workflowReviewSyncScopeRequest,
@@ -186,6 +187,7 @@ describe("workflow review live sync", () => {
     const fixture = await createTestWorkflowFixture(authority, authorization);
     const harness = createWorkflowLiveHarness(authority, router);
     const client = await createHttpGraphClient(graphSchema, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: graphDefinitions,
       fetch: harness.fetch,
       requestedScope: workflowReviewSyncScopeRequest,
@@ -264,6 +266,7 @@ describe("workflow review live sync", () => {
     const fixture = await createTestWorkflowFixture(authority, authorization);
     const harness = createWorkflowLiveHarness(authority, router);
     const client = await createHttpGraphClient(graphSchema, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: graphDefinitions,
       fetch: harness.fetch,
       requestedScope: workflowReviewSyncScopeRequest,

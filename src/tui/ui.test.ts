@@ -1,14 +1,13 @@
 import { expect, test } from "bun:test";
 
-import { bootstrap, createStore } from "@io/core/graph";
+import { createStore } from "@io/core/graph";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 import { createTestRenderer } from "@opentui/core/testing";
 import { act } from "react";
 
-import { core } from "../graph/modules/core.js";
-import { ops } from "../graph/modules/ops.js";
+import { core, coreGraphBootstrapOptions, ops, pkm } from "../graph/modules/index.js";
 import { createWorkflowProjectionIndex } from "../graph/modules/ops/workflow/query.js";
-import { pkm } from "../graph/modules/pkm.js";
 import { buildWorkflowTuiRootComponentModel } from "./layout.js";
 import {
   createWorkflowTuiStartupFailureModel,
@@ -32,9 +31,9 @@ function date(value: string): Date {
 
 function createWorkflowProjectionFixture() {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, pkm);
-  bootstrap(store, ops);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, pkm, coreGraphBootstrapOptions);
+  bootstrap(store, ops, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
 
   const projectId = graph.workflowProject.create({

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
 import {
-  bootstrap,
   createStore,
   edgeId,
   fieldTreeId,
@@ -12,7 +12,7 @@ import {
   isSecretBackedField,
 } from "../index.js";
 import { defaultMoneyCurrencyKey } from "../modules/core/money/index.js";
-import { core } from "../modules/index.js";
+import { core, coreGraphBootstrapOptions } from "../modules/index.js";
 import {
   kitchenSink,
   kitchenSinkBlock,
@@ -135,8 +135,8 @@ describe("kitchen sink schema namespace", () => {
 
   it("boots cleanly through the graph client for unit tests", () => {
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, kitchenSink);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, kitchenSink, coreGraphBootstrapOptions);
     const graph = createGraphClient(store, kitchenSink, kitchenSinkDefs);
 
     const personId = graph.person.create({

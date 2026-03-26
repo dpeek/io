@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { bootstrap, createStore, typeId } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { createStore, typeId } from "@io/core/graph";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -14,9 +15,9 @@ const productGraph = { ...core, ...pkm, ...ops } as const;
 
 function createWorkflowPageRuntime() {
   const store = createStore();
-  bootstrap(store, core);
-  bootstrap(store, pkm);
-  bootstrap(store, ops);
+  bootstrap(store, core, coreGraphBootstrapOptions);
+  bootstrap(store, pkm, coreGraphBootstrapOptions);
+  bootstrap(store, ops, coreGraphBootstrapOptions);
 
   const graph = createGraphClient(store, productGraph);
   const projectId = graph.workflowProject.create({

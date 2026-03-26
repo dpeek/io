@@ -1,10 +1,10 @@
+import { requireGraphBootstrapCoreSchema } from "@io/graph-bootstrap";
 import type { GraphStore } from "@io/graph-kernel";
 import type { AnyTypeOutput, ScalarTypeOutput, TypeOutput } from "@io/graph-kernel";
 
 import {
   assertValidResult,
   getStableCreateNodeId,
-  requireGraphClientCoreSchema,
   type CreateInputOfType,
   type EntityOfType,
 } from "./core";
@@ -21,7 +21,7 @@ export function createEntityAtId<T extends TypeOutput>(
   enumValuesByRange: Map<string, Set<string>>,
   namespace: Record<string, AnyTypeOutput>,
 ): string {
-  const coreSchema = requireGraphClientCoreSchema(namespace);
+  const coreSchema = requireGraphBootstrapCoreSchema(namespace);
   const validation = validateCreateEntity(
     store,
     typeDef,

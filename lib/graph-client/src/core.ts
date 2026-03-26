@@ -1,3 +1,4 @@
+import type { GraphBootstrapCoreSchema } from "@io/graph-bootstrap";
 import { createGraphId } from "@io/graph-kernel";
 import {
   edgeId,
@@ -13,7 +14,6 @@ import type {
   AnyTypeOutput,
   Cardinality,
   EdgeOutput,
-  EntityTypeOutput,
   FieldsOutput,
   ScalarTypeOutput,
   TypeOutput,
@@ -84,114 +84,7 @@ export type AllDefs<
   Defs extends Record<string, AnyTypeOutput> = NS,
 > = Defs;
 
-export type GraphClientCoreSchema = {
-  readonly cardinality: {
-    readonly values: {
-      readonly many: { readonly id: string };
-      readonly one: { readonly id: string };
-      readonly oneOptional: { readonly id: string };
-    };
-  };
-  readonly icon: EntityTypeOutput & {
-    readonly fields: {
-      readonly key: EdgeOutput;
-      readonly svg: EdgeOutput;
-    };
-  };
-  readonly enum: EntityTypeOutput & {
-    readonly fields: {
-      readonly member: EdgeOutput;
-    };
-  };
-  readonly node: EntityTypeOutput & {
-    readonly fields: {
-      readonly description: EdgeOutput;
-      readonly name: EdgeOutput;
-      readonly type: EdgeOutput;
-    };
-  };
-  readonly predicate: EntityTypeOutput & {
-    readonly fields: {
-      readonly cardinality: EdgeOutput;
-      readonly icon: EdgeOutput;
-      readonly key: EdgeOutput;
-      readonly range: EdgeOutput;
-    };
-  };
-  readonly type: EntityTypeOutput & {
-    readonly fields: {
-      readonly icon: EdgeOutput;
-    };
-  };
-};
-
-function isEdgeOutputProperty(value: unknown): value is EdgeOutput {
-  return isEdgeOutput(value);
-}
-
-function assertGraphClientCoreSchema(value: unknown, fieldName: string): void {
-  if (!value) {
-    throw new Error(
-      `Graph client definitions must include the core "${fieldName}" schema contract.`,
-    );
-  }
-}
-
-/**
- * Reads the built-in core schema contracts required by graph client helpers.
- *
- * Client bootstrap and validation work against explicit definition objects
- * instead of importing `core` implicitly. Callers should pass definitions that
- * already include the built-in core schema when their namespace depends on it.
- */
-export function requireGraphClientCoreSchema(
-  definitions: Record<string, AnyTypeOutput>,
-): GraphClientCoreSchema {
-  const record = definitions as Partial<Record<keyof GraphClientCoreSchema, unknown>>;
-  assertGraphClientCoreSchema(record.node, "node");
-  assertGraphClientCoreSchema(record.predicate, "predicate");
-  assertGraphClientCoreSchema(record.type, "type");
-  assertGraphClientCoreSchema(record.icon, "icon");
-  assertGraphClientCoreSchema(record.enum, "enum");
-  assertGraphClientCoreSchema(record.cardinality, "cardinality");
-
-  const icon = record.icon as Partial<EntityTypeOutput>;
-  const node = record.node as Partial<EntityTypeOutput>;
-  const predicate = record.predicate as Partial<EntityTypeOutput>;
-  const typeDef = record.type as Partial<EntityTypeOutput>;
-  const enumDef = record.enum as Partial<EntityTypeOutput>;
-  const cardinality = record.cardinality as Partial<GraphClientCoreSchema["cardinality"]>;
-
-  if (
-    !isEdgeOutputProperty(icon.fields?.key) ||
-    !isEdgeOutputProperty(icon.fields?.svg) ||
-    !isEdgeOutputProperty(node.fields?.type) ||
-    !isEdgeOutputProperty(node.fields?.name) ||
-    !isEdgeOutputProperty(node.fields?.description) ||
-    !isEdgeOutputProperty(predicate.fields?.key) ||
-    !isEdgeOutputProperty(predicate.fields?.range) ||
-    !isEdgeOutputProperty(predicate.fields?.cardinality) ||
-    !isEdgeOutputProperty(predicate.fields?.icon) ||
-    !isEdgeOutputProperty(typeDef.fields?.icon) ||
-    !isEdgeOutputProperty(enumDef.fields?.member) ||
-    typeof cardinality.values?.one?.id !== "string" ||
-    typeof cardinality.values?.oneOptional?.id !== "string" ||
-    typeof cardinality.values?.many?.id !== "string"
-  ) {
-    throw new Error(
-      "Graph client definitions must include the built-in core node, predicate, type, enum, and cardinality contracts.",
-    );
-  }
-
-  return {
-    cardinality: cardinality as GraphClientCoreSchema["cardinality"],
-    enum: enumDef as GraphClientCoreSchema["enum"],
-    icon: icon as GraphClientCoreSchema["icon"],
-    node: node as GraphClientCoreSchema["node"],
-    predicate: predicate as GraphClientCoreSchema["predicate"],
-    type: typeDef as GraphClientCoreSchema["type"],
-  };
-}
+export type GraphClientCoreSchema = GraphBootstrapCoreSchema;
 type FieldGroupInfo<T extends FieldsTree> = {
   subjectId: string;
   fieldTree: T;

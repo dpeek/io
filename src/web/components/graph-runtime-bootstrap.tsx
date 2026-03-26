@@ -1,6 +1,6 @@
 "use client";
 
-import { core } from "@io/core/graph/modules";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 import { GraphMutationRuntimeProvider } from "@io/core/graph/runtime/react";
@@ -64,6 +64,7 @@ export async function createGraphRuntime(
   requestedScope: SyncScopeRequest = graphSyncScope,
 ): Promise<GraphRuntime> {
   return createHttpGraphClient(graphSchema, {
+    bootstrap: coreGraphBootstrapOptions,
     url: resolveWebGraphBaseUrl(),
     syncPath: syncUrl,
     transactionPath: transactionUrl,

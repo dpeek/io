@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { bootstrap, createStore, edgeId, typeId } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { createStore, edgeId, typeId } from "@io/core/graph";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import {
   createAuthoritativeGraphWriteResultValidator as createResolvedAuthoritativeGraphWriteResultValidator,
   createAuthoritativeGraphWriteSession as createResolvedAuthoritativeGraphWriteSession,
@@ -10,6 +10,7 @@ import {
   validateAuthoritativeGraphWriteTransaction as validateResolvedAuthoritativeGraphWriteTransaction,
   validateAuthoritativeTotalSyncPayload as validateResolvedAuthoritativeTotalSyncPayload,
 } from "@io/graph-authority";
+import { bootstrap } from "@io/graph-bootstrap";
 import {
   createSyncedGraphClient as createResolvedSyncedGraphClient,
   createGraphClient as createResolvedGraphClient,
@@ -48,6 +49,7 @@ function createSyncedGraphClient(
   >,
 ) {
   return createResolvedSyncedGraphClient(testNamespace, {
+    bootstrap: coreGraphBootstrapOptions,
     definitions: testDefs,
     ...options,
   });
@@ -2625,8 +2627,8 @@ describe("authoritative graph writes", () => {
     });
 
     const restartedStore = createStore();
-    bootstrap(restartedStore, core);
-    bootstrap(restartedStore, testNamespace);
+    bootstrap(restartedStore, core, coreGraphBootstrapOptions);
+    bootstrap(restartedStore, testNamespace, coreGraphBootstrapOptions);
     restartedStore.replace(server.store.snapshot());
     const restartedGraph = createGraphClient(restartedStore, testNamespace);
     const restarted = createAuthoritativeGraphWriteSession(restartedStore, testNamespace, {

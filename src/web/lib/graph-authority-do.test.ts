@@ -2,7 +2,6 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
 import {
-  bootstrap,
   createIdMap,
   createStore,
   applyIdMap,
@@ -13,7 +12,7 @@ import {
   type AnyTypeOutput,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
   workflowProjectionMetadata,
@@ -26,6 +25,7 @@ import {
   type AuthorizationContext,
   type PersistedAuthoritativeGraphStorage,
 } from "@io/graph-authority";
+import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, type GraphClient } from "@io/graph-client";
 import {
   type AuthoritativeGraphRetainedHistoryPolicy,
@@ -706,8 +706,8 @@ function createHiddenCursorAdvanceAuthorityFactory(ref: { entityId: string | nul
     options: { readonly retainedHistoryPolicy?: AuthoritativeGraphRetainedHistoryPolicy },
   ): Promise<WebAppAuthority> => {
     const store = createStore();
-    bootstrap(store, core);
-    bootstrap(store, hiddenCursorProbeNamespace);
+    bootstrap(store, core, coreGraphBootstrapOptions);
+    bootstrap(store, hiddenCursorProbeNamespace, coreGraphBootstrapOptions);
 
     const authority = await createPersistedAuthoritativeGraph(store, hiddenCursorGraph, {
       storage: createPersistedStorageAdapter(storage),

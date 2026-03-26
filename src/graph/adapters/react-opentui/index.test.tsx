@@ -2,14 +2,15 @@
 
 import { expect, test } from "bun:test";
 
+import { bootstrap } from "@io/graph-bootstrap";
 import { createSyncedGraphClient, createGraphClient } from "@io/graph-client";
 import { createTotalSyncPayload } from "@io/graph-sync";
 import { createTestRenderer } from "@opentui/core/testing";
 import { createRoot, flushSync } from "@opentui/react";
 import { act } from "react";
 
-import { bootstrap, createStore } from "../../index.js";
-import { core, ops, pkm } from "../../modules/index.js";
+import { createStore } from "../../index.js";
+import { core, coreGraphBootstrapOptions, ops, pkm } from "../../modules/index.js";
 import { useOptionalMutationRuntime } from "../../runtime/react/index.js";
 import {
   GraphRuntimeProvider,
@@ -30,7 +31,7 @@ function date(value: string): Date {
 
 function createWorkflowRuntimeFixture() {
   const store = createStore();
-  bootstrap(store, productGraph);
+  bootstrap(store, productGraph, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
 
   const projectId = graph.workflowProject.create({
@@ -71,6 +72,7 @@ function createWorkflowRuntimeFixture() {
   });
 
   const runtime = createSyncedGraphClient(productGraph, {
+    bootstrap: coreGraphBootstrapOptions,
     pull: () => createTotalSyncPayload(store, { cursor: "server:workflow:1" }),
   });
 

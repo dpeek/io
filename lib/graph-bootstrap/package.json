@@ -1,5 +1,5 @@
 {
-  "name": "@io/graph-authority",
+  "name": "@io/graph-bootstrap",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -17,12 +17,10 @@
     "types": "tsgo --noEmit"
   },
   "dependencies": {
-    "@io/graph-bootstrap": "workspace:*",
-    "@io/graph-client": "workspace:*",
-    "@io/graph-kernel": "workspace:*",
-    "@io/graph-sync": "workspace:*"
+    "@io/graph-kernel": "workspace:*"
   },
   "devDependencies": {
+    "@io/graph-client": "workspace:*",
     "@types/bun": "^1.3.9",
     "@typescript/native-preview": "^7.0.0-dev.20260226.1"
   }

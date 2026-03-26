@@ -89,10 +89,18 @@ const requiredDefExports = [
   "defineType",
 ] as const;
 
-const forbiddenRuntimeModuleExports = ["core", "country", "stringTypeModule"] as const;
+const forbiddenRuntimeModuleExports = [
+  "bootstrap",
+  "core",
+  "country",
+  "createBootstrappedSnapshot",
+  "stringTypeModule",
+] as const;
 
 const forbiddenRootModuleExports = [
+  "bootstrap",
   "core",
+  "createBootstrappedSnapshot",
   "ops",
   "pkm",
   "country",

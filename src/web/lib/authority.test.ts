@@ -11,7 +11,7 @@ import {
   type AuthSubjectRef,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
   type RetainedWorkflowProjectionState,
@@ -1589,6 +1589,7 @@ describe("web authority", () => {
       authorization: signedInAuthorization,
     });
     const runtime = createSyncedGraphClient(browserGraph, {
+      bootstrap: coreGraphBootstrapOptions,
       definitions: productGraph,
       pull(state) {
         return Promise.resolve(

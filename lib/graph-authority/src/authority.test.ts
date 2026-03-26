@@ -3,7 +3,8 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { createBootstrappedSnapshot, createGraphClient } from "@io/graph-client";
+import { createBootstrappedSnapshot } from "@io/graph-bootstrap";
+import { createGraphClient } from "@io/graph-client";
 import {
   applyGraphIdMap as applyIdMap,
   createGraphIdMap as createIdMap,
@@ -18,7 +19,7 @@ import {
 } from "@io/graph-kernel";
 import { validateIncrementalSyncResult } from "@io/graph-sync";
 
-import { core } from "../../../src/graph/modules/core.js";
+import { core, coreGraphBootstrapOptions } from "../../../src/graph/modules/index.js";
 import { kitchenSink } from "../../../src/graph/testing/kitchen-sink.js";
 import {
   authorizeRead,
@@ -181,19 +182,19 @@ function createItemNameWriteTransaction(
 }
 
 function createTestGraphStore() {
-  return createStore(createBootstrappedSnapshot(testDefs));
+  return createStore(createBootstrappedSnapshot(testDefs, coreGraphBootstrapOptions));
 }
 
 function createKitchenSinkStore() {
-  return createStore(createBootstrappedSnapshot(kitchenSinkDefs));
+  return createStore(createBootstrappedSnapshot(kitchenSinkDefs, coreGraphBootstrapOptions));
 }
 
 function createVisibilityStore() {
-  return createStore(createBootstrappedSnapshot(visibilityDefs));
+  return createStore(createBootstrappedSnapshot(visibilityDefs, coreGraphBootstrapOptions));
 }
 
 function createHiddenCursorStore() {
-  return createStore(createBootstrappedSnapshot(hiddenCursorGraph));
+  return createStore(createBootstrappedSnapshot(hiddenCursorGraph, coreGraphBootstrapOptions));
 }
 
 async function createJsonAuthority(
