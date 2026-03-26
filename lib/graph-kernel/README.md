@@ -1,0 +1,69 @@
+# Graph Kernel
+
+`@io/graph-kernel` is the extracted seed of the smallest graph-kernel boundary.
+
+## Read This First
+
+- Start with `./out/index.d.ts` for the compact public contract.
+- Read `./src/index.ts` for the curated root export surface.
+- Read one nearby `./src/*.test.ts` file for usage examples.
+
+## What It Owns
+
+- `GraphId` generation
+- `GraphStore` and `GraphStoreSnapshot`
+- schema authoring helpers and field-authority metadata
+- stable key-to-id reconciliation with `GraphIdMap`
+- graph write transaction and snapshot-derivation helpers
+
+## What It Does Not Own
+
+- built-in `core` schema assembly
+- bootstrap and seeded schema materialization
+- typed client CRUD/query helpers
+- sync sessions and transport payloads
+- persisted authority and storage adapters
+- React or host-specific adapters
+
+## Common Workflows
+
+- Author schema: `defineType`, `defineScalar`, `defineEnum`
+- Reconcile stable ids: `createIdMap`
+- Apply stable ids in place: `applyIdMap`
+- Store facts: `createStore`
+- Derive sync writes: `createGraphWriteTransactionFromSnapshots`
+
+## Important Semantics
+
+- `applyIdMap()` mutates the provided namespace objects in place.
+- `find()` includes retracted facts. `facts()` excludes them.
+- `newId()` allocates an id only. It does not create a node record.
+- `edgeId()`, `typeId()`, `fieldTreeId()`, and `rangeOf()` fall back to authored keys until ids are applied.
+- This package stops at pure contracts and storage primitives. Validation/bootstrap/client/session layers live above it.
+
+## Public API
+
+`@io/graph-kernel` exposes a single public entrypoint from `./src/index.ts`.
+Everything intended for consumers is re-exported from the package root.
+
+- `createGraphId`
+- `createStore`, `cloneStoreSnapshot`
+- `GraphFact`, `GraphStore`, `GraphStoreSnapshot`, `GraphIdMap`
+- `defineType`, `defineScalar`, `defineEnum`
+- `createIdMap`, `applyIdMap`, `extractSchemaKeys`, `findDuplicateIds`
+- graph write transaction, canonicalization, and snapshot-derivation helpers from `tx`
+
+## Build Output
+
+Run `bun run build` in this package to emit `./out`.
+Run `bun test` in this package to execute the extracted kernel unit tests.
+
+Tests stay colocated in `./src`, but the build uses `tsconfig.build.json` so
+`*.test.ts` files are not emitted into `./out`.
+
+The intended first-read contract artifact for agents is
+`./out/index.d.ts`. That keeps the source layout natural while still giving
+readers one low-noise declaration view of the exported API after build.
+
+This package is a straight copy for now. It is not yet wired back into the main
+`src/graph` runtime.

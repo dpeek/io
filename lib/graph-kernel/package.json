@@ -1,0 +1,22 @@
+{
+  "name": "@io/graph-kernel",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsgo -p tsconfig.build.json",
+    "clean": "rm -rf out",
+    "test": "bun test ./src",
+    "types": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "^7.0.0-dev.20260226.1"
+  }
+}
