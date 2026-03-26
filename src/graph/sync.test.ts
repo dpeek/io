@@ -889,8 +889,8 @@ describe("total sync", () => {
     const applied = await client.sync.sync();
 
     expect(applied.mode).toBe("incremental");
-    expect("fallback" in applied).toBe(false);
-    if ("fallback" in applied) {
+    expect("fallbackReason" in applied).toBe(false);
+    if ("fallbackReason" in applied) {
       throw new Error("Expected a data-bearing incremental sync result.");
     }
     expect(applied).toEqual({
@@ -962,8 +962,8 @@ describe("total sync", () => {
     const applied = await client.sync.sync();
 
     expect(applied.mode).toBe("incremental");
-    expect("fallback" in applied).toBe(false);
-    if ("fallback" in applied) {
+    expect("fallbackReason" in applied).toBe(false);
+    if ("fallbackReason" in applied) {
       throw new Error("Expected a data-bearing incremental sync result.");
     }
     expect(applied.cursor).toBe(peerResult.cursor);
@@ -1714,7 +1714,7 @@ describe("total sync", () => {
     const clientGraph = createTypeClient(clientStore, testNamespace);
     const sync = createTotalSyncController(clientStore, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
-      validate: createAuthoritativeTotalSyncValidator(testNamespace),
+      validateTotalPayload: createAuthoritativeTotalSyncValidator(testNamespace),
     });
 
     sync.apply(createTotalSyncPayload(server.store, { cursor: "server:1" }));
@@ -1870,7 +1870,7 @@ describe("total sync", () => {
     const clientStore = createTestStore();
     const clientGraph = createTypeClient(clientStore, testNamespace);
     const session = createTotalSyncSession(clientStore, {
-      validate: createAuthoritativeTotalSyncValidator(testNamespace),
+      validateTotalPayload: createAuthoritativeTotalSyncValidator(testNamespace),
     });
 
     session.apply(createTotalSyncPayload(server.store, { cursor: "server:1" }));
@@ -1937,7 +1937,7 @@ describe("total sync", () => {
     const clientStore = createTestStore();
     const clientGraph = createTypeClient(clientStore, testNamespace);
     const session = createTotalSyncSession(clientStore, {
-      validate: createAuthoritativeTotalSyncValidator(testNamespace),
+      validateTotalPayload: createAuthoritativeTotalSyncValidator(testNamespace),
       validateWriteResult: createAuthoritativeGraphWriteResultValidator(clientStore, testNamespace),
     });
 
@@ -1960,7 +1960,7 @@ describe("total sync", () => {
     const applied = session.apply(incremental);
 
     expect(applied.mode).toBe("incremental");
-    if (applied.mode !== "incremental" || "fallback" in applied) {
+    if (applied.mode !== "incremental" || "fallbackReason" in applied) {
       throw new Error("Expected a data-bearing incremental sync result.");
     }
     expect(applied.transactions).toEqual([first, second]);
@@ -2045,7 +2045,7 @@ describe("total sync", () => {
     const clientGraph = createTypeClient(clientStore, testNamespace);
     const session = createTotalSyncSession(clientStore, {
       preserveSnapshot,
-      validate: createAuthoritativeTotalSyncValidator(testNamespace),
+      validateTotalPayload: createAuthoritativeTotalSyncValidator(testNamespace),
     });
 
     const dataOnlyPayload = createDataOnlyTotalSyncPayload(server.store, {
@@ -2572,8 +2572,8 @@ describe("authoritative graph writes", () => {
       freshness: "stale",
     });
 
-    expect("fallback" in incremental).toBe(false);
-    if ("fallback" in incremental) {
+    expect("fallbackReason" in incremental).toBe(false);
+    if ("fallbackReason" in incremental) {
       throw new Error("Expected a data-bearing incremental sync payload.");
     }
     expect(incremental).toEqual({
@@ -2745,7 +2745,7 @@ describe("authoritative graph writes", () => {
       cursor: "module:1",
       completeness: "incomplete",
       freshness: "stale",
-      fallback: "scope-changed",
+      fallbackReason: "scope-changed",
       status: "error",
     });
     expect(client.sync.getState().recentActivities).toEqual(
@@ -2754,7 +2754,7 @@ describe("authoritative graph writes", () => {
           kind: "fallback",
           after: "module:1",
           cursor: "module:2",
-          reason: "scope-changed",
+          fallbackReason: "scope-changed",
           freshness: "current",
         }),
       ]),
@@ -2830,7 +2830,7 @@ describe("authoritative graph writes", () => {
       cursor: first.cursor,
       completeness: "complete",
       freshness: "current",
-      fallback: "unknown-cursor",
+      fallbackReason: "unknown-cursor",
       diagnostics: {
         retainedBaseCursor: authority.getBaseCursor(),
         retainedHistoryPolicy: {
@@ -2852,7 +2852,7 @@ describe("authoritative graph writes", () => {
       cursor: "server:2",
       completeness: "complete",
       freshness: "current",
-      fallback: "gap",
+      fallbackReason: "gap",
       diagnostics: {
         retainedBaseCursor: gapAuthority.getBaseCursor(),
         retainedHistoryPolicy: {
@@ -2873,7 +2873,7 @@ describe("authoritative graph writes", () => {
       cursor: "reset:0",
       completeness: "complete",
       freshness: "current",
-      fallback: "reset",
+      fallbackReason: "reset",
       diagnostics: {
         retainedBaseCursor: resetAuthority.getBaseCursor(),
         retainedHistoryPolicy: {
@@ -2918,7 +2918,7 @@ describe("authoritative graph writes", () => {
       cursor: "server:2",
       completeness: "incomplete",
       freshness: "future",
-      fallback: "later",
+      fallbackReason: "later",
     } as unknown as ReturnType<
       ReturnType<typeof createAuthoritativeGraphWriteSession>["getIncrementalSyncResult"]
     >);
@@ -2970,7 +2970,7 @@ describe("authoritative graph writes", () => {
         }),
         expect.objectContaining({
           source: "sync",
-          code: "sync.incremental.fallback",
+          code: "sync.incremental.fallbackReason",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",
         }),

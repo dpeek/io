@@ -80,7 +80,9 @@ function SyncPageSurface({
               <Badge variant="outline">{state.status}</Badge>
               <Badge variant="outline">{state.freshness}</Badge>
               <Badge variant="outline">{state.completeness}</Badge>
-              {state.fallback ? <Badge variant="destructive">{state.fallback}</Badge> : null}
+              {state.fallbackReason ? (
+                <Badge variant="destructive">{state.fallbackReason}</Badge>
+              ) : null}
             </div>
           </div>
         </CardHeader>

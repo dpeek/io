@@ -533,7 +533,7 @@ describe("persisted authoritative graph", () => {
       cursor: third.cursor,
       completeness: "complete",
       freshness: "current",
-      fallback: "gap",
+      fallbackReason: "gap",
       diagnostics: {
         retainedBaseCursor: first.cursor,
         retainedHistoryPolicy: {
@@ -566,7 +566,7 @@ describe("persisted authoritative graph", () => {
       cursor: third.cursor,
       completeness: "complete",
       freshness: "current",
-      fallback: "gap",
+      fallbackReason: "gap",
       diagnostics: {
         retainedBaseCursor: first.cursor,
         retainedHistoryPolicy: {
@@ -729,7 +729,7 @@ describe("persisted authoritative graph", () => {
       cursor: third.cursor,
       completeness: "complete",
       freshness: "current",
-      fallback: "gap",
+      fallbackReason: "gap",
       diagnostics: {
         retainedBaseCursor: first.cursor,
         retainedHistoryPolicy: {
@@ -762,7 +762,7 @@ describe("persisted authoritative graph", () => {
       cursor: third.cursor,
       completeness: "complete",
       freshness: "current",
-      fallback: "gap",
+      fallbackReason: "gap",
       diagnostics: {
         retainedBaseCursor: first.cursor,
         retainedHistoryPolicy: {
@@ -979,7 +979,7 @@ describe("persisted authoritative graph", () => {
     const result = session.getIncrementalSyncResult(session.getBaseCursor());
 
     expect(validateIncrementalSyncResult(result).ok).toBe(true);
-    if ("fallback" in result) throw new Error("Expected an incremental payload.");
+    if ("fallbackReason" in result) throw new Error("Expected an incremental payload.");
     expect(result.transactions).toEqual([]);
     expect(result.cursor).toBe("server:hidden:1");
   });
@@ -1033,7 +1033,7 @@ describe("persisted authoritative graph", () => {
     const result = session.getIncrementalSyncResult(session.getBaseCursor());
 
     expect(validateIncrementalSyncResult(result).ok).toBe(true);
-    if ("fallback" in result) throw new Error("Expected an incremental payload.");
+    if ("fallbackReason" in result) throw new Error("Expected an incremental payload.");
     expect(result.cursor).toBe("server:mixed:2");
     expect(result.transactions).toHaveLength(1);
     expect(result.transactions[0]?.txId).toBe("tx:visible");
@@ -1096,9 +1096,9 @@ describe("persisted authoritative graph", () => {
       authorizeRead: createVisibilityReadAuthorizer(outsiderAuthorization),
     });
 
-    expect("fallback" in memberIncremental).toBe(false);
-    expect("fallback" in outsiderIncremental).toBe(false);
-    if ("fallback" in memberIncremental || "fallback" in outsiderIncremental) {
+    expect("fallbackReason" in memberIncremental).toBe(false);
+    expect("fallbackReason" in outsiderIncremental).toBe(false);
+    if ("fallbackReason" in memberIncremental || "fallbackReason" in outsiderIncremental) {
       throw new Error("Expected data-bearing incremental sync payloads.");
     }
 

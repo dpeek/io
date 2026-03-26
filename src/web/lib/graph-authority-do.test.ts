@@ -290,7 +290,7 @@ type SyncPayload = {
   };
   readonly after?: string;
   readonly cursor: string;
-  readonly fallback?: "gap" | "reset" | "unknown-cursor" | "scope-changed" | "policy-changed";
+  readonly fallbackReason?: "gap" | "reset" | "unknown-cursor" | "scope-changed" | "policy-changed";
   readonly completeness?: "complete" | "incomplete";
   readonly freshness?: "current" | "stale";
   readonly diagnostics?: {
@@ -2356,7 +2356,7 @@ describe("web graph authority durable object", () => {
       workflowModuleScope,
     );
 
-    if (firstRefresh.mode !== "incremental" || "fallback" in firstRefresh) {
+    if (firstRefresh.mode !== "incremental" || "fallbackReason" in firstRefresh) {
       throw new Error("Expected a scoped incremental refresh after live invalidation.");
     }
     if (!firstRefresh.transactions) {
@@ -2427,7 +2427,7 @@ describe("web graph authority durable object", () => {
       workflowModuleScope,
     );
 
-    if (recovered.mode !== "incremental" || "fallback" in recovered) {
+    if (recovered.mode !== "incremental" || "fallbackReason" in recovered) {
       throw new Error("Expected router-loss recovery to stay on the scoped incremental path.");
     }
     if (!recovered.transactions) {
@@ -2527,7 +2527,7 @@ describe("web graph authority durable object", () => {
       workflowModuleScope,
     );
 
-    if (incremental.mode !== "incremental" || "fallback" in incremental) {
+    if (incremental.mode !== "incremental" || "fallbackReason" in incremental) {
       throw new Error("Expected a data-bearing scoped incremental payload.");
     }
 
@@ -2591,7 +2591,7 @@ describe("web graph authority durable object", () => {
       scope: scopedTotal.scope,
       after: staleCursor,
       cursor: scopedTotal.cursor,
-      fallback: "policy-changed",
+      fallbackReason: "policy-changed",
       completeness: "complete",
       freshness: "current",
       transactions: [],
@@ -2669,10 +2669,10 @@ describe("web graph authority durable object", () => {
     if (memberTotal.mode !== "total" || outsiderTotal.mode !== "total") {
       throw new Error("Expected total sync payloads for the visibility proof baseline.");
     }
-    if (memberIncremental.mode !== "incremental" || "fallback" in memberIncremental) {
+    if (memberIncremental.mode !== "incremental" || "fallbackReason" in memberIncremental) {
       throw new Error("Expected a data-bearing incremental sync payload for the graph member.");
     }
-    if (outsiderIncremental.mode !== "incremental" || "fallback" in outsiderIncremental) {
+    if (outsiderIncremental.mode !== "incremental" || "fallbackReason" in outsiderIncremental) {
       throw new Error("Expected a data-bearing incremental sync payload for the outsider.");
     }
     const memberSnapshot = memberTotal.snapshot;
@@ -3013,8 +3013,8 @@ describe("web graph authority durable object", () => {
     }
     if (
       grantedIncremental.mode !== "incremental" ||
-      !("fallback" in grantedIncremental) ||
-      grantedIncremental.fallback !== "reset"
+      !("fallbackReason" in grantedIncremental) ||
+      grantedIncremental.fallbackReason !== "reset"
     ) {
       throw new Error("Expected delegated sharing to force total-sync recovery.");
     }
@@ -3084,8 +3084,8 @@ describe("web graph authority durable object", () => {
     }
     if (
       revokedIncremental.mode !== "incremental" ||
-      !("fallback" in revokedIncremental) ||
-      revokedIncremental.fallback !== "reset"
+      !("fallbackReason" in revokedIncremental) ||
+      revokedIncremental.fallbackReason !== "reset"
     ) {
       throw new Error("Expected share revocation to force total-sync recovery.");
     }
@@ -3799,7 +3799,7 @@ describe("web graph authority durable object", () => {
     expect(gap).toMatchObject({
       mode: "incremental",
       after: initialSync.cursor,
-      fallback: "gap",
+      fallbackReason: "gap",
       cursor: thirdHidden.cursor,
       diagnostics: {
         retainedBaseCursor: firstHidden.cursor,
@@ -3823,13 +3823,13 @@ describe("web graph authority durable object", () => {
       },
       transactions: [],
     });
-    expect(retained.fallback).toBeUndefined();
+    expect(retained.fallbackReason).toBeUndefined();
     expect(gap.cursor).not.toBe(gap.after);
     expect(retained.cursor).not.toBe(retained.after);
     expect(restartedGap).toMatchObject({
       mode: "incremental",
       after: initialSync.cursor,
-      fallback: "gap",
+      fallbackReason: "gap",
       cursor: thirdHidden.cursor,
       diagnostics: {
         retainedBaseCursor: firstHidden.cursor,
@@ -3853,7 +3853,7 @@ describe("web graph authority durable object", () => {
       },
       transactions: [],
     });
-    expect(restartedRetained.fallback).toBeUndefined();
+    expect(restartedRetained.fallbackReason).toBeUndefined();
   });
 
   it("keeps hidden-only cursor recovery incremental when the retained policy is unbounded", async () => {
@@ -3938,7 +3938,7 @@ describe("web graph authority durable object", () => {
       },
       transactions: [],
     });
-    expect(incremental.fallback).toBeUndefined();
+    expect(incremental.fallbackReason).toBeUndefined();
   });
 
   it("falls back with reset when a hidden-only baseline rewrite drops retained history", async () => {
@@ -4030,7 +4030,7 @@ describe("web graph authority durable object", () => {
       cursor: hiddenResult.cursor,
       transactions: [],
     });
-    expect(retained.fallback).toBeUndefined();
+    expect(retained.fallbackReason).toBeUndefined();
     expect(txCount).toEqual([{ count: 0 }]);
     expect(metaRows).toHaveLength(1);
     expect(metaRow.head_seq).toBe(0);
@@ -4040,7 +4040,7 @@ describe("web graph authority durable object", () => {
     expect(reset).toMatchObject({
       mode: "incremental",
       after: initialSync.cursor,
-      fallback: "reset",
+      fallbackReason: "reset",
       cursor: restartedSync.cursor,
       diagnostics: {
         retainedBaseCursor: restartedSync.cursor,
@@ -4913,7 +4913,7 @@ describe("web graph authority durable object", () => {
     expect(retractedRows).toHaveLength(snapshotBeforePersist.retracted.length);
     expect(restartedSync.snapshot).toEqual(snapshotBeforePersist);
     expect(reset).toMatchObject({
-      fallback: "reset",
+      fallbackReason: "reset",
       transactions: [],
     });
   });
@@ -4977,7 +4977,7 @@ describe("web graph authority durable object", () => {
         writeScope: "server-command",
       }),
     ]);
-    expect(incremental.fallback).toBeUndefined();
+    expect(incremental.fallbackReason).toBeUndefined();
   });
 
   it("rewrites a stale retained-history boundary when retained transaction rows still match", async () => {
@@ -5069,7 +5069,7 @@ describe("web graph authority durable object", () => {
       resetReasons: [],
     });
     expect(reset).toMatchObject({
-      fallback: "gap",
+      fallbackReason: "gap",
       cursor: latestTx.cursor,
       transactions: [],
       diagnostics: {
@@ -5144,7 +5144,7 @@ describe("web graph authority durable object", () => {
       resetReasons: ["retained-history-sequence-mismatch"],
     });
     expect(reset).toMatchObject({
-      fallback: "reset",
+      fallbackReason: "reset",
       cursor: restartedSync.cursor,
       transactions: [],
     });
@@ -5216,7 +5216,7 @@ describe("web graph authority durable object", () => {
       resetReasons: ["retained-history-head-mismatch"],
     });
     expect(reset).toMatchObject({
-      fallback: "reset",
+      fallbackReason: "reset",
       transactions: [],
     });
   });
@@ -5329,7 +5329,7 @@ describe("web graph authority durable object", () => {
       },
     ]);
     expect(gap).toMatchObject({
-      fallback: "gap",
+      fallbackReason: "gap",
       cursor: latestTx.cursor,
       transactions: [],
     });
@@ -5338,12 +5338,12 @@ describe("web graph authority durable object", () => {
       "tx:update-env-var:2",
     ]);
     expect(unknown).toMatchObject({
-      fallback: "unknown-cursor",
+      fallbackReason: "unknown-cursor",
       cursor: latestTx.cursor,
       transactions: [],
     });
     expect(restartedGap).toMatchObject({
-      fallback: "gap",
+      fallbackReason: "gap",
       cursor: latestTx.cursor,
       transactions: [],
     });

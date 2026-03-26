@@ -48,7 +48,7 @@ function sameGraphSyncState(left: SyncState | undefined, right: SyncState): bool
     left.status !== right.status ||
     left.completeness !== right.completeness ||
     left.freshness !== right.freshness ||
-    left.fallback !== right.fallback ||
+    left.fallbackReason !== right.fallbackReason ||
     !sameSyncDiagnostics(left.diagnostics, right.diagnostics) ||
     left.pendingCount !== right.pendingCount ||
     left.cursor !== right.cursor ||

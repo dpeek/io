@@ -274,9 +274,9 @@ function describeIncrementalFallbackReasons(scope: SyncScope): string {
 
 function allowsIncrementalSyncFallbackReason(
   scope: SyncScope,
-  fallback: IncrementalSyncFallbackReason,
+  fallbackReason: IncrementalSyncFallbackReason,
 ): boolean {
-  return isGraphSyncScope(scope) ? graphIncrementalFallbackReasons.has(fallback) : true;
+  return isGraphSyncScope(scope) ? graphIncrementalFallbackReasons.has(fallbackReason) : true;
 }
 
 function materializeTotalSyncPayload(
@@ -648,10 +648,10 @@ function createIncrementalSyncPayload(
   };
 }
 
-// `fallback` is reserved for cases where the caller must recover with a total
+// `fallbackReason` is reserved for cases where the caller must recover with a total
 // sync rather than apply an empty incremental payload.
 function createIncrementalSyncFallback(
-  fallback: IncrementalSyncFallbackReason,
+  fallbackReason: IncrementalSyncFallbackReason,
   options: {
     after: string;
     cursor: string;
@@ -669,7 +669,7 @@ function createIncrementalSyncFallback(
     cursor: options.cursor,
     completeness: options.completeness ?? "complete",
     freshness: options.freshness ?? "current",
-    fallback,
+    fallbackReason,
     ...(options.diagnostics ? { diagnostics: cloneSyncDiagnostics(options.diagnostics) } : {}),
   };
 }
@@ -861,17 +861,17 @@ function validateIncrementalSyncPayloadShape(
     : "complete";
   const freshness = candidate.freshness === "stale" ? "stale" : "current";
   const diagnosticsValue = diagnostics.value ? cloneSyncDiagnostics(diagnostics.value) : undefined;
-  const hasFallback = "fallback" in candidate;
-  const fallbackReason = isIncrementalSyncFallbackReason(candidate.fallback)
-    ? candidate.fallback
+  const hasFallback = "fallbackReason" in candidate;
+  const fallbackReason = isIncrementalSyncFallbackReason(candidate.fallbackReason)
+    ? candidate.fallbackReason
     : "unknown-cursor";
 
   if (!options.allowFallback && hasFallback) {
     issues.push(
       createIncrementalSyncValidationIssue(
-        ["fallback"],
-        "sync.incremental.fallback.unexpected",
-        'Field "fallback" is only valid on incremental pull results that require total-sync recovery.',
+        ["fallbackReason"],
+        "sync.incremental.fallbackReason.unexpected",
+        'Field "fallbackReason" is only valid on incremental pull results that require total-sync recovery.',
       ),
     );
   }
@@ -880,14 +880,14 @@ function validateIncrementalSyncPayloadShape(
 
   if (options.allowFallback && hasFallback) {
     if (
-      !isIncrementalSyncFallbackReason(candidate.fallback) ||
-      !allowsIncrementalSyncFallbackReason(scope.value, candidate.fallback)
+      !isIncrementalSyncFallbackReason(candidate.fallbackReason) ||
+      !allowsIncrementalSyncFallbackReason(scope.value, candidate.fallbackReason)
     ) {
       issues.push(
         createIncrementalSyncValidationIssue(
-          ["fallback"],
-          "sync.incremental.fallback",
-          `Field "fallback" must be ${describeIncrementalFallbackReasons(scope.value)}.`,
+          ["fallbackReason"],
+          "sync.incremental.fallbackReason",
+          `Field "fallbackReason" must be ${describeIncrementalFallbackReasons(scope.value)}.`,
         ),
       );
     }
@@ -896,8 +896,8 @@ function validateIncrementalSyncPayloadShape(
       issues.push(
         createIncrementalSyncValidationIssue(
           ["transactions"],
-          "sync.incremental.fallback.transactions",
-          'Field "transactions" must be empty when "fallback" is present.',
+          "sync.incremental.fallbackReason.transactions",
+          'Field "transactions" must be empty when "fallbackReason" is present.',
         ),
       );
     }
@@ -1045,7 +1045,7 @@ function validateIncrementalSyncCursorSequence(
   return issues;
 }
 
-export function prepareIncrementalSyncResultForApply(
+export function prepareIncrementalSyncPayloadForApply(
   store: GraphStore,
   result: IncrementalSyncResult,
   currentCursor: string | undefined,
@@ -1074,14 +1074,14 @@ export function prepareIncrementalSyncResultForApply(
   }
 
   const materialized = validation.value;
-  if ("fallback" in materialized) {
+  if ("fallbackReason" in materialized) {
     return {
       ok: false,
       result: invalidIncrementalSyncResult(materialized, [
         createIncrementalSyncValidationIssue(
-          ["fallback"],
+          ["fallbackReason"],
           "sync.incremental.recovery",
-          `Incremental sync requires total snapshot recovery because the authority reported "${materialized.fallback}".`,
+          `Incremental sync requires total snapshot recovery because the authority reported "${materialized.fallbackReason}".`,
         ),
       ]),
     };

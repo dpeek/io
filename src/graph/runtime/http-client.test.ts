@@ -416,7 +416,7 @@ describe("createHttpGraphClient", () => {
       cursor: "module:1",
       completeness: "incomplete",
       freshness: "stale",
-      fallback: "policy-changed",
+      fallbackReason: "policy-changed",
       status: "error",
     });
 
@@ -484,8 +484,8 @@ describe("createHttpGraphClient", () => {
     const applied = await client.sync.sync();
 
     expect(applied.mode).toBe("incremental");
-    expect("fallback" in applied).toBe(false);
-    if (applied.mode !== "incremental" || "fallback" in applied) {
+    expect("fallbackReason" in applied).toBe(false);
+    if (applied.mode !== "incremental" || "fallbackReason" in applied) {
       throw new Error("Expected a zero-transaction incremental sync result.");
     }
     expect(applied).toMatchObject({
@@ -574,8 +574,8 @@ describe("createHttpGraphClient", () => {
     const retained = await client.sync.sync();
 
     expect(retained.mode).toBe("incremental");
-    expect("fallback" in retained).toBe(false);
-    if (retained.mode !== "incremental" || "fallback" in retained) {
+    expect("fallbackReason" in retained).toBe(false);
+    if (retained.mode !== "incremental" || "fallbackReason" in retained) {
       throw new Error("Expected the first hidden-only cursor advance to remain incremental.");
     }
     expect(client.sync.getState()).toMatchObject({
@@ -615,7 +615,7 @@ describe("createHttpGraphClient", () => {
     await expect(client.sync.sync()).rejects.toBeInstanceOf(GraphValidationError);
     expect(client.sync.getState()).toMatchObject({
       cursor: firstHidden.cursor,
-      fallback: "gap",
+      fallbackReason: "gap",
       freshness: "stale",
       status: "error",
       diagnostics: {
@@ -675,7 +675,7 @@ describe("createHttpGraphClient", () => {
         requestedScope: { kind: "graph" },
         scope: { kind: "graph" },
         cursor: "server:1",
-        fallback,
+        fallbackReason: fallback,
         freshness: "stale",
         status: "error",
       });
@@ -687,7 +687,7 @@ describe("createHttpGraphClient", () => {
       expect(activity).toMatchObject({
         after: "server:1",
         cursor: fallbackCursor,
-        reason: fallback,
+        fallbackReason: fallback,
         freshness: "current",
       });
 

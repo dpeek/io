@@ -147,7 +147,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
   const session = createTotalSyncSession(authoritativeStore, {
     requestedScope: options.requestedScope,
     preserveSnapshot: schemaSnapshot,
-    validate: createAuthoritativeTotalSyncValidator(namespace),
+    validateTotalPayload: createAuthoritativeTotalSyncValidator(namespace),
     validateWriteResult: createAuthoritativeGraphWriteResultValidator(
       authoritativeStore,
       namespace,
@@ -184,7 +184,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
       lastPublishedState.status === state.status &&
       lastPublishedState.completeness === state.completeness &&
       lastPublishedState.freshness === state.freshness &&
-      lastPublishedState.fallback === state.fallback &&
+      lastPublishedState.fallbackReason === state.fallbackReason &&
       sameSyncDiagnostics(lastPublishedState.diagnostics, state.diagnostics) &&
       lastPublishedState.pendingCount === state.pendingCount &&
       lastPublishedState.cursor === state.cursor &&

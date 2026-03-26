@@ -107,8 +107,8 @@ describe("example runtime sync integration", () => {
     const applied = await peer.sync.sync();
 
     expect(applied.mode).toBe("incremental");
-    expect("fallback" in applied).toBe(false);
-    if (applied.mode !== "incremental" || "fallback" in applied) {
+    expect("fallbackReason" in applied).toBe(false);
+    if (applied.mode !== "incremental" || "fallbackReason" in applied) {
       throw new Error("Expected a data-bearing incremental sync result.");
     }
     expect(applied.after).toBe(baseCursor);
@@ -158,8 +158,8 @@ describe("example runtime sync integration", () => {
     const applied = await peer.sync.sync();
 
     expect(applied.mode).toBe("incremental");
-    expect("fallback" in applied).toBe(false);
-    if (applied.mode !== "incremental" || "fallback" in applied) {
+    expect("fallbackReason" in applied).toBe(false);
+    if (applied.mode !== "incremental" || "fallbackReason" in applied) {
       throw new Error("Expected an incremental sync result.");
     }
     expect(applied.after).toBe(baseCursor);
@@ -199,8 +199,8 @@ describe("example runtime sync integration", () => {
     const retained = await peer.sync.sync();
 
     expect(retained.mode).toBe("incremental");
-    expect("fallback" in retained).toBe(false);
-    if (retained.mode !== "incremental" || "fallback" in retained) {
+    expect("fallbackReason" in retained).toBe(false);
+    if (retained.mode !== "incremental" || "fallbackReason" in retained) {
       throw new Error("Expected a retained zero-transaction incremental sync result.");
     }
     expect(retained).toMatchObject({
@@ -248,7 +248,7 @@ describe("example runtime sync integration", () => {
     expect(resetActivity).toMatchObject({
       after: hidden.cursor,
       cursor: resetCursor,
-      reason: "reset",
+      fallbackReason: "reset",
       freshness: "current",
     });
     expect(activities.filter((activity) => activity.kind === "incremental")).toHaveLength(1);
@@ -285,8 +285,8 @@ describe("example runtime sync integration", () => {
     const retained = await peer.sync.sync();
 
     expect(retained.mode).toBe("incremental");
-    expect("fallback" in retained).toBe(false);
-    if (retained.mode !== "incremental" || "fallback" in retained) {
+    expect("fallbackReason" in retained).toBe(false);
+    if (retained.mode !== "incremental" || "fallbackReason" in retained) {
       throw new Error("Expected a retained zero-transaction incremental sync result.");
     }
     expect(retained).toMatchObject({
@@ -335,7 +335,7 @@ describe("example runtime sync integration", () => {
     expect(gapActivity).toMatchObject({
       after: firstHidden.cursor,
       cursor: thirdHidden.cursor,
-      reason: "gap",
+      fallbackReason: "gap",
       freshness: "current",
     });
     expect(activities.filter((activity) => activity.kind === "incremental")).toHaveLength(1);
@@ -389,8 +389,8 @@ describe("example runtime sync integration", () => {
     const applied = await runtime.sync.sync();
 
     expect(applied.mode).toBe("incremental");
-    expect("fallback" in applied).toBe(false);
-    if (applied.mode !== "incremental" || "fallback" in applied) {
+    expect("fallbackReason" in applied).toBe(false);
+    if (applied.mode !== "incremental" || "fallbackReason" in applied) {
       throw new Error("Expected an incremental sync result.");
     }
     expect(applied.after).toBe(baseCursor);
@@ -448,7 +448,7 @@ describe("example runtime sync integration", () => {
           kind: "fallback",
           after: acknowledged.cursor,
           cursor: resetCursor,
-          reason: "reset",
+          fallbackReason: "reset",
           freshness: "current",
         }),
       ]),

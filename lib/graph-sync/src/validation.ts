@@ -36,7 +36,6 @@ import {
   type SyncCompleteness,
   type SyncDiagnostics,
   type SyncFreshness,
-  type SyncPayload,
   type SyncScope,
   type TotalSyncPayload,
 } from "./contracts";
@@ -352,9 +351,9 @@ function describeIncrementalFallbackReasons(scope: SyncScope): string {
 
 function allowsIncrementalSyncFallbackReason(
   scope: SyncScope,
-  fallback: IncrementalSyncFallbackReason,
+  fallbackReason: IncrementalSyncFallbackReason,
 ): boolean {
-  return isGraphSyncScope(scope) ? graphIncrementalFallbackReasons.has(fallback) : true;
+  return isGraphSyncScope(scope) ? graphIncrementalFallbackReasons.has(fallbackReason) : true;
 }
 
 function materializeTotalSyncPayload(
@@ -739,7 +738,7 @@ export function createIncrementalSyncPayload(
  * than applying an empty incremental delta.
  */
 export function createIncrementalSyncFallback(
-  fallback: IncrementalSyncFallbackReason,
+  fallbackReason: IncrementalSyncFallbackReason,
   options: {
     after: string;
     cursor: string;
@@ -757,7 +756,7 @@ export function createIncrementalSyncFallback(
     cursor: options.cursor,
     completeness: options.completeness ?? "complete",
     freshness: options.freshness ?? "current",
-    fallback,
+    fallbackReason,
     ...(options.diagnostics ? { diagnostics: cloneSyncDiagnostics(options.diagnostics) } : {}),
   };
 }
@@ -910,43 +909,43 @@ function validateIncrementalSyncPayloadShape(
     });
   }
 
-  let fallback: IncrementalSyncFallbackReason | undefined;
-  if ("fallback" in candidate) {
+  let fallbackReason: IncrementalSyncFallbackReason | undefined;
+  if ("fallbackReason" in candidate) {
     if (!options.allowFallback) {
       issues.push(
         createIncrementalSyncValidationIssue(
-          ["fallback"],
-          "sync.incremental.fallback.forbidden",
-          'Field "fallback" is not allowed on successful incremental payloads.',
+          ["fallbackReason"],
+          "sync.incremental.fallbackReason.forbidden",
+          'Field "fallbackReason" is not allowed on successful incremental payloads.',
         ),
       );
-    } else if (!isIncrementalSyncFallbackReason(candidate.fallback)) {
+    } else if (!isIncrementalSyncFallbackReason(candidate.fallbackReason)) {
       issues.push(
         createIncrementalSyncValidationIssue(
-          ["fallback"],
-          "sync.incremental.fallback",
-          `Field "fallback" must be ${describeIncrementalFallbackReasons(scope.value)}.`,
+          ["fallbackReason"],
+          "sync.incremental.fallbackReason",
+          `Field "fallbackReason" must be ${describeIncrementalFallbackReasons(scope.value)}.`,
         ),
       );
-    } else if (!allowsIncrementalSyncFallbackReason(scope.value, candidate.fallback)) {
+    } else if (!allowsIncrementalSyncFallbackReason(scope.value, candidate.fallbackReason)) {
       issues.push(
         createIncrementalSyncValidationIssue(
-          ["fallback"],
-          "sync.incremental.fallback.scope",
-          `Field "fallback" must be ${describeIncrementalFallbackReasons(scope.value)}.`,
+          ["fallbackReason"],
+          "sync.incremental.fallbackReason.scope",
+          `Field "fallbackReason" must be ${describeIncrementalFallbackReasons(scope.value)}.`,
         ),
       );
     } else {
-      fallback = candidate.fallback;
+      fallbackReason = candidate.fallbackReason;
     }
   }
 
-  if (fallback && transactions.length > 0) {
+  if (fallbackReason && transactions.length > 0) {
     issues.push(
       createIncrementalSyncValidationIssue(
         ["transactions"],
-        "sync.incremental.fallback.transactions",
-        'Field "transactions" must be empty when "fallback" is present.',
+        "sync.incremental.fallbackReason.transactions",
+        'Field "transactions" must be empty when "fallbackReason" is present.',
       ),
     );
   }
@@ -989,8 +988,8 @@ function validateIncrementalSyncPayloadShape(
     );
   }
 
-  const value = fallback
-    ? createIncrementalSyncFallback(fallback, {
+  const value = fallbackReason
+    ? createIncrementalSyncFallback(fallbackReason, {
         after: typeof candidate.after === "string" ? candidate.after : "",
         cursor: typeof candidate.cursor === "string" ? candidate.cursor : "",
         completeness: isSyncCompleteness(candidate.completeness)
@@ -1053,7 +1052,7 @@ export function validateIncrementalSyncResult(
   };
 }
 
-export function prepareIncrementalSyncResultForApply(
+export function prepareIncrementalSyncPayloadForApply(
   snapshot: GraphStoreSnapshot,
   result: IncrementalSyncResult,
   currentCursor?: string,
@@ -1064,18 +1063,21 @@ export function prepareIncrementalSyncResultForApply(
 ):
   | {
       ok: true;
-      value: IncrementalSyncResult;
-      snapshot?: GraphStoreSnapshot;
+      value: IncrementalSyncPayload;
+      snapshot: GraphStoreSnapshot;
     }
   | {
       ok: false;
-      result: Extract<GraphSyncValidationResult<SyncPayload>, { ok: false }>;
+      result: Extract<GraphSyncValidationResult<IncrementalSyncResult>, { ok: false }>;
     } {
   const validation = validateIncrementalSyncResult(result);
   if (!validation.ok) {
     return {
       ok: false,
-      result: validation as Extract<GraphSyncValidationResult<SyncPayload>, { ok: false }>,
+      result: validation as Extract<
+        GraphSyncValidationResult<IncrementalSyncResult>,
+        { ok: false }
+      >,
     };
   }
 
@@ -1088,7 +1090,7 @@ export function prepareIncrementalSyncResultForApply(
           "sync.incremental.after.cursor",
           'Field "after" must match the current session cursor.',
         ),
-      ]) as Extract<GraphSyncValidationResult<SyncPayload>, { ok: false }>,
+      ]) as Extract<GraphSyncValidationResult<IncrementalSyncResult>, { ok: false }>,
     };
   }
 
@@ -1101,20 +1103,20 @@ export function prepareIncrementalSyncResultForApply(
           "sync.incremental.scope.changed",
           "Incremental apply must keep the active sync scope identity.",
         ),
-      ]) as Extract<GraphSyncValidationResult<SyncPayload>, { ok: false }>,
+      ]) as Extract<GraphSyncValidationResult<IncrementalSyncResult>, { ok: false }>,
     };
   }
 
-  if ("fallback" in validation.value) {
+  if ("fallbackReason" in validation.value) {
     return {
       ok: false,
       result: invalidIncrementalSyncResult(validation.value, [
         createIncrementalSyncValidationIssue(
-          ["fallback"],
+          ["fallbackReason"],
           "sync.incremental.recovery",
-          `Incremental sync requires total snapshot recovery because the authority reported "${validation.value.fallback}".`,
+          `Incremental sync requires total snapshot recovery because the authority reported "${validation.value.fallbackReason}".`,
         ),
-      ]) as Extract<GraphSyncValidationResult<SyncPayload>, { ok: false }>,
+      ]) as Extract<GraphSyncValidationResult<IncrementalSyncResult>, { ok: false }>,
     };
   }
 
@@ -1133,7 +1135,7 @@ export function prepareIncrementalSyncResultForApply(
         result: invalidIncrementalSyncResult(
           validation.value,
           prefixIncrementalSyncTransactionIssues(index, materialized.result.issues),
-        ) as Extract<GraphSyncValidationResult<SyncPayload>, { ok: false }>,
+        ) as Extract<GraphSyncValidationResult<IncrementalSyncResult>, { ok: false }>,
       };
     }
 

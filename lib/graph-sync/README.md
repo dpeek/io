@@ -40,8 +40,8 @@ Kernel-owned write-envelope symbols come from `@io/graph-kernel` directly.
 ## Important Semantics
 
 - Cursor strings are opaque to callers. Persist them and compare them for equality only.
-- An empty incremental payload is still a successful pull when `fallback` is absent.
-- `fallback` means incremental apply must recover with a total refresh.
+- An empty incremental payload is still a successful pull when `fallbackReason` is absent.
+- `fallbackReason` means incremental apply must recover with a total refresh.
 - Module scope identity includes `moduleId`, `scopeId`, `definitionHash`, and `policyFilterVersion`.
 - `GraphWriteTransaction.id` is the idempotency key for authoritative replay semantics.
 - `SyncStatus` in this package is total-sync-only and excludes the runtime shim's `"pushing"` phase.
@@ -52,8 +52,9 @@ Kernel-owned write-envelope symbols come from `@io/graph-kernel` directly.
 `@io/graph-sync` exposes a single public entrypoint from `./src/index.ts`.
 Everything intended for consumers is re-exported from the package root.
 
-- sync scopes, payloads, diagnostics, and state contracts
+- sync scopes, request-scope helpers, payloads, diagnostics, and state contracts
 - `createTotalSyncPayload`, `createIncrementalSyncPayload`, `createIncrementalSyncFallback`
+- `createModuleSyncScope`, `createModuleSyncScopeRequest`
 - `createTotalSyncSession`, `createTotalSyncController`
 - cursor helpers from `cursor`
 - sync-owned transaction materialization/apply helpers from `transactions`

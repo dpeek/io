@@ -33,7 +33,7 @@ import {
 import { applyGraphWriteTransaction } from "./transactions";
 import {
   prepareAuthoritativeGraphWriteResult,
-  prepareIncrementalSyncResultForApply,
+  prepareIncrementalSyncPayloadForApply,
   prepareTotalSyncPayload,
   validateIncrementalSyncResult,
 } from "./validation";
@@ -48,7 +48,7 @@ export function createTotalSyncSession(
   store: GraphStore,
   options: {
     requestedScope?: SyncScopeRequest;
-    validate?: TotalSyncPayloadValidator;
+    validateTotalPayload?: TotalSyncPayloadValidator;
     validateWriteResult?: AuthoritativeGraphWriteResultValidator;
     preserveSnapshot?: GraphStoreSnapshot;
   } = {},
@@ -86,7 +86,7 @@ export function createTotalSyncSession(
     if (!prepared.ok) throw new GraphSyncValidationError(prepared.result);
 
     const materialized = prepared.value;
-    options.validate?.(materialized);
+    options.validateTotalPayload?.(materialized);
     store.replace(materialized.snapshot);
     const syncedAt = new Date();
     recordActivity({
@@ -106,7 +106,7 @@ export function createTotalSyncSession(
       recentActivities: state.recentActivities,
       cursor: materialized.cursor,
       lastSyncedAt: syncedAt,
-      fallback: undefined,
+      fallbackReason: undefined,
       diagnostics: materialized.diagnostics
         ? cloneSyncDiagnostics(materialized.diagnostics)
         : undefined,
@@ -116,29 +116,27 @@ export function createTotalSyncSession(
   }
 
   function applyIncrementalResult(result: IncrementalSyncResult) {
-    if ("fallback" in result) {
+    if ("fallbackReason" in result) {
       const validation = validateIncrementalSyncResult(result);
-      if (validation.ok && "fallback" in validation.value) {
+      if (validation.ok && "fallbackReason" in validation.value) {
         recordActivity({
           kind: "fallback",
           after: validation.value.after,
           cursor: validation.value.cursor,
           freshness: validation.value.freshness,
-          reason: validation.value.fallback,
+          fallbackReason: validation.value.fallbackReason,
           at: new Date(),
         });
       }
     }
 
-    const prepared = prepareIncrementalSyncResultForApply(store.snapshot(), result, state.cursor, {
+    const prepared = prepareIncrementalSyncPayloadForApply(store.snapshot(), result, state.cursor, {
       currentScope: state.scope,
       validateWriteResult: options.validateWriteResult,
     });
     if (!prepared.ok) throw new GraphSyncValidationError(prepared.result);
 
-    if (prepared.snapshot) {
-      store.replace(prepared.snapshot);
-    }
+    store.replace(prepared.snapshot);
 
     const syncedAt = new Date();
     recordActivity({
@@ -160,7 +158,7 @@ export function createTotalSyncSession(
       recentActivities: state.recentActivities,
       cursor: prepared.value.cursor,
       lastSyncedAt: syncedAt,
-      fallback: "fallback" in prepared.value ? prepared.value.fallback : undefined,
+      fallbackReason: undefined,
       diagnostics: prepared.value.diagnostics
         ? cloneSyncDiagnostics(prepared.value.diagnostics)
         : undefined,
@@ -199,7 +197,7 @@ export function createTotalSyncSession(
       recentActivities: state.recentActivities,
       cursor: materialized.cursor,
       lastSyncedAt: syncedAt,
-      fallback: undefined,
+      fallbackReason: undefined,
       diagnostics: state.diagnostics ? cloneSyncDiagnostics(state.diagnostics) : undefined,
       error: undefined,
     });
@@ -208,7 +206,7 @@ export function createTotalSyncSession(
 
   async function pull(source: SyncSource): Promise<SyncPayload> {
     const sourceState = cloneState(state);
-    let fallback: IncrementalSyncFallbackReason | undefined;
+    let fallbackReason: IncrementalSyncFallbackReason | undefined;
     let diagnostics = sourceState.diagnostics
       ? cloneSyncDiagnostics(sourceState.diagnostics)
       : undefined;
@@ -223,7 +221,8 @@ export function createTotalSyncSession(
       if (payload.mode === "incremental") {
         const validation = validateIncrementalSyncResult(payload);
         if (validation.ok) {
-          fallback = "fallback" in validation.value ? validation.value.fallback : undefined;
+          fallbackReason =
+            "fallbackReason" in validation.value ? validation.value.fallbackReason : undefined;
           diagnostics = validation.value.diagnostics
             ? cloneSyncDiagnostics(validation.value.diagnostics)
             : undefined;
@@ -244,7 +243,7 @@ export function createTotalSyncSession(
         ...state,
         status: "error",
         freshness: "stale",
-        fallback: fallback ?? state.fallback,
+        fallbackReason: fallbackReason ?? state.fallbackReason,
         diagnostics,
         error,
       });
@@ -302,7 +301,7 @@ export function createTotalSyncController(
   options: {
     pull: SyncSource;
     requestedScope?: SyncScopeRequest;
-    validate?: TotalSyncPayloadValidator;
+    validateTotalPayload?: TotalSyncPayloadValidator;
     validateWriteResult?: AuthoritativeGraphWriteResultValidator;
     preserveSnapshot?: GraphStoreSnapshot;
   },
@@ -310,7 +309,7 @@ export function createTotalSyncController(
   const session = createTotalSyncSession(store, {
     requestedScope: options.requestedScope,
     preserveSnapshot: options.preserveSnapshot,
-    validate: options.validate,
+    validateTotalPayload: options.validateTotalPayload,
     validateWriteResult: options.validateWriteResult,
   });
 

@@ -1,5 +1,6 @@
 import {
   createModuleSyncScope,
+  createModuleSyncScopeRequest,
   type ModuleSyncScope,
   type ModuleSyncScopeRequest,
   type SyncScope,
@@ -260,8 +261,7 @@ export function defineModuleReadScopeDefinition<const T extends ModuleReadScopeD
 export function createModuleReadScopeRequest(
   definition: ModuleReadScopeDefinition,
 ): ModuleSyncScopeRequest {
-  return Object.freeze({
-    kind: "module",
+  return createModuleSyncScopeRequest({
     moduleId: definition.moduleId,
     scopeId: definition.scopeId,
   });

@@ -4345,8 +4345,8 @@ export async function createWebAppAuthority(
     }
     const resultAfter = formatScopedModuleCursor(plannedScope.scope, result.after);
     const resultCursor = formatScopedModuleCursor(plannedScope.scope, result.cursor);
-    if ("fallback" in result) {
-      return createIncrementalSyncFallback(result.fallback, {
+    if ("fallbackReason" in result) {
+      return createIncrementalSyncFallback(result.fallbackReason, {
         after: resultAfter,
         cursor: resultCursor,
         freshness: result.freshness,

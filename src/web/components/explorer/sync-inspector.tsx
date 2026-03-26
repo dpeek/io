@@ -182,7 +182,7 @@ export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
                     ) : null}
                     {activity.kind === "fallback" ? (
                       <Badge className="border-rose-500/20 bg-rose-500/5 tracking-normal text-rose-100 normal-case">
-                        {activity.reason}
+                        {activity.fallbackReason}
                       </Badge>
                     ) : null}
                   </div>

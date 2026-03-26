@@ -81,6 +81,17 @@ export function createModuleSyncScope(scope: {
   };
 }
 
+export function createModuleSyncScopeRequest(scope: {
+  moduleId: string;
+  scopeId: string;
+}): ModuleSyncScopeRequest {
+  return {
+    kind: "module",
+    moduleId: scope.moduleId,
+    scopeId: scope.scopeId,
+  };
+}
+
 export function isGraphSyncScope(scope: SyncScope): scope is GraphSyncScope {
   return scope.kind === "graph";
 }
@@ -216,7 +227,7 @@ export type IncrementalSyncFallback = {
   readonly cursor: AuthoritativeGraphCursor;
   readonly completeness: SyncCompleteness;
   readonly freshness: SyncFreshness;
-  readonly fallback: IncrementalSyncFallbackReason;
+  readonly fallbackReason: IncrementalSyncFallbackReason;
   readonly diagnostics?: SyncDiagnostics;
 };
 
@@ -226,7 +237,7 @@ export type SyncPayload = TotalSyncPayload | IncrementalSyncResult;
 export function isIncrementalSyncFallback(
   result: IncrementalSyncResult,
 ): result is IncrementalSyncFallback {
-  return "fallback" in result;
+  return "fallbackReason" in result;
 }
 
 export function cloneSyncDiagnostics(diagnostics: SyncDiagnostics): SyncDiagnostics {
@@ -283,7 +294,7 @@ export type SyncActivity =
       readonly after: AuthoritativeGraphCursor;
       readonly cursor: AuthoritativeGraphCursor;
       readonly freshness: SyncFreshness;
-      readonly reason: IncrementalSyncFallbackReason;
+      readonly fallbackReason: IncrementalSyncFallbackReason;
       readonly at: Date;
     }
   | {
@@ -301,7 +312,7 @@ export type SyncScopeState = {
   readonly completeness: SyncCompleteness;
   readonly freshness: SyncFreshness;
   readonly cursor?: AuthoritativeGraphCursor;
-  readonly fallback?: IncrementalSyncFallbackReason;
+  readonly fallbackReason?: IncrementalSyncFallbackReason;
   readonly diagnostics?: SyncDiagnostics;
 };
 
@@ -439,7 +450,7 @@ export function cloneTotalSyncPayload(payload: TotalSyncPayload): TotalSyncPaylo
 }
 
 export function cloneIncrementalSyncResult(result: IncrementalSyncResult): IncrementalSyncResult {
-  return "fallback" in result
+  return "fallbackReason" in result
     ? {
         ...result,
         scope: cloneSyncScope(result.scope),
@@ -479,7 +490,9 @@ export function sameSyncActivity(left: SyncActivity, right: SyncActivity): boole
       return right.kind === "total";
     case "fallback":
       return (
-        right.kind === "fallback" && left.after === right.after && left.reason === right.reason
+        right.kind === "fallback" &&
+        left.after === right.after &&
+        left.fallbackReason === right.fallbackReason
       );
     case "write":
       return (

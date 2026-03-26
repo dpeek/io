@@ -106,7 +106,7 @@ Incremental payloads carry:
 - `cursor`
 - `completeness`
 - `freshness`
-- optional `fallback`
+- optional `fallbackReason`
 
 Stable delivery rules:
 
@@ -116,11 +116,11 @@ Stable delivery rules:
 - `AuthoritativeGraphWriteResult.replayed` is only `true` on the direct replay
   acknowledgement returned from `apply(...)`; retained history and incremental
   pull delivery keep the original accepted result with `replayed: false`
-- an incremental result with `transactions: []` and no `fallback` is still a
+- an incremental result with `transactions: []` and no `fallbackReason` is still a
   successful pull: `cursor === after` means no new authoritative change,
   while `cursor !== after` means the cursor advanced without any replicated
   writes in scope
-- graph-scoped `fallback` remains limited to `unknown-cursor`, `gap`, and
+- graph-scoped `fallbackReason` remains limited to `unknown-cursor`, `gap`, and
   `reset`
 - module-scoped incremental fallbacks may also report `scope-changed` or
   `policy-changed`; those are explicit recovery signals, not successful
@@ -146,7 +146,7 @@ The current end-to-end proof is intentionally narrow and explicit:
    incremental fallback with `transactions: []` plus `scope-changed` or
    `policy-changed`
 4. the client keeps the existing scoped cache readable but stale, records the
-   fallback, and recovers with a new whole-graph total request
+   fallback reason, and recovers with a new whole-graph total request
    `scopeKind=graph`; recovery is never a silent incremental widen
 
 That flow is the baseline proof covered today across shared sync validation,
@@ -214,7 +214,7 @@ contract without copying raw literal lists.
 
 ### Client/session side
 
-- `createTotalSyncSession(store, { preserveSnapshot, validate, validateWriteResult })`
+- `createTotalSyncSession(store, { preserveSnapshot, validateTotalPayload, validateWriteResult })`
 - `apply(payload)`
 - `applyWriteResult(result)`
 - `pull(source)`
@@ -244,7 +244,7 @@ authoritative sync events:
   `sync.flush()` is in flight; that synced-client state does not live in
   `@io/graph-sync`
 - `SyncState.requestedScope` preserves the active graph-or-module scope request even before a total snapshot arrives
-- `SyncState.fallback` retains the last recovery-only incremental fallback so callers can see scoped `scope-changed` or `policy-changed` failures without silently widening the cache
+- `SyncState.fallbackReason` retains the last recovery-only incremental fallback so callers can see scoped `scope-changed` or `policy-changed` failures without silently widening the cache
 - `SyncState.diagnostics` retains the last authority-published retained-window
   metadata, so UI and transport consumers can show the current base cursor and
   retention policy alongside fallback state
@@ -308,7 +308,7 @@ authoritative sync events:
   with `transactions: []` when the authority cursor advanced only through
   hidden or filtered writes
 - stale, missing, pruned, or reset cursors stay explicit: authorities return an
-  incremental `fallback` such as `unknown-cursor`, `gap`, or `reset` instead of
+  incremental `fallbackReason` such as `unknown-cursor`, `gap`, or `reset` instead of
   widening scope or repairing incrementally
 - clients keep the last readable cache and mark sync state as stale/error until
   the caller performs a new total sync; recovery is never implicit

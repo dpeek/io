@@ -100,7 +100,7 @@ describe("sync validation", () => {
     expect(result.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "sync.incremental.fallback.scope",
+          code: "sync.incremental.fallbackReason.scope",
         }),
       ]),
     );

@@ -77,7 +77,7 @@ export function formatStreamActivityTitle(activity: ExplorerStreamActivity): str
       : "Incremental cursor advanced without replicated writes";
   }
   if (activity.kind === "write") return `Authoritative write applied (${activity.txId})`;
-  return `Snapshot recovery required (${activity.reason})`;
+  return `Snapshot recovery required (${activity.fallbackReason})`;
 }
 
 export function formatStreamActivityDetail(activity: ExplorerStreamActivity): string {

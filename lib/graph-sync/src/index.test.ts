@@ -89,7 +89,7 @@ describe("@io/graph-sync", () => {
     expect(validateIncrementalSyncResult(result)).toMatchObject({
       ok: true,
       value: {
-        fallback: "unknown-cursor",
+        fallbackReason: "unknown-cursor",
         transactions: [],
       },
     });

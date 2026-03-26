@@ -1781,7 +1781,7 @@ describe("web authority", () => {
     expect(updatedAuthority.getPolicyVersion()).toBe(nextPolicyVersion);
     expect(invalidated).toMatchObject({
       mode: "incremental",
-      fallback: "policy-changed",
+      fallbackReason: "policy-changed",
       after: scopedTotal.cursor,
       scope: expect.objectContaining({
         policyFilterVersion: `policy:${nextPolicyVersion}`,
@@ -2964,7 +2964,7 @@ describe("web authority", () => {
       scope: workflowModuleScope,
     });
 
-    if (incremental.mode !== "incremental" || "fallback" in incremental) {
+    if (incremental.mode !== "incremental" || "fallbackReason" in incremental) {
       throw new Error("Expected a data-bearing scoped incremental sync payload.");
     }
     expect(incremental.scope).toEqual(total.scope);
@@ -3011,13 +3011,13 @@ describe("web authority", () => {
 
     expect(scopeChanged).toMatchObject({
       mode: "incremental",
-      fallback: "scope-changed",
+      fallbackReason: "scope-changed",
       scope: total.scope,
       after: scopeChangedCursor,
     });
     expect(policyChanged).toMatchObject({
       mode: "incremental",
-      fallback: "policy-changed",
+      fallbackReason: "policy-changed",
       scope: total.scope,
       after: policyChangedCursor,
     });
@@ -4169,7 +4169,7 @@ describe("web authority", () => {
       mode: "incremental",
       after: deniedTotal.cursor,
       cursor: grantedTotal.cursor,
-      fallback: "reset",
+      fallbackReason: "reset",
     });
     expect(
       readStringPredicateValue(
@@ -4230,7 +4230,7 @@ describe("web authority", () => {
       mode: "incremental",
       after: grantedTotal.cursor,
       cursor: revokedTotal.cursor,
-      fallback: "reset",
+      fallbackReason: "reset",
     });
     expect(() =>
       authority.readPredicateValue(noteId, shareProbeSharedNotePredicateId, {
@@ -4388,7 +4388,7 @@ describe("web authority", () => {
     expect(revokedIncremental).toMatchObject({
       mode: "incremental",
       after: grantedTotal.cursor,
-      fallback: "reset",
+      fallbackReason: "reset",
     });
     await expect(
       authority.lookupBearerShare({
