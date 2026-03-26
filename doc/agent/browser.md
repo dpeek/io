@@ -72,7 +72,9 @@ phase 1.
 That means the browser route now covers the first product-shaped workflow read
 surface, but it still stops short of ship:
 
-- it is read-focused and does not yet launch or finalize work
+- it now launches and attaches branch-scoped planning sessions and commit-
+  scoped execution sessions through the local browser-agent bridge, but it
+  does not yet finalize repository results
 - it does not yet render a browser-native retained session feed
 - it still depends on follow-on phases for authoritative session persistence and
   browser-agent execution
@@ -297,22 +299,65 @@ Worker-owned.
 
 The browser-facing contract should be explicit:
 
-- request: project id, subject, actor, mode, and any selection metadata needed
-  for launch
-- success: session summary, attach handoff, repository/worktree metadata
-- failure: subject locked, workspace missing, repository mismatch, policy
-  denied, local bridge unavailable
+- reuse the canonical `CodexSessionLaunch` request and result shape from
+  `doc/branch/06-workflow-and-agent-runtime.md`; do not define a second
+  browser-only launch payload
+- request: `projectId`, `subject`, `actor`, `kind`, launch preference, browser
+  selection metadata, and a delegated launch lease
+- success: `outcome = "launched" | "attached"`, session summary, attach
+  handoff, repository/worktree binding, reuse metadata when an existing session
+  is attached, and a session-scoped append grant for later writes
+- failure: `policy-denied`, `launch-lease-expired`, `session-not-found`,
+  `subject-locked`, `workspace-unavailable`, `repository-branch-missing`,
+  `repository-mismatch`, `local-bridge-unavailable`
+
+The first browser flow should be:
+
+1. the browser asks the authority for a short-lived launch lease bound to one
+   user, one project, one subject, and one session kind
+2. the browser sends the canonical `CodexSessionLaunchRequest` plus that lease
+   to the local `browser-agent`
+3. the `browser-agent` resolves repository and workspace state, then calls the
+   same authority-backed launch path
+4. the authority either rejects the request with a typed failure or returns the
+   persisted session plus a narrower append grant scoped to that session
+5. the browser stores only the returned attach handoff for reconnect; it does
+   not keep reusing the original launch lease after launch succeeds
+
+Reload and reconnect behavior for the shipped browser proof should stay
+explicit:
+
+- after launch success, the page may drop its optimistic action state on reload
+  and must recover by re-running `POST /active-session` for the selected branch
+  or commit
+- when the local runtime still has the session, `/workflow` should switch back
+  into attach mode and show that a reusable session is active in the local
+  browser-agent runtime
+- when attach recovery fails with a typed launch failure such as
+  `subject-locked`, `workspace-unavailable`, `repository-mismatch`, or
+  `local-bridge-unavailable`, the page should show that failure inline rather
+  than silently falling back to a fresh launch affordance
+- when the localhost bridge is down entirely, `/workflow` should keep the
+  degraded state visible, mark browser launch and attach unavailable, and point
+  the operator back at `io browser-agent`
 
 Security requirement:
 
 - the browser-agent must not be trusted just because it runs on localhost
-- use a delegated, short-lived, user-bound launch lease or equivalent explicit
-  authority credential when the local runtime writes to the graph
+- use a delegated, short-lived, user-bound launch lease for launch and attach
+  initiation
+- mint a narrower session-scoped append grant after launch succeeds so the
+  local runtime can append events, artifacts, and decisions without holding a
+  reusable broad launch credential
+- make the authority audit record attribute the launch to the browser actor,
+  not to a generic localhost runtime principal
 
 Acceptance criteria:
 
 - browser actions can launch or attach to branch-scoped and commit-scoped
   sessions
+- the browser and local runtime both use the same `CodexSessionLaunch`
+  authority contract
 - launch continues to work if the browser tab reloads after the session starts
 - launch failures are attributed and user-visible
 - the authority can still audit who initiated the session

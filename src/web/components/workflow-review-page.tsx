@@ -1,9 +1,23 @@
 "use client";
 
 import { Badge } from "@io/web/badge";
+import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import type {
+  BrowserAgentActiveSessionLookupResult,
+  BrowserAgentRuntimeProbe,
+  CodexSessionLaunchFailure,
+  CodexSessionLaunchPreference,
+  CodexSessionLaunchResult,
+  CodexSessionLaunchSuccess,
+} from "../../browser-agent/transport.js";
+import {
+  probeBrowserAgentRuntime,
+  requestBrowserAgentActiveSessionLookup,
+  requestBrowserAgentLaunch,
+} from "../../browser-agent/transport.js";
 import type {
   CommitQueueScopeCommitRow,
   CommitQueueScopeResult,
@@ -25,6 +39,7 @@ import {
   type CommitQueueScopeWorkflowReadResponse,
   type ProjectBranchScopeWorkflowReadResponse,
 } from "../lib/workflow-transport.js";
+import { useWebAuthSession } from "./auth-shell.js";
 import { useGraphRuntime } from "./graph-runtime-bootstrap.js";
 
 export type WorkflowReviewReadState =
@@ -39,6 +54,31 @@ export type WorkflowReviewReadState =
       readonly message: string;
       readonly status: "error";
     };
+
+type SessionLookupState =
+  | { readonly status: "idle" | "checking" }
+  | {
+      readonly message: string;
+      readonly status: "failed";
+    }
+  | {
+      readonly result: BrowserAgentActiveSessionLookupResult | CodexSessionLaunchFailure;
+      readonly status: "ready";
+    };
+
+type SessionActionModel = {
+  readonly availability: "available" | "unavailable";
+  readonly description: string;
+  readonly label: string;
+  readonly preference?: CodexSessionLaunchPreference;
+  readonly reason?: string;
+};
+
+type SessionActionRequestState = {
+  readonly message: string;
+  readonly result?: CodexSessionLaunchResult;
+  readonly status: "failure" | "pending" | "success";
+};
 
 function buildWorkflowHref(search: WorkflowRouteSearch): string {
   const params = new URLSearchParams();
@@ -106,6 +146,268 @@ function resolveSelectedCommitRow(commitQueue: CommitQueueScopeResult | undefine
   );
 }
 
+function isLaunchFailure(result: CodexSessionLaunchResult): result is CodexSessionLaunchFailure {
+  return result.ok === false;
+}
+
+function isLaunchSuccess(result: CodexSessionLaunchResult): result is CodexSessionLaunchSuccess {
+  return result.ok === true;
+}
+
+function formatLaunchOutcome(result: CodexSessionLaunchSuccess): string {
+  return result.outcome === "attached"
+    ? `Attached to ${result.session.sessionKey}.`
+    : `Launched ${result.session.sessionKey}.`;
+}
+
+function formatLookupMetadata(result: BrowserAgentActiveSessionLookupResult): string | undefined {
+  if (!result.ok || !result.found) {
+    return undefined;
+  }
+  return `Reusable session ${result.session.sessionKey} is active in the local browser-agent runtime.`;
+}
+
+function formatBrowserAgentRequestError(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return fallback;
+}
+
+export function createBranchSessionActionModel(input: {
+  readonly authStatus: "booting" | "error" | "expired" | "ready" | "signed-out";
+  readonly commitQueue?: CommitQueueScopeResult;
+  readonly lookupState: SessionLookupState;
+  readonly runtime: BrowserAgentRuntimeProbe;
+  readonly selectedBranchState?: ProjectBranchScopeResult["rows"][number]["workflowBranch"]["state"];
+}): SessionActionModel {
+  const description = "Start a branch-scoped planning session from the selected workflow branch.";
+
+  if (input.authStatus !== "ready") {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch branch session",
+      reason: "Sign in before launching or attaching to a branch session.",
+    };
+  }
+
+  if (input.runtime.status !== "ready") {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch branch session",
+      reason: input.runtime.message,
+    };
+  }
+
+  if (!input.selectedBranchState) {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch branch session",
+      reason: "Select a workflow branch first.",
+    };
+  }
+
+  if (input.selectedBranchState === "done" || input.selectedBranchState === "archived") {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch branch session",
+      reason: "Completed and archived branches do not accept new branch sessions.",
+    };
+  }
+
+  const latestSession = input.commitQueue?.branch.latestSession;
+  if (latestSession?.runtimeState === "running" && latestSession.subject.kind === "commit") {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch branch session",
+      reason: "The selected branch already has a running commit-scoped session.",
+    };
+  }
+
+  if (input.lookupState.status === "ready" && input.lookupState.result.ok === false) {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch branch session",
+      reason: input.lookupState.result.message,
+    };
+  }
+
+  if (input.lookupState.status === "failed") {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch branch session",
+      reason: input.lookupState.message,
+    };
+  }
+
+  if (
+    input.lookupState.status === "ready" &&
+    input.lookupState.result.ok &&
+    input.lookupState.result.found
+  ) {
+    return {
+      availability: "available",
+      description: "Reuse the running branch-scoped session for the selected workflow branch.",
+      label: "Attach branch session",
+      preference: { mode: "attach-existing" },
+    };
+  }
+
+  return {
+    availability: "available",
+    description:
+      input.lookupState.status === "checking"
+        ? "Check the local runtime for a reusable branch-scoped session before launching."
+        : description,
+    label: "Launch branch session",
+    preference: { mode: "attach-or-launch" },
+  };
+}
+
+export function createCommitSessionActionModel(input: {
+  readonly authStatus: "booting" | "error" | "expired" | "ready" | "signed-out";
+  readonly commitQueue?: CommitQueueScopeResult;
+  readonly lookupState: SessionLookupState;
+  readonly runtime: BrowserAgentRuntimeProbe;
+  readonly selectedBranchState?: ProjectBranchScopeResult["rows"][number]["workflowBranch"]["state"];
+}): SessionActionModel {
+  const description = "Start a commit-scoped execution session from the selected workflow commit.";
+  const selectedCommit = resolveSelectedCommitRow(input.commitQueue);
+
+  if (input.authStatus !== "ready") {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch commit session",
+      reason: "Sign in before launching or attaching to a commit session.",
+    };
+  }
+
+  if (input.runtime.status !== "ready") {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch commit session",
+      reason: input.runtime.message,
+    };
+  }
+
+  if (!input.commitQueue) {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch commit session",
+      reason: "Select a workflow branch first.",
+    };
+  }
+
+  if (!selectedCommit) {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch commit session",
+      reason: "Select a workflow commit first.",
+    };
+  }
+
+  if (input.lookupState.status === "ready" && input.lookupState.result.ok === false) {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch commit session",
+      reason: input.lookupState.result.message,
+    };
+  }
+
+  if (input.lookupState.status === "failed") {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch commit session",
+      reason: input.lookupState.message,
+    };
+  }
+
+  const latestSession = input.commitQueue.branch.latestSession;
+  const hasRunningSession =
+    latestSession?.runtimeState === "running" &&
+    latestSession.subject.kind === "commit" &&
+    latestSession.subject.commitId === selectedCommit.workflowCommit.id;
+  const runningBranchSession =
+    latestSession?.runtimeState === "running" && latestSession.subject.kind === "branch";
+  const runningOtherCommitSession =
+    latestSession?.runtimeState === "running" &&
+    latestSession.subject.kind === "commit" &&
+    latestSession.subject.commitId !== selectedCommit.workflowCommit.id;
+  const selectedBranchState = input.selectedBranchState;
+  let reason: string | undefined;
+
+  if (
+    selectedBranchState === "backlog" ||
+    selectedBranchState === "done" ||
+    selectedBranchState === "archived"
+  ) {
+    reason = "The selected branch is not in a launchable state for commit execution.";
+  } else if (
+    input.commitQueue.branch.workflowBranch.activeCommitId &&
+    input.commitQueue.branch.workflowBranch.activeCommitId !== selectedCommit.workflowCommit.id
+  ) {
+    reason = "Select the branch active commit to launch commit execution.";
+  } else if (selectedCommit.workflowCommit.state === "planned") {
+    reason = "Planned commits must be promoted before execution can launch.";
+  } else if (
+    selectedCommit.workflowCommit.state === "committed" ||
+    selectedCommit.workflowCommit.state === "dropped"
+  ) {
+    reason = "Committed and dropped commits do not accept execution sessions.";
+  } else if (runningBranchSession) {
+    reason = "The selected branch already has a running branch-scoped session.";
+  } else if (runningOtherCommitSession) {
+    reason = "Another commit on the selected branch already has a running session.";
+  }
+
+  if (reason) {
+    return {
+      availability: "unavailable",
+      description,
+      label: "Launch commit session",
+      reason,
+    };
+  }
+
+  if (
+    input.lookupState.status === "ready" &&
+    input.lookupState.result.ok &&
+    input.lookupState.result.found
+  ) {
+    return {
+      availability: "available",
+      description: "Reuse the running commit-scoped session for the selected workflow commit.",
+      label: "Attach commit session",
+      preference: { mode: "attach-existing" },
+    };
+  }
+
+  return {
+    availability: "available",
+    description:
+      input.lookupState.status === "checking"
+        ? "Check the local runtime for a reusable commit-scoped session before launching."
+        : hasRunningSession
+          ? "Reuse the running commit-scoped session for the selected workflow commit."
+          : description,
+    label: hasRunningSession ? "Attach commit session" : "Launch commit session",
+    preference: { mode: "attach-or-launch" },
+  };
+}
+
 function RecoveryHint() {
   return (
     <p className="text-muted-foreground text-sm">
@@ -122,11 +424,13 @@ function PageHeader({
   branchCount,
   commitCount,
   projectId,
+  runtime,
   selectedBranchId,
 }: {
   readonly branchCount?: number;
   readonly commitCount?: number;
   readonly projectId?: string;
+  readonly runtime: BrowserAgentRuntimeProbe;
   readonly selectedBranchId?: string;
 }) {
   return (
@@ -144,6 +448,9 @@ function PageHeader({
             <Badge variant="outline">workflow-review scope</Badge>
             <Badge variant="outline">branch board</Badge>
             <Badge variant="outline">commit queue</Badge>
+            <Badge variant={runtime.status === "ready" ? "secondary" : "outline"}>
+              {runtime.status === "ready" ? "browser-agent ready" : "browser-agent unavailable"}
+            </Badge>
           </div>
         </div>
       </CardHeader>
@@ -164,6 +471,52 @@ function PageHeader({
           <Badge variant="secondary">{branchCount ?? 0} branches</Badge>
           <Badge variant="secondary">{commitCount ?? 0} commits</Badge>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BrowserAgentStatusCard({ runtime }: { readonly runtime: BrowserAgentRuntimeProbe }) {
+  if (runtime.status === "checking") {
+    return (
+      <Card className="border-border/70 bg-card/95 border shadow-sm">
+        <CardHeader>
+          <CardTitle>Checking local browser-agent runtime</CardTitle>
+          <CardDescription>
+            Probe the localhost browser bridge before browser launch and attach actions mount here.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (runtime.status === "ready") {
+    return (
+      <Card className="border-border/70 bg-card/95 border shadow-sm">
+        <CardHeader>
+          <CardTitle>Local browser-agent runtime ready</CardTitle>
+          <CardDescription>{runtime.message}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 text-sm md:grid-cols-2">
+          <DetailField label="Started at" value={runtime.startedAt} />
+          <DetailField label="Launch transport" value={runtime.launchPath} />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-border/70 bg-card/95 border shadow-sm">
+      <CardHeader>
+        <CardTitle>Local browser-agent runtime unavailable</CardTitle>
+        <CardDescription>{runtime.message}</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <code>io browser-agent</code>
+        <p className="text-muted-foreground text-sm">
+          Browser launch and attach actions stay unavailable until this machine exposes the local
+          runtime bridge.
+        </p>
       </CardContent>
     </Card>
   );
@@ -330,12 +683,20 @@ function BranchBoardPanel({
 }
 
 function BranchDetailPanel({
+  branchAction,
+  branchActionState,
   branchBoard,
+  branchLookupState,
   commitQueue,
+  onTriggerBranchSession,
   startupState,
 }: {
+  readonly branchAction: SessionActionModel;
+  readonly branchActionState?: SessionActionRequestState;
   readonly branchBoard?: ProjectBranchScopeResult;
+  readonly branchLookupState: SessionLookupState;
   readonly commitQueue?: CommitQueueScopeResult;
+  readonly onTriggerBranchSession: () => void;
   readonly startupState: WorkflowReviewStartupState;
 }) {
   const selectedBranchId =
@@ -406,6 +767,13 @@ function BranchDetailPanel({
           value={branchBoard?.freshness.projectionCursor ?? "Not exposed"}
         />
       </div>
+      <BranchSessionActionCard
+        action={branchAction}
+        actionState={branchActionState}
+        lookupState={branchLookupState}
+        onTrigger={onTriggerBranchSession}
+        pending={branchActionState?.status === "pending"}
+      />
     </div>
   );
 }
@@ -421,7 +789,182 @@ function DetailField({ label, value }: { readonly label: string; readonly value:
   );
 }
 
-function CommitQueuePanel({ commitQueue }: { readonly commitQueue?: CommitQueueScopeResult }) {
+function LaunchMetadataFields({ result }: { readonly result: CodexSessionLaunchSuccess }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <DetailField label="Outcome" value={result.outcome} />
+      <DetailField label="Session key" value={result.session.sessionKey} />
+      <DetailField label="Session id" value={result.session.id} />
+      <DetailField label="Runtime state" value={result.session.runtimeState} />
+      <DetailField label="Attach token" value={result.attach.attachToken} />
+      <DetailField label="Attach transport" value={result.attach.transport} />
+      <DetailField label="Browser-agent session" value={result.attach.browserAgentSessionId} />
+      <DetailField label="Attach expiry" value={result.attach.expiresAt} />
+      <DetailField label="Repository id" value={result.workspace.repositoryId} />
+      <DetailField
+        label="Repository branch"
+        value={result.workspace.repositoryBranchName ?? "Not reported"}
+      />
+      <DetailField
+        label="Repository root"
+        value={result.workspace.repositoryRoot ?? "Not reported"}
+      />
+      <DetailField label="Worktree path" value={result.workspace.worktreePath ?? "Not reported"} />
+    </div>
+  );
+}
+
+function BranchSessionActionCard({
+  action,
+  actionState,
+  lookupState,
+  onTrigger,
+  pending,
+}: {
+  readonly action: SessionActionModel;
+  readonly actionState?: SessionActionRequestState;
+  readonly lookupState: SessionLookupState;
+  readonly onTrigger: () => void;
+  readonly pending: boolean;
+}) {
+  const lookupMessage =
+    lookupState.status === "checking"
+      ? "Checking the local browser-agent runtime for a reusable branch session."
+      : lookupState.status === "ready" && lookupState.result.ok
+        ? formatLookupMetadata(lookupState.result)
+        : undefined;
+  const successResult =
+    actionState?.status === "success" && actionState.result && isLaunchSuccess(actionState.result)
+      ? actionState.result
+      : undefined;
+
+  return (
+    <div className="border-border/70 grid gap-3 rounded-lg border px-3 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="font-medium">Branch session</div>
+          <p className="text-muted-foreground text-sm">{action.description}</p>
+        </div>
+        <Button
+          disabled={action.availability !== "available" || pending}
+          onClick={onTrigger}
+          type="button"
+          variant={action.availability === "available" ? "default" : "outline"}
+        >
+          {pending ? `${action.label}...` : action.label}
+        </Button>
+      </div>
+      {action.reason ? (
+        <p className="text-muted-foreground text-sm" data-workflow-branch-session-reason="">
+          {action.reason}
+        </p>
+      ) : null}
+      {lookupMessage ? (
+        <p className="text-muted-foreground text-sm" data-workflow-branch-session-lookup="">
+          {lookupMessage}
+        </p>
+      ) : null}
+      {actionState ? (
+        <div
+          className={`rounded-lg border px-3 py-3 text-sm ${
+            actionState.status === "failure"
+              ? "border-destructive/20 bg-destructive/5"
+              : actionState.status === "success"
+                ? "border-primary/20 bg-primary/5"
+                : "border-border/70 bg-muted/30"
+          }`}
+          data-workflow-branch-session-state={actionState.status}
+        >
+          {actionState.message}
+        </div>
+      ) : null}
+      {successResult ? <LaunchMetadataFields result={successResult} /> : null}
+    </div>
+  );
+}
+
+function CommitSessionActionCard({
+  action,
+  actionState,
+  lookupState,
+  onTrigger,
+  pending,
+}: {
+  readonly action: SessionActionModel;
+  readonly actionState?: SessionActionRequestState;
+  readonly lookupState: SessionLookupState;
+  readonly onTrigger: () => void;
+  readonly pending: boolean;
+}) {
+  const lookupMessage =
+    lookupState.status === "checking"
+      ? "Checking the local browser-agent runtime for a reusable commit session."
+      : lookupState.status === "ready" && lookupState.result.ok
+        ? formatLookupMetadata(lookupState.result)
+        : undefined;
+  const successResult =
+    actionState?.status === "success" && actionState.result && isLaunchSuccess(actionState.result)
+      ? actionState.result
+      : undefined;
+
+  return (
+    <div className="border-border/70 grid gap-3 rounded-lg border px-3 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="font-medium">Commit session</div>
+          <p className="text-muted-foreground text-sm">{action.description}</p>
+        </div>
+        <Button
+          disabled={action.availability !== "available" || pending}
+          onClick={onTrigger}
+          type="button"
+          variant={action.availability === "available" ? "default" : "outline"}
+        >
+          {pending ? `${action.label}...` : action.label}
+        </Button>
+      </div>
+      {action.reason ? (
+        <p className="text-muted-foreground text-sm" data-workflow-commit-session-reason="">
+          {action.reason}
+        </p>
+      ) : null}
+      {lookupMessage ? (
+        <p className="text-muted-foreground text-sm" data-workflow-commit-session-lookup="">
+          {lookupMessage}
+        </p>
+      ) : null}
+      {actionState ? (
+        <div
+          className={`rounded-lg border px-3 py-3 text-sm ${
+            actionState.status === "failure"
+              ? "border-destructive/20 bg-destructive/5"
+              : actionState.status === "success"
+                ? "border-primary/20 bg-primary/5"
+                : "border-border/70 bg-muted/30"
+          }`}
+          data-workflow-commit-session-state={actionState.status}
+        >
+          {actionState.message}
+        </div>
+      ) : null}
+      {successResult ? <LaunchMetadataFields result={successResult} /> : null}
+    </div>
+  );
+}
+
+function CommitQueuePanel({
+  commitAction,
+  commitActionState,
+  commitLookupState,
+  commitQueue,
+  onTriggerCommitSession,
+}: {
+  readonly commitAction: SessionActionModel;
+  readonly commitActionState?: SessionActionRequestState;
+  readonly commitLookupState: SessionLookupState;
+  readonly commitQueue?: CommitQueueScopeResult;
+  readonly onTriggerCommitSession: () => void;
+}) {
   const selectedCommit = resolveSelectedCommitRow(commitQueue);
 
   if (!commitQueue) {
@@ -500,6 +1043,13 @@ function CommitQueuePanel({ commitQueue }: { readonly commitQueue?: CommitQueueS
             label="Repository commit"
             value={formatRepositoryCommitSummary(selectedCommit)}
           />
+          <CommitSessionActionCard
+            action={commitAction}
+            actionState={commitActionState}
+            lookupState={commitLookupState}
+            onTrigger={onTriggerCommitSession}
+            pending={commitActionState?.status === "pending"}
+          />
         </div>
       ) : null}
     </div>
@@ -507,11 +1057,29 @@ function CommitQueuePanel({ commitQueue }: { readonly commitQueue?: CommitQueueS
 }
 
 export function WorkflowReviewSurface({
+  branchAction,
+  branchActionState,
+  branchLookupState,
+  commitAction,
+  commitActionState,
+  commitLookupState,
+  onTriggerBranchSession,
+  onTriggerCommitSession,
   readState,
+  runtime,
   search,
   startupState,
 }: {
+  readonly branchAction: SessionActionModel;
+  readonly branchActionState?: SessionActionRequestState;
+  readonly branchLookupState: SessionLookupState;
+  readonly commitAction: SessionActionModel;
+  readonly commitActionState?: SessionActionRequestState;
+  readonly commitLookupState: SessionLookupState;
+  readonly onTriggerBranchSession: () => void;
+  readonly onTriggerCommitSession: () => void;
   readonly readState: WorkflowReviewReadState;
+  readonly runtime: BrowserAgentRuntimeProbe;
   readonly search: WorkflowRouteSearch;
   readonly startupState: WorkflowReviewStartupState;
 }) {
@@ -532,8 +1100,10 @@ export function WorkflowReviewSurface({
         branchCount={readState.status === "ready" ? readState.branchBoard.rows.length : undefined}
         commitCount={readState.status === "ready" ? readState.commitQueue?.rows.length : undefined}
         projectId={projectId}
+        runtime={runtime}
         selectedBranchId={selectedBranchId}
       />
+      <BrowserAgentStatusCard runtime={runtime} />
 
       {readState.status === "error" ? (
         <Card className="border-destructive/20 bg-card/95 border shadow-sm">
@@ -572,8 +1142,12 @@ export function WorkflowReviewSurface({
             />
           ) : (
             <BranchDetailPanel
+              branchAction={branchAction}
+              branchActionState={branchActionState}
               branchBoard={readState.status === "ready" ? readState.branchBoard : undefined}
+              branchLookupState={branchLookupState}
               commitQueue={readState.status === "ready" ? readState.commitQueue : undefined}
+              onTriggerBranchSession={onTriggerBranchSession}
               startupState={startupState}
             />
           )}
@@ -590,7 +1164,11 @@ export function WorkflowReviewSurface({
             />
           ) : (
             <CommitQueuePanel
+              commitAction={commitAction}
+              commitActionState={commitActionState}
+              commitLookupState={commitLookupState}
               commitQueue={readState.status === "ready" ? readState.commitQueue : undefined}
+              onTriggerCommitSession={onTriggerCommitSession}
             />
           )}
         </PanelShell>
@@ -609,6 +1187,7 @@ export function WorkflowReviewPage({
   readonly search: WorkflowRouteSearch;
 }) {
   const runtime = useGraphRuntime();
+  const auth = useWebAuthSession();
   const contract = useMemo(() => createWorkflowReviewStartupContract(search), [search]);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const visibleProjects = useMemo(
@@ -639,11 +1218,66 @@ export function WorkflowReviewPage({
     () => resolveWorkflowReviewStartupState(visibleProjects, visibleBranches, contract),
     [contract, visibleBranches, visibleProjects],
   );
+  const [runtimeState, setRuntimeState] = useState<BrowserAgentRuntimeProbe>({
+    message: "Checking local browser-agent runtime.",
+    status: "checking",
+  });
   const [readState, setReadState] = useState<WorkflowReviewReadState>({ status: "loading" });
+  const [branchLookupState, setBranchLookupState] = useState<SessionLookupState>({
+    status: "idle",
+  });
+  const [commitLookupState, setCommitLookupState] = useState<SessionLookupState>({
+    status: "idle",
+  });
+  const [branchActionStates, setBranchActionStates] = useState<
+    Readonly<Record<string, SessionActionRequestState>>
+  >({});
+  const [commitActionStates, setCommitActionStates] = useState<
+    Readonly<Record<string, SessionActionRequestState>>
+  >({});
   const canonicalSearch = useMemo(
     () => resolveCanonicalWorkflowRouteSearch(search, startupState),
     [search, startupState],
   );
+  const selectedBranchId =
+    readState.status === "ready"
+      ? (readState.commitQueue?.branch.workflowBranch.id ??
+        (startupState.kind === "ready" ? startupState.selectedBranch?.id : undefined))
+      : startupState.kind === "ready"
+        ? startupState.selectedBranch?.id
+        : undefined;
+  const selectedBranchState =
+    readState.status === "ready"
+      ? readState.branchBoard.rows.find((row) => row.workflowBranch.id === selectedBranchId)
+          ?.workflowBranch.state
+      : undefined;
+  const branchAction = useMemo(
+    () =>
+      createBranchSessionActionModel({
+        authStatus: auth.status,
+        commitQueue: readState.status === "ready" ? readState.commitQueue : undefined,
+        lookupState: branchLookupState,
+        runtime: runtimeState,
+        selectedBranchState,
+      }),
+    [auth.status, branchLookupState, readState, runtimeState, selectedBranchState],
+  );
+  const branchActionState = selectedBranchId ? branchActionStates[selectedBranchId] : undefined;
+  const selectedCommit =
+    readState.status === "ready" ? resolveSelectedCommitRow(readState.commitQueue) : undefined;
+  const selectedCommitId = selectedCommit?.workflowCommit.id;
+  const commitAction = useMemo(
+    () =>
+      createCommitSessionActionModel({
+        authStatus: auth.status,
+        commitQueue: readState.status === "ready" ? readState.commitQueue : undefined,
+        lookupState: commitLookupState,
+        runtime: runtimeState,
+        selectedBranchState,
+      }),
+    [auth.status, commitLookupState, readState, runtimeState, selectedBranchState],
+  );
+  const commitActionState = selectedCommitId ? commitActionStates[selectedCommitId] : undefined;
 
   useEffect(() => {
     if (!onSearchChange || !canonicalSearch) {
@@ -651,6 +1285,132 @@ export function WorkflowReviewPage({
     }
     void onSearchChange(canonicalSearch);
   }, [canonicalSearch, onSearchChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void probeBrowserAgentRuntime().then((state) => {
+      if (!cancelled) {
+        setRuntimeState(state);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      auth.status !== "ready" ||
+      runtimeState.status !== "ready" ||
+      startupState.kind !== "ready"
+    ) {
+      setBranchLookupState({ status: "idle" });
+      return;
+    }
+
+    const branchId = startupState.selectedBranch?.id;
+    if (!branchId) {
+      setBranchLookupState({ status: "idle" });
+      return;
+    }
+
+    let cancelled = false;
+    setBranchLookupState({ status: "checking" });
+    void requestBrowserAgentActiveSessionLookup({
+      actor: {
+        principalId: auth.principalId,
+        sessionId: auth.sessionId,
+        surface: "browser",
+      },
+      kind: "planning",
+      projectId: startupState.project.id,
+      subject: {
+        kind: "branch",
+        branchId,
+      },
+    })
+      .then((result) => {
+        if (!cancelled) {
+          setBranchLookupState({
+            result,
+            status: "ready",
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setBranchLookupState({
+            message: formatBrowserAgentRequestError(
+              error,
+              "Branch session attach recovery failed.",
+            ),
+            status: "failed",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, runtimeState, startupState]);
+
+  useEffect(() => {
+    if (
+      auth.status !== "ready" ||
+      runtimeState.status !== "ready" ||
+      readState.status !== "ready"
+    ) {
+      setCommitLookupState({ status: "idle" });
+      return;
+    }
+
+    const selectedCommit = resolveSelectedCommitRow(readState.commitQueue);
+    const commitQueue = readState.commitQueue;
+    if (!selectedCommit || !commitQueue) {
+      setCommitLookupState({ status: "idle" });
+      return;
+    }
+
+    let cancelled = false;
+    setCommitLookupState({ status: "checking" });
+    void requestBrowserAgentActiveSessionLookup({
+      actor: {
+        principalId: auth.principalId,
+        sessionId: auth.sessionId,
+        surface: "browser",
+      },
+      kind: "execution",
+      projectId: readState.branchBoard.project.id,
+      subject: {
+        kind: "commit",
+        branchId: commitQueue.branch.workflowBranch.id,
+        commitId: selectedCommit.workflowCommit.id,
+      },
+    })
+      .then((result) => {
+        if (!cancelled) {
+          setCommitLookupState({
+            result,
+            status: "ready",
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCommitLookupState({
+            message: formatBrowserAgentRequestError(
+              error,
+              "Commit session attach recovery failed.",
+            ),
+            status: "failed",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, readState, runtimeState]);
 
   useEffect(() => {
     let cancelled = false;
@@ -757,7 +1517,180 @@ export function WorkflowReviewPage({
     };
   }, [refreshVersion, startupState]);
 
+  function updateBranchActionState(branchId: string, nextState: SessionActionRequestState) {
+    setBranchActionStates((current) => ({
+      ...current,
+      [branchId]: nextState,
+    }));
+  }
+
+  function updateCommitActionState(commitId: string, nextState: SessionActionRequestState) {
+    setCommitActionStates((current) => ({
+      ...current,
+      [commitId]: nextState,
+    }));
+  }
+
+  function handleTriggerBranchSession() {
+    if (
+      auth.status !== "ready" ||
+      startupState.kind !== "ready" ||
+      !startupState.selectedBranch ||
+      branchAction.availability !== "available"
+    ) {
+      return;
+    }
+
+    const branchId = startupState.selectedBranch.id;
+    updateBranchActionState(branchId, {
+      message: `${branchAction.label} requested for ${branchId}.`,
+      status: "pending",
+    });
+
+    void requestBrowserAgentLaunch({
+      actor: {
+        principalId: auth.principalId,
+        sessionId: auth.sessionId,
+        surface: "browser",
+      },
+      kind: "planning",
+      preference: branchAction.preference,
+      projectId: startupState.project.id,
+      selection: {
+        branchId,
+        projectId: startupState.project.id,
+      },
+      subject: {
+        kind: "branch",
+        branchId,
+      },
+    })
+      .then((result) => {
+        if (isLaunchFailure(result)) {
+          updateBranchActionState(branchId, {
+            message: result.message,
+            result,
+            status: "failure",
+          });
+          return;
+        }
+
+        updateBranchActionState(branchId, {
+          message: formatLaunchOutcome(result),
+          result,
+          status: "success",
+        });
+        setBranchLookupState({
+          result: {
+            attach: result.attach,
+            found: true,
+            ok: true,
+            session: result.session,
+            workspace: result.workspace,
+          },
+          status: "ready",
+        });
+        setRefreshVersion((current) => current + 1);
+      })
+      .catch((error) => {
+        updateBranchActionState(branchId, {
+          message: formatBrowserAgentRequestError(error, "Branch session launch failed."),
+          status: "failure",
+        });
+      });
+  }
+
+  function handleTriggerCommitSession() {
+    if (
+      auth.status !== "ready" ||
+      readState.status !== "ready" ||
+      commitAction.availability !== "available"
+    ) {
+      return;
+    }
+
+    const selectedCommit = resolveSelectedCommitRow(readState.commitQueue);
+    const commitQueue = readState.commitQueue;
+    if (!selectedCommit || !commitQueue) {
+      return;
+    }
+
+    const branchId = commitQueue.branch.workflowBranch.id;
+    const commitId = selectedCommit.workflowCommit.id;
+    updateCommitActionState(commitId, {
+      message: `${commitAction.label} requested for ${commitId}.`,
+      status: "pending",
+    });
+
+    void requestBrowserAgentLaunch({
+      actor: {
+        principalId: auth.principalId,
+        sessionId: auth.sessionId,
+        surface: "browser",
+      },
+      kind: "execution",
+      preference: commitAction.preference,
+      projectId: readState.branchBoard.project.id,
+      selection: {
+        branchId,
+        commitId,
+        projectId: readState.branchBoard.project.id,
+      },
+      subject: {
+        kind: "commit",
+        branchId,
+        commitId,
+      },
+    })
+      .then((result) => {
+        if (isLaunchFailure(result)) {
+          updateCommitActionState(commitId, {
+            message: result.message,
+            result,
+            status: "failure",
+          });
+          return;
+        }
+
+        updateCommitActionState(commitId, {
+          message: formatLaunchOutcome(result),
+          result,
+          status: "success",
+        });
+        setCommitLookupState({
+          result: {
+            attach: result.attach,
+            found: true,
+            ok: true,
+            session: result.session,
+            workspace: result.workspace,
+          },
+          status: "ready",
+        });
+        setRefreshVersion((current) => current + 1);
+      })
+      .catch((error) => {
+        updateCommitActionState(commitId, {
+          message: formatBrowserAgentRequestError(error, "Commit session launch failed."),
+          status: "failure",
+        });
+      });
+  }
+
   return (
-    <WorkflowReviewSurface readState={readState} search={search} startupState={startupState} />
+    <WorkflowReviewSurface
+      branchAction={branchAction}
+      branchActionState={branchActionState}
+      branchLookupState={branchLookupState}
+      commitAction={commitAction}
+      commitActionState={commitActionState}
+      commitLookupState={commitLookupState}
+      onTriggerBranchSession={handleTriggerBranchSession}
+      onTriggerCommitSession={handleTriggerCommitSession}
+      readState={readState}
+      runtime={runtimeState}
+      search={search}
+      startupState={startupState}
+    />
   );
 }

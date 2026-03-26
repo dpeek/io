@@ -16,6 +16,8 @@ state, and the operator-facing session stream used by the TUI.
   assembly, and module scoping
 - [CLI Overview](./cli.md): `io agent ...` and `io mcp ...` entrypoints
 - [TUI Overview](./tui.md): live and retained operator UI
+- [Browser Agent Proposal](./browser.md): browser-first workflow control
+  surface, launch bridge, and delegated authority model
 - [Documentation Agent](./document.md): doc-maintenance prompt contract
 - [Simplification Agent](./simplify.md): cleanup prompt contract
 - [Secrets Note](./secrets.md): retained pointer to the canonical graph secret

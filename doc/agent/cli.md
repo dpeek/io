@@ -6,6 +6,7 @@ that module's exported `run(args)` function.
 Current top-level task modules are:
 
 - `agent`
+- `browser-agent`
 - `check`
 - `graph`
 - `install`
@@ -81,5 +82,28 @@ The first workflow TUI startup contract is intentionally small:
 - [cli/index.ts](../../src/cli/index.ts): top-level task dispatch
 - [task/agent.ts](../../src/task/agent.ts) and
   [agent/server.ts](../../src/agent/server.ts): `io agent ...`
+- [task/browser-agent.ts](../../src/task/browser-agent.ts) and
+  [browser-agent/server.ts](../../src/browser-agent/server.ts): `io browser-agent`
 - [task/mcp.ts](../../src/task/mcp.ts) and
   [mcp/index.ts](../../src/mcp/index.ts): `io mcp ...`
+
+## Browser-Agent Command
+
+- `io browser-agent [entrypointPath] [--host <host>] [--port <port>]`
+
+`io browser-agent` starts the local long-lived browser bridge used by `/workflow`
+for browser-owned launch, attach, and active-session lookup. The first shipped
+runtime serves a localhost HTTP transport with:
+
+- `GET /health`
+- `POST /launch-session`
+- `POST /active-session`
+
+The runtime stays explicit when the shared launch coordinator is not configured:
+`/workflow` surfaces the local runtime as unavailable and points operators at
+`io browser-agent` rather than pretending browser launch exists.
+
+When `/workflow` reloads after a browser-owned launch, it rechecks the selected
+branch or commit through `POST /active-session` and reuses the returned attach
+handoff when the local runtime still owns that session. Typed attach or launch
+failures stay visible in the page instead of degrading into a silent retry.

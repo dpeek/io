@@ -2,12 +2,18 @@ import { describe, expect, it } from "bun:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
+import type { BrowserAgentRuntimeProbe } from "../../browser-agent/transport.js";
 import type {
   CommitQueueScopeResult,
   ProjectBranchScopeResult,
 } from "../../graph/modules/ops/workflow/query.js";
 import type { WorkflowReviewStartupState } from "../lib/workflow-review-contract.js";
-import { WorkflowReviewSurface, type WorkflowReviewReadState } from "./workflow-review-page.js";
+import {
+  createBranchSessionActionModel,
+  createCommitSessionActionModel,
+  WorkflowReviewSurface,
+  type WorkflowReviewReadState,
+} from "./workflow-review-page.js";
 
 function createBranchBoard(): ProjectBranchScopeResult {
   return {
@@ -250,6 +256,38 @@ function createReadyStartupState(): WorkflowReviewStartupState {
   };
 }
 
+function createRuntimeState(
+  overrides: Partial<BrowserAgentRuntimeProbe> = {},
+): BrowserAgentRuntimeProbe {
+  return {
+    launchPath: "/launch-session",
+    message: "Browser-agent runtime ready for launch, attach, and active-session lookup.",
+    startedAt: "2026-03-26T10:00:00.000Z",
+    status: "ready",
+    ...overrides,
+  };
+}
+
+function createBranchActionOverrides() {
+  return createBranchSessionActionModel({
+    authStatus: "ready",
+    commitQueue: createCommitQueue(),
+    lookupState: { status: "idle" },
+    runtime: createRuntimeState(),
+    selectedBranchState: "active",
+  });
+}
+
+function createCommitActionOverrides() {
+  return createCommitSessionActionModel({
+    authStatus: "ready",
+    commitQueue: createCommitQueue(),
+    lookupState: { status: "idle" },
+    runtime: createRuntimeState(),
+    selectedBranchState: "active",
+  });
+}
+
 describe("workflow review page", () => {
   it("renders the workflow-native branch board, branch detail, and commit queue layout", () => {
     const readState: WorkflowReviewReadState = {
@@ -260,7 +298,16 @@ describe("workflow review page", () => {
 
     const html = renderToStaticMarkup(
       <WorkflowReviewSurface
+        branchAction={createBranchActionOverrides()}
+        branchActionState={undefined}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitActionOverrides()}
+        commitActionState={undefined}
+        commitLookupState={{ status: "idle" }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
         readState={readState}
+        runtime={createRuntimeState()}
         search={{ project: "project-io", branch: "branch-1" }}
         startupState={createReadyStartupState()}
       />,
@@ -272,6 +319,10 @@ describe("workflow review page", () => {
     expect(html).toContain("Workflow runtime contract");
     expect(html).toContain("Build workflow review layout");
     expect(html).toContain("Observed repository branches");
+    expect(html).toContain("Local browser-agent runtime ready");
+    expect(html).toContain("Launch branch session");
+    expect(html).toContain("Commit session");
+    expect(html).toContain("Attach commit session");
     expect(html).not.toContain("EntityTypeBrowser");
   });
 
@@ -289,7 +340,20 @@ describe("workflow review page", () => {
 
     const html = renderToStaticMarkup(
       <WorkflowReviewSurface
+        branchAction={createBranchActionOverrides()}
+        branchActionState={undefined}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitActionOverrides()}
+        commitActionState={undefined}
+        commitLookupState={{ status: "idle" }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
         readState={{ status: "loading" }}
+        runtime={createRuntimeState({
+          message:
+            "Local browser-agent runtime unavailable. Start `io browser-agent` on this machine to enable browser launch and attach.",
+          status: "unavailable",
+        })}
         search={{}}
         startupState={startupState}
       />,
@@ -299,6 +363,8 @@ describe("workflow review page", () => {
     expect(html).toContain("Branch board");
     expect(html).toContain("No branch selected");
     expect(html).toContain("Commit queue unavailable");
+    expect(html).toContain("Local browser-agent runtime unavailable");
+    expect(html).toContain("io browser-agent");
   });
 
   it("renders an explicit empty branch-board state when the project has no branches", () => {
@@ -316,7 +382,16 @@ describe("workflow review page", () => {
 
     const html = renderToStaticMarkup(
       <WorkflowReviewSurface
+        branchAction={createBranchActionOverrides()}
+        branchActionState={undefined}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitActionOverrides()}
+        commitActionState={undefined}
+        commitLookupState={{ status: "idle" }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
         readState={{ status: "loading" }}
+        runtime={createRuntimeState()}
         search={{ project: "project-io" }}
         startupState={startupState}
       />,
@@ -352,7 +427,16 @@ describe("workflow review page", () => {
 
     const html = renderToStaticMarkup(
       <WorkflowReviewSurface
+        branchAction={createBranchActionOverrides()}
+        branchActionState={undefined}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitActionOverrides()}
+        commitActionState={undefined}
+        commitLookupState={{ status: "idle" }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
         readState={{ status: "loading" }}
+        runtime={createRuntimeState()}
         search={{ branch: "branch-missing", project: "project-io" }}
         startupState={startupState}
       />,
@@ -365,5 +449,476 @@ describe("workflow review page", () => {
     expect(html).toContain("project-io");
     expect(html).toContain("pending selection");
     expect(html).not.toContain("Workflow docs alignment");
+  });
+
+  it("switches the branch action into attach mode when an active branch session exists", () => {
+    const action = createBranchSessionActionModel({
+      authStatus: "ready",
+      commitQueue: {
+        ...createCommitQueue(),
+        branch: {
+          ...createCommitQueue().branch,
+          latestSession: {
+            id: "session:1",
+            kind: "planning",
+            runtimeState: "running",
+            sessionKey: "session:workflow-branch",
+            startedAt: "2026-03-26T02:00:00.000Z",
+            subject: {
+              kind: "branch",
+            },
+          },
+        },
+      },
+      lookupState: {
+        status: "ready",
+        result: {
+          attach: {
+            attachToken: "attach:1",
+            browserAgentSessionId: "browser-agent:1",
+            expiresAt: "2026-03-26T03:00:00.000Z",
+            transport: "browser-agent-http",
+          },
+          found: true,
+          ok: true,
+          session: {
+            id: "session:1",
+            kind: "planning",
+            runtimeState: "running",
+            sessionKey: "session:workflow-branch",
+            startedAt: "2026-03-26T02:00:00.000Z",
+            subject: {
+              kind: "branch",
+              branchId: "branch-1",
+            },
+          },
+          workspace: {
+            repositoryId: "repo-1",
+          },
+        },
+      },
+      runtime: createRuntimeState(),
+      selectedBranchState: "active",
+    });
+
+    expect(action.label).toBe("Attach branch session");
+    expect(action.preference).toEqual({ mode: "attach-existing" });
+  });
+
+  it("keeps branch attach recovery explicit after reload when a reusable session is found", () => {
+    const commitQueue = {
+      ...createCommitQueue(),
+      branch: {
+        ...createCommitQueue().branch,
+        latestSession: {
+          id: "session:1",
+          kind: "planning",
+          runtimeState: "running",
+          sessionKey: "session:workflow-branch",
+          startedAt: "2026-03-26T02:00:00.000Z",
+          subject: {
+            kind: "branch",
+          },
+        },
+      },
+    } satisfies CommitQueueScopeResult;
+    const html = renderToStaticMarkup(
+      <WorkflowReviewSurface
+        branchAction={createBranchSessionActionModel({
+          authStatus: "ready",
+          commitQueue,
+          lookupState: {
+            status: "ready",
+            result: {
+              attach: {
+                attachToken: "attach:1",
+                browserAgentSessionId: "browser-agent:1",
+                expiresAt: "2026-03-26T03:00:00.000Z",
+                transport: "browser-agent-http",
+              },
+              found: true,
+              ok: true,
+              session: {
+                id: "session:1",
+                kind: "planning",
+                runtimeState: "running",
+                sessionKey: "session:workflow-branch",
+                startedAt: "2026-03-26T02:00:00.000Z",
+                subject: {
+                  kind: "branch",
+                  branchId: "branch-1",
+                },
+              },
+              workspace: {
+                repositoryId: "repo-1",
+              },
+            },
+          },
+          runtime: createRuntimeState(),
+          selectedBranchState: "active",
+        })}
+        branchActionState={undefined}
+        branchLookupState={{
+          status: "ready",
+          result: {
+            attach: {
+              attachToken: "attach:1",
+              browserAgentSessionId: "browser-agent:1",
+              expiresAt: "2026-03-26T03:00:00.000Z",
+              transport: "browser-agent-http",
+            },
+            found: true,
+            ok: true,
+            session: {
+              id: "session:1",
+              kind: "planning",
+              runtimeState: "running",
+              sessionKey: "session:workflow-branch",
+              startedAt: "2026-03-26T02:00:00.000Z",
+              subject: {
+                kind: "branch",
+                branchId: "branch-1",
+              },
+            },
+            workspace: {
+              repositoryId: "repo-1",
+            },
+          },
+        }}
+        commitAction={createCommitActionOverrides()}
+        commitActionState={undefined}
+        commitLookupState={{ status: "idle" }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
+        readState={{
+          branchBoard: createBranchBoard(),
+          commitQueue,
+          status: "ready",
+        }}
+        runtime={createRuntimeState()}
+        search={{ project: "project-io", branch: "branch-1" }}
+        startupState={createReadyStartupState()}
+      />,
+    );
+
+    expect(html).toContain("Attach branch session");
+    expect(html).toContain(
+      "Reusable session session:workflow-branch is active in the local browser-agent runtime.",
+    );
+  });
+
+  it("switches the commit action into attach mode when an active commit session exists", () => {
+    const action = createCommitSessionActionModel({
+      authStatus: "ready",
+      commitQueue: createCommitQueue(),
+      lookupState: {
+        status: "ready",
+        result: {
+          attach: {
+            attachToken: "attach:commit:1",
+            browserAgentSessionId: "browser-agent:commit:1",
+            expiresAt: "2026-03-26T03:00:00.000Z",
+            transport: "browser-agent-http",
+          },
+          found: true,
+          ok: true,
+          session: {
+            id: "session:commit:1",
+            kind: "execution",
+            runtimeState: "running",
+            sessionKey: "session:workflow-commit",
+            startedAt: "2026-03-26T02:00:00.000Z",
+            subject: {
+              kind: "commit",
+              branchId: "branch-1",
+              commitId: "commit-1",
+            },
+          },
+          workspace: {
+            repositoryId: "repo-1",
+          },
+        },
+      },
+      runtime: createRuntimeState(),
+      selectedBranchState: "active",
+    });
+
+    expect(action.label).toBe("Attach commit session");
+    expect(action.preference).toEqual({ mode: "attach-existing" });
+  });
+
+  it("keeps commit attach recovery explicit after reload when a reusable session is found", () => {
+    const lookupResult = {
+      attach: {
+        attachToken: "attach:commit:1",
+        browserAgentSessionId: "browser-agent:commit:1",
+        expiresAt: "2026-03-26T03:00:00.000Z",
+        transport: "browser-agent-http",
+      },
+      found: true,
+      ok: true,
+      session: {
+        id: "session:commit:1",
+        kind: "execution",
+        runtimeState: "running",
+        sessionKey: "session:workflow-commit",
+        startedAt: "2026-03-26T02:00:00.000Z",
+        subject: {
+          kind: "commit",
+          branchId: "branch-1",
+          commitId: "commit-1",
+        },
+      },
+      workspace: {
+        repositoryId: "repo-1",
+      },
+    } as const;
+    const html = renderToStaticMarkup(
+      <WorkflowReviewSurface
+        branchAction={createBranchActionOverrides()}
+        branchActionState={undefined}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitSessionActionModel({
+          authStatus: "ready",
+          commitQueue: createCommitQueue(),
+          lookupState: {
+            status: "ready",
+            result: lookupResult,
+          },
+          runtime: createRuntimeState(),
+          selectedBranchState: "active",
+        })}
+        commitActionState={undefined}
+        commitLookupState={{
+          status: "ready",
+          result: lookupResult,
+        }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
+        readState={{
+          branchBoard: createBranchBoard(),
+          commitQueue: createCommitQueue(),
+          status: "ready",
+        }}
+        runtime={createRuntimeState()}
+        search={{ project: "project-io", branch: "branch-1" }}
+        startupState={createReadyStartupState()}
+      />,
+    );
+
+    expect(html).toContain("Attach commit session");
+    expect(html).toContain(
+      "Reusable session session:workflow-commit is active in the local browser-agent runtime.",
+    );
+  });
+
+  it("surfaces explicit degraded branch attach recovery failures", () => {
+    const commitQueue = {
+      ...createCommitQueue(),
+      branch: {
+        ...createCommitQueue().branch,
+        latestSession: undefined,
+      },
+    } satisfies CommitQueueScopeResult;
+    const action = createBranchSessionActionModel({
+      authStatus: "ready",
+      commitQueue,
+      lookupState: {
+        message: "Repository mismatch. Expected repo-1 before attach can continue.",
+        status: "failed",
+      },
+      runtime: createRuntimeState(),
+      selectedBranchState: "active",
+    });
+
+    expect(action.availability).toBe("unavailable");
+    expect(action.reason).toBe("Repository mismatch. Expected repo-1 before attach can continue.");
+  });
+
+  it("renders typed launch failures inline for commit sessions", () => {
+    const html = renderToStaticMarkup(
+      <WorkflowReviewSurface
+        branchAction={createBranchActionOverrides()}
+        branchActionState={undefined}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitActionOverrides()}
+        commitActionState={{
+          message: "The selected commit is locked by another running session.",
+          result: {
+            code: "subject-locked",
+            message: "The selected commit is locked by another running session.",
+            ok: false,
+            retryable: true,
+            source: "authority",
+          },
+          status: "failure",
+        }}
+        commitLookupState={{ status: "idle" }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
+        readState={{
+          branchBoard: createBranchBoard(),
+          commitQueue: createCommitQueue(),
+          status: "ready",
+        }}
+        runtime={createRuntimeState()}
+        search={{ project: "project-io", branch: "branch-1" }}
+        startupState={createReadyStartupState()}
+      />,
+    );
+
+    expect(html).toContain("The selected commit is locked by another running session.");
+    expect(html).toContain('data-workflow-commit-session-state="failure"');
+  });
+
+  it("renders branch launch metadata after a successful browser-agent handoff", () => {
+    const html = renderToStaticMarkup(
+      <WorkflowReviewSurface
+        branchAction={createBranchSessionActionModel({
+          authStatus: "ready",
+          commitQueue: createCommitQueue(),
+          lookupState: { status: "idle" },
+          runtime: createRuntimeState(),
+          selectedBranchState: "active",
+        })}
+        branchActionState={{
+          message: "Attached to session:workflow-branch.",
+          result: {
+            attach: {
+              attachToken: "attach:1",
+              browserAgentSessionId: "browser-agent:1",
+              expiresAt: "2026-03-26T03:00:00.000Z",
+              transport: "browser-agent-http",
+            },
+            authority: {
+              appendGrant: {
+                allowedActions: ["append-session-events", "write-artifact", "write-decision"],
+                expiresAt: "2026-03-26T03:00:00.000Z",
+                grantId: "grant:1",
+                grantToken: "grant-token:1",
+                issuedAt: "2026-03-26T02:00:00.000Z",
+                sessionId: "session:1",
+              },
+              auditActorPrincipalId: "principal:1",
+            },
+            ok: true,
+            outcome: "attached",
+            session: {
+              id: "session:1",
+              kind: "planning",
+              runtimeState: "running",
+              sessionKey: "session:workflow-branch",
+              startedAt: "2026-03-26T02:00:00.000Z",
+              subject: {
+                kind: "branch",
+                branchId: "branch-1",
+              },
+            },
+            workspace: {
+              repositoryBranchName: "workflow/runtime",
+              repositoryId: "repo-1",
+              repositoryRoot: "/workspace/io",
+              worktreePath: "/tmp/worktree-1",
+            },
+          },
+          status: "success",
+        }}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitActionOverrides()}
+        commitActionState={undefined}
+        commitLookupState={{ status: "idle" }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
+        readState={{
+          branchBoard: createBranchBoard(),
+          commitQueue: createCommitQueue(),
+          status: "ready",
+        }}
+        runtime={createRuntimeState()}
+        search={{ project: "project-io", branch: "branch-1" }}
+        startupState={createReadyStartupState()}
+      />,
+    );
+
+    expect(html).toContain("Attach token");
+    expect(html).toContain("attach:1");
+    expect(html).toContain("Browser-agent session");
+    expect(html).toContain("workflow/runtime");
+  });
+
+  it("renders commit launch metadata after a successful browser-agent handoff", () => {
+    const html = renderToStaticMarkup(
+      <WorkflowReviewSurface
+        branchAction={createBranchActionOverrides()}
+        branchActionState={undefined}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitSessionActionModel({
+          authStatus: "ready",
+          commitQueue: createCommitQueue(),
+          lookupState: { status: "idle" },
+          runtime: createRuntimeState(),
+          selectedBranchState: "active",
+        })}
+        commitActionState={{
+          message: "Attached to session:workflow-commit.",
+          result: {
+            attach: {
+              attachToken: "attach:commit:1",
+              browserAgentSessionId: "browser-agent:commit:1",
+              expiresAt: "2026-03-26T03:00:00.000Z",
+              transport: "browser-agent-http",
+            },
+            authority: {
+              appendGrant: {
+                allowedActions: ["append-session-events", "write-artifact", "write-decision"],
+                expiresAt: "2026-03-26T03:00:00.000Z",
+                grantId: "grant:commit:1",
+                grantToken: "grant-token:commit:1",
+                issuedAt: "2026-03-26T02:00:00.000Z",
+                sessionId: "session:commit:1",
+              },
+              auditActorPrincipalId: "principal:1",
+            },
+            ok: true,
+            outcome: "attached",
+            session: {
+              id: "session:commit:1",
+              kind: "execution",
+              runtimeState: "running",
+              sessionKey: "session:workflow-commit",
+              startedAt: "2026-03-26T02:00:00.000Z",
+              subject: {
+                kind: "commit",
+                branchId: "branch-1",
+                commitId: "commit-1",
+              },
+            },
+            workspace: {
+              repositoryBranchName: "workflow/runtime",
+              repositoryId: "repo-1",
+              repositoryRoot: "/workspace/io",
+              worktreePath: "/tmp/worktree-1",
+            },
+          },
+          status: "success",
+        }}
+        commitLookupState={{ status: "idle" }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
+        readState={{
+          branchBoard: createBranchBoard(),
+          commitQueue: createCommitQueue(),
+          status: "ready",
+        }}
+        runtime={createRuntimeState()}
+        search={{ project: "project-io", branch: "branch-1" }}
+        startupState={createReadyStartupState()}
+      />,
+    );
+
+    expect(html).toContain("Attach commit session");
+    expect(html).toContain("attach:commit:1");
+    expect(html).toContain("session:workflow-commit");
+    expect(html).toContain("Browser-agent session");
   });
 });

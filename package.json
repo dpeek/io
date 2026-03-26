@@ -11,6 +11,7 @@
   "type": "module",
   "exports": {
     "./agent": "./src/agent/index.ts",
+    "./browser-agent": "./src/browser-agent/index.ts",
     "./cli": "./src/cli/index.ts",
     "./config": "./src/config/index.ts",
     "./graph": "./src/graph/index.ts",

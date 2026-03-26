@@ -94,7 +94,10 @@ and `POST /api/workflow-live` routes are part of that same package boundary.
 query envelope, while `/api/workflow-read` remains the workflow-specific proof
 and compatibility surface for the first shipped board and commit-queue reads.
 Those routes are still web-owned surfaces rather than published graph-owned
-command registries.
+command registries. Browser launch and attach do not go through Worker routes:
+the browser now probes a separate localhost `browser-agent` runtime over
+`../../src/browser-agent/transport.ts`, and `/workflow` keeps unavailable local
+runtime state explicit until that bridge is reachable.
 
 ## Docs
 
@@ -201,6 +204,9 @@ command registries.
   loop that keeps `/workflow` registered against workflow-review live
   invalidations, triggers scoped refreshes only, and tears the registration
   down on route exit
+- `../../src/browser-agent/transport.ts`: shared localhost browser-agent
+  transport contract covering runtime health, launch-session requests, and
+  active-session lookup so browser and local runtime use the same typed bridge
 - `../../src/web/lib/authority.ts`: shared web authority behavior, secret-field
   mutation flow, the current web-owned `/api/commands` envelope, the shared
   write/command authorization seam, principal-aware sync filtering that omits

@@ -997,23 +997,189 @@ interface CommitQueueScopeResult {
 ### `CodexSessionLaunch`
 
 - purpose: start an interactive Codex session in branch or commit context from
-  the TUI
-- caller: TUI branch detail view, future web operator view
+  the TUI or browser workflow shell
+- caller: TUI branch detail view, browser workflow shell
 - callee: session launcher plus workspace manager
-- inputs:
-  - `projectId`
-  - `subject`
-  - actor principal
-  - session kind such as `planning`, `execution`, or `review`
+- canonical request and result:
+
+```ts
+type CodexSessionKind = "planning" | "execution" | "review";
+
+type CodexSessionLaunchSubject =
+  | { kind: "branch"; branchId: string }
+  | { kind: "commit"; branchId: string; commitId: string };
+
+type CodexSessionLaunchPreference =
+  | { mode: "launch-new" }
+  | { mode: "attach-or-launch" }
+  | { mode: "attach-existing" };
+
+interface CodexSessionLaunchActor {
+  principalId: string;
+  sessionId: string;
+  surface: "tui" | "browser";
+}
+
+interface CodexSessionLaunchLease {
+  leaseId: string;
+  leaseToken: string;
+  issuedAt: string;
+  expiresAt: string;
+  actor: CodexSessionLaunchActor;
+  projectId: string;
+  subject: CodexSessionLaunchSubject;
+  kind: CodexSessionKind;
+  allowedActions: readonly [
+    "launch-session",
+    "attach-session",
+    "append-session-events",
+    "write-artifact",
+    "write-decision",
+  ];
+}
+
+interface CodexSessionLaunchRequest {
+  projectId: string;
+  subject: CodexSessionLaunchSubject;
+  actor: CodexSessionLaunchActor;
+  kind: CodexSessionKind;
+  preference?: CodexSessionLaunchPreference;
+  selection?: {
+    projectId?: string;
+    branchId?: string;
+    commitId?: string;
+  };
+  delegation?: {
+    lease: CodexSessionLaunchLease;
+  };
+}
+
+interface CodexSessionSummary {
+  id: string;
+  sessionKey: string;
+  kind: CodexSessionKind;
+  runtimeState:
+    | "starting"
+    | "running"
+    | "awaiting-user-input"
+    | "blocked"
+    | "completed"
+    | "failed"
+    | "cancelled";
+  subject: CodexSessionLaunchSubject;
+  startedAt: string;
+}
+
+interface CodexSessionAttachHandle {
+  browserAgentSessionId: string;
+  transport: "browser-agent-http";
+  attachToken: string;
+  expiresAt: string;
+}
+
+interface CodexSessionWorkspaceBinding {
+  repositoryId: string;
+  repositoryRoot?: string;
+  repositoryBranchName?: string;
+  worktreePath?: string;
+  workspaceLeaseId?: string;
+}
+
+interface CodexSessionAuthorityGrant {
+  grantId: string;
+  grantToken: string;
+  issuedAt: string;
+  expiresAt: string;
+  sessionId: string;
+  allowedActions: readonly ["append-session-events", "write-artifact", "write-decision"];
+}
+
+interface CodexSessionLaunchSuccess {
+  ok: true;
+  outcome: "launched" | "attached";
+  session: CodexSessionSummary;
+  attach: CodexSessionAttachHandle;
+  workspace: CodexSessionWorkspaceBinding;
+  reuse?: {
+    reusedSessionId: string;
+    reason: "active-session" | "explicit-attach";
+  };
+  authority: {
+    auditActorPrincipalId: string;
+    appendGrant: CodexSessionAuthorityGrant;
+  };
+}
+
+type CodexSessionLaunchFailureCode =
+  | "policy-denied"
+  | "launch-lease-expired"
+  | "session-not-found"
+  | "subject-locked"
+  | "workspace-unavailable"
+  | "repository-branch-missing"
+  | "repository-mismatch"
+  | "local-bridge-unavailable";
+
+interface CodexSessionLaunchFailure {
+  ok: false;
+  code: CodexSessionLaunchFailureCode;
+  source: "browser" | "browser-agent" | "authority";
+  retryable: boolean;
+  message: string;
+  details?: {
+    activeSessionId?: string;
+    activeSessionKey?: string;
+    leaseExpiresAt?: string;
+    expectedRepositoryId?: string;
+    observedRepositoryId?: string;
+  };
+}
+
+type CodexSessionLaunchResult = CodexSessionLaunchSuccess | CodexSessionLaunchFailure;
+```
+
+- contract rules:
+  - this remains the one launch contract for TUI and browser surfaces; the
+    browser path uses the same `CodexSessionLaunchRequest` and
+    `CodexSessionLaunchResult` shapes instead of defining a separate browser
+    launch payload
+  - `preference.mode = "attach-or-launch"` allows the callee to reuse an
+    existing active session for the same project, subject, and session kind;
+    when reuse happens, the result sets `outcome = "attached"` and fills
+    `reuse`
+  - `preference.mode = "attach-existing"` never creates a new session; if no
+    compatible active session exists, fail as `session-not-found`
+  - `selection` is advisory browser or TUI state carried for deep-link recovery
+    and audit trails; it must not expand authority beyond `projectId`,
+    `subject`, and `kind`
+  - browser callers must supply `delegation.lease`; TUI callers may omit it
+    when the launcher already runs in a trusted local operator process
+  - the launch lease is short-lived, user-bound, and subject-bound; the
+    authority validates that `actor`, `projectId`, `subject`, and `kind` still
+    match before accepting launch or attach
+  - successful launch returns a session-scoped `appendGrant`; the local runtime
+    uses that narrower grant for later `AgentSessionAppend`, `ArtifactWrite`,
+    and `DecisionWrite` calls instead of reusing the broader launch lease
+  - `attach.attachToken` is an opaque reconnect handle for the browser to rejoin
+    the local `browser-agent` runtime after reload; it is not an authority
+    credential
+  - `workspace.repositoryRoot` and `workspace.worktreePath` are optional
+    because attach may succeed before a new worktree reservation is needed
 - outputs:
   - persisted `AgentSession`
-  - launch metadata including repository id, branch name, and worktree path if
-    assigned
+  - attach handoff for browser or TUI reconnect
+  - repository and worktree binding metadata when assigned
+  - session-scoped delegated authority grant for append, artifact, and
+    decision writes
 - failure shape:
+  - `policy-denied`
+  - `launch-lease-expired`
+  - `session-not-found`
   - `subject-locked`
   - `workspace-unavailable`
   - `repository-branch-missing`
-  - `policy-denied`
+  - `repository-mismatch`
+  - `local-bridge-unavailable`
 - stability: `stable`
 
 ### `AgentSessionAppend`
