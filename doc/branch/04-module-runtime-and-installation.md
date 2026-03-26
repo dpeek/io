@@ -1009,12 +1009,14 @@ own fact storage itself.
 
 ## 13. Recommended First Code Targets
 
-- `src/graph/runtime/contracts.ts`
-  Publish the canonical `ModulePermissionRequest` plus the manifest, install-
-  plan, install-result, and migration contract types here instead of
-  overloading `type-module.ts`.
-- `src/graph/runtime/index.ts` and `src/graph/index.ts`
-  Export the new module-runtime contracts from the root graph surface.
+- `lib/graph-authority/src/contracts.ts` and `src/graph/definition-contracts.ts`
+  Publish authority-owned permission contracts from `graph-authority`, and keep
+  any remaining root-safe manifest or definition contracts in the small
+  root-owned definition surface instead of reviving a mixed runtime bucket.
+- `src/graph/def.ts` and `src/graph/index.ts`
+  Export only the deliberate root-owned definition contracts from `def`, and
+  keep the root graph surface curated instead of reintroducing a catch-all
+  runtime barrel.
 - `src/graph/modules/ops/env-var/module.ts`
   Wrap the existing env-var schema and secret-aware descriptors as the first
   optional built-in module bundle.

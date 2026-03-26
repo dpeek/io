@@ -252,7 +252,7 @@ Current editor interaction model:
   request and response envelopes plus the fetch helper that browser, TUI, or
   MCP callers can reuse for the first shipped `ProjectBranchScope` and
   `CommitQueueScope` compatibility proof while generic serialized-query callers
-  move to `../../src/graph/runtime/http-client.ts`
+  move to `../../lib/graph-client/src/http.ts` via `@io/graph-client`
 - `../../src/web/lib/workflow-live-transport.ts`: shared
   `POST /api/workflow-live` request and response envelopes plus the fetch
   helper that callers can reuse for the first ephemeral workflow review live

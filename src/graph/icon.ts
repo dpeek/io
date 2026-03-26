@@ -1,4 +1,4 @@
-import type { ValidationIssueInput } from "./runtime/schema.js";
+import type { ValidationIssueInput } from "@io/graph-kernel";
 
 type SvgValidationIssue = ValidationIssueInput;
 

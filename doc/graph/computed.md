@@ -2,9 +2,13 @@
 
 ## Purpose
 
-This document describes a proposed computed-value layer for `graph`: lazily
-evaluated, memoized, read-only derivations built on top of the existing typed
-ref and predicate-slot subscription surface.
+This document describes a proposed computed-predicate or computed-value layer
+for `graph`: lazily evaluated, memoized, read-only derivations built on top of
+the existing typed ref and predicate-slot subscription surface.
+
+This document uses "computed predicate" as schema-authoring shorthand for a
+field-like derived read that belongs with a type definition. It does not imply
+that the result is a durable graph predicate or an authoritative stored fact.
 
 This is not current engine behavior. Today the reactive leaf boundary is still
 the predicate slot, exposed through `PredicateRef.get()` and
@@ -56,6 +60,64 @@ The current runtime already establishes the key constraints:
 
 That suggests the correct placement for computed values is above the store and
 alongside the typed client surface, not inside the schema-agnostic kernel.
+
+## Package Placement In The Current Layout
+
+The extracted package split changes where each part of this feature should
+live.
+
+### Definition-time authoring belongs on `@io/core/graph/def`
+
+Schema authors should define computed predicates through `@io/core/graph/def`,
+the same focused root-owned authoring surface that already gathers:
+
+- `defineType(...)`, `defineScalar(...)`, and `defineEnum(...)` from
+  `@io/graph-kernel`
+- field-authoring helpers such as `defineReferenceField(...)`
+- root-owned definition-time contracts that do not belong in an extracted
+  runtime package cleanly
+
+That keeps model authoring coherent. A type author should not need to import
+`@io/graph-client` just to declare that a type has computed predicates.
+
+In the current source tree, that means the canonical import surface is
+`../../src/graph/def.ts`, with the actual computed-definition helpers likely
+living in a small root-owned definition module re-exported from that barrel.
+
+### Runtime evaluation belongs in `@io/graph-client`
+
+The runtime behavior of computed predicates should live in `@io/graph-client`,
+because that package already owns:
+
+- typed graph clients
+- entity refs and predicate refs
+- local read semantics
+- the subscribe/get contract that computed values should reuse
+
+This is where `ComputedRef<T>`, dependency collection, invalidation, memoized
+evaluation, and `entity.computed.*` attachment belong.
+
+### React helpers belong on `@io/core/graph/runtime/react`
+
+Host-neutral React helpers such as `useComputedValue(...)` should live beside
+the existing predicate and entity hooks on `@io/core/graph/runtime/react`.
+
+That keeps React concerns out of `@io/graph-client` while still exposing one
+small host-neutral hook layer above the computed runtime.
+
+### Other extracted packages should stay uninvolved in the first cut
+
+The first cut should not require core feature work in:
+
+- `@io/graph-kernel`: it should remain schema-agnostic and unaware of computed
+  evaluation
+- `@io/graph-bootstrap`: bootstrap does not need special computed behavior
+- `@io/graph-sync`: sync contracts do not change when computed values are
+  transient
+- `@io/graph-authority`: authority storage and replay do not need schema
+  changes for local computed reads
+- `@io/graph-projection`: only relevant later if materialized computed outputs
+  become retained projection caches
 
 ## Core Model
 
@@ -121,6 +183,13 @@ happen while the compute function runs.
 The cleanest first shape is to define computed values adjacent to a durable type
 definition rather than mixing them into `defineType(...)` itself.
 
+The canonical authoring import should be `@io/core/graph/def`, even though the
+evaluation runtime lives elsewhere.
+
+```ts
+import { computed, defineComputed, defineType } from "@io/core/graph/def";
+```
+
 ```ts
 export const task = defineType({
   key: "ops:task",
@@ -158,6 +227,8 @@ The important properties of that shape are:
 - computed values are explicitly grouped under `computed`
 - the body uses ordinary typed refs, not a special dependency DSL
 - return type metadata stays explicit enough for inference and tooling
+- the schema author stays on the root-owned definition surface rather than
+  importing client runtime internals
 
 Whether the helper ends up named `defineComputed(...)`, `defineDerived(...)`, or
 something else is secondary. The important part is keeping durable fields and
@@ -438,39 +509,90 @@ In particular, it should not:
 The more deterministic the body is, the more predictable memoization and
 subscription behavior become.
 
-## Likely Package Boundaries
+## Likely Internal Source Layout
 
-This feature should not force major package reshaping.
+This feature should not force major package reshaping, but it does need one
+clear split between definition-time helpers and runtime evaluation.
 
-- `@io/graph-kernel` can stay schema-agnostic and unaware of computed values
-- `@io/graph-client` is the natural home for the base computed runtime because
-  it already owns typed refs and the read contract
-- `src/graph/runtime/react/` can add `useComputedValue(...)` and related React
-  helpers
-- persistence, sync, and authority storage do not need schema changes for the
-  first cut
+### Root-owned definition surface
 
-That keeps the kernel small and places computed logic where typed reads already
-live.
+Definition-only helpers should be exported from `../../src/graph/def.ts`.
+
+That barrel already exists to gather:
+
+- kernel-owned schema primitives that remain part of the authoring surface
+- root-owned definition helpers that do not fit an extracted package cleanly
+- root-owned definition contracts such as command and view manifests
+
+Computed-predicate authoring utilities belong in that same category. The
+underlying implementation likely belongs in a small sibling module such as a
+new computed-definition file re-exported from `def.ts`, rather than inside
+`@io/graph-client`.
+
+### Client runtime
+
+The execution runtime should live under `../../lib/graph-client/src/`.
+
+That package should own:
+
+- `ComputedRef<T>`
+- the dependency collector
+- node invalidation and memoization
+- attachment of computed refs onto typed entity refs
+- any runtime helpers needed to bridge predicate reads into computed
+  dependencies
+
+This is the real engine for computed values. It is where reads happen and where
+subscriptions are already modeled today.
+
+### React layer
+
+The React helper layer should live under `../../src/graph/runtime/react/`.
+
+That layer should own:
+
+- `useComputedValue(...)`
+- any snapshot-stabilization helper mirroring `usePredicateValue(...)`
+- host-neutral React glue only
+
+It should not own dependency tracking or the base computed runtime itself.
+
+### Packages that should remain unchanged in v1
+
+For the first cut, none of these packages need feature ownership beyond
+possibly consuming the result later:
+
+- `../../lib/graph-kernel/src/`
+- `../../lib/graph-bootstrap/src/`
+- `../../lib/graph-sync/src/`
+- `../../lib/graph-authority/src/`
+- `../../lib/graph-projection/src/`
+
+That keeps the durable engine contracts stable while the computed layer proves
+itself as a client-side read abstraction.
 
 ## Recommended First Increment
 
 The smallest useful implementation would be:
 
-1. introduce a `ComputedRef<T>` contract with `get()` and `subscribe(...)`
-2. add a small dependency collector runtime in `@io/graph-client`
-3. track predicate reads and nested computed reads
-4. attach computed refs to entity refs under `entity.computed`
-5. add `useComputedValue(...)` in the React layer
-6. document that `list()` and `query()` are not reactive dependencies yet
+1. introduce definition-time helpers on `@io/core/graph/def` such as
+   `computed(...)` and `defineComputed(...)`
+2. introduce a `ComputedRef<T>` runtime contract with `get()` and
+   `subscribe(...)` in `@io/graph-client`
+3. add a small dependency collector runtime in `@io/graph-client`
+4. track predicate reads and nested computed reads
+5. attach computed refs to entity refs under `entity.computed`
+6. add `useComputedValue(...)` in the React layer
+7. document that `list()` and `query()` are not reactive dependencies yet
 
 That would already unlock a large class of application logic without forcing a
 query planner or a new persistence model.
 
 ## Open Design Questions
 
-- Should computed definitions live entirely beside `defineType(...)`, or should
-  type authoring eventually grow a `computed` section?
+- Assuming the canonical import stays `@io/core/graph/def`, should computed
+  definitions live entirely beside `defineType(...)`, or should type authoring
+  eventually grow a `computed` section?
 - Should the first cut allow custom equality for expensive or unordered derived
   values, or should it always use the shared logical equality helper?
 - Should there be a separate notion of parameterized computed families, such as

@@ -1,4 +1,4 @@
-import type { TypeModuleFilter } from "../../../runtime/type-module.js";
+import type { TypeModuleFilter } from "../../../type-module.js";
 
 function parseNumber(raw: string): number {
   const value = Number(raw);

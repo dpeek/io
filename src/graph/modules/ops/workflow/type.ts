@@ -1,6 +1,6 @@
 import { defineEnum, defineType } from "@io/core/graph/def";
 
-import { existingEntityReferenceField } from "../../../runtime/reference-policy.js";
+import { existingEntityReferenceField } from "../../../reference-policy.js";
 import { core } from "../../core.js";
 import { booleanTypeModule } from "../../core/boolean/index.js";
 import { dateTypeModule } from "../../core/date/index.js";

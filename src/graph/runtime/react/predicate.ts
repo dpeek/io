@@ -10,9 +10,9 @@ import { useMemo, useRef, useSyncExternalStore } from "react";
 import {
   entityReferenceComboboxEditorKind,
   entityReferenceListDisplayKind,
-  type EditorInputMode,
   type ExistingEntityReferencePolicy,
-} from "../../index.js";
+} from "../../reference-policy.js";
+import type { EditorInputMode } from "../../type-module.js";
 
 export type PredicateFieldMeta<T extends EdgeOutput> = T extends { meta: infer Meta }
   ? Meta

@@ -1,6 +1,6 @@
 import { defineType } from "@io/core/graph/def";
 
-import { defineReferenceField } from "../../../runtime/type-module.js";
+import { defineReferenceField } from "../../../type-module.js";
 import { dateTypeModule } from "../date/index.js";
 import { graphIconSeeds } from "../icon/seed.js";
 import { stringTypeModule } from "../string/index.js";

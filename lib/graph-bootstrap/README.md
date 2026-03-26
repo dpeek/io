@@ -25,6 +25,8 @@
 Icons are a core graph concept, but the concrete icon catalog is domain-owned.
 `@io/graph-bootstrap` only understands icon contracts:
 
+- schema-authored `DefinitionIconRef` values and `readDefinitionIconId(...)`
+  from `@io/graph-kernel`
 - optional icon seed records that can be materialized during bootstrap
 - optional type and predicate icon resolvers
 - optional per-id seed resolution for remappable or installable catalogs

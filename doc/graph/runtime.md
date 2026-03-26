@@ -2,179 +2,110 @@
 
 ## Purpose
 
-This document is the entry point for agents working on schema authoring, stable
-ids, additive bootstrap, store behavior, or root-safe runtime contracts.
-Authority-owned APIs now live in `@io/graph-authority`, and client-owned APIs
-such as `createGraphClient(...)`, `createSyncedGraphClient(...)`, and
-`createHttpGraphClient(...)` now live in `@io/graph-client`.
-Bootstrap-owned APIs such as `bootstrap(...)` and
-`createBootstrappedSnapshot(...)` now live in `@io/graph-bootstrap`.
-Shared Branch 3 projection/runtime metadata contracts now live in
-`@io/graph-projection`.
+This document is the entry point for agents working on the graph engine's
+low-level runtime seams after the package split.
 
-## Current Runtime Surface
+There is no longer a public non-React `@io/core/graph/runtime` surface. The
+old catch-all runtime layer has been collapsed into the owning packages plus a
+small root definition surface.
 
-### Store
+## Current Ownership
 
-`../../src/graph/runtime/store.ts` owns the schema-agnostic store:
+### Kernel
 
-- facts are `Edge { id, s, p, o }`
-- `assert(...)` appends a new edge
-- `assertEdge(...)` preserves pre-authored edge ids for replay/sync
-- `retract(...)` tombstones an edge without removing history
-- internal subject/predicate/object indexes accelerate common `find(...)` and `facts(...)` patterns
-- `snapshot()` and `replace(...)` support full-state transport
-- `batch(...)` coalesces predicate-slot notifications
-- `subscribePredicateSlot(s, p, listener)` is the reactive leaf boundary
+`@io/graph-kernel` is the source of truth for:
 
-### Schema authoring
+- ids and stable id generation
+- append-oriented store primitives
+- schema authoring helpers for entities, scalars, and enums
+- stable id mapping and namespace resolution
+- predicate policy descriptor helpers, including fallback policy lowering
 
-`../../src/graph/runtime/schema.ts` defines the core authoring contract:
+Key source files:
 
-- `defineType(...)` for entity types
-- `defineScalar(...)` for scalar codecs and reusable scalar validation
-- `defineEnum(...)` for enum families and option identities
-- `rangeOf(...)` to normalize key-or-type references without losing inference
-- `edgeId(...)`, `fieldTreeId(...)`, and `typeId(...)` to switch from authored keys to resolved ids
-- `GraphFieldAuthority` plus `graphFieldVisibilities`, `graphFieldWritePolicies`,
-  `fieldVisibility(...)`, `fieldWritePolicy(...)`, and
-  `fieldSecretMetadataVisibility(...)` publish the stable field-authority metadata
-  contract used by sync filtering, write validation, and secret-handle boundaries
+- `../../lib/graph-kernel/src/id.ts`
+- `../../lib/graph-kernel/src/store.ts`
+- `../../lib/graph-kernel/src/schema.ts`
+- `../../lib/graph-kernel/src/identity.ts`
 
-### Stable ids
+### Bootstrap
 
-`../../src/graph/runtime/identity.ts` owns key-to-id stability:
+`@io/graph-bootstrap` owns:
 
-- `defineNamespace(...)` injects resolved ids into schema definitions
-- `createIdMap(...)` and `extractSchemaKeys(...)` generate and reconcile id maps
-- rerunning `createIdMap(...)` with a prior map preserves assigned ids, adds ids only for newly
-  introduced owned keys, and leaves orphaned keys in place unless `pruneOrphans` is requested
-- `defineNamespace(...)` fails fast when a schema-owned key is missing a stable id or when the
-  supplied map contains duplicate or malformed ids, so bootstrap never runs against ambiguous
-  schema identity
-- `bun run ids check <schema-file.ts>`
-- `bun run ids sync <schema-file.ts> [--prune-orphans]`
-- `bun run ids rename <schema-file.ts> <old-key> <new-key>`
+- additive bootstrap into a live store
+- bootstrapped snapshot creation
+- bootstrap-facing schema requirements
+- bootstrap-specific icon seed/resolver contracts
 
-The current implementation keeps ids stable per key and treats rename as an explicit map-key move. There is no alias history layer.
+Key source file:
 
-### Core schema and bootstrap
+- `../../lib/graph-bootstrap/src/index.ts`
 
-`../../src/graph/modules/core.ts`, `../../src/graph/modules/core/bootstrap.ts`,
-and `../../lib/graph-bootstrap/src/index.ts` define and materialize the base
-graph model:
+### Authority
 
-- core scalars include string, number, date, boolean, url, email, and slug
-- core entities include `core:node`, `core:type`, `core:predicate`, and `core:enum`
-- the canonical namespace id map lives beside that entrypoint at `../../src/graph/modules/core.json`
-- `@io/graph-bootstrap` materializes seeded schema entities through the shared
-  validated create path when it owns the full typed shape, then writes the
-  remaining schema metadata facts into the store
-- `bootstrap(store, definitions, options)` is additive and idempotent for a
-  resolved definition slice: reapplying it after repeated startup or restart
-  does not duplicate schema facts or rewrite already materialized schema state
-- bootstrap-owned typed entities pin `createdAt` and `updatedAt` to the canonical
-  `2000-01-01T00:00:00.000Z` timestamp so independently bootstrapped stores converge on the same
-  logical schema facts during sync and preserve-snapshot merges
-- runtime-created entities keep their ordinary lifecycle timestamps; bootstrap-owned timestamps are
-  limited to schema entities and seed entities that bootstrap materializes itself
-- concrete icon catalogs remain domain-owned inputs; the built-in core icon
-  seed catalog and default resolvers live in `../../src/graph/modules/core/icon/seed.ts`
-  and plug into bootstrap through `../../src/graph/modules/core/bootstrap.ts`
-- `core:type.icon` and `core:predicate.icon` track definition-level icons, with inferred defaults
-  for enum types (`tag.svg`) and entity-reference predicates (`edge.svg`) before falling back to
-  `unknown.svg`
-- schema itself is represented as graph data, not only TypeScript structure
+`@io/graph-authority` owns:
 
-`../../lib/graph-bootstrap/src/index.ts` now owns both the additive live-store
-bootstrap runtime and the client-safe `createBootstrappedSnapshot(...)` helper.
-`../../src/graph/modules/core/bootstrap.ts` is the domain-owned adapter that
-supplies the built-in core schema requirements and icon catalog to that package
-without making the catalog part of bootstrap's public identity.
+- authoritative write sessions and persisted-authority contracts
+- auth subject, principal session, and browser bootstrap/session summary contracts
+- admission/share/module-permission contracts
+- replication filtering and authority validation helpers
 
-### Authoritative persistence
+Key source files:
 
-`../../lib/graph-authority/src/json-storage.ts` owns the shipped JSON adapter
-for the persisted authoritative runtime:
+- `../../lib/graph-authority/src/session.ts`
+- `../../lib/graph-authority/src/persisted-authority.ts`
+- `../../lib/graph-authority/src/contracts.ts`
 
-- `../../lib/graph-authority/src/persisted-authority.ts` is the stable shared contract for
-  `PersistedAuthoritativeGraphState`, the storage load/commit/persist inputs, and
-  `PersistedAuthoritativeGraphStorage`
-- `PersistedAuthoritativeGraphStorage` defines the hydration, incremental commit, and explicit snapshot-persist contract for durable state
-- persisted-authority `load()` results now carry `startupDiagnostics` with stable
-  `repairReasons` and `resetReasons`, and the returned persisted authority exposes
-  the same startup outcome to callers after bootstrap
-- `createJsonPersistedAuthoritativeGraphStorage(path, definitions)` provides the shipped file-backed JSON adapter for non-DO runtimes
-- `createJsonPersistedAuthoritativeGraph(store, namespace, { path, seed?, createCursorPrefix? })` composes that file-backed adapter with the persisted authority runtime
-- `createPersistedAuthoritativeGraph(store, namespace, { storage, seed?, createCursorPrefix? })` composes seeding, reload, incremental commit, explicit snapshot persistence, and authoritative write replay
-- `../../src/web/lib/graph-authority-do.ts` is the current SQLite-backed Durable Object consumer of that storage contract; it bootstraps SQL tables in the constructor, hydrates rows during authority init, and commits graph plus secret side-storage writes inside one Durable Object storage transaction
-- the SQLite row layout, Durable Object transaction wiring, and secret side-table
-  shape are current web-adapter details rather than part of the shared runtime
-  contract
-- the stable command-related shared surface stops at field-authority metadata,
-  `writeScope`, graph write envelopes, sync payloads, and
-  `PersistedAuthoritativeGraphStorage`; generic command envelopes, dispatch
-  registries, and routes remain consumer-owned
-- `../../src/web/lib/authority.ts` is the current web proof of that
-  consumer-owned lowering boundary rather than a published `graph` command
-  registry
-- `AuthoritativeGraphWriteResult` now retains `writeScope`, so persisted-authority storage keeps accepted `client-tx` versus `server-command` origin alongside cursor and transaction data
-- `GraphWriteTransaction.id` is the stable idempotency key; replaying the same canonical transaction reuses the accepted cursor with `replayed: true`, while reusing the id for different operations is rejected
-- graph-scoped incremental sync treats `transactions: []` without `fallback` as a successful no-op or cursor-advanced result; only explicit `fallback` requires total-sync recovery
-- cursor strings are opaque to transport callers; the current prefix-plus-sequence encoding belongs to shared runtime internals and persisted history rather than the downstream transport contract
-- file-backed persisted state stores a validated `snapshot` plus retained `writeHistory`, while the web Durable Object path reconstructs that same in-memory shape from `io_graph_meta`, `io_graph_tx`, `io_graph_tx_op`, `io_graph_edge`, and `io_secret_value`
-- legacy snapshot-only files are rewritten into the current versioned state shape
-- legacy versioned write histories that predate `writeScope` are normalized to `client-tx` on load and rewritten through the shared persistence path rather than treated as exact pre-migration authority-origin audit data
-- failed durable commits or snapshot persists roll back the accepted in-memory authority state so it does not diverge from disk
-- retained history now carries an explicit shared runtime policy via
-  `writeHistory.retainedHistoryPolicy`; the shipped baseline is still
-  count-based pruning, and when that retained window no longer covers an older
-  or broken cursor, authorities fall back to total-sync recovery instead of
-  serving stale incremental state
+### Root Definition Surface
 
-`../../lib/graph-authority/src/session.ts` owns the in-memory authoritative
-runtime surface:
+`@io/core/graph/def` is the small root-owned definition surface for graph
+helpers that do not belong in an extracted package:
 
-- `createAuthoritativeGraphWriteSession(store, namespace, options)` validates writes, retains accepted history, and produces incremental replay from retained cursors
-- `createAuthoritativeTotalSyncPayload(store, namespace, options)` filters authority-only facts first, then applies any caller-provided replication read authorizer over the remaining replicated slice
+- type-module authoring helpers
+- existing-entity reference authoring policy
+- pure definition-time contracts such as `ObjectViewSpec`, `WorkflowSpec`, and
+  `GraphCommandSpec`
 
-### Runtime helpers
+Key source files:
 
-- `../../src/graph/runtime/contracts.ts` publishes the root-safe auth shell,
-  module-permission, object-view, workflow, and browser bootstrap contracts
-- `../../lib/graph-authority/src/contracts.ts` publishes the authority-owned
-  Branch 2 authorization contract surface, including the
-  `entity-predicate-slice` share selector, durable `ShareGrant` shape, and the
-  validation helpers that reject malformed or non-shareable share slices before
-  runtime enforcement consumes them
-- `../../lib/graph-projection/src/index.ts`, consumed as
-  `@io/graph-projection`, owns the shared Branch 3 read-scope definitions,
-  projection metadata contracts, dependency keys, invalidation contracts, and
-  retained projection compatibility helpers
-- `../../src/graph/runtime/serialize.ts` contains internal helpers for turning store state into plain objects and schema views
-- `../../src/graph/modules/core/input.ts` contains input-kind guards used by scalar codecs
+- `../../src/graph/def.ts`
+- `../../src/graph/type-module.ts`
+- `../../src/graph/reference-policy.ts`
+- `../../src/graph/definition-contracts.ts`
+
+### React Runtime
+
+The remaining `runtime/` directory is intentionally about host-neutral React
+behavior:
+
+- `@io/core/graph/runtime/react` publishes the React hooks and resolver layer
+- `../../src/graph/runtime/react/` contains those implementation files
+
+It is no longer the source of truth for ids, store, schema, authority, or
+definition contracts.
+
+### Internal Inspection Helpers
+
+`../../src/graph/inspect.ts` contains internal helpers for turning store state
+into plain objects and schema views.
+
+Those helpers are intentionally not exported from the package surface because
+they depend on core-schema conventions such as `core:predicate.key`,
+`core:node.name`, and the built-in core scalar codecs.
 
 ## Current Constraints
 
 - Storage stays opaque and string-based; scalar decode/encode lives above it.
 - Field trees preserve authoring shape, but runtime linking uses resolved ids.
-- Reference fields should be authored through `defineReferenceField(...)` or helpers layered on top of it.
-- Store indexes remain an internal implementation detail; the public surface is still pattern lookups.
-- `@io/graph-authority` owns the persisted-authority contract and JSON adapter, but consumers still choose storage paths, bootstrap order, seed data, and process lifecycle, including the web package's SQLite Durable Object adapter.
-- Transport and generic command dispatch are still outside the runtime core;
-  persisted authority helpers only produce and consume graph sync/session
-  primitives.
-
-## Roadmap
-
-- add persistence backends beyond the current JSON snapshot-plus-history adapter
-- decide whether internal serialization helpers should become supported exports
-- add stronger schema-evolution guidance beyond the current id-map workflow
+- Reference fields should be authored through `defineReferenceField(...)` or
+  helpers layered on top of it.
+- Store indexes remain an internal implementation detail; the public surface is
+  still pattern lookups.
+- Transport and generic command dispatch remain consumer-owned.
 
 ## Future Work Suggestions
 
 1. Add one small end-to-end example showing schema authoring, id resolution, bootstrap, and a resulting store snapshot.
 2. Document when `rangeOf(...)` is preferred over passing raw strings directly.
-3. Clarify whether `serialize.ts` is intended to remain internal or graduate to public API.
-4. Add a short schema-evolution section covering safe rename and orphan-pruning workflows.
-5. Document which lookup patterns should stay covered by the current in-store indexes before a real query planner exists.
+3. Add a short schema-evolution section covering safe rename and orphan-pruning workflows.
+4. Document which lookup patterns should stay covered by the current in-store indexes before a real query planner exists.

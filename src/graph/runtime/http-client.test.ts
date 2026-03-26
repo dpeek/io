@@ -19,10 +19,17 @@ import {
 } from "@io/graph-client";
 import { createGraphClient } from "@io/graph-client";
 import {
+  applyGraphIdMap as applyIdMap,
+  createGraphIdMap as createIdMap,
+  createGraphStore as createStore,
+  defineType,
+  edgeId,
   createGraphWriteTransactionFromSnapshots,
+  type GraphStoreSnapshot,
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteResult,
   type GraphWriteTransaction,
+  typeId,
 } from "@io/graph-kernel";
 import {
   createIncrementalSyncFallback,
@@ -32,12 +39,9 @@ import {
   type SyncPayload,
 } from "@io/graph-sync";
 
+import { core } from "../modules/core.js";
 import { coreGraphBootstrapOptions } from "../modules/index.js";
 import { pkm } from "../modules/pkm.js";
-import { core } from "./core";
-import { createIdMap, applyIdMap } from "./identity";
-import { defineType, edgeId, typeId } from "./schema";
-import { createStore, type GraphStoreSnapshot } from "./store";
 
 const item = defineType({
   values: { key: "test:item", name: "Item" },

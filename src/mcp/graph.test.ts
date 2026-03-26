@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { createBootstrappedSnapshot } from "@io/graph-bootstrap";
 import {
-  createGraphClient,
-  type FetchImpl,
-  type GraphClient,
-} from "@io/graph-client";
+  createAuthoritativeGraphWriteSession,
+  createAuthoritativeTotalSyncPayload,
+} from "@io/graph-authority";
+import { createBootstrappedSnapshot } from "@io/graph-bootstrap";
+import { createGraphClient, type FetchImpl, type GraphClient } from "@io/graph-client";
 import {
   createGraphStore,
   type AnyTypeOutput,
@@ -14,10 +14,6 @@ import {
   type GraphWriteTransaction,
 } from "@io/graph-kernel";
 import { type SyncPayload } from "@io/graph-sync";
-import {
-  createAuthoritativeGraphWriteSession,
-  createAuthoritativeTotalSyncPayload,
-} from "@io/graph-authority";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 

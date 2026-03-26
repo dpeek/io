@@ -8,10 +8,13 @@ import {
   isEnumType,
   isFieldsOutput,
   isScalarType,
+  readDefinitionIconId,
   typeId,
   type AnyTypeOutput,
+  type DefinitionIconRef,
   type EdgeOutput,
   type FieldsOutput,
+  type GraphIconSeedRecord,
   type GraphStore,
   type GraphStoreSnapshot,
 } from "@io/graph-kernel";
@@ -19,19 +22,17 @@ import {
 import { requireGraphBootstrapCoreSchema, type GraphBootstrapCoreSchema } from "./core-schema.js";
 
 type SchemaTree = FieldsOutput;
-type DefinitionIconRef = string | { id: string };
 
 type BootstrapFacts = {
   readonly currentFactKeys: Set<string>;
   readonly existingNodeIds: Set<string>;
 };
 
-export type GraphBootstrapIconSeed = Readonly<{
-  id: string;
-  key: string;
-  name: string;
-  svg: string;
-}>;
+/**
+ * Bootstrap consumes the shared seed-record contract but does not own a global
+ * icon catalog. Callers supply domain-owned records through options.
+ */
+export type GraphBootstrapIconSeed = GraphIconSeedRecord;
 
 export type GraphBootstrapTypeIconResolver = (
   typeDef: Pick<AnyTypeOutput, "kind" | "values">,
@@ -94,16 +95,6 @@ const bootstrappedSnapshotCache = new WeakMap<
 
 function cloneBootstrapTimestamp(timestamp: Date | undefined): Date {
   return new Date((timestamp ?? defaultBootstrapTimestamp).getTime());
-}
-
-function isDefinitionIconObject(value: DefinitionIconRef | undefined): value is { id: string } {
-  return typeof value === "object" && value !== null && typeof value.id === "string";
-}
-
-function readDefinitionIconId(value: DefinitionIconRef | undefined): string | undefined {
-  if (typeof value === "string" && value.length > 0) return value;
-  if (isDefinitionIconObject(value) && value.id.length > 0) return value.id;
-  return undefined;
 }
 
 function isBootstrapIconSeed(value: unknown): value is GraphBootstrapIconSeed {

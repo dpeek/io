@@ -8,14 +8,18 @@ describe("graph-kernel package surface", () => {
       expect.arrayContaining([
         "applyGraphIdMap",
         "cloneGraphStoreSnapshot",
+        "createFallbackPolicyDescriptor",
         "createGraphId",
         "createGraphIdMap",
         "createGraphStore",
         "extractGraphSchemaKeys",
         "fieldTreeMeta",
+        "fieldPolicyFallbackContractVersion",
         "findDuplicateGraphIds",
         "graphWriteScopes",
         "isGraphWriteScope",
+        "readDefinitionIconId",
+        "resolveFieldPolicyDescriptor",
       ]),
     );
 

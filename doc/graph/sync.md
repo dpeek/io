@@ -15,9 +15,9 @@ The relevant package split is now:
 - `@io/graph-projection`: shared module scope definitions, projection metadata, dependency keys, invalidation contracts, and retained projection compatibility helpers
 - `@io/graph-sync`: sync contracts, cursor helpers, sync-core validation, sync-specific transaction materialization/apply helpers, and total sync sessions
 - `@io/graph-client`: synced-client runtime behavior, including the runtime-only `"pushing"` flush state
-- `json-storage.ts`: shipped JSON persistence adapter for durable authorities
-- `persisted-authority.ts`: durable authority contracts and startup recovery behavior
-- `session.ts`: authoritative write session state, history replay, and incremental delivery
+- `@io/graph-authority`: shipped JSON persistence adapter, durable authority
+  contracts and startup recovery behavior, plus authoritative write-session
+  state, history replay, and incremental delivery
 
 ## Current Contract
 

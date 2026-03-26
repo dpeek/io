@@ -3,8 +3,8 @@ import { describe, expect, it } from "bun:test";
 import { createStore } from "@io/core/graph";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
+import { createGraphIdMap as createIdMap } from "@io/graph-kernel";
 
-import { createIdMap } from "../../../runtime/identity.js";
 import { core } from "../../core.js";
 import { coreGraphBootstrapOptions } from "../../core/bootstrap.js";
 import { ops } from "../../ops.js";

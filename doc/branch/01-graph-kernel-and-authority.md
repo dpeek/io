@@ -378,7 +378,7 @@ Secret-backed fields:
 
 ### `IdMap` and namespace resolution
 
-- Name: `createIdMap(...)`, `defineNamespace(...)`, `extractSchemaKeys(...)`
+- Name: `createIdMap(...)`, `applyIdMap(...)`, `extractSchemaKeys(...)`
 - Purpose: assign and preserve stable runtime ids for schema-authored keys
 - Caller: graph bootstrap and schema-owning packages
 - Callee: graph identity layer
@@ -896,12 +896,13 @@ commands target.
 
 ## 13. Recommended First Code Targets
 
-- `src/graph/runtime/identity.ts` and `src/graph/runtime/bootstrap.ts` to lock
-  stable schema-id and bootstrap behavior in code comments and tests
-- `lib/graph-sync/src/contracts.ts`, `src/graph/runtime/authority-session.ts`,
-  and `src/graph/runtime/authority-replication.ts` to freeze tx, cursor,
-  replay, and replicated-field semantics
-- `src/graph/runtime/persisted-authority.ts` to keep the durable storage
+- `src/graph/runtime/identity.ts`, `src/graph/modules/core/bootstrap.ts`, and
+  `lib/graph-bootstrap/src/index.ts` to lock stable schema-id and bootstrap
+  behavior in code comments and tests
+- `lib/graph-sync/src/contracts.ts`, `lib/graph-authority/src/session.ts`, and
+  `lib/graph-authority/src/replication.ts` to freeze tx, cursor, replay, and
+  replicated-field semantics
+- `lib/graph-authority/src/persisted-authority.ts` to keep the durable storage
   boundary small and explicit
 - `src/web/lib/graph-authority-do.ts` to harden the SQLite-backed single-graph
   authority proof

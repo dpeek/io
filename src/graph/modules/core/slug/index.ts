@@ -1,4 +1,4 @@
-import type { TypeModuleFilter } from "../../../runtime/type-module.js";
+import type { TypeModuleFilter } from "../../../type-module.js";
 import { graphIconSeeds } from "../icon/seed.js";
 import { defineValidatedStringTypeModule } from "../validated-string.js";
 

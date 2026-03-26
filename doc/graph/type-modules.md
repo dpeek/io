@@ -8,24 +8,22 @@ contracts that live beside graph-owned types.
 
 ## Package Surfaces
 
-`../../src/graph/runtime/type-module.ts` defines the core type-module
-authoring surface. `../../src/graph/runtime/def.ts` re-exports the focused
-authoring subset, and `../../src/graph/runtime/contracts.ts` holds the pure
-shared contracts for authorization snapshots, module permission requests,
+`../../src/graph/type-module.ts` defines the root-owned type-module authoring
+surface. `../../src/graph/def.ts` re-exports the focused authoring subset, and
+`../../src/graph/definition-contracts.ts` holds the pure shared contracts for
 object views, workflows, and command descriptors.
 
 Canonical imports:
 
 - `@io/core/graph/def`: focused schema and type-module authoring helpers from
-  `../../src/graph/runtime/def.ts`
-- `@io/core/graph`: root runtime surface, including `ObjectViewSpec`,
-  `WorkflowSpec`, `GraphCommandSpec`, `ModulePermissionRequest`,
-  `PrincipalRoleBinding`, and `ModulePermissionApprovalRecord` from
-  `../../src/graph/runtime/contracts.ts`
-- `@io/core/graph/runtime`: full runtime entry surface from
-  `../../src/graph/runtime/index.ts`
+  `../../src/graph/def.ts`, including `ObjectViewSpec`, `WorkflowSpec`, and
+  `GraphCommandSpec`
+- `@io/core/graph`: small root helper surface for curated kernel aliases,
+  icon helpers, and reference-field authoring helpers
+- `@io/graph-authority`: authority-owned permission/admission/share contracts
+  such as `ModulePermissionRequest` and `ModulePermissionApprovalRecord`
 
-Exported building blocks in `../../src/graph/runtime/type-module.ts` include:
+Exported building blocks in `../../src/graph/type-module.ts` include:
 
 - `defineScalarModule(...)`
 - `defineEnumModule(...)`
@@ -35,8 +33,8 @@ Exported building blocks in `../../src/graph/runtime/type-module.ts` include:
 - `TypeModuleFilter`
 - field-level metadata and filter override types
 
-`../../src/graph/runtime/contracts.typecheck.ts` shows the intended usage in
-real code.
+`../../src/graph/def.typecheck.ts` and nearby module/type tests show the
+intended usage in real code.
 
 ## Secret-Field Contract
 
@@ -109,8 +107,8 @@ Current fields:
 - optional `policy.capabilities`, reusing the shared authorization capability-key vocabulary
 - optional `policy.touchesPredicates`, where each entry names a touched `predicateId`
 
-The descriptor belongs in `@io/core/graph`. The authoritative implementation,
-transport wiring, and route ownership still belong in `app`.
+The descriptor belongs in `@io/core/graph/def`. The authoritative
+implementation, transport wiring, and route ownership still belong in `app`.
 
 ## `ModulePermissionRequest`
 

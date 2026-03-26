@@ -3,7 +3,7 @@ import { defineEnum, defineType } from "@io/core/graph/def";
 import {
   entityReferenceComboboxEditorKind,
   existingEntityReferenceField,
-} from "../../../runtime/reference-policy.js";
+} from "../../../reference-policy.js";
 import { core } from "../../core.js";
 import { booleanTypeModule } from "../../core/boolean/index.js";
 import { defineDefaultEnumTypeModule } from "../../core/enum-module.js";

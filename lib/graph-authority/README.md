@@ -18,6 +18,7 @@ authoritative graph behavior.
 - authority-side replication filtering and read-authorizer contracts
 - authority-side validation helpers and validators
 - graph-owned authorization evaluation and share/admission/capability contracts
+- browser/bootstrap principal summary contracts and module-permission approvals
 
 ## What It Does Not Own
 
@@ -59,7 +60,8 @@ authoritative graph behavior.
   `PersistedAuthoritativeGraphStartupDiagnostics`,
   `AuthoritativeGraphWriteSession`, `ReplicationReadAuthorizer`
 - graph-owned policy contracts: `AuthorizationContext`, `AdmissionPolicy`,
-  `CapabilityGrant`, `ShareGrant`, `PrincipalRoleBinding`, `GraphCommandPolicy`
+  `CapabilityGrant`, `ShareGrant`, `PrincipalRoleBinding`, `GraphCommandPolicy`,
+  `WebPrincipalBootstrapPayload`, `ModulePermissionApprovalRecord`
 
 ## Build Output
 

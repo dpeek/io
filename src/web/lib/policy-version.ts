@@ -1,13 +1,13 @@
-import {
-  fieldPolicyDescriptor,
-  fieldPolicyFallbackContractVersion,
-  resolveFieldPolicyDescriptor,
-  type GraphFieldAuthority,
-} from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 import { shareSurfaceContractVersion, type PolicyVersion } from "@io/graph-authority";
+import {
+  type GraphFieldAuthority,
+  fieldPolicyDescriptor,
+  fieldPolicyFallbackContractVersion,
+  resolveFieldPolicyDescriptor,
+} from "@io/graph-kernel";
 
 import { webAuthorityPolicyEvaluatorVersion } from "./policy-contract.js";
 

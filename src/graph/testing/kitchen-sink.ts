@@ -1,5 +1,5 @@
-import { createIdMap } from "../runtime/identity.js";
-import { applyIdMap } from "../runtime/schema.js";
+import { applyGraphIdMap as applyIdMap, createGraphIdMap as createIdMap } from "@io/graph-kernel";
+
 import { kitchenSinkEnumSchema } from "./kitchen-sink/enums.js";
 import { kitchenSinkScalarSchema } from "./kitchen-sink/scalars.js";
 import { kitchenSinkTypeSchema } from "./kitchen-sink/types.js";

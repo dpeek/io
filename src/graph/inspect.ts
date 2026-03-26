@@ -1,8 +1,16 @@
 import type { GraphId, GraphStore } from "@io/graph-kernel";
+import { edgeId, typeId, type EdgeOutput } from "@io/graph-kernel";
 
-import { core } from "./core";
-import { edgeId, typeId } from "./schema";
-import type { EdgeOutput } from "./schema";
+import { core } from "./modules/core.js";
+
+/**
+ * Internal graph inspection helpers for turning store state into plain objects.
+ *
+ * These helpers intentionally stay out of the published package surface for
+ * now. They depend on core-schema conventions ("key", "name", and core scalar
+ * codecs) and are better treated as debugging/inspection utilities than as a
+ * stable runtime contract.
+ */
 
 /**
  * Returns the serialization key for a predicate node:

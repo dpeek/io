@@ -1,4 +1,4 @@
-import { defineScalarModule } from "../../../runtime/type-module.js";
+import { defineScalarModule } from "../../../type-module.js";
 import { quantityFilter } from "./filter.js";
 import { quantityMeta } from "./meta.js";
 import {

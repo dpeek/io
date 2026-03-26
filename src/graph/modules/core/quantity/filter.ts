@@ -1,4 +1,4 @@
-import type { TypeModuleFilter } from "../../../runtime/type-module.js";
+import type { TypeModuleFilter } from "../../../type-module.js";
 import { formatQuantity, parseQuantity, type QuantityValue } from "./type.js";
 
 export const quantityFilter = {

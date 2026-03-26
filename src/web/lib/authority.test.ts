@@ -8,7 +8,6 @@ import {
   defineType,
   edgeId,
   type AnyTypeOutput,
-  type AuthSubjectRef,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
@@ -22,7 +21,7 @@ import {
   workflowReviewSyncScopeRequest,
 } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
-import { type AuthorizationContext } from "@io/graph-authority";
+import { type AuthSubjectRef, type AuthorizationContext } from "@io/graph-authority";
 import {
   createSyncedGraphClient,
   createGraphClient,

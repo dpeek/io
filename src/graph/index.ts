@@ -1,8 +1,82 @@
-export * from "./runtime/contracts.js";
-export * from "./runtime/id.js";
-export * from "./runtime/identity.js";
-export * from "./runtime/schema.js";
-export * from "./runtime/store.js";
-export * from "./runtime/type-module.js";
-export * from "./runtime/reference-policy.js";
-export * from "./icon.js";
+/**
+ * Curated root graph surface.
+ *
+ * Internal callers should prefer the owning package (`@io/graph-kernel`,
+ * `@io/graph-authority`, `@io/graph-bootstrap`, and friends) over this umbrella
+ * barrel. This surface stays focused on a small set of low-level kernel aliases
+ * plus root-owned graph helpers such as SVG sanitization and definition-only
+ * reference helpers.
+ */
+export {
+  applyGraphIdMap as applyIdMap,
+  cloneGraphStoreSnapshot as cloneStoreSnapshot,
+  createGraphId,
+  createGraphIdMap as createIdMap,
+  createGraphStore as createStore,
+  createFallbackPolicyDescriptor,
+  defineEnum,
+  defineScalar,
+  defineType,
+  edgeId,
+  extractGraphSchemaKeys as extractSchemaKeys,
+  fieldPolicyDescriptor,
+  fieldPolicyFallbackContractVersion,
+  fieldSecretMetadataVisibility,
+  fieldTreeId,
+  fieldTreeKey,
+  fieldVisibility,
+  fieldWritePolicy,
+  findDuplicateGraphIds as findDuplicateIds,
+  graphFieldVisibilities,
+  graphFieldWritePolicies,
+  isEntityType,
+  isEnumType,
+  isFieldsOutput,
+  isGraphFieldVisibility,
+  isGraphFieldWritePolicy,
+  isScalarType,
+  isSecretBackedField,
+  readDefinitionIconId,
+  rangeOf,
+  resolveFieldPolicyDescriptor,
+  typeId,
+  type AnyEnumTypeOutput,
+  type AnyTypeOutput,
+  type Cardinality,
+  type DefinitionIconRef,
+  type EdgeInput,
+  type EdgeOutput,
+  type EncodedValue,
+  type EntityTypeInput,
+  type EntityTypeOutput,
+  type EnumOptionInput,
+  type EnumTypeInput,
+  type EnumTypeOutput,
+  type FieldsInput,
+  type FieldsOutput,
+  type GraphFact,
+  type GraphFieldAuthority,
+  type GraphFieldVisibility,
+  type GraphFieldWritePolicy,
+  type GraphIconSeedRecord,
+  type GraphId,
+  type GraphIdMap,
+  type GraphSecretFieldAuthority,
+  type GraphStore,
+  type GraphStoreSnapshot,
+  type PredicatePolicyDefinition,
+  type PredicatePolicyDescriptor,
+  type PredicateSlotListener,
+  type RangeRef,
+  type ResolvedGraphNamespace,
+  type ScalarTypeInput,
+  type ScalarTypeOutput,
+  type ValidationIssueInput,
+} from "@io/graph-kernel";
+
+export { defineReferenceField, defineSecretField } from "./type-module.js";
+export {
+  existingEntityReferenceField,
+  existingEntityReferenceFieldMeta,
+} from "./reference-policy.js";
+export { sanitizeSvgMarkup, type SvgSanitizationResult } from "./icon.js";

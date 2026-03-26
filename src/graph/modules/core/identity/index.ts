@@ -1,6 +1,6 @@
 import { defineEnum, defineType } from "@io/core/graph/def";
 
-import { defineReferenceField } from "../../../runtime/type-module.js";
+import { defineReferenceField } from "../../../type-module.js";
 import { dateTypeModule } from "../date/index.js";
 import { defineDefaultEnumTypeModule } from "../enum-module.js";
 import { node } from "../node/index.js";

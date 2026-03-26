@@ -14,6 +14,7 @@ const requiredExports = [
   "defineAdmissionPolicy",
   "defineShareGrant",
   "defineShareSurface",
+  "defineWebPrincipalBootstrapPayload",
   "persistedAuthoritativeGraphStateVersion",
   "validateAuthoritativeGraphWriteResult",
   "validateAuthoritativeGraphWriteTransaction",
@@ -26,8 +27,8 @@ const forbiddenExports = [
   "createGraphClient",
   "createSyncedGraphClient",
   "createGraphStore",
+  "GraphCommandSpec",
   "createModuleReadScope",
-  "defineWebPrincipalBootstrapPayload",
   "ObjectViewSpec",
   "WorkflowSpec",
 ] as const;

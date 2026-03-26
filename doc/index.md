@@ -36,7 +36,9 @@ the graph-first application direction the rest of the workspace is proving.
 - `./agent/cli.md`: current `io agent ...` and `io mcp ...` command surface
 - `./agent/index.md`: agent runtime overview, scheduler layout, and operator surfaces
 - `./agent/tui.md`: operator-facing TUI layout and retained runtime display
-- `./graph/index.md`: graph package layout including engine, adapters, taxonomies, and focused subdocs
+- `./graph/index.md`: graph workspace layout including the root `@io/core/graph`
+  surface, extracted `lib/graph-*` packages, adapters, taxonomies, and
+  focused subdocs
 - `./graph/computed.md`: proposed computed-value layer for lazy, memoized, read-only graph derivations
 - `./graph/mcp.md`: current graph MCP read surface, opt-in writes, and the remaining command roadmap
 - `./graph/storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,
@@ -51,7 +53,10 @@ the graph-first application direction the rest of the workspace is proving.
   and the operator TUI
 - `../src/tui/`: graph-backed terminal workflow product surface
 - `../src/config/`, `../src/lib/`: shared config loading and typed config surface
-- `../src/graph/`, `../src/web/`: graph runtime, canonical `core:`, `ops:`, and `pkm:`
-  schema families, the persisted-authority contract, worker-backed browser surfaces, and the
-  SQLite Durable Object authority path that backs the web shell
+- `../src/graph/`: root `@io/core/graph` wrappers, local schema and module
+  authoring, graph adapters, and graph-owned icon helpers
+- `../lib/graph-*/`: extracted graph kernel, bootstrap, client, authority,
+  sync, and projection packages
+- `../src/web/`: worker-backed browser surfaces and the SQLite Durable Object
+  authority path that backs the web shell
 - `../src/cli/`: operator command surface

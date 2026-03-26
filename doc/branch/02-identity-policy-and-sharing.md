@@ -1052,7 +1052,7 @@ Important failure modes:
 - `src/graph/runtime/contracts.ts`: publish the canonical
   `ModulePermissionRequest` plus the command-policy vocabulary it lowers
   through
-- `src/graph/runtime/authority-replication.ts`: add principal-aware filtering
+- `lib/graph-authority/src/replication.ts`: add principal-aware filtering
   on top of the existing replication visibility rules
 - `src/web/lib/authority.ts`: introduce request-bound `AuthorizationContext`
   evaluation and final read or write enforcement

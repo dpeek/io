@@ -35,6 +35,15 @@ export type PredicatePolicyDescriptor = PredicatePolicyDefinition & {
 };
 
 /**
+ * Explicit policy-contract epoch for fallback descriptor lowering.
+ *
+ * Bump this when the fallback mapping for predicates without authored policy
+ * metadata changes in a way that affects allow/deny or scoped visibility for
+ * the same stored graph state.
+ */
+export const fieldPolicyFallbackContractVersion = 0;
+
+/**
  * Stable field-visibility literals published by the kernel.
  */
 export const graphFieldVisibilities = [
@@ -87,9 +96,41 @@ export type GraphFieldAuthority = {
   policy?: PredicatePolicyDefinition;
   secret?: GraphSecretFieldAuthority;
 };
-type DefinitionIconRef = string | { id: string };
+
+/**
+ * Minimal concrete icon record that a domain can hand to bootstrap when it
+ * wants a stable icon id materialized as graph data.
+ */
+export type GraphIconSeedRecord = Readonly<{
+  id: string;
+  key: string;
+  name: string;
+  svg: string;
+}>;
+
+/**
+ * Schema-level icon reference stored on type and predicate definitions.
+ *
+ * Definitions only commit to the stable icon id. Concrete catalogs remain
+ * domain-owned and can be supplied separately during bootstrap.
+ */
+export type DefinitionIconRef = string | { id: string };
 
 type TypeLike = { values: { key: string } };
+
+function isDefinitionIconObject(value: DefinitionIconRef | undefined): value is { id: string } {
+  return typeof value === "object" && value !== null && typeof value.id === "string";
+}
+
+/**
+ * Reads the stable icon id from a definition icon ref without applying any
+ * domain-specific fallback.
+ */
+export function readDefinitionIconId(value: DefinitionIconRef | undefined): string | undefined {
+  if (typeof value === "string" && value.length > 0) return value;
+  if (isDefinitionIconObject(value) && value.id.length > 0) return value.id;
+  return undefined;
+}
 
 /**
  * Either a raw range key or a type-like object whose key can be resolved.
@@ -309,6 +350,36 @@ export function fieldPolicyDescriptor(
       ? { requiredCapabilities: [...policy.requiredCapabilities] }
       : {}),
   } satisfies PredicatePolicyDescriptor;
+}
+
+/**
+ * Synthesize the stable fallback policy descriptor for one field when authored
+ * policy metadata is absent.
+ */
+export function createFallbackPolicyDescriptor(
+  field: FieldWithAuthorityPolicy,
+): PredicatePolicyDescriptor {
+  const transportVisibility = fieldVisibility(field);
+  const requiredWriteScope = fieldWritePolicy(field);
+  return {
+    predicateId: edgeId(field),
+    transportVisibility,
+    requiredWriteScope,
+    readAudience: transportVisibility === "authority-only" ? "authority" : "public",
+    writeAudience: requiredWriteScope === "client-tx" ? "graph-member-edit" : "authority",
+    shareable: false,
+  } satisfies PredicatePolicyDescriptor;
+}
+
+/**
+ * Resolve the effective policy descriptor for one field, falling back to the
+ * stable synthesized contract when authored policy metadata is absent.
+ */
+export function resolveFieldPolicyDescriptor(
+  field: FieldWithAuthorityPolicy | undefined,
+): PredicatePolicyDescriptor | undefined {
+  if (!field) return undefined;
+  return fieldPolicyDescriptor(field) ?? createFallbackPolicyDescriptor(field);
 }
 
 /**

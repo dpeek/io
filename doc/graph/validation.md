@@ -16,15 +16,18 @@ Relevant source:
 
 - `../../src/graph/runtime/schema.ts`
 - `../../src/graph/runtime/type-module.ts`
-- `../../lib/graph-client/src/client-core.ts`
-- `../../lib/graph-client/src/client-validation.ts`
-- `../../lib/graph-client/src/client.ts`
+- `../../lib/graph-client/src/core.ts`
+- `../../lib/graph-client/src/validation.ts`
+- `../../lib/graph-client/src/entity-actions.ts`
+- `../../lib/graph-client/src/graph.ts`
 - `../../lib/graph-authority/src/validation.ts`
 - `../../lib/graph-sync/src/validation.ts`
 
 ## Current Local Lifecycle
 
-Local typed mutations in `../../lib/graph-client/src/client.ts` already follow one shared path:
+Local typed mutations in `../../lib/graph-client/src/graph.ts`, backed by
+`../../lib/graph-client/src/entity-actions.ts` and
+`../../lib/graph-client/src/validation.ts`, already follow one shared path:
 
 1. normalize and clone caller input
 2. run `onCreate` or `onUpdate` lifecycle hooks
@@ -72,8 +75,8 @@ That keeps local optimistic mutation and authoritative reconciliation on one iss
 ## Current Result Surface
 
 `GraphValidationResult` and `GraphValidationError` are defined in
-`../../src/graph/runtime/client-core.ts` and re-exported through
-`../../src/graph/runtime/client.ts` as the shared public-facing shape:
+`../../lib/graph-client/src/core.ts` and exported through `@io/graph-client`
+as the shared public-facing shape:
 
 - `ok`
 - `phase`

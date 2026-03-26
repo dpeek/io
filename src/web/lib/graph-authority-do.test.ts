@@ -8,7 +8,6 @@ import {
   defineSecretField,
   defineType,
   edgeId,
-  type AuthSubjectRef,
   type AnyTypeOutput,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
@@ -22,6 +21,7 @@ import {
 import { pkm } from "@io/core/graph/modules/pkm";
 import {
   createPersistedAuthoritativeGraph,
+  type AuthSubjectRef,
   type AuthorizationContext,
   type PersistedAuthoritativeGraphStorage,
 } from "@io/graph-authority";

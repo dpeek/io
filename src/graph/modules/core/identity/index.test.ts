@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { createIdMap } from "../../../runtime/identity.js";
+import { createGraphIdMap as createIdMap } from "@io/graph-kernel";
+
 import { core } from "../../core.js";
 import {
   admissionApproval,

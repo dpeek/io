@@ -1,4 +1,4 @@
-import { defineWebPrincipalBootstrapPayload } from "@io/core/graph";
+import { defineWebPrincipalBootstrapPayload } from "@io/graph-authority";
 
 import {
   BearerShareTokenProjectionError,

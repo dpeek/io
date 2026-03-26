@@ -1,6 +1,6 @@
 import { defineScalar } from "@io/core/graph/def";
 
-import type { EnumModuleValue } from "../../../runtime/type-module.js";
+import type { EnumModuleValue } from "../../../type-module.js";
 import { currency } from "../currency/index.js";
 import { graphIconSeeds } from "../icon/seed.js";
 import { expectNumberInput, expectRecordInput, expectStringInput } from "../input.js";

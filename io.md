@@ -2,7 +2,7 @@ Project-local guidance for the `io` workspace.
 
 Purpose:
 
-- this repo owns the agent runtime, CLI, shared config surface, and the graph package used to prove the model end to end
+- this repo owns the agent runtime, CLI, shared config surface, and the graph packages used to prove the model end to end
 
 Read first:
 

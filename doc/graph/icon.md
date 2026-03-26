@@ -11,11 +11,20 @@ Icons are graph-owned entities. SVG is graph-owned scalar data. The explorer sho
 - Types opt into icons explicitly through `iconReferenceField(...)`.
 - Type and predicate definitions can declare an optional icon seed directly on the authored
   definition.
-- Bootstrap seeds canonical icons from `res/icon/*.svg`.
+- `DefinitionIconRef` and `readDefinitionIconId(...)` live in the schema contract.
+- Bootstrap consumes caller-supplied icon seed records and icon resolvers; it does not own one
+  global catalog.
 - Missing icons are inferred before falling back to `unknown.svg`:
   enum types default to `tag.svg`, and predicates whose range is another entity type default to
   `edge.svg`.
 - Rendering happens through shared DOM helpers such as `GraphIcon` and `SvgMarkup`.
+
+## Ownership Model
+
+- Kernel/schema owns the `DefinitionIconRef` contract that definitions store.
+- Domain modules own concrete icon catalogs, default icon choices, and future remapping policy.
+- Bootstrap owns materialization of icon entities from caller-supplied icon providers.
+- Client and explorer code read icon ids and rendered SVG data; they do not own catalogs.
 
 ## Data Model
 
@@ -55,13 +64,16 @@ No global `icon` predicate is inherited from `core:node`.
 
 ### Seed Registry
 
-`graphIconSeeds` is the canonical seed registry for definition-level icons:
+`graphIconSeeds` in `src/graph/modules/core/icon/seed.ts` is the canonical built-in core seed
+registry:
 
 - each seed owns a stable graph id, slug key, display name, and raw SVG payload
-- the registry is sourced from `res/icon/*.svg`
+- the registry is domain-owned rather than globally owned by bootstrap or client
 - schema definitions can reference a seed object directly, similar to enum option references
-- runtime bootstrap materializes the seed icon entities through the normal typed create lifecycle
-  before linking type and predicate metadata
+- `src/graph/modules/core/bootstrap.ts` passes the core catalog and the core default type/predicate
+  icon resolvers into `@io/graph-bootstrap`
+- bootstrap can also materialize icons through per-id lookup for installable or remapped catalogs,
+  so definitions only need to commit to stable icon ids
 
 ## Explorer Surface
 

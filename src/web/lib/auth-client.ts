@@ -4,7 +4,7 @@ import {
   defineWebPrincipalBootstrapPayload,
   type WebPrincipalBootstrapPayload,
   type WebPrincipalSummary,
-} from "@io/core/graph";
+} from "@io/graph-authority";
 import { createAuthClient } from "better-auth/react";
 
 import { betterAuthBasePath } from "./auth-path.js";

@@ -9,7 +9,7 @@ import type {
   PolicyCapabilityKey,
   RangeRef,
   ScalarTypeOutput,
-} from "./schema";
+} from "@io/graph-kernel";
 
 type EnumOptionLike = { key: string; id?: string };
 type EnumTypeLike = { options: Record<string, EnumOptionLike> };

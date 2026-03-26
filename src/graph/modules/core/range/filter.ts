@@ -1,4 +1,4 @@
-import type { TypeModuleFilter } from "../../../runtime/type-module.js";
+import type { TypeModuleFilter } from "../../../type-module.js";
 import { compareStructuredValueValues } from "../structured-value.js";
 import { formatRange, parseRange, type RangeValue } from "./type.js";
 

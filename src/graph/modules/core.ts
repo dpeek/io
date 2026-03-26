@@ -1,4 +1,5 @@
-import { applyIdMap } from "../runtime/schema.js";
+import { applyGraphIdMap as applyIdMap } from "@io/graph-kernel";
+
 import coreIdMap from "./core.json";
 import { booleanTypeModule } from "./core/boolean/index.js";
 import { cardinality } from "./core/cardinality/index.js";

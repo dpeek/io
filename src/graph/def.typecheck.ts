@@ -1,9 +1,19 @@
-import { booleanTypeModule } from "../modules/core/boolean/index.js";
-import { defineDefaultEnumTypeModule } from "../modules/core/enum-module.js";
-import { stringTypeModule } from "../modules/core/string/index.js";
-import { existingEntityReferenceField } from "./reference-policy.js";
-import { defineEnum, defineScalar, defineType } from "./schema.js";
-import { defineReferenceField, defineScalarModule, defineSecretField } from "./type-module.js";
+import { isSecretBackedField } from "@io/graph-kernel";
+
+import {
+  defineEnum,
+  defineReferenceField,
+  defineScalar,
+  defineScalarModule,
+  defineSecretField,
+  defineType,
+  existingEntityReferenceField,
+  type GraphSecretFieldAuthority,
+} from "./def.js";
+import { core } from "./modules/core.js";
+import { booleanTypeModule } from "./modules/core/boolean/index.js";
+import { defineDefaultEnumTypeModule } from "./modules/core/enum-module.js";
+import { stringTypeModule } from "./modules/core/string/index.js";
 
 const probeStringType = defineScalar({
   values: { key: "probe:string", name: "Probe String" },
@@ -44,12 +54,23 @@ void existingEntityReferenceField(probeEntityType, {
   label: "Searchable related entities",
 });
 
-void defineSecretField({
-  range: probeEntityType,
+const secretField = defineSecretField({
+  range: core.secretHandle,
   cardinality: "one?",
   revealCapability: "secret:reveal",
   rotateCapability: "secret:rotate",
 });
+
+void (secretField.authority.secret satisfies GraphSecretFieldAuthority);
+
+if (isSecretBackedField(secretField)) {
+  void (secretField.authority.secret satisfies GraphSecretFieldAuthority);
+  void secretField.authority.secret.revealCapability;
+  void secretField.authority.secret.rotateCapability;
+
+  // @ts-expect-error transport details stay out of the shared secret-field authority contract
+  void secretField.authority.secret.command;
+}
 
 void stringTypeModule.field({
   cardinality: "one",

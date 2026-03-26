@@ -19,8 +19,8 @@ import { urlTypeModule } from "../../modules/core/url/index.js";
 import {
   entityReferenceComboboxEditorKind,
   existingEntityReferenceField,
-} from "../../runtime/reference-policy.js";
-import { defineSecretField } from "../../runtime/type-module.js";
+} from "../../reference-policy.js";
+import { defineSecretField } from "../../type-module.js";
 import { kitchenSinkSeverityTypeModule, kitchenSinkStatusTypeModule } from "./enums.js";
 import { kitchenSinkReferenceField } from "./reference-field.js";
 import { kitchenSinkScoreTypeModule } from "./scalars.js";

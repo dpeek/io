@@ -2,10 +2,12 @@ import { describe, expect, it } from "bun:test";
 
 import { applyIdMap, createIdMap } from "./identity.js";
 import {
+  createFallbackPolicyDescriptor,
   defineEnum,
   defineScalar,
   defineType,
   edgeId,
+  fieldPolicyFallbackContractVersion,
   fieldPolicyDescriptor,
   fieldSecretMetadataVisibility,
   fieldTreeId,
@@ -22,6 +24,7 @@ import {
   isScalarType,
   isSecretBackedField,
   rangeOf,
+  resolveFieldPolicyDescriptor,
   typeId,
 } from "./schema.js";
 
@@ -123,6 +126,31 @@ describe("schema helpers", () => {
       metadataVisibility: "replicated",
       revealCapability: "secret:reveal",
       rotateCapability: "secret:rotate",
+    });
+  });
+
+  it("publishes a stable fallback descriptor contract for predicates without authored policy", () => {
+    const { item } = createSchemaFixture();
+
+    expect(fieldPolicyFallbackContractVersion).toBe(0);
+    expect(createFallbackPolicyDescriptor(item.fields.website)).toEqual({
+      predicateId: "test:item:website",
+      transportVisibility: "replicated",
+      requiredWriteScope: "client-tx",
+      readAudience: "public",
+      writeAudience: "graph-member-edit",
+      shareable: false,
+    });
+    expect(resolveFieldPolicyDescriptor(item.fields.title)).toEqual(
+      fieldPolicyDescriptor(item.fields.title),
+    );
+    expect(resolveFieldPolicyDescriptor(item.fields.website)).toEqual({
+      predicateId: "test:item:website",
+      transportVisibility: "replicated",
+      requiredWriteScope: "client-tx",
+      readAudience: "public",
+      writeAudience: "graph-member-edit",
+      shareable: false,
     });
   });
 

@@ -11,7 +11,8 @@ import {
   type FieldsOutput,
   type GraphFieldWritePolicy,
   type TypeOutput,
-} from "../graph/index.js";
+} from "@io/graph-kernel";
+
 import { core } from "../graph/modules/index.js";
 
 type GraphMcpNamespace = Record<string, AnyTypeOutput>;

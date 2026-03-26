@@ -2,7 +2,7 @@ import {
   type AuthSubjectRef,
   type AuthenticatedSession,
   type WebPrincipalSummary,
-} from "@io/core/graph";
+} from "@io/graph-authority";
 import { type AuthorizationContext, type PrincipalKind } from "@io/graph-authority";
 
 type MaybePromise<T> = T | Promise<T>;

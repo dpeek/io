@@ -23,7 +23,7 @@ defines the reusable platform model that later surfaces should converge on.
 The repo currently has three different read/query shapes:
 
 - local typed entity queries via `TypeQuerySpec` in
-  `../../src/graph/runtime/client-core.ts`
+  `../../lib/graph-client/src/core.ts`
 - one workflow-specific serialized read transport via
   `../../src/web/lib/workflow-transport.ts`
 - the Branch 3 target `ReadQuery` contract described in
@@ -36,10 +36,10 @@ What exists today:
   over the reusable web transport path
 - `POST /api/workflow-read` remains as the workflow-specific compatibility
   proof for the first board and commit-queue reads
-- `../../src/graph/runtime/serialized-query.ts` now exports the first shared
+- `../../lib/graph-client/src/serialized-query.ts` now exports the first shared
   generic serialized query request, response, and validation helpers for
   Branch 3 transport work
-- `../../src/graph/runtime/http-client.ts` now exports the shared
+- `../../lib/graph-client/src/http.ts` now exports the shared
   `requestSerializedQuery(...)` helper so browser, MCP, and future callers can
   issue the generic envelope without depending on workflow-specific request
   shapes
@@ -389,8 +389,8 @@ Current enforced rules:
 
 ### Current normalization model
 
-The shared runtime now also publishes a planner-owned normalization helper in
-`../../src/graph/runtime/serialized-query.ts`:
+`@io/graph-client` now also publishes a planner-owned normalization helper in
+`../../lib/graph-client/src/serialized-query.ts`:
 `normalizeSerializedQueryRequest(...)`.
 
 It builds one deterministic internal form from the validated transport request:

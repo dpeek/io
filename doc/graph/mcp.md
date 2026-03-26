@@ -12,7 +12,8 @@ The repo now ships a stdio graph MCP entrypoint:
 
 - command:
   `io mcp graph [--url <url>] [--bearer-token <token>] [--allow-writes]`
-- runtime: one `createHttpGraphClient(app, ...)` session kept alive for the stdio server
+- runtime: one `createHttpGraphClient(namespace, ...)` session kept alive for
+  the stdio server
 - auth:
   - default local flow can run without a bearer token against a locally trusted
     Worker
@@ -57,10 +58,10 @@ The repo now ships a stdio graph MCP entrypoint:
 The repo now ships its own MCP server, and the underlying runtime pieces were
 already in place:
 
-- the graph already has a typed client and query surface in
-  `../../src/graph/runtime/client.ts`
-- the current HTTP-backed graph adapter already exists in
-  `../../src/graph/runtime/http-client.ts`
+- `@io/graph-client`, implemented in
+  `../../lib/graph-client/src/graph.ts` and
+  `../../lib/graph-client/src/http.ts`, already provides the typed client,
+  local query surface, and HTTP-backed graph adapter
 - the Worker authority already exposes thin sync and write routes in
   `../../src/web/lib/server-routes.ts`
 - the Durable Object wrapper already hosts that authority in

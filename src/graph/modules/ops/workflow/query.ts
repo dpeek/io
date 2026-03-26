@@ -1,11 +1,11 @@
 import { type GraphClient } from "@io/graph-client";
+import { applyGraphIdMap as applyIdMap } from "@io/graph-kernel";
 import {
   findRetainedProjectionRecord,
   type RetainedProjectionCheckpointRecord,
   type RetainedProjectionRowRecord,
 } from "@io/graph-projection";
 
-import { applyIdMap } from "../../../runtime/schema.js";
 import { core } from "../../core.js";
 import opsIds from "../../ops.json";
 import { pkm } from "../../pkm.js";

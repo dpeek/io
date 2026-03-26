@@ -14,6 +14,7 @@
 - `GraphStore` and `GraphStoreSnapshot`
 - schema authoring helpers and field-authority metadata
 - stable key-to-id reconciliation with `GraphIdMap`
+- fallback policy descriptor lowering for schema-owned predicates
 - graph write transaction, `GraphWriteScope`, and snapshot-derivation helpers
 
 ## What It Does Not Own
@@ -51,6 +52,8 @@ Everything intended for consumers is re-exported from the package root.
 - `createGraphStore`, `cloneGraphStoreSnapshot`
 - `GraphFact`, `GraphStore`, `GraphStoreSnapshot`, `GraphIdMap`, `ResolvedGraphNamespace`
 - `defineType`, `defineScalar`, `defineEnum`
+- `fieldPolicyFallbackContractVersion`, `createFallbackPolicyDescriptor`,
+  `resolveFieldPolicyDescriptor`
 - `createGraphIdMap`, `applyGraphIdMap`, `extractGraphSchemaKeys`, `findDuplicateGraphIds`
 - `GraphWriteScope`, `graphWriteScopes`, and graph write transaction helpers from `tx`
 
@@ -66,5 +69,5 @@ The intended first-read contract artifact for agents is
 `./out/index.d.ts`. That keeps the source layout natural while still giving
 readers one low-noise declaration view of the exported API after build.
 
-This package is a straight copy for now. It is not yet wired back into the main
-`src/graph` runtime.
+The root `src/graph` surface should treat this package as the single source of
+truth for ids, store primitives, schema authoring, and stable id reconciliation.

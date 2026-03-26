@@ -22,16 +22,23 @@ This document is the high-level entry point for agents reasoning about the engin
 
 ### Main source boundaries
 
-- `../../src/graph/runtime/store.ts`: append-only facts, batching, slot subscriptions, snapshots
-- `../../src/graph/runtime/schema.ts`: schema definitions, field trees, type helpers
-- `../../src/graph/runtime/identity.ts`: stable key-to-id resolution and id-map helpers
-- `../../src/graph/runtime/bootstrap.ts`: schema bootstrap into store facts
+- `../../lib/graph-kernel/src/`: canonical ids, append-only store primitives,
+  schema helpers, stable-id utilities, and authoritative write envelopes
+- `../../src/graph/def.ts`, `../../src/graph/type-module.ts`,
+  `../../src/graph/reference-policy.ts`, and
+  `../../src/graph/definition-contracts.ts`: the remaining root-owned
+  definition-time helpers that do not belong in an extracted package
+- `../../lib/graph-bootstrap/src/`: schema bootstrap into live stores plus
+  convergent bootstrapped snapshots
 - `../../lib/graph-client/src/`: typed CRUD, refs, local validation, synced-client state, write flushing, reconcile behavior, and HTTP/query client helpers
+- `../../lib/graph-projection/src/`: module read scopes, projection metadata,
+  dependency keys, invalidation contracts, and retained projection helpers
 - `../../lib/graph-authority/src/json-storage.ts`: shipped JSON persistence adapter for durable authorities
 - `../../lib/graph-authority/src/persisted-authority.ts`: persisted authority orchestration and storage contracts
 - `../../lib/graph-authority/src/session.ts`: authoritative write sessions, retained history, and incremental delivery
 - `../../lib/graph-sync/src/`: shared sync contracts, payload validation, cursor helpers, and total sync sessions
-- `../../src/graph/runtime/type-module.ts`: typed scalar/enum module contracts
+- `../../src/graph/runtime/react/`: host-neutral React hooks and resolver primitives
+- `../../src/graph/inspect.ts`: internal graph inspection helpers that are not part of the public package surface
 
 ## What Is Current
 

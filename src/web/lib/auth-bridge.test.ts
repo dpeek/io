@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import type { AuthSubjectRef, AuthenticatedSession, WebPrincipalSummary } from "@io/core/graph";
+import type {
+  AuthSubjectRef,
+  AuthenticatedSession,
+  WebPrincipalSummary,
+} from "@io/graph-authority";
 
 import {
   createBearerShareAuthorizationContext,

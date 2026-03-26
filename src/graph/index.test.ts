@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 
-import { edgeId } from "./index.js";
 import {
   probeAuthSubject,
   probeAuthenticatedSession,
@@ -16,7 +15,8 @@ import {
   probeContractWorkflow,
   probeRevokedModulePermissionRecord,
   probeSaveContractItemCommand,
-} from "./runtime/contracts.probe.js";
+} from "./definition-contracts.probe.js";
+import { edgeId } from "./index.js";
 
 type GraphPackageJson = {
   exports: Record<string, string>;
@@ -24,7 +24,6 @@ type GraphPackageJson = {
 
 const canonicalGraphSubpaths = [
   "./graph",
-  "./graph/runtime",
   "./graph/runtime/react",
   "./graph/def",
   "./graph/modules",
@@ -58,6 +57,7 @@ const retiredGraphSubpaths = [
   "./graph/schema/app",
   "./graph/schema/app/topic",
   "./graph/schema/*",
+  "./graph/runtime",
   "./graph/authority",
   "./graph/taxonomy/*",
 ] as const;
@@ -75,10 +75,9 @@ const requiredRootExports = [
   "graphFieldWritePolicies",
   "isGraphFieldVisibility",
   "isGraphFieldWritePolicy",
+  "readDefinitionIconId",
   "sanitizeSvgMarkup",
 ] as const;
-
-const requiredRuntimeExports = ["createStore", "defineSecretField"] as const;
 
 const requiredDefExports = [
   "defineEnum",
@@ -87,14 +86,7 @@ const requiredDefExports = [
   "defineScalar",
   "defineSecretField",
   "defineType",
-] as const;
-
-const forbiddenRuntimeModuleExports = [
-  "bootstrap",
-  "core",
-  "country",
-  "createBootstrappedSnapshot",
-  "stringTypeModule",
+  "readDefinitionIconId",
 ] as const;
 
 const forbiddenRootModuleExports = [
@@ -237,26 +229,20 @@ describe("@io/core/graph package entry surfaces", () => {
     }
   });
 
-  it("keeps the root, runtime, and schema-authoring surfaces focused", async () => {
-    const [rootExports, runtimeExports, defExports] = await Promise.all([
+  it("keeps the root and schema-authoring surfaces focused", async () => {
+    const [rootExports, defExports] = await Promise.all([
       import("@io/core/graph"),
-      import("@io/core/graph/runtime"),
       import("@io/core/graph/def"),
     ]);
 
     expectNamedExports(rootExports, requiredRootExports);
-    expectNamedExports(runtimeExports, requiredRuntimeExports);
     expectNamedExports(defExports, requiredDefExports);
 
     for (const name of forbiddenRootModuleExports) {
       expect(Object.keys(rootExports)).not.toContain(name);
     }
-    for (const name of forbiddenRuntimeModuleExports) {
-      expect(Object.keys(runtimeExports)).not.toContain(name);
-    }
     for (const name of forbiddenProjectionContractValueExports) {
       expect(Object.keys(rootExports)).not.toContain(name);
-      expect(Object.keys(runtimeExports)).not.toContain(name);
     }
 
     expect(Object.keys(rootExports)).not.toContain("FilterOperandEditor");
@@ -265,19 +251,14 @@ describe("@io/core/graph package entry surfaces", () => {
     expect(Object.keys(rootExports)).not.toContain("createPersistedAuthoritativeGraph");
     expect(Object.keys(rootExports)).not.toContain("createGraphClient");
     expect(Object.keys(rootExports)).not.toContain("createSyncedGraphClient");
+    expect(Object.keys(rootExports)).not.toContain("defineWebPrincipalBootstrapPayload");
     expect(Object.keys(rootExports)).not.toContain("validateGraphStore");
     expect(Object.keys(rootExports)).not.toContain("authorizeRead");
     expect(Object.keys(rootExports)).not.toContain("authorizeWrite");
     expect(Object.keys(rootExports)).not.toContain("authorizeCommand");
-    expect(Object.keys(runtimeExports)).not.toContain("sanitizeSvgMarkup");
-    expect(Object.keys(runtimeExports)).not.toContain("createGraphClient");
-    expect(Object.keys(runtimeExports)).not.toContain("createSyncedGraphClient");
-    expect(Object.keys(runtimeExports)).not.toContain("validateGraphStore");
-    expect(Object.keys(runtimeExports)).not.toContain("createPersistedAuthoritativeGraph");
-    expect(Object.keys(runtimeExports)).not.toContain("authorizeRead");
-    expect(Object.keys(runtimeExports)).not.toContain("authorizeWrite");
-    expect(Object.keys(runtimeExports)).not.toContain("authorizeCommand");
     expect(Object.keys(defExports)).not.toContain("createStore");
+    const retiredRuntimeSubpath = "@io/core/graph/runtime";
+    await expect(import(retiredRuntimeSubpath)).rejects.toThrow();
     const retiredAuthoritySubpath = "@io/core/graph/authority";
     await expect(import(retiredAuthoritySubpath)).rejects.toThrow();
 

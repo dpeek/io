@@ -4,12 +4,12 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
-  createIdMap,
-  extractSchemaKeys,
-  findDuplicateIds,
   type AnyTypeOutput,
   type GraphIdMap,
-} from "@io/core/graph";
+  createGraphIdMap as createIdMap,
+  extractGraphSchemaKeys as extractSchemaKeys,
+  findDuplicateGraphIds as findDuplicateIds,
+} from "@io/graph-kernel";
 
 type TypeNamespace = Record<string, AnyTypeOutput>;
 

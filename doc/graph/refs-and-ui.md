@@ -8,7 +8,10 @@ host-neutral React layer, and host-specific adapters.
 
 ## Engine Surface
 
-`../../src/graph/runtime/client.ts` exports:
+Typed refs and synced-client ergonomics now live in `@io/graph-client`,
+primarily through `../../lib/graph-client/src/graph.ts`,
+`../../lib/graph-client/src/core.ts`, and `../../lib/graph-client/src/refs.ts`.
+That surface exports:
 
 - typed `EntityRef`
 - typed `PredicateRef`
@@ -30,14 +33,17 @@ host-neutral React layer, and host-specific adapters.
 
 Relevant source:
 
-- `../../src/graph/runtime/client.ts`
+- `../../lib/graph-client/src/graph.ts`
+- `../../lib/graph-client/src/core.ts`
+- `../../lib/graph-client/src/refs.ts`
 - `../../src/graph/runtime/store.ts`
-- `../../src/graph/runtime/synced-client.ts`
+- `../../lib/graph-client/src/sync.ts`
 - `../../lib/graph-sync/src/index.ts`
 
 ## UI-Adjacent Contracts
 
-The engine exposes enough surface for higher-level UI work:
+Across `@io/graph-client` and the root `@io/core/graph` surface, the engine
+exposes enough surface for higher-level UI work:
 
 - field metadata and filter contracts from type modules
 - predicate-local subscriptions

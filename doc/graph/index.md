@@ -2,15 +2,18 @@
 
 ## Purpose
 
-`graph` owns the reusable graph engine: schema authoring, stable ids,
-bootstrap, the append-only store, root-safe runtime contracts, type-module
-contracts, graph-owned icon helpers, and the graph-aware adapter layer that
-binds shared `@io/web` primitives to graph predicates. The extracted
-`@io/graph-authority` workspace package owns persisted authoritative runtimes,
-authority validation, authority-side replication filtering, and graph-owned
-authorization and policy contracts. The extracted `@io/graph-client` workspace
-package owns typed refs, local validation, synced-client composition, and
-client-facing HTTP/query helpers on top of the graph kernel and sync packages.
+The graph engine now spans the root `@io/core/graph` package plus the extracted
+`@io/graph-kernel`, `@io/graph-bootstrap`, `@io/graph-client`,
+`@io/graph-authority`, `@io/graph-sync`, and `@io/graph-projection` workspace
+packages.
+
+The root `@io/core/graph` surface owns a small curated graph helper layer:
+selected kernel aliases, local definition authoring contracts on
+`@io/core/graph/def`, built-in namespace assembly, graph-owned icon helpers,
+and the graph-aware adapter layer that binds shared `@io/web` primitives to
+graph predicates. The extracted packages own the layered engine boundaries:
+kernel storage and write envelopes, schema bootstrap, typed client behavior,
+authoritative runtime behavior, sync contracts, and projection metadata.
 
 ## Browser Editor Boundary
 
@@ -68,18 +71,15 @@ compose shared `@io/web` primitives rather than duplicate browser chrome.
 
 ## Canonical Package Exports
 
-The graph package publishes these subpaths from `../../package.json`:
+The root `@io/core` package publishes these graph subpaths from
+`../../package.json`:
 
 - `@io/core/graph`: `../../src/graph/index.ts`; re-exports
-  `../../src/graph/runtime/index.ts` plus graph-owned icon helpers from
-  `../../src/graph/icon.ts`
-- `@io/core/graph/runtime`: `../../src/graph/runtime/index.ts`; runtime,
-  store, schema, bootstrap, root-safe contracts, type-module, projection, and
-  reference-policy surface
+  curated kernel aliases plus graph-owned icon and reference helpers
 - `@io/core/graph/runtime/react`: `../../src/graph/runtime/react/index.ts`;
   host-neutral React hooks and resolver primitives
-- `@io/core/graph/def`: `../../src/graph/runtime/def.ts`; focused schema and
-  type-module authoring exports
+- `@io/core/graph/def`: `../../src/graph/def.ts`; focused schema and
+  type-module authoring exports plus root-owned definition contracts
 - `@io/core/graph/modules`: `../../src/graph/modules/index.ts`; canonical
   namespace root plus representative built-ins
 - `@io/core/graph/modules/core`, `@io/core/graph/modules/ops`,
@@ -92,6 +92,11 @@ The graph package publishes these subpaths from `../../package.json`:
 
 The workspace also publishes:
 
+- `@io/graph-kernel`: `../../lib/graph-kernel/src/index.ts`; opaque ids,
+  append-oriented store primitives, schema helpers, stable-id utilities, and
+  authoritative write-envelope contracts
+- `@io/graph-bootstrap`: `../../lib/graph-bootstrap/src/index.ts`; additive
+  schema bootstrap and convergent bootstrapped snapshots
 - `@io/graph-authority`: `../../lib/graph-authority/src/index.ts`; persisted
   authority runtime, authoritative write sessions, total-sync payload
   creation, authority validation, replication read filtering, and graph-owned
@@ -99,24 +104,42 @@ The workspace also publishes:
 - `@io/graph-client`: `../../lib/graph-client/src/index.ts`; typed client
   construction, refs, local validation, synced-client composition, HTTP sync
   transport helpers, and serialized-query request/response contracts
+- `@io/graph-sync`: `../../lib/graph-sync/src/index.ts`; sync scopes,
+  total/incremental payload contracts, cursor helpers, validation, and total
+  sync sessions
+- `@io/graph-projection`: `../../lib/graph-projection/src/index.ts`; module
+  read-scope definitions, projection metadata, dependency keys, invalidation
+  contracts, and retained projection compatibility helpers
 
-The root `@io/core/graph` surface stays focused on runtime, schema, and icon
-contracts. Authority APIs now live on `@io/graph-authority`, and client APIs
-live on `@io/graph-client`. Module namespaces, slice exports, and host
-adapters stay on their dedicated subpaths.
+The root `@io/core/graph` surface stays focused on a small helper layer,
+definition-time exports, modules, adapters, and icon contracts. Bootstrap,
+client, authority, sync, and projection APIs now live on their extracted
+packages. Module namespaces, slice exports, and host adapters stay on their
+dedicated root-package subpaths.
 
 ## Source Layout
 
-- `../../src/graph/runtime/`: runtime kernel, schema authoring contracts, ids,
-  additive bootstrap, root-safe runtime contracts, projection metadata, and
-  reference-policy helpers
+- `../../lib/graph-kernel/src/`: canonical ids, store primitives, schema
+  helpers, stable-id reconciliation, and authoritative write envelopes
+- `../../src/graph/def.ts`, `../../src/graph/type-module.ts`,
+  `../../src/graph/reference-policy.ts`, and
+  `../../src/graph/definition-contracts.ts`: root-owned definition-authoring
+  helpers that do not belong in an extracted package
+- `../../src/graph/inspect.ts`: internal graph inspection helpers; not part of
+  the published package surface
+- `../../lib/graph-bootstrap/src/`: additive bootstrap runtime and convergent
+  bootstrapped snapshots
 - `../../lib/graph-authority/src/`: authoritative write sessions, persisted
   authority contracts, authority validation, replication filtering, graph-owned
   policy/share/admission contracts, and the file-backed JSON adapter used
   outside the web Durable Object path
 - `../../lib/graph-client/src/`: typed client layers, local validation,
   synced-client composition, client-facing HTTP/query transport helpers, and
-  bootstrap-snapshot helpers
+  typed query helpers
+- `../../lib/graph-sync/src/`: sync scopes, payload/session contracts, cursor
+  helpers, validation, and total sync sessions
+- `../../lib/graph-projection/src/`: projection contracts, module read scopes,
+  dependency keys, and retained projection compatibility helpers
 - `../../src/graph/runtime/react/`: host-neutral React helpers for entity and
   predicate access, mutation validation, persisted mutation state, and resolver
   primitives

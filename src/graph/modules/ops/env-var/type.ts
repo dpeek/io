@@ -1,6 +1,6 @@
 import { defineType } from "@io/core/graph/def";
 
-import { defineSecretField } from "../../../runtime/type-module.js";
+import { defineSecretField } from "../../../type-module.js";
 import { core } from "../../core.js";
 import { secretHandle } from "../../core/secret/index.js";
 import { stringTypeModule } from "../../core/string/index.js";

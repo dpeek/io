@@ -1,17 +1,19 @@
 import { describe, expect, it } from "bun:test";
 
-import { core } from "./core.js";
 import {
   fieldSecretMetadataVisibility,
   fieldVisibility,
   fieldWritePolicy,
-  graphFieldVisibilities,
-  graphFieldWritePolicies,
-  isGraphFieldVisibility,
-  isGraphFieldWritePolicy,
   isSecretBackedField,
-} from "./schema.js";
-import { defineSecretField } from "./type-module.js";
+} from "@io/graph-kernel";
+
+import {
+  defineSecretField,
+  existingEntityReferenceField,
+  existingEntityReferenceFieldMeta,
+  readDefinitionIconId,
+} from "./def.js";
+import { core } from "./modules/core.js";
 
 const replicatedSecretField = defineSecretField({
   range: core.secretHandle,
@@ -38,22 +40,8 @@ const explicitSecretMetadataField = defineSecretField({
   rotateCapability: "secret:rotate",
 });
 
-describe("graph field authority contract", () => {
-  it("publishes the stable shared field-authority value sets", () => {
-    expect(graphFieldVisibilities).toEqual(["replicated", "authority-only"]);
-    expect(graphFieldWritePolicies).toEqual(["client-tx", "server-command", "authority-only"]);
-    expect(isGraphFieldVisibility("replicated")).toBe(true);
-    expect(isGraphFieldVisibility("server-command")).toBe(false);
-    expect(isGraphFieldWritePolicy("server-command")).toBe(true);
-    expect(isGraphFieldWritePolicy("replicated")).toBe(false);
-  });
-
-  it("keeps secret metadata visibility on the shared schema contract", () => {
-    expect(fieldVisibility(undefined)).toBe("replicated");
-    expect(fieldWritePolicy(undefined)).toBe("client-tx");
-    expect(fieldSecretMetadataVisibility(undefined)).toBe("replicated");
-    expect(isSecretBackedField(undefined)).toBe(false);
-
+describe("root graph definition helpers", () => {
+  it("authors secret-backed fields without reimplementing kernel authority rules", () => {
     expect(fieldVisibility(replicatedSecretField)).toBe("replicated");
     expect(fieldWritePolicy(replicatedSecretField)).toBe("server-command");
     expect(fieldSecretMetadataVisibility(replicatedSecretField)).toBe("replicated");
@@ -72,5 +60,55 @@ describe("graph field authority contract", () => {
       revealCapability: "secret:reveal",
       rotateCapability: "secret:rotate",
     });
+  });
+
+  it("keeps entity-reference policy helpers on the root definition surface", () => {
+    expect(
+      existingEntityReferenceFieldMeta({
+        label: "Related items",
+        create: true,
+        excludeSubject: true,
+        editorKind: "entity-reference-combobox",
+        collection: "unordered",
+      }),
+    ).toEqual({
+      label: "Related items",
+      reference: {
+        selection: "existing-only",
+        create: true,
+        excludeSubject: true,
+      },
+      editor: {
+        kind: "entity-reference-combobox",
+      },
+      collection: {
+        kind: "unordered",
+      },
+    });
+
+    const field = existingEntityReferenceField(core.node, {
+      cardinality: "many",
+      label: "Related nodes",
+      create: true,
+    });
+
+    expect(field.range).toBe(core.node);
+    expect(field).toMatchObject({
+      cardinality: "many",
+      meta: {
+        label: "Related nodes",
+        reference: {
+          selection: "existing-only",
+          create: true,
+        },
+      },
+    });
+  });
+
+  it("re-exports icon-ref reading for definition-time callers", () => {
+    expect(readDefinitionIconId("seed:icon:domain")).toBe("seed:icon:domain");
+    expect(readDefinitionIconId({ id: "seed:icon:domain" })).toBe("seed:icon:domain");
+    expect(readDefinitionIconId({ id: "" })).toBeUndefined();
+    expect(readDefinitionIconId(undefined)).toBeUndefined();
   });
 });

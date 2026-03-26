@@ -1,4 +1,5 @@
-import { edgeId, type GraphCommandSpec } from "@io/core/graph";
+import { edgeId } from "@io/core/graph";
+import type { GraphCommandSpec } from "@io/core/graph/def";
 
 import { workflowBranch, workflowCommit, workflowProject, workflowRepository } from "./type.js";
 

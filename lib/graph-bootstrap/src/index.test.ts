@@ -129,4 +129,44 @@ describe("graph-bootstrap contract", () => {
     );
     expect(graph.icon.get(graphIconSeeds.string.id).svg).toContain("<svg");
   });
+
+  it("can materialize domain-owned icon seeds through a pluggable per-id provider", () => {
+    const domainIconSeed = Object.freeze({
+      id: "seed:icon:test-item",
+      key: "test-item",
+      name: "Test Item",
+      svg: '<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>',
+    });
+    const customItem = defineType({
+      values: { key: "test:customItem", name: "Custom Item", icon: domainIconSeed.id },
+      fields: {
+        ...core.node.fields,
+        title: { range: core.string, cardinality: "one", icon: domainIconSeed.id },
+      },
+    });
+    const customGraph = applyIdMap(createIdMap({ customItem }).map, { customItem });
+    const store = createGraphStore();
+
+    graphBootstrap.bootstrap(store, core, coreGraphBootstrapOptions);
+    graphBootstrap.bootstrap(store, customGraph, {
+      ...coreGraphBootstrapOptions,
+      resolveIconSeed(iconId) {
+        return iconId === domainIconSeed.id ? domainIconSeed : undefined;
+      },
+    });
+
+    const iconTypePredicateId = edgeId(core.node.fields.type);
+    const iconSvgPredicateId = edgeId(core.icon.fields.svg);
+    const typeIconPredicateId = edgeId(core.type.fields.icon);
+    const predicateIconPredicateId = edgeId(core.predicate.fields.icon);
+
+    expect(store.facts(domainIconSeed.id, iconTypePredicateId)[0]?.o).toBe(typeId(core.icon));
+    expect(store.facts(domainIconSeed.id, iconSvgPredicateId)[0]?.o).toBe(domainIconSeed.svg);
+    expect(store.facts(typeId(customGraph.customItem), typeIconPredicateId)[0]?.o).toBe(
+      domainIconSeed.id,
+    );
+    expect(
+      store.facts(edgeId(customGraph.customItem.fields.title), predicateIconPredicateId)[0]?.o,
+    ).toBe(domainIconSeed.id);
+  });
 });

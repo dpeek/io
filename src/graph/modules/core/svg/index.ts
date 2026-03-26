@@ -1,4 +1,4 @@
-import { defineScalarModule } from "../../../runtime/type-module.js";
+import { defineScalarModule } from "../../../type-module.js";
 import { stringFilter } from "../string/filter.js";
 import { svgMeta } from "./meta.js";
 import { svgType } from "./type.js";

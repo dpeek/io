@@ -1,4 +1,10 @@
-import type { AnyTypeOutput, DefinitionIconRef, EdgeOutput } from "@io/core/graph/def";
+import {
+  type AnyTypeOutput,
+  type DefinitionIconRef,
+  type EdgeOutput,
+  type GraphIconSeedRecord,
+  readDefinitionIconId,
+} from "@io/graph-kernel";
 
 import booleanSvg from "./seed/boolean.svg?raw";
 import colorSvg from "./seed/color.svg?raw";
@@ -20,12 +26,7 @@ import tagSvg from "./seed/tag.svg?raw";
 import unknownSvg from "./seed/unknown.svg?raw";
 import urlSvg from "./seed/url.svg?raw";
 
-export type GraphIconSeed = Readonly<{
-  id: string;
-  key: string;
-  name: string;
-  svg: string;
-}>;
+export type GraphIconSeed = GraphIconSeedRecord;
 
 function normalizeSeedSvg(svg: string): string {
   return svg.trim().length > 0 ? svg : unknownSvg;
@@ -40,6 +41,12 @@ function defineGraphIconSeed(alias: string, input: { name: string; svg: string }
   });
 }
 
+/**
+ * Canonical built-in core icon catalog.
+ *
+ * This stays domain-owned so bootstrap can consume it without taking ownership
+ * of one global icon registry.
+ */
 export const graphIconSeeds = {
   boolean: defineGraphIconSeed("boolean", { name: "Boolean", svg: booleanSvg }),
   color: defineGraphIconSeed("color", { name: "Color", svg: colorSvg }),
@@ -64,16 +71,13 @@ export const graphIconSeeds = {
 
 export const graphIconSeedList = Object.values(graphIconSeeds);
 
-function isDefinitionIconObject(value: DefinitionIconRef | undefined): value is { id: string } {
-  return typeof value === "object" && value !== null && typeof value.id === "string";
-}
-
 export function resolveDefinitionIconId(value: DefinitionIconRef | undefined): string {
-  if (typeof value === "string" && value.length > 0) return value;
-  if (isDefinitionIconObject(value) && value.id.length > 0) return value.id;
-  return graphIconSeeds.unknown.id;
+  return readDefinitionIconId(value) ?? graphIconSeeds.unknown.id;
 }
 
+/**
+ * Default icon mapping for core-owned type definitions.
+ */
 export function resolveTypeDefinitionIconId(
   typeDef: Pick<AnyTypeOutput, "kind" | "values">,
 ): string {
@@ -82,6 +86,9 @@ export function resolveTypeDefinitionIconId(
   return graphIconSeeds.unknown.id;
 }
 
+/**
+ * Default icon mapping for core-owned predicate definitions.
+ */
 export function resolvePredicateDefinitionIconId(
   predicateDef: Pick<EdgeOutput, "icon" | "range">,
   rangeType?: Pick<AnyTypeOutput, "kind" | "values">,

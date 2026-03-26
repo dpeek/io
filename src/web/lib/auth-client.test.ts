@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import type { WebPrincipalBootstrapPayload } from "@io/core/graph";
+import type { WebPrincipalBootstrapPayload } from "@io/graph-authority";
 
 import {
   fetchWebPrincipalBootstrap,

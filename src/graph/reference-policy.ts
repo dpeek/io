@@ -1,4 +1,5 @@
-import type { Cardinality, RangeRef } from "./schema.js";
+import type { Cardinality, RangeRef } from "@io/graph-kernel";
+
 import type { ReferenceFieldInput } from "./type-module.js";
 import { defineReferenceField } from "./type-module.js";
 

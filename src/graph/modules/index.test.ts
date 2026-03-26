@@ -6,7 +6,7 @@ import {
   probeContractObjectView,
   probeContractWorkflow,
   probeSaveContractItemCommand,
-} from "../runtime/contracts.probe.js";
+} from "../definition-contracts.probe.js";
 import { core as canonicalCore } from "./core.js";
 import { cardinality } from "./core/cardinality/index.js";
 import { colorTypeModule } from "./core/color/index.js";

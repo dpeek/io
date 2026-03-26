@@ -1,20 +1,22 @@
-import type { PrincipalRoleBinding } from "@io/graph-authority";
-
-import { createIdMap, applyIdMap, defineReferenceField, defineType } from "../index.js";
 import type {
   AuthSubjectRef,
   AuthenticatedSession,
-  GraphCommandSpec,
   ModulePermissionApprovalRecord,
   ModulePermissionCapabilityGrant,
   ModulePermissionGrantResource,
   ModulePermissionRequest,
-  ObjectViewSpec,
-  PredicatePolicyDescriptor,
-  WorkflowSpec,
-} from "../index.js";
-import { fieldPolicyDescriptor } from "../index.js";
-import { core, stringTypeModule } from "../modules/index.js";
+  PrincipalRoleBinding,
+} from "@io/graph-authority";
+import {
+  applyGraphIdMap as applyIdMap,
+  createGraphIdMap as createIdMap,
+  fieldPolicyDescriptor,
+  type PredicatePolicyDescriptor,
+} from "@io/graph-kernel";
+
+import { defineReferenceField, defineType, type GraphCommandSpec } from "./def.js";
+import type { ObjectViewSpec, WorkflowSpec } from "./def.js";
+import { core, stringTypeModule } from "./modules/index.js";
 
 // Test-only root-safe contract probes that feature work can copy from.
 export const probeContractItem = defineType({

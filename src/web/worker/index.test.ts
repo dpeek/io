@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 
-import { createStore, type GraphStoreSnapshot, type WebPrincipalSummary } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
-import { type AuthorizationContext } from "@io/graph-authority";
+import type { AuthorizationContext, WebPrincipalSummary } from "@io/graph-authority";
 import { createGraphClient } from "@io/graph-client";
+import { createGraphStore as createStore, type GraphStoreSnapshot } from "@io/graph-kernel";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
 
 import { createAnonymousAuthorizationContext, issueBearerShareToken } from "../lib/auth-bridge.js";

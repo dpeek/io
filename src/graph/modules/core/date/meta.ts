@@ -1,4 +1,4 @@
-import type { TypeModuleMeta } from "../../../runtime/type-module.js";
+import type { TypeModuleMeta } from "../../../type-module.js";
 import { formatDate } from "./parse.js";
 
 export const dateMeta = {

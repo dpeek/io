@@ -1,18 +1,3 @@
-import {
-  type AuthSubjectRef,
-  type AnyTypeOutput,
-  createStore,
-  edgeId,
-  type GraphFieldAuthority,
-  isEntityType,
-  isSecretBackedField,
-  type Cardinality,
-  type PredicatePolicyDescriptor,
-  type WebPrincipalSummary,
-  resolveFieldPolicyDescriptor,
-  type GraphStore,
-  type GraphStoreSnapshot,
-} from "@io/core/graph";
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
@@ -47,6 +32,7 @@ import { pkm } from "@io/core/graph/modules/pkm";
 import {
   defineAdmissionPolicy,
   type AdmissionPolicy,
+  type AuthSubjectRef,
   type AuthorizationContext,
   authorizeCommand,
   authorizeRead,
@@ -54,14 +40,15 @@ import {
   createPersistedAuthoritativeGraph,
   type GraphCommandPolicy,
   type PersistedAuthoritativeGraph,
-  type PersistedAuthoritativeGraphStorageCommitInput,
-  type PersistedAuthoritativeGraphStoragePersistInput,
   type PersistedAuthoritativeGraphStorage,
+  type PersistedAuthoritativeGraphStorageCommitInput,
   type PersistedAuthoritativeGraphStorageLoadResult,
+  type PersistedAuthoritativeGraphStoragePersistInput,
   type PolicyError,
   type PrincipalKind,
   type ReplicationReadAuthorizer,
   validateShareGrant,
+  type WebPrincipalSummary,
 } from "@io/graph-authority";
 import { bootstrap } from "@io/graph-bootstrap";
 import {
@@ -81,6 +68,19 @@ import {
   SerializedQueryValidationError,
   normalizeSerializedQueryRequest,
 } from "@io/graph-client";
+import {
+  createGraphStore as createStore,
+  edgeId,
+  isEntityType,
+  isSecretBackedField,
+  resolveFieldPolicyDescriptor,
+  type AnyTypeOutput,
+  type Cardinality,
+  type GraphFieldAuthority,
+  type GraphStore,
+  type GraphStoreSnapshot,
+  type PredicatePolicyDescriptor,
+} from "@io/graph-kernel";
 import {
   type AuthoritativeGraphRetainedHistoryPolicy,
   type GraphWriteTransaction,

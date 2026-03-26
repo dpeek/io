@@ -1,4 +1,4 @@
-import type { TypeModuleMeta } from "../../../runtime/type-module.js";
+import type { TypeModuleMeta } from "../../../type-module.js";
 
 function formatJson(value: unknown): string {
   return JSON.stringify(value);

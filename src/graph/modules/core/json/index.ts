@@ -1,4 +1,4 @@
-import { defineScalarModule } from "../../../runtime/type-module.js";
+import { defineScalarModule } from "../../../type-module.js";
 import { jsonFilter } from "./filter.js";
 import { jsonMeta } from "./meta.js";
 import { jsonType } from "./type.js";
