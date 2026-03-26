@@ -1,10 +1,4 @@
 import { createEntityWithId, type CreateInputOfType } from "@io/graph-client";
-import {
-  cloneStoreSnapshot,
-  createStore,
-  type GraphStore,
-  type GraphStoreSnapshot,
-} from "@io/graph-kernel";
 
 import {
   graphIconSeedList,
@@ -22,6 +16,7 @@ import {
   typeId,
 } from "./schema.js";
 import type { AnyTypeOutput, EdgeOutput, FieldsOutput, TypeOutput } from "./schema.js";
+import { cloneStoreSnapshot, createStore, type GraphStore, type GraphStoreSnapshot } from "./store";
 
 type SchemaTree = FieldsOutput;
 // Canonical bootstrap timestamps keep independently seeded schema entities

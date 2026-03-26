@@ -4,7 +4,7 @@ import { bootstrap, createStore, isEntityType } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import { seedExampleGraph } from "../../lib/example-data.js";
 import { buildEntityCatalog, buildTypeCatalog } from "./catalog.js";
@@ -20,7 +20,7 @@ function createCatalogFixture() {
   bootstrap(store, pkm);
   bootstrap(store, ops);
 
-  const graph = createTypeClient(store, { ...core, ...pkm, ...ops });
+  const graph = createGraphClient(store, { ...core, ...pkm, ...ops });
   seedExampleGraph(graph);
 
   return { graph, store };

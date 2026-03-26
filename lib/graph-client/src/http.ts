@@ -13,7 +13,7 @@ import {
   type QueryResultPage,
   type SerializedQueryRequest,
 } from "./serialized-query";
-import { createSyncedTypeClient, type SyncedTypeClient } from "./synced-client";
+import { createSyncedGraphClient, type SyncedGraphClient } from "./sync";
 
 export type FetchImpl = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -150,7 +150,7 @@ export async function createHttpGraphClient<
 >(
   namespace: TNamespace,
   options: HttpGraphClientOptions<TDefs> = {},
-): Promise<SyncedTypeClient<TNamespace, TDefs>> {
+): Promise<SyncedGraphClient<TNamespace, TDefs>> {
   const baseUrl = options.url ?? defaultHttpGraphUrl;
   const syncUrl = resolveEndpointUrl(options.syncPath ?? "/api/sync", baseUrl);
   const transactionUrl = resolveEndpointUrl(options.transactionPath ?? "/api/tx", baseUrl);
@@ -216,7 +216,7 @@ export async function createHttpGraphClient<
     return payload as AuthoritativeGraphWriteResult;
   }
 
-  const client = createSyncedTypeClient(namespace, {
+  const client = createSyncedGraphClient(namespace, {
     createTxId,
     definitions: options.definitions,
     requestedScope: options.requestedScope,

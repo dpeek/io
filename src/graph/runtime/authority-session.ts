@@ -10,7 +10,7 @@ import {
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteHistory,
   type AuthoritativeGraphWriteResult,
-  type AuthoritativeWriteScope,
+  type GraphWriteScope,
   type GraphWriteTransaction,
   sameGraphWriteTransaction,
   unboundedAuthoritativeGraphRetainedHistoryPolicy,
@@ -295,7 +295,7 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
   function apply(
     transaction: GraphWriteTransaction,
     options: {
-      writeScope?: AuthoritativeWriteScope;
+      writeScope?: GraphWriteScope;
     } = {},
   ): AuthoritativeGraphWriteResult {
     return applyWithSnapshot(transaction, options).result;
@@ -304,7 +304,7 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
   function applyWithSnapshot(
     transaction: GraphWriteTransaction,
     options: {
-      writeScope?: AuthoritativeWriteScope;
+      writeScope?: GraphWriteScope;
       sourceSnapshot?: GraphStoreSnapshot;
     } = {},
   ): {

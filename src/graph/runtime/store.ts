@@ -5,8 +5,8 @@
  * that still live under `src/graph/runtime`.
  */
 export {
-  cloneStoreSnapshot,
-  createStore,
+  cloneGraphStoreSnapshot as cloneStoreSnapshot,
+  createGraphStore as createStore,
   type EncodedValue,
   type GraphId,
   type GraphFact,

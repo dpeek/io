@@ -1,7 +1,7 @@
 import {
   cloneAuthoritativeGraphWriteResult,
   type AuthoritativeGraphWriteResult,
-  type AuthoritativeWriteScope,
+  type GraphWriteScope,
   type GraphWriteOperation,
   type GraphWriteTransaction,
 } from "@io/graph-kernel";
@@ -196,24 +196,21 @@ export function filterReplicatedWriteResult(
   });
 }
 
-const authoritativeWriteScopeLevel: Record<AuthoritativeWriteScope, number> = {
+const graphWriteScopeLevel: Record<GraphWriteScope, number> = {
   "client-tx": 0,
   "server-command": 1,
   "authority-only": 2,
 };
 
-function writeScopeAllows(
-  writeScope: AuthoritativeWriteScope,
-  required: GraphFieldWritePolicy,
-): boolean {
-  return authoritativeWriteScopeLevel[writeScope] >= authoritativeWriteScopeLevel[required];
+function writeScopeAllows(writeScope: GraphWriteScope, required: GraphFieldWritePolicy): boolean {
+  return graphWriteScopeLevel[writeScope] >= graphWriteScopeLevel[required];
 }
 
 export function validateAuthoritativeFieldWritePolicies(
   transaction: GraphWriteTransaction,
   snapshot: GraphStoreSnapshot,
   namespace: Record<string, AnyTypeOutput>,
-  writeScope: AuthoritativeWriteScope,
+  writeScope: GraphWriteScope,
 ) {
   const policiesByTypeId = createFieldAuthorityPolicyIndex(namespace);
   const validationStore = createStore(snapshot);

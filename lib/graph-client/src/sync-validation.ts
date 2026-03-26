@@ -1,5 +1,5 @@
 import {
-  createStore,
+  createGraphStore,
   type AnyTypeOutput,
   type AuthoritativeGraphWriteResult,
   type GraphStore,
@@ -24,7 +24,7 @@ import {
   validateGraphStore,
   type GraphValidationIssue,
   type GraphValidationResult,
-} from "./client.js";
+} from "./graph.js";
 
 function withValidationValue<TValue, TResult extends GraphValidationResult<unknown>>(
   result: TResult,
@@ -80,7 +80,7 @@ function validateClientTotalSyncPayload<const T extends Record<string, AnyTypeOu
     return toClientValidationResult(invalidTotalSyncPayloadResult(payload, prepared.result.issues));
   }
 
-  const validationStore = createStore(prepared.value.snapshot);
+  const validationStore = createGraphStore(prepared.value.snapshot);
   return withValidationValue(validateGraphStore(validationStore, namespace), payload);
 }
 
@@ -108,7 +108,7 @@ function validateClientGraphWriteResult<const T extends Record<string, AnyTypeOu
     );
   }
 
-  const validationStore = createStore(materialized.value);
+  const validationStore = createGraphStore(materialized.value);
   return withValidationValue(validateGraphStore(validationStore, namespace), prepared.value);
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createGraphWriteTransactionFromSnapshots, createStore } from "@io/graph-kernel";
+import { createGraphStore, createGraphWriteTransactionFromSnapshots } from "@io/graph-kernel";
 
 import {
   createIncrementalSyncFallback,
@@ -10,13 +10,27 @@ import {
   graphSyncScope,
   validateIncrementalSyncResult,
 } from "./index";
+import * as graphSync from "./index.js";
 
 describe("@io/graph-sync", () => {
+  it("publishes sync-specific clone and session helpers from the package root", () => {
+    expect(Object.keys(graphSync)).toEqual(
+      expect.arrayContaining([
+        "cloneSyncState",
+        "createIncrementalSyncPayload",
+        "createTotalSyncPayload",
+        "createTotalSyncSession",
+      ]),
+    );
+
+    expect(Object.keys(graphSync)).not.toContain("cloneState");
+  });
+
   it("applies a total payload through the package root API", () => {
-    const server = createStore();
+    const server = createGraphStore();
     server.assert("n:1", "p:type", "t:task");
 
-    const session = createTotalSyncSession(createStore());
+    const session = createTotalSyncSession(createGraphStore());
     const applied = session.apply(
       createTotalSyncPayload(server, {
         cursor: "server:1",
@@ -41,7 +55,7 @@ describe("@io/graph-sync", () => {
   });
 
   it("derives a write transaction from snapshots through the package root API", () => {
-    const store = createStore();
+    const store = createGraphStore();
     const before = store.snapshot();
     store.assertEdge({ id: "edge:1", s: "n:1", p: "p:type", o: "t:task" });
     const after = store.snapshot();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import { bootstrap } from "./bootstrap";
 import { core } from "./core";
@@ -36,8 +36,8 @@ describe("bootstrap contract", () => {
     bootstrap(store, core);
     bootstrap(store, testGraph);
 
-    const graph = createTypeClient(store, testGraph, testDefs);
-    const coreGraph = createTypeClient(store, core);
+    const graph = createGraphClient(store, testGraph, testDefs);
+    const coreGraph = createGraphClient(store, core);
     const runtimeId = graph.item.create({ name: "Runtime Item", title: "One" });
     const runtimeEntity = graph.item.get(runtimeId);
     const schemaType = coreGraph.type.get(typeId(testGraph.item));
@@ -53,8 +53,8 @@ describe("bootstrap contract", () => {
     bootstrap(restartedStore, core);
     bootstrap(restartedStore, testGraph);
 
-    const restartedGraph = createTypeClient(restartedStore, testGraph, testDefs);
-    const restartedCoreGraph = createTypeClient(restartedStore, core);
+    const restartedGraph = createGraphClient(restartedStore, testGraph, testDefs);
+    const restartedCoreGraph = createGraphClient(restartedStore, core);
     const restartedRuntimeEntity = restartedGraph.item.get(runtimeId);
     const restartedSchemaType = restartedCoreGraph.type.get(typeId(testGraph.item));
 

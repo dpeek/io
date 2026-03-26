@@ -1,4 +1,8 @@
-import type { SyncState, SyncedTypeClient, SyncedTypeSyncController } from "@io/graph-client";
+import type {
+  GraphClientSyncState,
+  SyncedGraphClient,
+  GraphSyncController,
+} from "@io/graph-client";
 import type { AnyTypeOutput } from "@io/graph-kernel";
 import {
   sameSyncActivity,
@@ -19,12 +23,12 @@ import {
 import { GraphMutationRuntimeProvider } from "../../runtime/react/persisted-mutation.js";
 
 type GraphSchema = Record<string, AnyTypeOutput>;
-type AnyGraphRuntime = SyncedTypeClient<GraphSchema, GraphSchema>;
+type AnyGraphRuntime = SyncedGraphClient<GraphSchema, GraphSchema>;
 
 export type GraphRuntime<
   TNamespace extends GraphSchema,
   TDefs extends GraphSchema = TNamespace,
-> = SyncedTypeClient<TNamespace, TDefs>;
+> = SyncedGraphClient<TNamespace, TDefs>;
 
 export interface GraphRuntimeProviderProps<
   TNamespace extends GraphSchema,
@@ -44,7 +48,10 @@ export interface GraphQueryOptions<
 
 const GraphRuntimeContext = createContext<AnyGraphRuntime | null>(null);
 
-function sameGraphSyncState(left: SyncState | undefined, right: SyncState): boolean {
+function sameGraphSyncState(
+  left: GraphClientSyncState | undefined,
+  right: GraphClientSyncState,
+): boolean {
   if (!left) return false;
   if (
     left.mode !== right.mode ||
@@ -86,14 +93,14 @@ function useResolvedGraphRuntime<TNamespace extends GraphSchema, TDefs extends G
   return resolvedRuntime;
 }
 
-function useStableSyncState(sync: SyncedTypeSyncController): SyncState {
+function useStableSyncState(sync: GraphSyncController): GraphClientSyncState {
   const hasSnapshotRef = useRef(false);
-  const snapshotRef = useRef<SyncState | undefined>(undefined);
+  const snapshotRef = useRef<GraphClientSyncState | undefined>(undefined);
 
-  function readSnapshot(): SyncState {
+  function readSnapshot(): GraphClientSyncState {
     const next = sync.getState();
     if (hasSnapshotRef.current && sameGraphSyncState(snapshotRef.current, next)) {
-      return snapshotRef.current as SyncState;
+      return snapshotRef.current as GraphClientSyncState;
     }
     snapshotRef.current = next;
     hasSnapshotRef.current = true;
@@ -132,7 +139,7 @@ export function useGraphRuntime<
 
 export function useGraphSyncState<T extends GraphSchema>(
   runtime?: GraphRuntime<T> | null,
-): SyncState {
+): GraphClientSyncState {
   return useStableSyncState(useResolvedGraphRuntime(runtime).sync);
 }
 

@@ -4,7 +4,7 @@ import { bootstrap, createStore, typeId } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { EntityTypeBrowserSurface } from "./entity-type-browser.js";
@@ -18,7 +18,7 @@ function createWorkflowPageRuntime() {
   bootstrap(store, pkm);
   bootstrap(store, ops);
 
-  const graph = createTypeClient(store, productGraph);
+  const graph = createGraphClient(store, productGraph);
   const projectId = graph.workflowProject.create({
     inferred: true,
     name: "IO",

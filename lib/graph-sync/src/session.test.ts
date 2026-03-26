@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createStore } from "@io/graph-kernel";
+import { createGraphStore } from "@io/graph-kernel";
 
 import {
   createIncrementalSyncPayload,
@@ -13,14 +13,14 @@ import {
 
 describe("total sync sessions", () => {
   it("preserves requested and delivered module scope state through total apply", () => {
-    const server = createStore();
+    const server = createGraphStore();
     server.assert("n:1", "p:type", "t:task");
     const requestedScope = {
       kind: "module" as const,
       moduleId: "ops/workflow",
       scopeId: "scope:ops/workflow:review",
     };
-    const session = createTotalSyncSession(createStore(), {
+    const session = createTotalSyncSession(createGraphStore(), {
       requestedScope,
     });
     const deliveredScope = createModuleSyncScope({
@@ -71,10 +71,10 @@ describe("total sync sessions", () => {
   });
 
   it("records total and incremental activities as payloads are applied", () => {
-    const server = createStore();
+    const server = createGraphStore();
     server.assert("n:1", "p:type", "t:task");
 
-    const session = createTotalSyncSession(createStore());
+    const session = createTotalSyncSession(createGraphStore());
     session.apply(
       createTotalSyncPayload(server, {
         cursor: "server:1",
@@ -108,9 +108,9 @@ describe("total sync sessions", () => {
   });
 
   it("rejects incremental scope swaps", () => {
-    const server = createStore();
+    const server = createGraphStore();
     server.assert("n:1", "p:type", "t:task");
-    const session = createTotalSyncSession(createStore());
+    const session = createTotalSyncSession(createGraphStore());
 
     session.apply(
       createTotalSyncPayload(server, {
@@ -143,7 +143,7 @@ describe("total sync sessions", () => {
   });
 
   it("marks the session stale when pull throws", async () => {
-    const session = createTotalSyncSession(createStore());
+    const session = createTotalSyncSession(createGraphStore());
 
     await expect(
       session.pull(() => {

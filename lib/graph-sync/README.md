@@ -19,14 +19,14 @@ cursored incremental delivery, and total sync sessions.
 
 ## What It Does Not Own
 
-- authoritative write-envelope contracts, write-scope literals, and canonicalization helpers
+- authoritative write-envelope contracts, graph write-scope literals, and canonicalization helpers
 - authoritative write sessions or retained-history persistence adapters
 - browser, worker, or HTTP transport wiring
-- typed client conveniences such as `createSyncedTypeClient(...)`
+- typed client conveniences such as `createSyncedGraphClient(...)`
 - auth bridge, policy-version, or share-route concerns
 - schema bootstrap, projection planning, or principal-aware read filtering
 
-Kernel-owned write-envelope symbols come from `@io/graph-kernel` directly.
+Kernel-owned write-envelope symbols and `GraphWriteScope` come from `@io/graph-kernel` directly.
 
 ## Common Workflows
 
@@ -44,7 +44,7 @@ Kernel-owned write-envelope symbols come from `@io/graph-kernel` directly.
 - `fallbackReason` means incremental apply must recover with a total refresh.
 - Module scope identity includes `moduleId`, `scopeId`, `definitionHash`, and `policyFilterVersion`.
 - `GraphWriteTransaction.id` is the idempotency key for authoritative replay semantics.
-- `SyncStatus` in this package is total-sync-only and excludes the runtime shim's `"pushing"` phase.
+- `SyncStatus` in this package is total-sync-only and excludes `@io/graph-client`'s `"pushing"` phase.
 - Diagnostics describe retained-history context only. They do not change apply rules by themselves.
 
 ## Public API

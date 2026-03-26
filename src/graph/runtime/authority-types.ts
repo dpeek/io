@@ -3,8 +3,8 @@ import type {
   AuthoritativeGraphRetainedHistoryPolicy,
   AuthoritativeGraphWriteHistory,
   AuthoritativeGraphWriteResult,
-  AuthoritativeWriteScope,
   GraphStoreSnapshot,
+  GraphWriteScope,
   GraphWriteTransaction,
 } from "@io/graph-kernel";
 import type { IncrementalSyncResult, SyncFreshness } from "@io/graph-sync";
@@ -20,13 +20,13 @@ export interface AuthoritativeGraphWriteSession {
   apply(
     transaction: GraphWriteTransaction,
     options?: {
-      writeScope?: AuthoritativeWriteScope;
+      writeScope?: GraphWriteScope;
     },
   ): AuthoritativeGraphWriteResult;
   applyWithSnapshot(
     transaction: GraphWriteTransaction,
     options?: {
-      writeScope?: AuthoritativeWriteScope;
+      writeScope?: GraphWriteScope;
       sourceSnapshot?: GraphStoreSnapshot;
     },
   ): {

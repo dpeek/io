@@ -1,6 +1,6 @@
 import { bootstrap, createStore } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import { testDefs, testNamespace } from "./test-graph.js";
 
@@ -8,8 +8,8 @@ const store = createStore();
 bootstrap(store, core);
 bootstrap(store, testNamespace);
 
-const graph = createTypeClient(store, testNamespace, testDefs);
-const coreGraph = createTypeClient(store, core);
+const graph = createGraphClient(store, testNamespace, testDefs);
+const coreGraph = createGraphClient(store, core);
 
 void graph.record
   .query({

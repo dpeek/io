@@ -3,7 +3,7 @@ import {
   edgeId,
   fieldTreeId,
   fieldTreeKey,
-  fieldsMeta,
+  fieldTreeMeta,
   isEnumType,
   isFieldsOutput,
   isScalarType,
@@ -45,12 +45,12 @@ type Cardinalized<
     ? PrimitiveForRange<R, Defs> | undefined
     : PrimitiveForRange<R, Defs>;
 
-type FieldsTree = { [fieldsMeta]: { key: string } } & Record<string, unknown>;
+type FieldsTree = { [fieldTreeMeta]: { key: string } } & Record<string, unknown>;
 
 type TreeEntity<T, Defs extends Record<string, AnyTypeOutput>> = T extends EdgeOutput
   ? Cardinalized<T["range"], T["cardinality"], Defs>
   : T extends FieldsTree
-    ? { [K in Exclude<keyof T, typeof fieldsMeta>]: TreeEntity<T[K], Defs> }
+    ? { [K in Exclude<keyof T, typeof fieldTreeMeta>]: TreeEntity<T[K], Defs> }
     : never;
 
 type TreeCreate<T, Defs extends Record<string, AnyTypeOutput>> = T extends EdgeOutput
@@ -61,7 +61,7 @@ type TreeCreate<T, Defs extends Record<string, AnyTypeOutput>> = T extends EdgeO
       : PrimitiveForRange<T["range"], Defs> | undefined
   : T extends FieldsTree
     ? {
-        [K in Exclude<keyof T, typeof fieldsMeta> as T[K] extends EdgeOutput
+        [K in Exclude<keyof T, typeof fieldTreeMeta> as T[K] extends EdgeOutput
           ? T[K]["cardinality"] extends "one"
             ? T[K] extends { createOptional: true }
               ? never
@@ -69,7 +69,7 @@ type TreeCreate<T, Defs extends Record<string, AnyTypeOutput>> = T extends EdgeO
             : never
           : never]-?: TreeCreate<T[K], Defs>;
       } & {
-        [K in Exclude<keyof T, typeof fieldsMeta> as T[K] extends EdgeOutput
+        [K in Exclude<keyof T, typeof fieldTreeMeta> as T[K] extends EdgeOutput
           ? T[K]["cardinality"] extends "one"
             ? T[K] extends { createOptional: true }
               ? K
@@ -210,7 +210,7 @@ export type FieldGroupRef<
 > = {
   [fieldGroupMeta]: FieldGroupInfo<T>;
 } & {
-  [K in Exclude<keyof T, typeof fieldsMeta>]: RefTree<T[K], Defs>;
+  [K in Exclude<keyof T, typeof fieldTreeMeta>]: RefTree<T[K], Defs>;
 };
 
 export function isFieldGroupRef(value: unknown): value is FieldGroupLike {
@@ -400,7 +400,7 @@ export type FieldQuerySelection<
   T extends FieldsTree,
   Defs extends Record<string, AnyTypeOutput>,
 > = {
-  [K in Exclude<keyof T, typeof fieldsMeta>]?: QuerySelectionNode<T[K], Defs>;
+  [K in Exclude<keyof T, typeof fieldTreeMeta>]?: QuerySelectionNode<T[K], Defs>;
 };
 
 type QueryEdgeSelection<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>> = [
@@ -430,7 +430,7 @@ export type QueryFieldResult<
   Selection extends FieldQuerySelection<T, Defs>,
   Defs extends Record<string, AnyTypeOutput>,
 > = {
-  [K in keyof Selection & Exclude<keyof T, typeof fieldsMeta>]: QueryResultNode<
+  [K in keyof Selection & Exclude<keyof T, typeof fieldTreeMeta>]: QueryResultNode<
     T[K],
     NonNullable<Selection[K]>,
     Defs
@@ -547,7 +547,7 @@ type TypeHandle<T extends TypeOutput, Defs extends Record<string, AnyTypeOutput>
   node(id: string): EntityRef<T, Defs>;
 };
 
-export type NamespaceClient<
+export type GraphClient<
   T extends Record<string, AnyTypeOutput>,
   Defs extends Record<string, AnyTypeOutput> = T,
 > = {

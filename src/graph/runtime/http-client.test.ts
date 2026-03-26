@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   createHttpGraphClient,
-  createSyncedTypeClient,
+  createSyncedGraphClient,
   defaultHttpGraphUrl,
   defaultHttpSerializedQueryPath,
   GraphValidationError,
@@ -12,7 +12,7 @@ import {
   type FetchImpl,
   type QueryResultPage,
 } from "@io/graph-client";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 import {
   createGraphWriteTransactionFromSnapshots,
   type AuthoritativeGraphRetainedHistoryPolicy,
@@ -76,7 +76,7 @@ function createAuthority() {
   const store = createStore();
   bootstrap(store, core);
   bootstrap(store, testGraph);
-  const graph = createTypeClient(store, testGraph, testDefs);
+  const graph = createGraphClient(store, testGraph, testDefs);
   graph.item.create({ name: "Seeded item" });
   const writes = createAuthoritativeGraphWriteSession(store, testGraph, {
     cursorPrefix: "server:",
@@ -134,7 +134,7 @@ function createHiddenCursorAuthority(
 ) {
   const store = createStore();
   bootstrap(store, hiddenGraph);
-  const graph = createTypeClient(store, hiddenGraph);
+  const graph = createGraphClient(store, hiddenGraph);
   const probeId = graph.hiddenCursorProbe.create({
     name: "Hidden Cursor Probe",
   });
@@ -158,7 +158,7 @@ function createHiddenCursorAdvanceTransaction(
   txId: string,
 ): GraphWriteTransaction {
   const mutationStore = createStore(snapshot);
-  const mutationGraph = createTypeClient(mutationStore, hiddenGraph);
+  const mutationGraph = createGraphClient(mutationStore, hiddenGraph);
   mutationGraph.hiddenCursorProbe.update(probeId, { hiddenState });
   return createGraphWriteTransactionFromSnapshots(snapshot, mutationStore.snapshot(), txId);
 }
@@ -741,7 +741,7 @@ describe("createHttpGraphClient", () => {
       cursor: "server:1",
     });
 
-    const client = createSyncedTypeClient(pkm, {
+    const client = createSyncedGraphClient(pkm, {
       createTxId: () => "cli:1",
       definitions: { ...core, ...pkm },
       pull: async () => payload,

@@ -11,8 +11,8 @@ import {
 } from "@io/core/graph/authority";
 import { core } from "@io/core/graph/modules";
 import {
-  createSyncedTypeClient as createResolvedSyncedTypeClient,
-  createTypeClient as createResolvedTypeClient,
+  createSyncedGraphClient as createResolvedSyncedGraphClient,
+  createGraphClient as createResolvedGraphClient,
   formatValidationPath,
   GraphSyncWriteError,
   GraphValidationError,
@@ -33,21 +33,21 @@ import {
 
 import { createTestGraph, createTestStore, testDefs, testNamespace } from "./test-graph.js";
 
-function createTypeClient(
+function createGraphClient(
   store: ReturnType<typeof createStore>,
   _namespace: typeof testNamespace = testNamespace,
 ) {
-  return createResolvedTypeClient(store, testNamespace, testDefs);
+  return createResolvedGraphClient(store, testNamespace, testDefs);
 }
 
-function createSyncedTypeClient(
+function createSyncedGraphClient(
   _namespace: typeof testNamespace,
   options: Omit<
-    Parameters<typeof createResolvedSyncedTypeClient<typeof testNamespace, typeof testDefs>>[1],
+    Parameters<typeof createResolvedSyncedGraphClient<typeof testNamespace, typeof testDefs>>[1],
     "definitions"
   >,
 ) {
-  return createResolvedSyncedTypeClient(testNamespace, {
+  return createResolvedSyncedGraphClient(testNamespace, {
     definitions: testDefs,
     ...options,
   });
@@ -143,7 +143,7 @@ function createCompanyNameWriteTransaction(
 describe("total sync", () => {
   it("runs synced-client local edits through the same local validation boundary before sync", () => {
     const server = createServerGraph();
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });
 
@@ -217,7 +217,7 @@ describe("total sync", () => {
       tags: [enterpriseTagId],
     });
 
-    const createClient = createSyncedTypeClient(testNamespace, {
+    const createClient = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:create" }),
     });
     const createdId = createClient.graph.company.create({
@@ -252,7 +252,7 @@ describe("total sync", () => {
     );
     expect(createClient.sync.getState().pendingCount).toBe(1);
 
-    const updateClient = createSyncedTypeClient(testNamespace, {
+    const updateClient = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:update" }),
     });
     updateClient.sync.apply(createTotalSyncPayload(server.store, { cursor: "server:update" }));
@@ -276,7 +276,7 @@ describe("total sync", () => {
       }),
     ]);
 
-    const deleteClient = createSyncedTypeClient(testNamespace, {
+    const deleteClient = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:delete" }),
     });
     deleteClient.sync.apply(createTotalSyncPayload(server.store, { cursor: "server:delete" }));
@@ -285,7 +285,7 @@ describe("total sync", () => {
     expect(deletePending).toHaveLength(1);
     expect(deletePending[0]?.ops.every((operation) => operation.op === "retract")).toBe(true);
 
-    const predicateClient = createSyncedTypeClient(testNamespace, {
+    const predicateClient = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:predicate" }),
     });
     predicateClient.sync.apply(
@@ -321,7 +321,7 @@ describe("total sync", () => {
     const authority = createAuthoritativeGraphWriteSession(server.store, testNamespace, {
       cursorPrefix: "server:",
     });
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, { cursor: authority.getCursor() ?? "server:0" }),
       push: (transaction) => authority.apply(transaction),
@@ -379,7 +379,7 @@ describe("total sync", () => {
       cursorPrefix: "server:",
     });
     let resolvePush: (() => void) | undefined;
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, { cursor: authority.getCursor() ?? "server:0" }),
       push(transaction) {
@@ -430,7 +430,7 @@ describe("total sync", () => {
       cursorPrefix: "server:",
     });
     let shouldFail = true;
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, { cursor: authority.getCursor() ?? "server:0" }),
       push(transaction) {
@@ -485,7 +485,7 @@ describe("total sync", () => {
       status: testNamespace.status.values.draft.id,
       website: new URL("https://acme.com"),
     });
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:recovery" }),
       push() {
         throw new Error("push failed");
@@ -522,7 +522,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });
 
@@ -572,7 +572,7 @@ describe("total sync", () => {
       website: new URL("https://betaworks.example"),
     });
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });
     const syncStatuses: string[] = [];
@@ -635,7 +635,7 @@ describe("total sync", () => {
     const dataOnlyPayload = createDataOnlyTotalSyncPayload(server.store, {
       cursor: "server:data-only:1",
     });
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => dataOnlyPayload,
     });
 
@@ -686,7 +686,7 @@ describe("total sync", () => {
     const dataOnlyPayload = createDataOnlyTotalSyncPayload(server.store, {
       cursor: "server:data-only:apply",
     });
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => dataOnlyPayload,
     });
 
@@ -736,7 +736,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createDataOnlyTotalSyncPayload(server.store, {
           cursor: "server:data-only:1",
@@ -821,7 +821,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:0" }),
     });
 
@@ -871,7 +871,7 @@ describe("total sync", () => {
       cursorPrefix: "server:",
     });
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: (state) =>
         state.cursor
           ? authority.getIncrementalSyncResult(state.cursor)
@@ -959,7 +959,7 @@ describe("total sync", () => {
     const authority = createAuthoritativeGraphWriteSession(server.store, testNamespace, {
       cursorPrefix: "server:",
     });
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: (state) =>
         state.cursor
           ? authority.getIncrementalSyncResult(state.cursor)
@@ -1020,7 +1020,7 @@ describe("total sync", () => {
       | undefined;
     let pullCount = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: (state) => {
         if (!state.cursor) {
           return createTotalSyncPayload(server.store, {
@@ -1151,7 +1151,7 @@ describe("total sync", () => {
     });
     let cursor = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, {
           cursor: `server:${(cursor += 1)}`,
@@ -1199,7 +1199,7 @@ describe("total sync", () => {
     });
 
     const error = new Error("sync failed");
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: async () => {
         throw error;
       },
@@ -1233,7 +1233,7 @@ describe("total sync", () => {
     });
     let cursor = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, {
           cursor: `server:${(cursor += 1)}`,
@@ -1292,7 +1292,7 @@ describe("total sync", () => {
     });
     let cursor = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, {
           cursor: `server:${(cursor += 1)}`,
@@ -1348,7 +1348,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });
 
@@ -1427,7 +1427,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });
 
@@ -1523,7 +1523,7 @@ describe("total sync", () => {
     });
     if (result.ok) throw new Error("Expected authoritative payload validation to fail");
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => payload,
     });
 
@@ -1729,7 +1729,7 @@ describe("total sync", () => {
     });
 
     const clientStore = createTestStore();
-    const clientGraph = createTypeClient(clientStore, testNamespace);
+    const clientGraph = createGraphClient(clientStore, testNamespace);
     const sync = createTotalSyncController(clientStore, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
       validateTotalPayload: createAuthoritativeTotalSyncValidator(testNamespace),
@@ -1773,7 +1773,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });
 
@@ -1825,7 +1825,7 @@ describe("total sync", () => {
       website: new URL("https://acme.com"),
     });
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });
 
@@ -1886,7 +1886,7 @@ describe("total sync", () => {
     });
 
     const clientStore = createTestStore();
-    const clientGraph = createTypeClient(clientStore, testNamespace);
+    const clientGraph = createGraphClient(clientStore, testNamespace);
     const session = createTotalSyncSession(clientStore, {
       validateTotalPayload: createAuthoritativeTotalSyncValidator(testNamespace),
     });
@@ -1953,7 +1953,7 @@ describe("total sync", () => {
     });
 
     const clientStore = createTestStore();
-    const clientGraph = createTypeClient(clientStore, testNamespace);
+    const clientGraph = createGraphClient(clientStore, testNamespace);
     const session = createTotalSyncSession(clientStore, {
       validateTotalPayload: createAuthoritativeTotalSyncValidator(testNamespace),
       validateWriteResult: createAuthoritativeGraphWriteResultValidator(clientStore, testNamespace),
@@ -2060,7 +2060,7 @@ describe("total sync", () => {
 
     const clientStore = createTestStore();
     const preserveSnapshot = clientStore.snapshot();
-    const clientGraph = createTypeClient(clientStore, testNamespace);
+    const clientGraph = createGraphClient(clientStore, testNamespace);
     const session = createTotalSyncSession(clientStore, {
       preserveSnapshot,
       validateTotalPayload: createAuthoritativeTotalSyncValidator(testNamespace),
@@ -2100,7 +2100,7 @@ describe("total sync", () => {
     });
     let cursor = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, {
           cursor: `server:${(cursor += 1)}`,
@@ -2155,7 +2155,7 @@ describe("total sync", () => {
     });
     let cursor = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, {
           cursor: `server:${(cursor += 1)}`,
@@ -2212,7 +2212,7 @@ describe("total sync", () => {
     });
     let cursor = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, {
           cursor: `server:${(cursor += 1)}`,
@@ -2278,7 +2278,7 @@ describe("total sync", () => {
     });
     let cursor = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, {
           cursor: `server:${(cursor += 1)}`,
@@ -2335,7 +2335,7 @@ describe("total sync", () => {
     });
     let cursor = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       pull: () =>
         createTotalSyncPayload(server.store, {
           cursor: `server:${(cursor += 1)}`,
@@ -2542,7 +2542,7 @@ describe("authoritative graph writes", () => {
     bootstrap(restartedStore, core);
     bootstrap(restartedStore, testNamespace);
     restartedStore.replace(server.store.snapshot());
-    const restartedGraph = createTypeClient(restartedStore, testNamespace);
+    const restartedGraph = createGraphClient(restartedStore, testNamespace);
     const restarted = createAuthoritativeGraphWriteSession(restartedStore, testNamespace, {
       cursorPrefix: history.cursorPrefix,
       initialSequence: history.baseSequence,
@@ -2640,7 +2640,7 @@ describe("authoritative graph writes", () => {
     }> = [];
     let pullCount = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       requestedScope,
       pull(state) {
         pullStates.push({
@@ -2734,7 +2734,7 @@ describe("authoritative graph writes", () => {
     });
     let pullCount = 0;
 
-    const client = createSyncedTypeClient(testNamespace, {
+    const client = createSyncedGraphClient(testNamespace, {
       requestedScope,
       pull() {
         pullCount += 1;

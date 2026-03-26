@@ -12,7 +12,7 @@ import {
   sameLogicalValue,
   setNestedValue,
   type EntityOfType,
-} from "./client-core";
+} from "./core";
 
 export function assertOne(
   store: GraphStore,

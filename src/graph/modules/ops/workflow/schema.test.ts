@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { bootstrap, createStore } from "@io/core/graph";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import { createIdMap } from "../../../runtime/identity.js";
 import { core } from "../../core.js";
@@ -591,7 +591,7 @@ describe("ops workflow schema", () => {
     bootstrap(store, core);
     bootstrap(store, pkm);
     bootstrap(store, ops);
-    const graph = createTypeClient(store, productGraph);
+    const graph = createGraphClient(store, productGraph);
 
     const projectId = graph.workflowProject.create({
       name: "IO",

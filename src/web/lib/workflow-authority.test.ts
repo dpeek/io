@@ -4,7 +4,7 @@ import { createStore, type AuthorizationContext } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import { createAnonymousAuthorizationContext } from "./auth-bridge.js";
 import {
@@ -35,7 +35,7 @@ function createTestAuthorizationContext(
 
 function readProductGraph(authority: WebAppAuthority, authorization: AuthorizationContext) {
   const store = createStore(authority.readSnapshot({ authorization }));
-  return createTypeClient(store, productGraph);
+  return createGraphClient(store, productGraph);
 }
 
 describe("workflow authority", () => {

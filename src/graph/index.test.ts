@@ -252,10 +252,12 @@ describe("@io/core/graph package entry surfaces", () => {
     expect(Object.keys(rootExports)).not.toContain("FilterOperandEditor");
     expect(Object.keys(rootExports)).not.toContain("PredicateFieldView");
     expect(Object.keys(rootExports)).not.toContain("createJsonPersistedAuthoritativeGraph");
-    expect(Object.keys(rootExports)).not.toContain("createTypeClient");
+    expect(Object.keys(rootExports)).not.toContain("createGraphClient");
+    expect(Object.keys(rootExports)).not.toContain("createSyncedGraphClient");
     expect(Object.keys(rootExports)).not.toContain("validateGraphStore");
     expect(Object.keys(runtimeExports)).not.toContain("sanitizeSvgMarkup");
-    expect(Object.keys(runtimeExports)).not.toContain("createTypeClient");
+    expect(Object.keys(runtimeExports)).not.toContain("createGraphClient");
+    expect(Object.keys(runtimeExports)).not.toContain("createSyncedGraphClient");
     expect(Object.keys(runtimeExports)).not.toContain("validateGraphStore");
     expect(Object.keys(defExports)).not.toContain("createStore");
 

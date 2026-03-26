@@ -3,15 +3,17 @@
  *
  * This surface intentionally stops at opaque ids, append-oriented fact
  * storage, schema authoring, stable key-to-id resolution, and authoritative
- * write envelope types. Bootstrap, typed client helpers, sync sessions, and
- * authority storage live in higher layers.
+ * write envelope types. The root exports use explicit graph-prefixed factory
+ * names so adjacent extracted packages can depend on one self-describing
+ * contract. Bootstrap, typed client helpers, sync sessions, and authority
+ * storage live in higher layers.
  */
 export { createGraphId, type GraphId } from "./id.js";
-export { fieldsMeta } from "./field-tree-meta.js";
+export { fieldsMeta as fieldTreeMeta } from "./field-tree-meta.js";
 
 export {
-  cloneStoreSnapshot,
-  createStore,
+  cloneStoreSnapshot as cloneGraphStoreSnapshot,
+  createStore as createGraphStore,
   type GraphFact,
   type GraphStore,
   type GraphStoreSnapshot,
@@ -86,16 +88,15 @@ export {
 } from "./schema.js";
 
 export {
-  applyIdMap,
-  createIdMap,
-  extractSchemaKeys,
-  findDuplicateIds,
+  applyIdMap as applyGraphIdMap,
+  createIdMap as createGraphIdMap,
+  extractSchemaKeys as extractGraphSchemaKeys,
+  findDuplicateIds as findDuplicateGraphIds,
   type GraphIdMap,
-  type ResolvedNamespace,
+  type ResolvedNamespace as ResolvedGraphNamespace,
 } from "./identity.js";
 
 export {
-  authoritativeWriteScopes,
   canonicalizeGraphWriteTransaction,
   cloneAuthoritativeGraphRetainedHistoryPolicy,
   cloneAuthoritativeGraphWriteResult,
@@ -103,8 +104,9 @@ export {
   cloneGraphWriteTransaction,
   createGraphWriteOperationsFromSnapshots,
   createGraphWriteTransactionFromSnapshots,
+  graphWriteScopes,
   isAuthoritativeGraphRetainedHistoryPolicy,
-  isAuthoritativeWriteScope,
+  isGraphWriteScope,
   sameAuthoritativeGraphRetainedHistoryPolicy,
   sameGraphWriteTransaction,
   unboundedAuthoritativeGraphRetainedHistoryPolicy,
@@ -113,7 +115,7 @@ export {
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteHistory,
   type AuthoritativeGraphWriteResult,
-  type AuthoritativeWriteScope,
+  type GraphWriteScope,
   type GraphWriteAssertOperation,
   type GraphWriteOperation,
   type GraphWriteRetractOperation,

@@ -1,4 +1,4 @@
-import { fieldsMeta } from "@io/graph-kernel";
+import { fieldTreeMeta } from "@io/graph-kernel";
 
 /**
  * Schema authoring remains local for now.
@@ -184,12 +184,12 @@ export interface FieldsInput {
   [key: string]: EdgeInput<RangeRef> | EdgeOutput | FieldsInput;
 }
 
-export { fieldsMeta } from "@io/graph-kernel";
+export { fieldTreeMeta } from "@io/graph-kernel";
 
 export type FieldsOutput<T extends FieldsInput = any> = {
-  [fieldsMeta]: { key: string };
+  [fieldTreeMeta]: { key: string };
 } & {
-  [K in Exclude<keyof T, typeof fieldsMeta>]: T[K] extends EdgeOutput<any>
+  [K in Exclude<keyof T, typeof fieldTreeMeta>]: T[K] extends EdgeOutput<any>
     ? T[K]
     : T[K] extends EdgeInput<any>
       ? EdgeOutput<T[K]>
@@ -223,17 +223,17 @@ export function rangeOf<const R extends RangeRef>(range: R): NormalizeRange<R> {
 
 export function isFieldsOutput(value: unknown): value is FieldsOutput {
   if (!value || typeof value !== "object") return false;
-  return fieldsMeta in (value as Record<PropertyKey, unknown>);
+  return fieldTreeMeta in (value as Record<PropertyKey, unknown>);
 }
 
 export function fieldTreeKey(tree: FieldsOutput): string {
-  return tree[fieldsMeta].key;
+  return tree[fieldTreeMeta].key;
 }
 
-type TreeWithId = { [fieldsMeta]: { key: string; id?: string } };
+type TreeWithId = { [fieldTreeMeta]: { key: string; id?: string } };
 
 export function fieldTreeId(tree: TreeWithId): string {
-  return tree[fieldsMeta].id ?? tree[fieldsMeta].key;
+  return tree[fieldTreeMeta].id ?? tree[fieldTreeMeta].key;
 }
 
 type EdgeWithId = { key: string; id?: string };
@@ -310,7 +310,7 @@ export function isSecretBackedField<Field extends { authority?: GraphFieldAuthor
 function ns<const T extends FieldsInput>(key: string, input: T): FieldsOutput<T> {
   function build(path: string, tree: FieldsInput): FieldsOutput<FieldsInput> {
     const out: Record<string, unknown> = {};
-    Object.defineProperty(out, fieldsMeta, {
+    Object.defineProperty(out, fieldTreeMeta, {
       value: { key: path },
       enumerable: false,
       configurable: false,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { bootstrap, createStore } from "../../index.js";
@@ -12,7 +12,7 @@ function createRecordFields() {
   const store = createStore();
   bootstrap(store, core);
   bootstrap(store, kitchenSink);
-  const graph = createTypeClient(store, { ...core, ...kitchenSink });
+  const graph = createGraphClient(store, { ...core, ...kitchenSink });
   const platformTagId = graph.tag.create({
     color: "#2563eb",
     key: "platform",

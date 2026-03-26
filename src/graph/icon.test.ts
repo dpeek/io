@@ -3,13 +3,13 @@ import { describe, expect, it } from "bun:test";
 import { bootstrap, createStore, sanitizeSvgMarkup, typeId } from "@io/core/graph";
 import { core, graphIconSeeds } from "@io/core/graph/modules";
 import { pkm } from "@io/core/graph/modules/pkm";
-import { createTypeClient, GraphValidationError } from "@io/graph-client";
+import { createGraphClient, GraphValidationError } from "@io/graph-client";
 
 function createGraph() {
   const store = createStore();
   bootstrap(store, core);
   bootstrap(store, pkm);
-  return createTypeClient(store, { ...core, ...pkm });
+  return createGraphClient(store, { ...core, ...pkm });
 }
 
 describe("graph icons", () => {

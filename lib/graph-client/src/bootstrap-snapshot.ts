@@ -1,6 +1,6 @@
 import {
-  cloneStoreSnapshot,
-  createStore,
+  cloneGraphStoreSnapshot,
+  createGraphStore,
   edgeId,
   fieldTreeId,
   fieldTreeKey,
@@ -21,8 +21,8 @@ import {
   resolvePredicateDefinitionIconId,
   resolveTypeDefinitionIconId,
 } from "./bootstrap-icons.js";
-import { requireGraphClientCoreSchema } from "./client-core.js";
-import { createEntityWithId, type CreateInputOfType } from "./client.js";
+import { requireGraphClientCoreSchema } from "./core.js";
+import { createEntityWithId, type CreateInputOfType } from "./graph.js";
 
 type SchemaTree = FieldsOutput;
 
@@ -108,7 +108,7 @@ function bootstrapFactKey(subjectId: string, predicateId: string, objectId: stri
 }
 
 function rememberBootstrapNodeFacts(
-  store: ReturnType<typeof createStore>,
+  store: ReturnType<typeof createGraphStore>,
   bootstrapFacts: BootstrapFacts,
   nodeId: string,
 ): void {
@@ -119,7 +119,7 @@ function rememberBootstrapNodeFacts(
 }
 
 function assertCurrentFactOnce(
-  store: ReturnType<typeof createStore>,
+  store: ReturnType<typeof createGraphStore>,
   bootstrapFacts: BootstrapFacts,
   subjectId: string,
   predicateId: string,
@@ -149,7 +149,7 @@ function withManagedTimestamps<T extends TypeOutput>(
 }
 
 function ensureBootstrapEntity<T extends TypeOutput>(
-  store: ReturnType<typeof createStore>,
+  store: ReturnType<typeof createGraphStore>,
   bootstrapFacts: BootstrapFacts,
   definitions: Record<string, AnyTypeOutput>,
   typeDef: T,
@@ -206,7 +206,7 @@ function collectReferencedIconIds(
 }
 
 function seedBootstrapIcons(
-  store: ReturnType<typeof createStore>,
+  store: ReturnType<typeof createGraphStore>,
   bootstrapFacts: BootstrapFacts,
   definitions: Record<string, AnyTypeOutput>,
   iconIds: readonly string[],
@@ -252,11 +252,11 @@ export function createBootstrappedSnapshot<const T extends Record<string, AnyTyp
   options: GraphClientBootstrapOptions = {},
 ): GraphStoreSnapshot {
   const cached = bootstrappedSnapshotCache.get(definitions);
-  if (cached && options.timestamp === undefined) return cloneStoreSnapshot(cached);
+  if (cached && options.timestamp === undefined) return cloneGraphStoreSnapshot(cached);
 
   const coreSchema = requireGraphClientCoreSchema(definitions);
   const bootstrapTimestamp = cloneBootstrapTimestamp(options.timestamp);
-  const store = createStore();
+  const store = createGraphStore();
   const orderedTypes = Object.values(definitions).sort((left, right) =>
     compareBootstrapTypeOrder(left, right, typeId(coreSchema.type)),
   );
@@ -396,5 +396,5 @@ export function createBootstrappedSnapshot<const T extends Record<string, AnyTyp
 
   const snapshot = store.snapshot();
   if (options.timestamp === undefined) bootstrappedSnapshotCache.set(definitions, snapshot);
-  return cloneStoreSnapshot(snapshot);
+  return cloneGraphStoreSnapshot(snapshot);
 }

@@ -1,6 +1,6 @@
-import { createHttpGraphClient } from "@io/graph-client";
 import { core } from "@io/core/graph/modules";
 import { pkm } from "@io/core/graph/modules/pkm";
+import { createHttpGraphClient } from "@io/graph-client";
 
 export async function run() {
   const client = await createHttpGraphClient(pkm, {

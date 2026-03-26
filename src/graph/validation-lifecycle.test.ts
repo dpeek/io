@@ -10,7 +10,7 @@ import {
 } from "@io/core/graph";
 import { createAuthoritativeGraphWriteSession } from "@io/core/graph/authority";
 import { core, stringTypeModule } from "@io/core/graph/modules";
-import { createSyncedTypeClient, createTypeClient, GraphValidationError } from "@io/graph-client";
+import { createSyncedGraphClient, createGraphClient, GraphValidationError } from "@io/graph-client";
 import { createTotalSyncPayload } from "@io/graph-sync";
 
 import { testNamespace } from "./test-graph.js";
@@ -102,7 +102,7 @@ function createValidationLifecycleFixture() {
 
     return {
       store,
-      graph: createTypeClient(store, namespace, definitions),
+      graph: createGraphClient(store, namespace, definitions),
     };
   }
 
@@ -163,7 +163,7 @@ function createDeleteValidationLifecycleFixture() {
 
     return {
       store,
-      graph: createTypeClient(store, namespace, definitions),
+      graph: createGraphClient(store, namespace, definitions),
     };
   }
 
@@ -341,7 +341,7 @@ describe("validation lifecycle contract", () => {
     }
     server.store.assert(serverId, edgeId(fixture.namespace.reviewItem.fields.score), "Infinity");
 
-    const client = createSyncedTypeClient(fixture.namespace, {
+    const client = createSyncedGraphClient(fixture.namespace, {
       definitions: fixture.definitions,
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });
@@ -668,7 +668,7 @@ describe("validation lifecycle contract", () => {
       server.store.retract(edge.id);
     }
 
-    const client = createSyncedTypeClient(fixture.namespace, {
+    const client = createSyncedGraphClient(fixture.namespace, {
       definitions: fixture.definitions,
       pull: () => createTotalSyncPayload(server.store, { cursor: "server:1" }),
     });

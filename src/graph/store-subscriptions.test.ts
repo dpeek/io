@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { bootstrap, createStore, edgeId } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import { testDefs, testNamespace } from "./test-graph.js";
 
@@ -10,8 +10,8 @@ function setupRecordGraph() {
   const store = createStore();
   bootstrap(store, core);
   bootstrap(store, testNamespace);
-  const graph = createTypeClient(store, testNamespace, testDefs);
-  const coreGraph = createTypeClient(store, core);
+  const graph = createGraphClient(store, testNamespace, testDefs);
+  const coreGraph = createGraphClient(store, core);
 
   const enterpriseTagId = coreGraph.tag.create({
     name: "Enterprise",

@@ -3,8 +3,8 @@ import { describe, expect, it } from "bun:test";
 import {
   canonicalizeGraphWriteTransaction,
   createGraphWriteOperationsFromSnapshots,
+  createGraphStore,
   createGraphWriteTransactionFromSnapshots,
-  createStore,
 } from "@io/graph-kernel";
 
 import {
@@ -127,7 +127,7 @@ describe("graph write transactions", () => {
   });
 
   it("surfaces materialization failures when a retract references a missing edge", () => {
-    const store = createStore();
+    const store = createGraphStore();
 
     const result = materializeGraphWriteTransactionSnapshot(store, {
       id: "tx:1",
@@ -148,7 +148,7 @@ describe("graph write transactions", () => {
   });
 
   it("applies valid transactions by replacing the target store snapshot", () => {
-    const store = createStore();
+    const store = createGraphStore();
     store.assertEdge({ id: "edge:old", s: "n:1", p: "p:name", o: "Old" });
 
     applyGraphWriteTransaction(store, {

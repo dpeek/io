@@ -9,7 +9,7 @@ import {
   edgeId,
 } from "@io/core/graph";
 import { core, stringTypeModule } from "@io/core/graph/modules";
-import { createTypeClient, GraphValidationError, formatValidationPath } from "@io/graph-client";
+import { createGraphClient, GraphValidationError, formatValidationPath } from "@io/graph-client";
 
 import { createTestGraph, testNamespace } from "./test-graph.js";
 
@@ -58,7 +58,7 @@ function setupGraphWithProtectedNickname() {
   const store = createStore();
   bootstrap(store, core);
   bootstrap(store, namespace);
-  const graph = createTypeClient(store, namespace, definitions);
+  const graph = createGraphClient(store, namespace, definitions);
   const employeeId = graph.employee.create({
     name: "Ada",
     nickname: "Ace",
@@ -118,7 +118,7 @@ describe("graph validation", () => {
     const store = createStore();
     bootstrap(store, core);
     bootstrap(store, namespace);
-    const graph = createTypeClient(store, namespace, definitions);
+    const graph = createGraphClient(store, namespace, definitions);
 
     for (const edge of store.facts(namespace.reviewItem.values.id)) {
       store.retract(edge.id);
@@ -231,7 +231,7 @@ describe("graph validation", () => {
     const store = createStore();
     bootstrap(store, core);
     bootstrap(store, namespace);
-    const graph = createTypeClient(store, namespace, definitions);
+    const graph = createGraphClient(store, namespace, definitions);
 
     const result = graph.employee.validateCreate({
       name: "Ada",

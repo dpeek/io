@@ -2,7 +2,6 @@ import type { GraphStore } from "@io/graph-kernel";
 import { edgeId, typeId } from "@io/graph-kernel";
 import type { AnyTypeOutput, EdgeOutput, TypeOutput } from "@io/graph-kernel";
 
-import { createEntity, createEntityAtId, deleteEntity, updateEntity } from "./client-actions";
 import {
   collectEnumValueIds,
   collectScalarCodecs,
@@ -12,20 +11,17 @@ import {
   type CreateInputOfType,
   type EntityLookup,
   type EntityRef,
-  type NamespaceClient,
+  type GraphClient,
   type TypeQuerySpec,
   requireGraphClientCoreSchema,
-} from "./client-core";
-import { createQueryProjector } from "./client-query";
-import { createEntityRef } from "./client-refs";
-import {
-  prepareDeleteEntity,
-  validateCreateEntity,
-  validateUpdateEntity,
-} from "./client-validation";
+} from "./core";
+import { createEntity, createEntityAtId, deleteEntity, updateEntity } from "./entity-actions";
+import { createQueryProjector } from "./query";
+import { createEntityRef } from "./refs";
+import { prepareDeleteEntity, validateCreateEntity, validateUpdateEntity } from "./validation";
 
-export * from "./client-core";
-export { validateGraphStore } from "./client-validation";
+export * from "./core";
+export { validateGraphStore } from "./validation";
 
 export function createEntityWithId<
   const T extends TypeOutput,
@@ -57,14 +53,14 @@ export function createEntityWithId<
   );
 }
 
-export function createTypeClient<
+export function createGraphClient<
   const TNamespace extends Record<string, AnyTypeOutput>,
   const TDefs extends Record<string, AnyTypeOutput> = TNamespace,
 >(
   store: GraphStore,
   namespace: TNamespace,
   definitionsArg?: TDefs,
-): NamespaceClient<TNamespace, TDefs> {
+): GraphClient<TNamespace, TDefs> {
   const definitions = (definitionsArg ?? (namespace as unknown as TDefs)) as TDefs;
   const coreSchema = requireGraphClientCoreSchema(definitions);
   const nodeTypePredicate = coreSchema.node.fields.type as EdgeOutput;
@@ -223,5 +219,5 @@ export function createTypeClient<
         };
       },
     },
-  ) as NamespaceClient<TNamespace, TDefs>;
+  ) as GraphClient<TNamespace, TDefs>;
 }

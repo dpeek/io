@@ -1,4 +1,5 @@
 import { handleExit } from "@io/core/lib";
+import { createHttpGraphClient } from "@io/graph-client";
 
 import { loadWorkflowFile } from "../agent/workflow.js";
 import {
@@ -8,7 +9,6 @@ import {
   type WorkflowProjectionIndex,
 } from "../graph/modules/ops/workflow/query.js";
 import { workflowProjectionSchema } from "../graph/modules/ops/workflow/schema.js";
-import { createHttpGraphClient } from "@io/graph-client";
 import { createWorkflowTuiWorkflowModel, type WorkflowTuiWorkflowSurfaceModel } from "./model.js";
 import { resolveWorkflowTuiStartupContract, type WorkflowTuiStartupContract } from "./startup.js";
 import { createWorkflowTui, type WorkflowTui } from "./tui.js";

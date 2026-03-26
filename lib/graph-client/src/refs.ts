@@ -8,7 +8,6 @@ import type {
   TypeOutput,
 } from "@io/graph-kernel";
 
-import { deleteEntity, updateEntity } from "./client-actions";
 import {
   assertValidResult,
   clearFieldValue,
@@ -36,13 +35,10 @@ import {
   type PredicateValueOf,
   type RefTree,
   type TypeByKey,
-} from "./client-core";
-import { projectEntity } from "./client-store";
-import {
-  planManyRemoveMutation,
-  prepareDeleteEntity,
-  validateUpdateEntity,
-} from "./client-validation";
+} from "./core";
+import { deleteEntity, updateEntity } from "./entity-actions";
+import { projectEntity } from "./entity-store";
+import { planManyRemoveMutation, prepareDeleteEntity, validateUpdateEntity } from "./validation";
 
 function createPredicateRef<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
   store: GraphStore,

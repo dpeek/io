@@ -70,7 +70,12 @@ export default defineIoConfig({
     },
     graph: {
       allowedSharedPaths: ["./src"],
-      docs: ["./doc/graph/index.md", "./doc/graph/icon.md", "./doc/graph/architecture.md"],
+      docs: [
+        "./doc/graph/index.md",
+        "./doc/graph/computed.md",
+        "./doc/graph/icon.md",
+        "./doc/graph/architecture.md",
+      ],
       path: "./src/graph",
     },
   },

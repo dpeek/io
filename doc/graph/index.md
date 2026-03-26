@@ -33,6 +33,8 @@ compose shared `@io/web` primitives rather than duplicate browser chrome.
 
 - [`storage.md`](./storage.md): SQLite-backed Durable Object authority storage
   and persistence boundaries
+- [`retained-records.md`](./retained-records.md): proposal for migration-stable
+  retained records above the live graph authority storage
 - [`modules.md`](./modules.md): built-in namespace ownership and module package
   subpaths
 - [`adapters.md`](./adapters.md): host-neutral React versus host-specific
@@ -43,6 +45,8 @@ compose shared `@io/web` primitives rather than duplicate browser chrome.
   behavior
 - [`authority.md`](./authority.md): authority boundaries, predicate
   visibility, typed business methods, and secrets
+- [`computed.md`](./computed.md): proposed computed-value layer for lazy,
+  memoized derived reads over predicate-slot subscriptions
 - [`runtime.md`](./runtime.md): schema authoring, id maps, bootstrap, store
   behavior, and persisted authority helpers
 - [`validation.md`](./validation.md): local and authoritative validation

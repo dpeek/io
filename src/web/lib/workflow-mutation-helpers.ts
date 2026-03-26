@@ -14,7 +14,7 @@ import {
   type WorkflowMutationSummary,
 } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
-import { type NamespaceClient } from "@io/graph-client";
+import { type GraphClient } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
 
 import { planRecordedMutation } from "./mutation-planning.js";
@@ -22,7 +22,7 @@ import { planRecordedMutation } from "./mutation-planning.js";
 export const productGraph = { ...core, ...pkm, ...ops } as const;
 
 export type ProductGraph = typeof productGraph;
-export type ProductGraphClient = NamespaceClient<ProductGraph>;
+export type ProductGraphClient = GraphClient<ProductGraph>;
 
 const workflowBranchStateIds = Object.fromEntries(
   workflowBranchStateValues.map((value) => [

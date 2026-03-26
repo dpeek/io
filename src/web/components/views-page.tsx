@@ -14,7 +14,7 @@ import {
   getPredicateEditorKind,
   usePredicateField,
 } from "@io/core/graph/runtime/react";
-import { createTypeClient, serializedQueryVersion, type PredicateRef } from "@io/graph-client";
+import { createGraphClient, serializedQueryVersion, type PredicateRef } from "@io/graph-client";
 import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
@@ -125,7 +125,7 @@ function createViewsPageFixture(): ViewsPageFixture {
   bootstrap(store, kitchenSink);
   bootstrap(store, viewsPageNamespace);
 
-  const graph = createTypeClient(store, viewsPageGraph);
+  const graph = createGraphClient(store, viewsPageGraph);
   const draftStatusId = kitchenSink.status.values.draft.id;
   const inReviewStatusId = kitchenSink.status.values.inReview.id;
   const approvedStatusId = kitchenSink.status.values.approved.id;

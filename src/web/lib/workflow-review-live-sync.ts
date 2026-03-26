@@ -1,6 +1,6 @@
 import { matchesModuleReadScopeRequest } from "@io/core/graph";
 import { workflowReviewModuleReadScope } from "@io/core/graph/modules/ops/workflow";
-import { type SyncedTypeSyncController } from "@io/graph-client";
+import { type GraphSyncController } from "@io/graph-client";
 import { type SyncPayload, type SyncState } from "@io/graph-sync";
 
 import {
@@ -31,7 +31,7 @@ export type WorkflowReviewLiveSync = {
   remove(): Promise<WorkflowReviewRemoveLiveResponse["result"]>;
 };
 
-type WorkflowReviewLiveSyncController = Pick<SyncedTypeSyncController, "getState" | "sync">;
+type WorkflowReviewLiveSyncController = Pick<GraphSyncController, "getState" | "sync">;
 
 function isWorkflowReviewLiveState(state: Pick<SyncState, "requestedScope" | "scope">): boolean {
   return (

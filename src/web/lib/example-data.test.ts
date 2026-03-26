@@ -4,7 +4,7 @@ import { bootstrap, createStore } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import { seedExampleGraph } from "./example-data.js";
 
@@ -15,7 +15,7 @@ test("seedExampleGraph backfills workflow data without duplicating older example
   bootstrap(store, core);
   bootstrap(store, pkm);
   bootstrap(store, ops);
-  const graph = createTypeClient(store, productGraph);
+  const graph = createGraphClient(store, productGraph);
 
   const graphTag = graph.tag.create({
     color: "#0ea5e9",

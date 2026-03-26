@@ -6,7 +6,7 @@ import {
   type AuthoritativeGraphCursor,
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteResult,
-  type AuthoritativeWriteScope,
+  type GraphWriteScope,
   type GraphStore,
   type GraphStoreSnapshot,
 } from "@io/graph-kernel";
@@ -286,7 +286,7 @@ export type SyncActivity =
       readonly freshness: SyncFreshness;
       readonly transactionCount: number;
       readonly txIds: readonly string[];
-      readonly writeScopes: readonly AuthoritativeWriteScope[];
+      readonly writeScopes: readonly GraphWriteScope[];
       readonly at: Date;
     }
   | {
@@ -303,7 +303,7 @@ export type SyncActivity =
       readonly cursor: AuthoritativeGraphCursor;
       readonly freshness: SyncFreshness;
       readonly replayed: boolean;
-      readonly writeScope: AuthoritativeWriteScope;
+      readonly writeScope: GraphWriteScope;
       readonly at: Date;
     };
 
@@ -522,7 +522,7 @@ export function appendSyncActivity(
   return [...recentActivities, cloneSyncActivity(activity)].slice(-limit);
 }
 
-export function cloneState(state: SyncState): SyncState {
+export function cloneSyncState(state: SyncState): SyncState {
   return {
     ...state,
     requestedScope: cloneSyncScopeRequest(state.requestedScope),

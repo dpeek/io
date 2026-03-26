@@ -1,4 +1,4 @@
-import { type NamespaceClient } from "@io/graph-client";
+import { type GraphClient } from "@io/graph-client";
 
 import type {
   RetainedProjectionCheckpointRecord,
@@ -232,17 +232,15 @@ export const workflowProjectionSchema = {
   ...workflowProjectionWorkflowSchema,
 } as const;
 
-type WorkflowProjectionTypeClient = NamespaceClient<typeof workflowProjectionSchema>;
-type WorkflowProjectEntity = ReturnType<WorkflowProjectionTypeClient["workflowProject"]["get"]>;
-type WorkflowRepositoryEntity = ReturnType<
-  WorkflowProjectionTypeClient["workflowRepository"]["get"]
->;
-type WorkflowBranchEntity = ReturnType<WorkflowProjectionTypeClient["workflowBranch"]["get"]>;
-type WorkflowCommitEntity = ReturnType<WorkflowProjectionTypeClient["workflowCommit"]["get"]>;
-type RepositoryBranchEntity = ReturnType<WorkflowProjectionTypeClient["repositoryBranch"]["get"]>;
-type RepositoryCommitEntity = ReturnType<WorkflowProjectionTypeClient["repositoryCommit"]["get"]>;
-type AgentSessionEntity = ReturnType<WorkflowProjectionTypeClient["agentSession"]["get"]>;
-type DocumentEntity = ReturnType<WorkflowProjectionTypeClient["document"]["get"]>;
+type WorkflowProjectionClient = GraphClient<typeof workflowProjectionSchema>;
+type WorkflowProjectEntity = ReturnType<WorkflowProjectionClient["workflowProject"]["get"]>;
+type WorkflowRepositoryEntity = ReturnType<WorkflowProjectionClient["workflowRepository"]["get"]>;
+type WorkflowBranchEntity = ReturnType<WorkflowProjectionClient["workflowBranch"]["get"]>;
+type WorkflowCommitEntity = ReturnType<WorkflowProjectionClient["workflowCommit"]["get"]>;
+type RepositoryBranchEntity = ReturnType<WorkflowProjectionClient["repositoryBranch"]["get"]>;
+type RepositoryCommitEntity = ReturnType<WorkflowProjectionClient["repositoryCommit"]["get"]>;
+type AgentSessionEntity = ReturnType<WorkflowProjectionClient["agentSession"]["get"]>;
+type DocumentEntity = ReturnType<WorkflowProjectionClient["document"]["get"]>;
 
 export interface WorkflowProjectionGraphClient {
   readonly document: {

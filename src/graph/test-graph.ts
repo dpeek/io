@@ -1,6 +1,6 @@
 import { createStore } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
-import { createBootstrappedSnapshot, createTypeClient } from "@io/graph-client";
+import { createBootstrappedSnapshot, createGraphClient } from "@io/graph-client";
 
 import { kitchenSink } from "./testing/kitchen-sink.js";
 
@@ -16,7 +16,7 @@ export function createTestGraph() {
 
   return {
     store,
-    coreGraph: createTypeClient(store, core),
-    graph: createTypeClient(store, testNamespace, testDefs),
+    coreGraph: createGraphClient(store, core),
+    graph: createGraphClient(store, testNamespace, testDefs),
   };
 }

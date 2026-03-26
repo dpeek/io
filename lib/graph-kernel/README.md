@@ -14,7 +14,7 @@
 - `GraphStore` and `GraphStoreSnapshot`
 - schema authoring helpers and field-authority metadata
 - stable key-to-id reconciliation with `GraphIdMap`
-- graph write transaction and snapshot-derivation helpers
+- graph write transaction, `GraphWriteScope`, and snapshot-derivation helpers
 
 ## What It Does Not Own
 
@@ -28,14 +28,14 @@
 ## Common Workflows
 
 - Author schema: `defineType`, `defineScalar`, `defineEnum`
-- Reconcile stable ids: `createIdMap`
-- Apply stable ids in place: `applyIdMap`
-- Store facts: `createStore`
+- Reconcile stable ids: `createGraphIdMap`
+- Apply stable ids in place: `applyGraphIdMap`
+- Store facts: `createGraphStore`
 - Derive sync writes: `createGraphWriteTransactionFromSnapshots`
 
 ## Important Semantics
 
-- `applyIdMap()` mutates the provided namespace objects in place.
+- `applyGraphIdMap()` mutates the provided namespace objects in place.
 - `find()` includes retracted facts. `facts()` excludes them.
 - `newId()` allocates an id only. It does not create a node record.
 - `edgeId()`, `typeId()`, `fieldTreeId()`, and `rangeOf()` fall back to authored keys until ids are applied.
@@ -47,11 +47,12 @@
 Everything intended for consumers is re-exported from the package root.
 
 - `createGraphId`
-- `createStore`, `cloneStoreSnapshot`
-- `GraphFact`, `GraphStore`, `GraphStoreSnapshot`, `GraphIdMap`
+- `fieldTreeMeta`, `fieldTreeId`, `fieldTreeKey`
+- `createGraphStore`, `cloneGraphStoreSnapshot`
+- `GraphFact`, `GraphStore`, `GraphStoreSnapshot`, `GraphIdMap`, `ResolvedGraphNamespace`
 - `defineType`, `defineScalar`, `defineEnum`
-- `createIdMap`, `applyIdMap`, `extractSchemaKeys`, `findDuplicateIds`
-- graph write transaction, canonicalization, and snapshot-derivation helpers from `tx`
+- `createGraphIdMap`, `applyGraphIdMap`, `extractGraphSchemaKeys`, `findDuplicateGraphIds`
+- `GraphWriteScope`, `graphWriteScopes`, and graph write transaction helpers from `tx`
 
 ## Build Output
 

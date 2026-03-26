@@ -25,8 +25,8 @@ import {
 } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
 import {
-  createSyncedTypeClient,
-  createTypeClient,
+  createSyncedGraphClient,
+  createGraphClient,
   type SerializedQueryRequest,
 } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
@@ -327,7 +327,7 @@ function createMutationStoreForGraph<TGraph extends Record<string, AnyTypeOutput
 ) {
   const mutationStore = createStore(snapshot);
   return {
-    mutationGraph: createTypeClient(mutationStore, graph),
+    mutationGraph: createGraphClient(mutationStore, graph),
     mutationStore,
   };
 }
@@ -1588,7 +1588,7 @@ describe("web authority", () => {
     const total = authority.createSyncPayload({
       authorization: signedInAuthorization,
     });
-    const runtime = createSyncedTypeClient(browserGraph, {
+    const runtime = createSyncedGraphClient(browserGraph, {
       definitions: productGraph,
       pull(state) {
         return Promise.resolve(

@@ -9,7 +9,7 @@ import {
   createHttpGraphClient,
   createHttpGraphTxIdFactory,
   defaultHttpGraphUrl,
-  type SyncedTypeClient,
+  type SyncedGraphClient,
 } from "@io/graph-client";
 import { graphSyncScope, type SyncScopeRequest } from "@io/graph-sync";
 import { Button } from "@io/web/button";
@@ -22,14 +22,19 @@ const transactionUrl = "/api/tx";
 
 const graphSchema = { ...core, ...pkm, ...ops } as const;
 
-export type GraphRuntime = SyncedTypeClient<typeof graphSchema>;
+export type GraphRuntime = SyncedGraphClient<typeof graphSchema>;
 
 const runtimeCache = new Map<string, Promise<GraphRuntime>>();
 
 const GraphRuntimeContext = createContext<GraphRuntime | null>(null);
 
 function resolveWebGraphBaseUrl(): string {
-  if (typeof window !== "undefined" && window.location.origin.length > 0) {
+  if (
+    typeof window === "object" &&
+    window !== null &&
+    typeof window.location?.origin === "string" &&
+    window.location.origin.length > 0
+  ) {
     return window.location.origin;
   }
   if (

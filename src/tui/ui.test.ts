@@ -1,11 +1,7 @@
-import {
-  expect,
-  test } from "bun:test";
+import { expect, test } from "bun:test";
 
-import { bootstrap,
-  createStore,
-} from "@io/core/graph";
-import { createTypeClient } from "@io/graph-client";
+import { bootstrap, createStore } from "@io/core/graph";
+import { createGraphClient } from "@io/graph-client";
 import { createTestRenderer } from "@opentui/core/testing";
 import { act } from "react";
 
@@ -39,7 +35,7 @@ function createWorkflowProjectionFixture() {
   bootstrap(store, core);
   bootstrap(store, pkm);
   bootstrap(store, ops);
-  const graph = createTypeClient(store, productGraph);
+  const graph = createGraphClient(store, productGraph);
 
   const projectId = graph.workflowProject.create({
     name: "IO",

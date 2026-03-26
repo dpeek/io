@@ -7,7 +7,7 @@ import {
 
 import {
   appendSyncActivity,
-  cloneState,
+  cloneSyncState,
   cloneSyncDiagnostics,
   cloneSyncScope,
   cloneSyncScopeRequest,
@@ -77,7 +77,7 @@ export function createTotalSyncSession(
       ...next,
       recentActivities: state.recentActivities,
     };
-    const snapshot = cloneState(state);
+    const snapshot = cloneSyncState(state);
     for (const listener of new Set(listeners)) listener(snapshot);
   }
 
@@ -205,7 +205,7 @@ export function createTotalSyncSession(
   }
 
   async function pull(source: SyncSource): Promise<SyncPayload> {
-    const sourceState = cloneState(state);
+    const sourceState = cloneSyncState(state);
     let fallbackReason: IncrementalSyncFallbackReason | undefined;
     let diagnostics = sourceState.diagnostics
       ? cloneSyncDiagnostics(sourceState.diagnostics)
@@ -252,7 +252,7 @@ export function createTotalSyncSession(
   }
 
   function getState(): SyncState {
-    return cloneState(state);
+    return cloneSyncState(state);
   }
 
   function subscribe(listener: SyncStateListener): () => void {

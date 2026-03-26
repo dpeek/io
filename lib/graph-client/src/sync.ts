@@ -1,7 +1,7 @@
 import {
   cloneGraphWriteTransaction,
+  createGraphStore,
   createGraphWriteTransactionFromSnapshots,
-  createStore,
   type AuthoritativeGraphWriteResult,
   type GraphStore,
   type GraphStoreSnapshot,
@@ -9,7 +9,7 @@ import {
 } from "@io/graph-kernel";
 import type { AnyTypeOutput } from "@io/graph-kernel";
 import {
-  cloneState as clonePackageSyncState,
+  cloneSyncState as clonePackageSyncState,
   applyGraphWriteTransaction,
   createTotalSyncSession,
   sameSyncActivity,
@@ -30,46 +30,46 @@ import {
 import { createBootstrappedSnapshot } from "./bootstrap-snapshot";
 import {
   GraphValidationError,
-  createTypeClient,
+  createGraphClient,
   validateGraphStore,
   type GraphValidationIssue,
   type GraphValidationResult,
-  type NamespaceClient,
-} from "./client";
+  type GraphClient,
+} from "./graph";
 import {
   createClientGraphWriteResultValidator,
   createClientTotalSyncValidator,
 } from "./sync-validation";
 
-export type SyncStatus = PackageSyncStatus | "pushing";
+export type GraphClientSyncStatus = PackageSyncStatus | "pushing";
 
-export type SyncState = Omit<PackageSyncState, "status"> & {
-  readonly status: SyncStatus;
+export type GraphClientSyncState = Omit<PackageSyncState, "status"> & {
+  readonly status: GraphClientSyncStatus;
 };
 
-export type SyncStateListener = (state: SyncState) => void;
+export type GraphClientSyncStateListener = (state: GraphClientSyncState) => void;
 
 export type GraphWriteSink = (
   transaction: GraphWriteTransaction,
 ) => AuthoritativeGraphWriteResult | Promise<AuthoritativeGraphWriteResult>;
 
-export interface SyncedTypeSyncController {
+export interface GraphSyncController {
   apply(payload: SyncPayload): SyncPayload;
   applyWriteResult(result: AuthoritativeGraphWriteResult): AuthoritativeGraphWriteResult;
   flush(): Promise<readonly AuthoritativeGraphWriteResult[]>;
   sync(): Promise<SyncPayload>;
   getPendingTransactions(): readonly GraphWriteTransaction[];
-  getState(): SyncState;
-  subscribe(listener: SyncStateListener): () => void;
+  getState(): GraphClientSyncState;
+  subscribe(listener: GraphClientSyncStateListener): () => void;
 }
 
-export type SyncedTypeClient<
+export type SyncedGraphClient<
   TNamespace extends Record<string, AnyTypeOutput>,
   TDefs extends Record<string, AnyTypeOutput> = TNamespace,
 > = {
   store: GraphStore;
-  graph: NamespaceClient<TNamespace, TDefs>;
-  sync: SyncedTypeSyncController;
+  graph: GraphClient<TNamespace, TDefs>;
+  sync: GraphSyncController;
 };
 
 export class GraphSyncWriteError extends Error {
@@ -89,7 +89,7 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
 }
 
-function cloneSyncState(state: SyncState): SyncState {
+function cloneGraphClientSyncState(state: GraphClientSyncState): GraphClientSyncState {
   const cloned = clonePackageSyncState({
     ...state,
     status: state.status === "pushing" ? "syncing" : state.status,
@@ -132,7 +132,7 @@ function normalizeSessionError(error: unknown): unknown {
   return error;
 }
 
-export function createSyncedTypeClient<
+export function createSyncedGraphClient<
   const TNamespace extends Record<string, AnyTypeOutput>,
   const TDefs extends Record<string, AnyTypeOutput> = TNamespace,
 >(
@@ -145,12 +145,12 @@ export function createSyncedTypeClient<
     requestedScope?: SyncScopeRequest;
     schemaSnapshot?: GraphStoreSnapshot;
   },
-): SyncedTypeClient<TNamespace, TDefs> {
+): SyncedGraphClient<TNamespace, TDefs> {
   const definitions = (options.definitions ?? (namespace as unknown as TDefs)) as TDefs;
   const schemaSnapshot = options.schemaSnapshot ?? createBootstrappedSnapshot(definitions);
-  const store = createStore(schemaSnapshot);
-  const authoritativeStore = createStore(schemaSnapshot);
-  const rawGraph = createTypeClient(store, namespace, definitions);
+  const store = createGraphStore(schemaSnapshot);
+  const authoritativeStore = createGraphStore(schemaSnapshot);
+  const rawGraph = createGraphClient(store, namespace, definitions);
   const session = createTotalSyncSession(authoritativeStore, {
     requestedScope: options.requestedScope,
     preserveSnapshot: schemaSnapshot,
@@ -163,17 +163,17 @@ export function createSyncedTypeClient<
   let pendingTransactions: GraphWriteTransaction[] = [];
   let captureDepth = 0;
   let captureSnapshot: GraphStoreSnapshot | undefined;
-  let statusOverride: SyncStatus | undefined;
+  let statusOverride: GraphClientSyncStatus | undefined;
   let freshnessOverride: SyncFreshness | undefined;
   let errorOverride: unknown | undefined;
-  const listeners = new Set<SyncStateListener>();
+  const listeners = new Set<GraphClientSyncStateListener>();
   const typeHandleCache = new WeakMap<object, object>();
   const entityRefCache = new WeakMap<object, object>();
   const fieldGroupCache = new WeakMap<object, object>();
   const predicateRefCache = new WeakMap<object, object>();
-  let lastPublishedState: SyncState | undefined;
+  let lastPublishedState: GraphClientSyncState | undefined;
 
-  function matchesLastPublishedState(state: SyncState): boolean {
+  function matchesLastPublishedState(state: GraphClientSyncState): boolean {
     if (!lastPublishedState) return false;
     if (lastPublishedState.recentActivities.length !== state.recentActivities.length) return false;
 
@@ -210,9 +210,9 @@ export function createSyncedTypeClient<
     return `local:${txSequence}`;
   }
 
-  function currentState(): SyncState {
+  function currentState(): GraphClientSyncState {
     const state = session.getState();
-    return cloneSyncState({
+    return cloneGraphClientSyncState({
       ...state,
       status: statusOverride ?? state.status,
       freshness: freshnessOverride ?? state.freshness,
@@ -235,7 +235,7 @@ export function createSyncedTypeClient<
   }
 
   function materializeLocalSnapshot(): GraphStoreSnapshot {
-    const replayStore = createStore(authoritativeStore.snapshot());
+    const replayStore = createGraphStore(authoritativeStore.snapshot());
     for (const transaction of pendingTransactions) {
       applyGraphWriteTransaction(replayStore, transaction);
     }
@@ -406,7 +406,7 @@ export function createSyncedTypeClient<
       if (!isObjectRecord(value)) return value;
       return wrapTypeHandle(value);
     },
-  }) as NamespaceClient<TNamespace, TDefs>;
+  }) as GraphClient<TNamespace, TDefs>;
 
   session.subscribe(() => {
     publishState();

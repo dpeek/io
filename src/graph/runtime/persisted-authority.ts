@@ -1,11 +1,11 @@
-import { createTypeClient, type NamespaceClient } from "@io/graph-client";
+import { createGraphClient, type GraphClient } from "@io/graph-client";
 import {
   sameAuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphChangesAfterResult,
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteHistory,
-  type AuthoritativeWriteScope,
   type AuthoritativeGraphWriteResult,
+  type GraphWriteScope,
   type GraphWriteTransaction,
 } from "@io/graph-kernel";
 import { type IncrementalSyncResult, type SyncFreshness } from "@io/graph-sync";
@@ -101,7 +101,7 @@ export type PersistedAuthoritativeGraphStoragePersistInput = {
 type AuthorityDefinitions<T extends Record<string, AnyTypeOutput>> = typeof core & T;
 
 export type PersistedAuthoritativeGraphSeed<T extends Record<string, AnyTypeOutput>> = (
-  graph: NamespaceClient<T, AuthorityDefinitions<T>>,
+  graph: GraphClient<T, AuthorityDefinitions<T>>,
 ) => void | Promise<void>;
 
 export type PersistedAuthoritativeGraphCursorPrefixFactory = () => string;
@@ -136,7 +136,7 @@ export type PersistedAuthoritativeGraphOptions<T extends Record<string, AnyTypeO
 
 export type PersistedAuthoritativeGraph<T extends Record<string, AnyTypeOutput>> = {
   readonly store: GraphStore;
-  readonly graph: NamespaceClient<T, AuthorityDefinitions<T>>;
+  readonly graph: GraphClient<T, AuthorityDefinitions<T>>;
   readonly startupDiagnostics: PersistedAuthoritativeGraphStartupDiagnostics;
   createSyncPayload(options?: {
     authorizeRead?: ReplicationReadAuthorizer;
@@ -145,7 +145,7 @@ export type PersistedAuthoritativeGraph<T extends Record<string, AnyTypeOutput>>
   applyTransaction(
     transaction: GraphWriteTransaction,
     options?: {
-      writeScope?: AuthoritativeWriteScope;
+      writeScope?: GraphWriteScope;
     },
   ): Promise<AuthoritativeGraphWriteResult>;
   getChangesAfter(cursor?: string): AuthoritativeGraphChangesAfterResult;
@@ -178,7 +178,7 @@ export async function createPersistedAuthoritativeGraph<
   options: PersistedAuthoritativeGraphOptions<T>,
 ): Promise<PersistedAuthoritativeGraph<T>> {
   const definitions = { ...core, ...namespace } as typeof core & T;
-  const graph = createTypeClient(store, namespace, definitions);
+  const graph = createGraphClient(store, namespace, definitions);
   const createCursorPrefix =
     options.createCursorPrefix ?? createPersistedAuthoritativeGraphCursorPrefix;
   const createFreshWriteSession = () =>
@@ -217,7 +217,7 @@ export async function createPersistedAuthoritativeGraph<
   async function applyTransaction(
     transaction: GraphWriteTransaction,
     applyOptions: {
-      writeScope?: AuthoritativeWriteScope;
+      writeScope?: GraphWriteScope;
     } = {},
   ): Promise<AuthoritativeGraphWriteResult> {
     const previousSnapshot = store.snapshot();

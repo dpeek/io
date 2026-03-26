@@ -4,8 +4,8 @@
 
 This document is the entry point for agents working on schema authoring, stable
 ids, additive bootstrap, store behavior, or persisted authority helpers.
-Client-owned APIs such as `createTypeClient(...)`,
-`createSyncedTypeClient(...)`, `createHttpGraphClient(...)`, and
+Client-owned APIs such as `createGraphClient(...)`,
+`createSyncedGraphClient(...)`, `createHttpGraphClient(...)`, and
 `createBootstrappedSnapshot(...)` now live in `@io/graph-client`.
 
 ## Current Runtime Surface

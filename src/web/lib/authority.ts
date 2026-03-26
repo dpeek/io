@@ -68,11 +68,11 @@ import { pkm } from "@io/core/graph/modules/pkm";
 import {
   collectScalarCodecs,
   collectTypeIndex,
-  createTypeClient,
+  createGraphClient,
   GraphValidationError,
   type NormalizedQueryFilter,
   type NormalizedQueryRequest,
-  type NamespaceClient,
+  type GraphClient,
   type QueryLiteral,
   type QueryResultItem,
   type QueryResultPage,
@@ -84,9 +84,9 @@ import {
 } from "@io/graph-client";
 import {
   type AuthoritativeGraphRetainedHistoryPolicy,
-  type AuthoritativeWriteScope,
   type GraphWriteTransaction,
   type AuthoritativeGraphWriteResult,
+  type GraphWriteScope,
 } from "@io/graph-kernel";
 import {
   createIncrementalSyncFallback,
@@ -663,7 +663,7 @@ function buildRetainedWorkflowProjectionState(
 ): RetainedWorkflowProjectionState {
   const projectionStore = createStore(snapshot);
   return createRetainedWorkflowProjectionState(
-    createTypeClient(projectionStore, workflowProjectionSchema),
+    createGraphClient(projectionStore, workflowProjectionSchema),
     {
       sourceCursor,
     },
@@ -1402,7 +1402,7 @@ function resolveSecretStartupDrift(
   const liveSecretIds = collectLiveSecretIds(snapshot);
   const liveSecretIdSet = new Set(liveSecretIds);
   const persistedStore = createStore(snapshot);
-  const persistedGraph = createTypeClient(persistedStore, graph);
+  const persistedGraph = createGraphClient(persistedStore, graph);
   const missingSecretIds: string[] = [];
   const invalidSecretIds: string[] = [];
   const versionMismatches: WebAppAuthoritySecretVersionMismatch[] = [];
@@ -2488,7 +2488,7 @@ function resolveInitialRoleBindingRoleKeys(
 }
 
 function ensurePrincipalRoleBindings(
-  mutationGraph: NamespaceClient<WebAppGraph>,
+  mutationGraph: GraphClient<WebAppGraph>,
   mutationStore: GraphStore,
   principalId: string,
   roleKeys: readonly string[],
@@ -2763,7 +2763,7 @@ function planCapabilityVersionInvalidationTransaction(
 function planAuthorityMutation<TResult>(
   snapshot: GraphStoreSnapshot,
   txId: string,
-  mutate: (graph: NamespaceClient<WebAppGraph>, store: GraphStore) => TResult,
+  mutate: (graph: GraphClient<WebAppGraph>, store: GraphStore) => TResult,
 ): {
   readonly changed: boolean;
   readonly result: TResult;
@@ -3071,7 +3071,7 @@ function assertTransactionAuthorized(
   snapshot: GraphStoreSnapshot,
   authorization: AuthorizationContext,
   authorityPolicyVersion: number,
-  writeScope: AuthoritativeWriteScope,
+  writeScope: GraphWriteScope,
   compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
 ): void {
   const store = createStore(snapshot);
@@ -3194,7 +3194,7 @@ function assertCommandAuthorized(input: {
   readonly commandKey: string;
   readonly commandPolicy: GraphCommandPolicy;
   readonly touchedPredicates: readonly AuthorizationDecisionTarget[];
-  readonly writeScope: AuthoritativeWriteScope;
+  readonly writeScope: GraphWriteScope;
 }): void {
   const staleContextError = assertCurrentAuthorizationVersion(
     input.store,
@@ -3255,8 +3255,8 @@ function runWebAuthorityMutationRollbacks(
 export async function applyStagedWebAuthorityMutation<TResult>(input: {
   readonly changed: boolean;
   readonly result: TResult;
-  readonly writeScope: AuthoritativeWriteScope;
-  readonly commit: (writeScope: AuthoritativeWriteScope) => Promise<void>;
+  readonly writeScope: GraphWriteScope;
+  readonly commit: (writeScope: GraphWriteScope) => Promise<void>;
   readonly stage?: (result: TResult, context: WebAuthorityMutationStageContext) => void;
 }): Promise<TResult> {
   if (!input.changed) return input.result;
@@ -3419,7 +3419,7 @@ export async function createWebAppAuthority(
     ),
     seed() {
       if (options.seedExampleGraph !== false) {
-        seedExampleGraph(createTypeClient(store, webAppGraph));
+        seedExampleGraph(createGraphClient(store, webAppGraph));
       }
     },
     createCursorPrefix: createAuthorityCursorPrefix,

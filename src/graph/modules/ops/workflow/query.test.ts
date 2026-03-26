@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { bootstrap, createStore } from "@io/core/graph";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import { core } from "../../core.js";
 import { ops } from "../../ops.js";
@@ -35,7 +35,7 @@ function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
   bootstrap(store, core);
   bootstrap(store, pkm);
   bootstrap(store, ops);
-  const graph = createTypeClient(store, productGraph);
+  const graph = createGraphClient(store, productGraph);
   const includeRepository = options.includeRepository ?? true;
   const includeRepositoryBranches = options.includeRepositoryBranches ?? includeRepository;
   const includeRepositoryCommits = options.includeRepositoryCommits ?? includeRepositoryBranches;

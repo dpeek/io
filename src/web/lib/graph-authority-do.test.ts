@@ -24,7 +24,7 @@ import {
   workflowReviewSyncScopeRequest,
 } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
-import { createTypeClient, type NamespaceClient } from "@io/graph-client";
+import { createGraphClient, type GraphClient } from "@io/graph-client";
 import {
   type AuthoritativeGraphRetainedHistoryPolicy,
   type GraphWriteTransaction,
@@ -530,7 +530,7 @@ function createBearerShareLookupRequest(
 }
 
 function readProductGraph(authority: WebAppAuthority, authorization: AuthorizationContext) {
-  return createTypeClient(createStore(authority.readSnapshot({ authorization })), productGraph);
+  return createGraphClient(createStore(authority.readSnapshot({ authorization })), productGraph);
 }
 
 function createSqliteDurableObjectState(): {
@@ -637,7 +637,7 @@ function buildGraphWriteTransaction(
 function buildTransactionFromSnapshot<TResult>(
   snapshot: GraphStoreSnapshot,
   id: string,
-  mutate: (graph: NamespaceClient<typeof productGraph>) => TResult,
+  mutate: (graph: GraphClient<typeof productGraph>) => TResult,
 ): {
   readonly result: TResult;
   readonly transaction: GraphWriteTransaction;
@@ -664,13 +664,13 @@ function buildTransactionFromGraphSnapshot<TGraph extends Record<string, AnyType
   snapshot: GraphStoreSnapshot,
   graph: TGraph,
   id: string,
-  mutate: (graph: NamespaceClient<TGraph>) => TResult,
+  mutate: (graph: GraphClient<TGraph>) => TResult,
 ): {
   readonly result: TResult;
   readonly transaction: GraphWriteTransaction;
 } {
   const mutationStore = createStore(snapshot);
-  const mutationGraph = createTypeClient(mutationStore, graph);
+  const mutationGraph = createGraphClient(mutationStore, graph);
   const before = mutationStore.snapshot();
   const result = mutate(mutationGraph);
 

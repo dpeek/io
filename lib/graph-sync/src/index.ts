@@ -1,7 +1,7 @@
 export {
   appendSyncActivity,
   cloneIncrementalSyncResult,
-  cloneState,
+  cloneSyncState,
   cloneSyncDiagnostics,
   cloneSyncScope,
   cloneSyncScopeRequest,

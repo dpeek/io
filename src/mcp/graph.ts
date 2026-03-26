@@ -1,9 +1,16 @@
+import {
+  GraphSyncWriteError,
+  GraphValidationError,
+  createHttpGraphClient,
+  defaultHttpGraphUrl,
+  type FetchImpl,
+  type SyncedGraphClient,
+} from "@io/graph-client";
+import { isEntityType, type AnyTypeOutput } from "@io/graph-kernel";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 
-import { GraphSyncWriteError, GraphValidationError, createHttpGraphClient, defaultHttpGraphUrl, type FetchImpl, type SyncedTypeClient } from "@io/graph-client";
-import { isEntityType, type AnyTypeOutput } from "@io/graph-kernel";
 import { core } from "../graph/modules/index.js";
 import { ops } from "../graph/modules/ops.js";
 import { pkm } from "../graph/modules/pkm.js";
@@ -128,7 +135,7 @@ export type GraphMcpStartOptions = GraphMcpSessionOptions;
 export type GraphMcpSession = {
   readonly allowWrites: boolean;
   readonly baseUrl: string;
-  readonly client: SyncedTypeClient<GraphMcpNamespace>;
+  readonly client: SyncedGraphClient<GraphMcpNamespace>;
   readonly schema: GraphMcpSchema;
   getStatus(): GraphStatus;
   reset(): Promise<void>;
@@ -244,7 +251,7 @@ function createToolErrorResult(
 }
 
 function readEntityTypeCounts(
-  client: SyncedTypeClient<GraphMcpNamespace>,
+  client: SyncedGraphClient<GraphMcpNamespace>,
   entityTypeEntries: readonly StatusEntityTypeEntry[],
 ): GraphEntityTypeCount[] {
   const graph = client.graph as Record<string, { list(): { readonly id: string }[] }>;
@@ -257,7 +264,7 @@ function readEntityTypeCounts(
 
 function readStatus(
   baseUrl: string,
-  client: SyncedTypeClient<GraphMcpNamespace>,
+  client: SyncedGraphClient<GraphMcpNamespace>,
   entityTypeEntries: readonly StatusEntityTypeEntry[],
 ): GraphStatus {
   const state = client.sync.getState();
@@ -444,7 +451,7 @@ export async function createGraphMcpSession(
       definitions: namespace === graphNamespace ? graphDefinitions : { ...core, ...namespace },
       fetch: options.fetch,
       url: baseUrl,
-    })) as SyncedTypeClient<GraphMcpNamespace>;
+    })) as SyncedGraphClient<GraphMcpNamespace>;
   let client = await createClient();
 
   return {

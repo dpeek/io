@@ -1,12 +1,7 @@
-import {
-  expect,
-  mock,
-  test } from "bun:test";
+import { expect, mock, test } from "bun:test";
 
-import { bootstrap,
-  createStore,
-} from "@io/core/graph";
-import { createTypeClient } from "@io/graph-client";
+import { bootstrap, createStore } from "@io/core/graph";
+import { createGraphClient } from "@io/graph-client";
 
 import type { Workflow } from "../agent/types.js";
 import { core } from "../graph/modules/core.js";
@@ -106,7 +101,7 @@ function createWorkflowGraphFixture(
   bootstrap(store, core);
   bootstrap(store, pkm);
   bootstrap(store, ops);
-  const graph = createTypeClient(store, productGraph);
+  const graph = createGraphClient(store, productGraph);
   const projectIds: string[] = [];
   const branchIds: string[] = [];
 

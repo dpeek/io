@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { createBootstrappedSnapshot, createTypeClient } from "@io/graph-client";
+import { createBootstrappedSnapshot, createGraphClient } from "@io/graph-client";
 import {
   createGraphWriteTransactionFromSnapshots,
   type AuthoritativeGraphWriteResult,
@@ -294,7 +294,7 @@ function createHiddenCursorAdvanceTransaction(
   txId: string,
 ): GraphWriteTransaction {
   const mutationStore = createStore(snapshot);
-  const graph = createTypeClient(mutationStore, hiddenCursorGraph);
+  const graph = createGraphClient(mutationStore, hiddenCursorGraph);
   graph.hiddenCursorProbe.update(probeId, { hiddenState });
   return createGraphWriteTransactionFromSnapshots(snapshot, mutationStore.snapshot(), txId);
 }
@@ -326,7 +326,7 @@ describe("persisted authoritative graph", () => {
   it("loads a legacy snapshot file, rewrites the persisted format, and preserves snapshot data", async () => {
     const snapshotPath = await createTempSnapshotPath();
     const store = createTestGraphStore();
-    const graph = createTypeClient(store, testGraph, testDefs);
+    const graph = createGraphClient(store, testGraph, testDefs);
 
     graph.item.create({ name: "Persisted Only Item" });
     await writeFile(snapshotPath, JSON.stringify(store.snapshot(), null, 2) + "\n", "utf8");
@@ -351,7 +351,7 @@ describe("persisted authoritative graph", () => {
   it("normalizes legacy persisted write history entries to client-tx before rewrite", async () => {
     const snapshotPath = await createTempSnapshotPath();
     const store = createTestGraphStore();
-    const graph = createTypeClient(store, testGraph, testDefs);
+    const graph = createGraphClient(store, testGraph, testDefs);
     const itemId = graph.item.create({ name: "Legacy Scoped Item" });
     const writes = createAuthoritativeGraphWriteSession(store, testGraph, {
       cursorPrefix: "persisted:legacy-scope:",
@@ -860,7 +860,7 @@ describe("persisted authoritative graph", () => {
   it("falls back to a reset when persisted write history cannot be replayed", async () => {
     const snapshotPath = await createTempSnapshotPath();
     const store = createTestGraphStore();
-    const graph = createTypeClient(store, testGraph, testDefs);
+    const graph = createGraphClient(store, testGraph, testDefs);
 
     const itemId = graph.item.create({ name: "Broken History Item" });
     const brokenResult: AuthoritativeGraphWriteResult = {
@@ -916,7 +916,7 @@ describe("persisted authoritative graph", () => {
 
   it("filters authority-only predicates from total sync snapshots", () => {
     const store = createKitchenSinkStore();
-    const graph = createTypeClient(store, kitchenSink, kitchenSinkDefs);
+    const graph = createGraphClient(store, kitchenSink, kitchenSinkDefs);
 
     const secretId = graph.secret.create({
       name: "Primary API secret",
@@ -953,7 +953,7 @@ describe("persisted authoritative graph", () => {
 
   it("omits hidden-only incremental writes while still advancing the cursor", () => {
     const store = createKitchenSinkStore();
-    const graph = createTypeClient(store, kitchenSink, kitchenSinkDefs);
+    const graph = createGraphClient(store, kitchenSink, kitchenSinkDefs);
 
     const secretId = graph.secret.create({
       name: "Primary API secret",
@@ -988,7 +988,7 @@ describe("persisted authoritative graph", () => {
 
   it("keeps visible incremental writes even when hidden writes are skipped", () => {
     const store = createKitchenSinkStore();
-    const graph = createTypeClient(store, kitchenSink, kitchenSinkDefs);
+    const graph = createGraphClient(store, kitchenSink, kitchenSinkDefs);
 
     const secretId = graph.secret.create({
       name: "Primary API secret",
@@ -1077,7 +1077,7 @@ describe("persisted authoritative graph", () => {
     ).toBe(false);
 
     const mutationStore = createStore(authority.store.snapshot());
-    const mutationGraph = createTypeClient(mutationStore, visibilityGraph, visibilityDefs);
+    const mutationGraph = createGraphClient(mutationStore, visibilityGraph, visibilityDefs);
     const before = mutationStore.snapshot();
     const probeId = mutationGraph.visibilityProbe.create({
       memberNote: "Incremental note",

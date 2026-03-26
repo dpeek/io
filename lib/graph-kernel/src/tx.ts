@@ -139,24 +139,22 @@ export function isAuthoritativeGraphRetainedHistoryPolicy(
 /**
  * Lowest-level write scope accepted by an authority for one transaction.
  */
-export type AuthoritativeWriteScope = GraphFieldWritePolicy;
+export type GraphWriteScope = GraphFieldWritePolicy;
 
 /**
  * Stable write-scope literals published by the kernel.
  */
-export const authoritativeWriteScopes = [
+export const graphWriteScopes = [
   "client-tx",
   "server-command",
   "authority-only",
-] as const satisfies readonly AuthoritativeWriteScope[];
+] as const satisfies readonly GraphWriteScope[];
 
 /**
- * Runtime guard for authoritative write scopes.
+ * Runtime guard for graph write scopes.
  */
-export function isAuthoritativeWriteScope(value: unknown): value is AuthoritativeWriteScope {
-  return (
-    typeof value === "string" && (authoritativeWriteScopes as readonly string[]).includes(value)
-  );
+export function isGraphWriteScope(value: unknown): value is GraphWriteScope {
+  return typeof value === "string" && (graphWriteScopes as readonly string[]).includes(value);
 }
 
 /**
@@ -294,7 +292,7 @@ export type AuthoritativeGraphWriteResult = {
   readonly txId: string;
   readonly cursor: AuthoritativeGraphCursor;
   readonly replayed: boolean;
-  readonly writeScope: AuthoritativeWriteScope;
+  readonly writeScope: GraphWriteScope;
   readonly transaction: GraphWriteTransaction;
 };
 

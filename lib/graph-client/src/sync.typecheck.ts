@@ -3,12 +3,9 @@ import type {
   SyncStatus as PackageSyncStatus,
 } from "@io/graph-sync";
 
-import type {
-  SyncState as CompatibilitySyncState,
-  SyncStatus as CompatibilitySyncStatus,
-} from "./synced-client.js";
+import type { GraphClientSyncState, GraphClientSyncStatus } from "./index.js";
 
-const compatibilityStatus: CompatibilitySyncStatus = "pushing";
+const compatibilityStatus: GraphClientSyncStatus = "pushing";
 const packageStatus: PackageSyncStatus = "ready";
 
 void compatibilityStatus;
@@ -23,7 +20,7 @@ void ({
   freshness: "stale",
   pendingCount: 0,
   recentActivities: [],
-} satisfies CompatibilitySyncState);
+} satisfies GraphClientSyncState);
 
 void ({
   mode: "total",

@@ -5,7 +5,7 @@
  * client composition, and client transport helpers. Authority storage,
  * projection routing, and React bindings stay outside this package.
  */
-export { createEntityWithId, createTypeClient, validateGraphStore } from "./client.js";
+export { createEntityWithId, createGraphClient, validateGraphStore } from "./graph.js";
 export {
   createBootstrappedSnapshot,
   type GraphClientBootstrapOptions,
@@ -32,7 +32,7 @@ export {
   type GraphValidationIssue,
   type GraphValidationResult,
   type GraphValidationSource,
-  type NamespaceClient,
+  type GraphClient,
   type PredicateCollectionKind,
   type PredicateCollectionSemantics,
   type PredicateItemOf,
@@ -49,17 +49,17 @@ export {
   type TypeQuerySelection,
   type TypeQuerySpec,
   type TypeQueryWhere,
-} from "./client-core.js";
+} from "./core.js";
 export {
-  createSyncedTypeClient,
+  createSyncedGraphClient,
   GraphSyncWriteError,
+  type GraphClientSyncState,
+  type GraphClientSyncStateListener,
+  type GraphClientSyncStatus,
   type GraphWriteSink,
-  type SyncState,
-  type SyncStateListener,
-  type SyncStatus,
-  type SyncedTypeClient,
-  type SyncedTypeSyncController,
-} from "./synced-client.js";
+  type SyncedGraphClient,
+  type GraphSyncController,
+} from "./sync.js";
 export {
   createHttpGraphClient,
   createHttpGraphTxIdFactory,
@@ -70,7 +70,7 @@ export {
   type FetchImpl,
   type HttpGraphClientOptions,
   type HttpSerializedQueryClientOptions,
-} from "./http-client.js";
+} from "./http.js";
 export {
   applyHttpSyncRequest,
   readHttpSyncRequest,

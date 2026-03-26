@@ -9,7 +9,7 @@ import {
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
 
 import { createAnonymousAuthorizationContext, issueBearerShareToken } from "../lib/auth-bridge.js";
@@ -149,7 +149,7 @@ function createSqliteDurableObjectState(): {
 function createMutationStore(snapshot: GraphStoreSnapshot) {
   const mutationStore = createStore(snapshot);
   return {
-    mutationGraph: createTypeClient(mutationStore, core),
+    mutationGraph: createGraphClient(mutationStore, core),
     mutationStore,
   };
 }
@@ -179,7 +179,7 @@ function buildGraphWriteTransaction(
 }
 
 function readCoreGraph(authority: WebAppAuthority, authorization = authorityAuthorization) {
-  return createTypeClient(createStore(authority.readSnapshot({ authorization })), core);
+  return createGraphClient(createStore(authority.readSnapshot({ authorization })), core);
 }
 
 async function getDurableAuthority(
@@ -1609,7 +1609,7 @@ describe("web worker admission flows", () => {
     const seedStore = createStore(
       authority.readSnapshot({ authorization: authorityAuthorization }),
     );
-    const seedGraph = createTypeClient(seedStore, workerGraph);
+    const seedGraph = createGraphClient(seedStore, workerGraph);
     const beforeCreate = seedStore.snapshot();
     const envVarId = seedGraph.envVar.create({
       description: "Original description",
@@ -1647,7 +1647,7 @@ describe("web worker admission flows", () => {
     const mutationStore = createStore(
       authority.readSnapshot({ authorization: authorityAuthorization }),
     );
-    const mutationGraph = createTypeClient(mutationStore, workerGraph);
+    const mutationGraph = createGraphClient(mutationStore, workerGraph);
     const beforeUpdate = mutationStore.snapshot();
     mutationGraph.envVar.update(envVarId, {
       description: "Updated by activated graph member",
@@ -1675,7 +1675,7 @@ describe("web worker admission flows", () => {
       writeScope: "client-tx",
     });
     expect(
-      createTypeClient(
+      createGraphClient(
         createStore(authority.readSnapshot({ authorization: authorityAuthorization })),
         workerGraph,
       ).envVar.get(envVarId)?.description,

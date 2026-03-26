@@ -1,4 +1,4 @@
-import { createStore, type GraphStore } from "@io/graph-kernel";
+import { createGraphStore, type GraphStore } from "@io/graph-kernel";
 import { edgeId, isEntityType, isEnumType, typeId } from "@io/graph-kernel";
 import type {
   AnyTypeOutput,
@@ -49,8 +49,8 @@ import {
   type GraphValidationIssue,
   type GraphValidationResult,
   requireGraphClientCoreSchema,
-} from "./client-core";
-import { commitCreateEntity, commitUpdateEntity } from "./client-store";
+} from "./core";
+import { commitCreateEntity, commitUpdateEntity } from "./entity-store";
 
 function normalizeValidationIssueInputs(
   issues: ValidationIssueInput | ValidationIssueInput[] | void,
@@ -825,7 +825,7 @@ function prepareMutationInput<T extends TypeOutput>(
 }
 
 function cloneStoreForValidation(store: GraphStore): GraphStore {
-  return createStore(store.snapshot());
+  return createGraphStore(store.snapshot());
 }
 
 function collectionItemPassesValidation(

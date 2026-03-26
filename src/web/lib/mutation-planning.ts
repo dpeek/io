@@ -4,7 +4,7 @@ import {
   type GraphStore,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
-import { createTypeClient, type NamespaceClient } from "@io/graph-client";
+import { createGraphClient, type GraphClient } from "@io/graph-client";
 import { canonicalizeGraphWriteTransaction, type GraphWriteTransaction } from "@io/graph-kernel";
 
 function createRecordingStore(snapshot: GraphStoreSnapshot): {
@@ -103,14 +103,14 @@ export function planRecordedMutation<const TGraph extends Record<string, AnyType
   snapshot: GraphStoreSnapshot,
   graph: TGraph,
   txId: string,
-  mutate: (graph: NamespaceClient<TGraph>, store: GraphStore) => TResult,
+  mutate: (graph: GraphClient<TGraph>, store: GraphStore) => TResult,
 ): {
   readonly changed: boolean;
   readonly result: TResult;
   readonly transaction: GraphWriteTransaction;
 } {
   const { buildTransaction, store } = createRecordingStore(snapshot);
-  const mutationGraph = createTypeClient(store, graph);
+  const mutationGraph = createGraphClient(store, graph);
   const result = mutate(mutationGraph, store);
   const transaction = buildTransaction(txId);
 

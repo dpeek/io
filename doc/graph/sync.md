@@ -15,7 +15,7 @@ Authority-owned runtime behavior now lives under `../../src/graph/runtime/`:
 - `@io/graph-sync`: sync contracts, cursor helpers, sync-core validation, sync-specific transaction materialization/apply helpers, and total sync sessions
 - `authority.ts`: persisted authority orchestration and the public authority entrypoint
 - `authority-session.ts`: authoritative write session state, history replay, and incremental delivery
-- `synced-client.ts`: runtime synced-client behavior, including the runtime-only `"pushing"` flush state
+- `sync.ts`: runtime synced-client behavior, including the runtime-only `"pushing"` flush state
 
 ## Current Contract
 
@@ -207,8 +207,8 @@ recovery.
 When provided, `authorizeRead` runs after transport visibility filtering for
 both total snapshots and incremental transaction materialization, so denied
 predicates are omitted instead of masked.
-The public runtime surface also exports `authoritativeWriteScopes`,
-`incrementalSyncFallbackReasons`, `isAuthoritativeWriteScope(...)`, and
+The public runtime surface also exports `graphWriteScopes`,
+`incrementalSyncFallbackReasons`, `isGraphWriteScope(...)`, and
 `isIncrementalSyncFallback(...)` so downstream callers can branch on the shared
 contract without copying raw literal lists.
 
@@ -234,26 +234,26 @@ authoritative sync events:
 
 ### Typed synced client
 
-- `createSyncedTypeClient(namespace, { pull, push?, createTxId?, requestedScope? })`
+- `createSyncedGraphClient(namespace, { pull, push?, createTxId?, requestedScope? })`
 - exposes `graph` for both `core` and the provided namespace, plus `sync`
 - local typed mutations capture committed diffs as pending `GraphWriteTransaction`s
 - `sync.flush()` pushes queued writes
 - `sync.sync()` pulls authoritative state
 - `sync.getPendingTransactions()` and `sync.getState()` expose queue and delivery state
-- the runtime synced-client surface widens `SyncStatus` with `"pushing"` while
-  `sync.flush()` is in flight; that synced-client state does not live in
+- the runtime synced-client surface widens `GraphClientSyncStatus` with `"pushing"`
+  while `sync.flush()` is in flight; that client-only state does not live in
   `@io/graph-sync`
-- `SyncState.requestedScope` preserves the active graph-or-module scope request even before a total snapshot arrives
-- `SyncState.fallbackReason` retains the last recovery-only incremental fallback so callers can see scoped `scope-changed` or `policy-changed` failures without silently widening the cache
-- `SyncState.diagnostics` retains the last authority-published retained-window
+- `GraphClientSyncState.requestedScope` preserves the active graph-or-module scope request even before a total snapshot arrives
+- `GraphClientSyncState.fallbackReason` retains the last recovery-only incremental fallback so callers can see scoped `scope-changed` or `policy-changed` failures without silently widening the cache
+- `GraphClientSyncState.diagnostics` retains the last authority-published retained-window
   metadata, so UI and transport consumers can show the current base cursor and
   retention policy alongside fallback state
 
 ## Ownership Boundary
 
-- `@io/graph-kernel` owns the authoritative write-envelope contract: `AuthoritativeGraphCursor`, `GraphWriteTransaction`, `GraphWriteOperation`, `AuthoritativeWriteScope`, retained-history policy, write results, and the canonical clone/canonicalize/snapshot-diff helpers around them.
+- `@io/graph-kernel` owns the authoritative write-envelope contract: `AuthoritativeGraphCursor`, `GraphWriteTransaction`, `GraphWriteOperation`, `GraphWriteScope`, retained-history policy, write results, and the canonical clone/canonicalize/snapshot-diff helpers around them.
 - `@io/graph-sync` owns the sync-specific payload/session contract layered on top of those kernel symbols. Consumers should import kernel-owned write-envelope symbols directly from `@io/graph-kernel`, not through `@io/graph-sync`.
-- `@io/graph-client` owns synced-client behavior such as `createSyncedTypeClient(...)`, `GraphSyncWriteError`, and the wider `SyncStatus`/`SyncState` model that can report `"pushing"`.
+- `@io/graph-client` owns synced-client behavior such as `createSyncedGraphClient(...)`, `GraphSyncWriteError`, and the wider `GraphClientSyncStatus`/`GraphClientSyncState` model that can report `"pushing"`.
 - `@io/core/graph/authority` owns authority orchestration such as persisted authorities and authoritative write sessions.
 - Consumer packages own transport and endpoint policy: when to call `createSyncPayload()` or `getIncrementalSyncResult(...)`, how to expose them over HTTP or another transport, how to construct any `authorizeRead` callback from request-local auth context, and what auth wraps those endpoints.
 - The current web transport proof uses one shared HTTP sync-request shape on

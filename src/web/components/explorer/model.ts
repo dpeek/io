@@ -5,7 +5,7 @@ import { pkm } from "@io/core/graph/modules/pkm";
 import {
   type EntityRef,
   type GraphMutationValidationResult,
-  type NamespaceClient,
+  type GraphClient,
   type PredicateRef,
 } from "@io/graph-client";
 
@@ -15,7 +15,7 @@ import type { GraphRuntime } from "../graph-runtime-bootstrap.js";
 export const explorerNamespace = { ...core, ...pkm, ...ops } as const;
 
 export type ExplorerNamespace = typeof explorerNamespace;
-export type ExplorerClient = NamespaceClient<ExplorerNamespace>;
+export type ExplorerClient = GraphClient<ExplorerNamespace>;
 export type ExplorerSync = GraphRuntime["sync"];
 export type ExplorerRuntime = Pick<GraphRuntime, "graph" | "store" | "sync">;
 export type ExplorerSelection = {

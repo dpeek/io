@@ -1,7 +1,7 @@
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
-import { type NamespaceClient } from "@io/graph-client";
+import { type GraphClient } from "@io/graph-client";
 
 const exampleGraph = { ...core, ...pkm, ...ops } as const;
 
@@ -35,7 +35,7 @@ export type ExampleGraphIds = {
   readonly workflowRepository: string;
 };
 
-export function seedExampleGraph(graph: NamespaceClient<typeof exampleGraph>): ExampleGraphIds {
+export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): ExampleGraphIds {
   const graphTag = resolveEntityId(
     graph.tag.list().find((tag) => tag.key === "graph"),
     () =>

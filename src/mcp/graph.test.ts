@@ -1,7 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-  createStore,
+  createBootstrappedSnapshot,
+  createGraphClient,
+  type FetchImpl,
+  type GraphClient,
+} from "@io/graph-client";
+import {
+  createGraphStore,
   type AnyTypeOutput,
   type AuthoritativeGraphWriteResult,
   type GraphStoreSnapshot,
@@ -11,12 +17,6 @@ import { type SyncPayload } from "@io/graph-sync";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
-import {
-  createBootstrappedSnapshot,
-  createTypeClient,
-  type FetchImpl,
-  type NamespaceClient,
-} from "@io/graph-client";
 import { core } from "../graph/modules/index.js";
 import { ops } from "../graph/modules/ops.js";
 import { pkm } from "../graph/modules/pkm.js";
@@ -32,7 +32,7 @@ const productGraph = { ...pkm, ...ops } as const;
 type GraphNamespace = Record<string, AnyTypeOutput>;
 type MockAuthority = {
   readonly namespace: GraphNamespace;
-  readonly store: ReturnType<typeof createStore>;
+  readonly store: ReturnType<typeof createGraphStore>;
   readonly writes: {
     apply(transaction: GraphWriteTransaction): AuthoritativeGraphWriteResult;
     getBaseCursor(): string;
@@ -50,11 +50,11 @@ function resolvedEnumValue(value: { key: string; id?: string }): string {
 
 function createAuthority<const T extends GraphNamespace>(
   namespace: T,
-  seed: (graph: NamespaceClient<typeof core & T>) => void,
+  seed: (graph: GraphClient<typeof core & T>) => void,
 ) {
   const definitions = { ...core, ...namespace } as const;
-  const store = createStore(createBootstrappedSnapshot(definitions));
-  const graph = createTypeClient(store, namespace, definitions) as unknown as NamespaceClient<
+  const store = createGraphStore(createBootstrappedSnapshot(definitions));
+  const graph = createGraphClient(store, definitions, definitions) as unknown as GraphClient<
     typeof core & T
   >;
   seed(graph);
@@ -74,8 +74,8 @@ function createAuthorityFromSnapshot<const T extends GraphNamespace>(
   snapshot: GraphStoreSnapshot,
 ) {
   const definitions = { ...core, ...namespace } as const;
-  const store = createStore(snapshot);
-  const graph = createTypeClient(store, namespace, definitions) as unknown as NamespaceClient<
+  const store = createGraphStore(snapshot);
+  const graph = createGraphClient(store, definitions, definitions) as unknown as GraphClient<
     typeof core & T
   >;
   const writes = createAuthoritativeGraphWriteSession(
@@ -102,7 +102,9 @@ function createProductAuthority() {
     }).store.snapshot();
   }
 
-  return createAuthorityFromSnapshot(productGraph, productAuthoritySnapshot);
+  const snapshot = productAuthoritySnapshot;
+  if (!snapshot) throw new Error("Product authority snapshot was not initialized.");
+  return createAuthorityFromSnapshot(productGraph, snapshot);
 }
 
 function createKitchenSinkAuthority() {
@@ -169,7 +171,9 @@ function createKitchenSinkAuthority() {
     }).store.snapshot();
   }
 
-  return createAuthorityFromSnapshot(kitchenSink, kitchenSinkAuthoritySnapshot);
+  const snapshot = kitchenSinkAuthoritySnapshot;
+  if (!snapshot) throw new Error("Kitchen sink authority snapshot was not initialized.");
+  return createAuthorityFromSnapshot(kitchenSink, snapshot);
 }
 
 function createMockFetch(authority: MockAuthority): FetchImpl {

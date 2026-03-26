@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import { graphIconSeeds } from "../modules/core/icon/seed.js";
 import { pkm } from "../modules/pkm.js";
@@ -85,7 +85,7 @@ describe("bootstrap cardinality metadata", () => {
   it("materializes bootstrap-owned timestamps for icon, type, predicate, and enum-member queries", async () => {
     const store = createStore();
     bootstrap(store, core);
-    const graph = createTypeClient(store, core);
+    const graph = createGraphClient(store, core);
     const expectedIso = "2000-01-01T00:00:00.000Z";
 
     const icon = await graph.icon.query({

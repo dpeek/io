@@ -5,14 +5,14 @@ import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 import {
   createBootstrappedSnapshot,
-  createSyncedTypeClient,
-  createTypeClient,
-  type SyncedTypeClient,
+  createSyncedGraphClient,
+  createGraphClient,
+  type SyncedGraphClient,
 } from "@io/graph-client";
 import {
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteResult,
-  type AuthoritativeWriteScope,
+  type GraphWriteScope,
   type GraphWriteTransaction,
 } from "@io/graph-kernel";
 import {
@@ -66,8 +66,8 @@ function getExampleAuthorityBaseline(): ExampleAuthorityBaseline {
   if (exampleAuthorityBaseline) return exampleAuthorityBaseline;
 
   const store = createExampleStore();
-  const graph = createTypeClient(store, exampleGraph);
-  const ids = seedExampleGraph(createTypeClient(store, productGraph));
+  const graph = createGraphClient(store, exampleGraph);
+  const ids = seedExampleGraph(createGraphClient(store, productGraph));
   const hiddenCursorProbeId = graph.hiddenCursorProbe.create({
     name: "Hidden Cursor Probe",
   });
@@ -85,7 +85,7 @@ function getExampleAuthorityBaseline(): ExampleAuthorityBaseline {
 function createExampleAuthorityGraph() {
   const baseline = getExampleAuthorityBaseline();
   const store = createStore(baseline.snapshot);
-  const graph = createTypeClient(store, exampleGraph);
+  const graph = createGraphClient(store, exampleGraph);
 
   return {
     store,
@@ -96,7 +96,7 @@ function createExampleAuthorityGraph() {
   };
 }
 
-export type ExampleSyncedClient = SyncedTypeClient<typeof exampleGraph>;
+export type ExampleSyncedClient = SyncedGraphClient<typeof exampleGraph>;
 
 export function createExampleRuntime(
   options: {
@@ -135,7 +135,7 @@ export function createExampleRuntime(
 
   function applyTransaction(
     transaction: GraphWriteTransaction,
-    options?: { writeScope?: AuthoritativeWriteScope },
+    options?: { writeScope?: GraphWriteScope },
   ): AuthoritativeGraphWriteResult {
     return writes.apply(transaction, options);
   }
@@ -174,7 +174,7 @@ export function createExampleRuntime(
   function createClient(): ExampleSyncedClient {
     let client: ExampleSyncedClient;
     const queuedTxIds: string[] = [];
-    client = createSyncedTypeClient(exampleGraph, {
+    client = createSyncedGraphClient(exampleGraph, {
       pull: (state) =>
         state.cursor ? getIncrementalSyncResult(state.cursor) : createSyncPayload(),
       createTxId() {

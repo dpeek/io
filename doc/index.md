@@ -17,8 +17,10 @@ the graph-first application direction the rest of the workspace is proving.
 - `./agent/cli.md`
 - `./agent/tui.md`
 - `./graph/index.md`
+- `./graph/computed.md`
 - `./graph/mcp.md`
 - `./graph/storage.md`
+- `./graph/retained-records.md`
 - `./tui/index.md`
 - `./README.md`
 - `./branch/README.md`
@@ -35,9 +37,12 @@ the graph-first application direction the rest of the workspace is proving.
 - `./agent/index.md`: agent runtime overview, scheduler layout, and operator surfaces
 - `./agent/tui.md`: operator-facing TUI layout and retained runtime display
 - `./graph/index.md`: graph package layout including engine, adapters, taxonomies, and focused subdocs
+- `./graph/computed.md`: proposed computed-value layer for lazy, memoized, read-only graph derivations
 - `./graph/mcp.md`: current graph MCP read surface, opt-in writes, and the remaining command roadmap
 - `./graph/storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,
   retained-history model, and secret side-storage split
+- `./graph/retained-records.md`: proposed retained-record boundary for data
+  that should survive graph refactors and migrations
 - `./tui/index.md`: terminal workflow product surface and the boundary against legacy agent TUI
 - `./README.md`: architecture and vision doc map for the numbered roadmap and branch docs
 - `./branch/README.md`: platform branches as parallel workstreams with canonical specs where available

@@ -6,7 +6,7 @@ import {
 } from "@io/core/graph";
 import {
   type AuthoritativeGraphRetainedHistoryPolicy,
-  type AuthoritativeWriteScope,
+  type GraphWriteScope,
 } from "@io/graph-kernel";
 
 type SqlRow = Record<string, unknown>;
@@ -36,7 +36,7 @@ type GraphTxRow = {
   cursor: string;
   seq: number;
   tx_id: string;
-  write_scope: AuthoritativeWriteScope;
+  write_scope: GraphWriteScope;
 };
 
 type GraphTxOpRow = {
@@ -89,7 +89,7 @@ export function requireString(value: unknown, label: string): string {
   return value;
 }
 
-export function requireWriteScope(value: unknown, label: string): AuthoritativeWriteScope {
+export function requireWriteScope(value: unknown, label: string): GraphWriteScope {
   if (value === "client-tx" || value === "server-command" || value === "authority-only") {
     return value;
   }

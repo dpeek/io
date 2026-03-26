@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-  authoritativeWriteScopes,
   canonicalizeGraphWriteTransaction,
   cloneAuthoritativeGraphRetainedHistoryPolicy,
   cloneAuthoritativeGraphWriteResult,
@@ -9,8 +8,9 @@ import {
   cloneGraphWriteTransaction,
   createGraphWriteOperationsFromSnapshots,
   createGraphWriteTransactionFromSnapshots,
+  graphWriteScopes,
   isAuthoritativeGraphRetainedHistoryPolicy,
-  isAuthoritativeWriteScope,
+  isGraphWriteScope,
   sameAuthoritativeGraphRetainedHistoryPolicy,
   sameGraphWriteTransaction,
   unboundedAuthoritativeGraphRetainedHistoryPolicy,
@@ -52,9 +52,9 @@ describe("authoritative write contracts", () => {
       }),
     ).toBe(false);
 
-    expect(authoritativeWriteScopes).toEqual(["client-tx", "server-command", "authority-only"]);
-    expect(isAuthoritativeWriteScope("server-command")).toBe(true);
-    expect(isAuthoritativeWriteScope("replicated")).toBe(false);
+    expect(graphWriteScopes).toEqual(["client-tx", "server-command", "authority-only"]);
+    expect(isGraphWriteScope("server-command")).toBe(true);
+    expect(isGraphWriteScope("replicated")).toBe(false);
   });
 
   it("clones and normalizes write operations, transactions, and results", () => {

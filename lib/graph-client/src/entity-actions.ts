@@ -7,13 +7,9 @@ import {
   requireGraphClientCoreSchema,
   type CreateInputOfType,
   type EntityOfType,
-} from "./client-core";
-import { commitCreateEntity, commitUpdateEntity } from "./client-store";
-import {
-  prepareDeleteEntity,
-  validateCreateEntity,
-  validateUpdateEntity,
-} from "./client-validation";
+} from "./core";
+import { commitCreateEntity, commitUpdateEntity } from "./entity-store";
+import { prepareDeleteEntity, validateCreateEntity, validateUpdateEntity } from "./validation";
 
 export function createEntityAtId<T extends TypeOutput>(
   store: GraphStore,

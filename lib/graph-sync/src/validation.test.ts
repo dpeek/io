@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createStore } from "@io/graph-kernel";
+import { createGraphStore } from "@io/graph-kernel";
 
 import { createModuleSyncScope, graphSyncScope } from "./contracts";
 import { createTotalSyncPayload } from "./session";
@@ -108,7 +108,7 @@ describe("sync validation", () => {
 
   it("requires complete graph-scoped total payloads", () => {
     const result = validateTotalSyncPayload(
-      createTotalSyncPayload(createStore(), {
+      createTotalSyncPayload(createGraphStore(), {
         scope: graphSyncScope,
         completeness: "incomplete",
       }),
@@ -140,7 +140,7 @@ describe("sync validation", () => {
 
     expect(
       validateTotalSyncPayload(
-        createTotalSyncPayload(createStore(), {
+        createTotalSyncPayload(createGraphStore(), {
           scope: moduleScope,
           completeness: "incomplete",
         }),

@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 
-import { createSyncedTypeClient, createTypeClient } from "@io/graph-client";
+import { createSyncedGraphClient, createGraphClient } from "@io/graph-client";
 import { createTotalSyncPayload } from "@io/graph-sync";
 import { createTestRenderer } from "@opentui/core/testing";
 import { createRoot, flushSync } from "@opentui/react";
@@ -31,7 +31,7 @@ function date(value: string): Date {
 function createWorkflowRuntimeFixture() {
   const store = createStore();
   bootstrap(store, productGraph);
-  const graph = createTypeClient(store, productGraph);
+  const graph = createGraphClient(store, productGraph);
 
   const projectId = graph.workflowProject.create({
     name: "IO",
@@ -70,7 +70,7 @@ function createWorkflowRuntimeFixture() {
     updatedAt: date("2026-01-05T01:00:00.000Z"),
   });
 
-  const runtime = createSyncedTypeClient(productGraph, {
+  const runtime = createSyncedGraphClient(productGraph, {
     pull: () => createTotalSyncPayload(store, { cursor: "server:workflow:1" }),
   });
 

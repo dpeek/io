@@ -1,13 +1,13 @@
 import {
-  createStore,
   cloneAuthoritativeGraphRetainedHistoryPolicy,
   cloneAuthoritativeGraphWriteResult,
+  createGraphStore,
   cloneGraphWriteTransaction,
   isAuthoritativeGraphRetainedHistoryPolicy,
-  isAuthoritativeWriteScope,
+  isGraphWriteScope,
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteResult,
-  type AuthoritativeWriteScope,
+  type GraphWriteScope,
   type GraphStoreSnapshot,
   type GraphWriteTransaction,
 } from "@io/graph-kernel";
@@ -638,9 +638,9 @@ export function prepareAuthoritativeGraphWriteResult(result: AuthoritativeGraphW
     );
   }
 
-  let writeScope: AuthoritativeWriteScope = "client-tx";
+  let writeScope: GraphWriteScope = "client-tx";
   if (candidate.writeScope !== undefined) {
-    if (!isAuthoritativeWriteScope(candidate.writeScope)) {
+    if (!isGraphWriteScope(candidate.writeScope)) {
       issues.push(
         createGraphWriteResultValidationIssue(
           ["writeScope"],
@@ -1120,7 +1120,7 @@ export function prepareIncrementalSyncPayloadForApply(
     };
   }
 
-  const validationStore = createStore(snapshot);
+  const validationStore = createGraphStore(snapshot);
   for (const [index, txResult] of validation.value.transactions.entries()) {
     const materialized = materializeGraphWriteTransactionSnapshot(
       validationStore,

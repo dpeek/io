@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createTypeClient } from "@io/graph-client";
+import { createGraphClient } from "@io/graph-client";
 
 import {
   bootstrap,
@@ -137,7 +137,7 @@ describe("kitchen sink schema namespace", () => {
     const store = createStore();
     bootstrap(store, core);
     bootstrap(store, kitchenSink);
-    const graph = createTypeClient(store, kitchenSink, kitchenSinkDefs);
+    const graph = createGraphClient(store, kitchenSink, kitchenSinkDefs);
 
     const personId = graph.person.create({
       name: "Ada Lovelace",

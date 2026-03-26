@@ -1,4 +1,5 @@
 import { defaultHttpGraphUrl } from "@io/graph-client";
+
 import { normalizeGraphMcpUrl, startGraphMcpServer, type GraphMcpStartOptions } from "./graph.js";
 
 type McpCliCommand = { kind: "help" } | { kind: "graph"; options: GraphMcpStartOptions };

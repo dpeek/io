@@ -1,7 +1,7 @@
 import { createGraphId } from "@io/graph-kernel";
 
 import {
-  fieldsMeta,
+  fieldTreeMeta,
   type EnumTypeOutput,
   type EntityTypeOutput,
   type ScalarTypeOutput,
@@ -30,13 +30,13 @@ type MapKeysOptions = {
 type IdNamespace = Record<string, AnyTypeOutput>;
 type MutableEdge = EdgeOutput & { id?: string };
 type MutableTreeMeta = { key: string; id?: string };
-type MutableFields = FieldsOutput & { [fieldsMeta]: MutableTreeMeta };
+type MutableFields = FieldsOutput & { [fieldTreeMeta]: MutableTreeMeta };
 
 type DeepResolvedFields<T> = T extends FieldsOutput
   ? T & {
-      [fieldsMeta]: T[typeof fieldsMeta] & { id: string };
+      [fieldTreeMeta]: T[typeof fieldTreeMeta] & { id: string };
     } & {
-      [K in Exclude<keyof T, typeof fieldsMeta>]: T[K] extends EdgeOutput
+      [K in Exclude<keyof T, typeof fieldTreeMeta>]: T[K] extends EdgeOutput
         ? T[K] & { id: string }
         : T[K] extends FieldsOutput
           ? DeepResolvedFields<T[K]>
@@ -94,7 +94,7 @@ function validateNormalizedMap(keys: Record<string, string>): void {
 }
 
 function walkOwnedKeys(tree: FieldsOutput, keys: Set<string>): void {
-  keys.add(tree[fieldsMeta].key);
+  keys.add(tree[fieldTreeMeta].key);
   for (const value of Object.values(tree) as unknown[]) {
     if (isEdgeOutput(value)) {
       keys.add(value.key);
@@ -110,9 +110,9 @@ function assignFieldIds(
   missing: Set<string>,
 ): void {
   const mutableTree = tree as MutableFields;
-  const treeId = keys[mutableTree[fieldsMeta].key];
-  if (treeId) mutableTree[fieldsMeta].id = treeId;
-  else if (!mutableTree[fieldsMeta].id) missing.add(mutableTree[fieldsMeta].key);
+  const treeId = keys[mutableTree[fieldTreeMeta].key];
+  if (treeId) mutableTree[fieldTreeMeta].id = treeId;
+  else if (!mutableTree[fieldTreeMeta].id) missing.add(mutableTree[fieldTreeMeta].key);
 
   for (const value of Object.values(mutableTree) as unknown[]) {
     if (isEdgeOutput(value)) {

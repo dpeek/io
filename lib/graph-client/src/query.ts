@@ -16,7 +16,7 @@ import {
   type QueryFieldResult,
   type TypeQueryResult,
   type TypeQuerySelection,
-} from "./client-core";
+} from "./core";
 
 export function createQueryProjector<const TDefs extends Record<string, AnyTypeOutput>>(
   store: GraphStore,

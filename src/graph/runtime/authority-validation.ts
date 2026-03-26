@@ -9,10 +9,10 @@ import {
   cloneAuthoritativeGraphWriteResult,
   cloneGraphWriteTransaction,
   isAuthoritativeGraphRetainedHistoryPolicy,
-  isAuthoritativeWriteScope,
+  isGraphWriteScope,
   type AuthoritativeGraphWriteResult,
   type AuthoritativeGraphRetainedHistoryPolicy,
-  type AuthoritativeWriteScope,
+  type GraphWriteScope,
   type GraphWriteTransaction,
 } from "@io/graph-kernel";
 import {
@@ -415,9 +415,9 @@ export function prepareAuthoritativeGraphWriteResult(result: AuthoritativeGraphW
     );
   }
 
-  let writeScope: AuthoritativeWriteScope = "client-tx";
+  let writeScope: GraphWriteScope = "client-tx";
   if (candidate.writeScope !== undefined) {
-    if (!isAuthoritativeWriteScope(candidate.writeScope)) {
+    if (!isGraphWriteScope(candidate.writeScope)) {
       issues.push(
         createGraphWriteResultValidationIssue(
           ["writeScope"],
@@ -1211,7 +1211,7 @@ export function validateAuthoritativeGraphWriteTransaction<
   store: GraphStore,
   namespace: T,
   options: {
-    writeScope?: AuthoritativeWriteScope;
+    writeScope?: GraphWriteScope;
   } = {},
 ): GraphValidationResult<GraphWriteTransaction> {
   const definitions = resolveAuthorityDefinitions(namespace);
