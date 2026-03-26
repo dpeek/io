@@ -11,11 +11,9 @@ import {
   defineSecretField,
   defineType,
   edgeId,
-  type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthSubjectRef,
   type AnyTypeOutput,
   type AuthorizationContext,
-  type GraphWriteTransaction,
   type NamespaceClient,
   type PersistedAuthoritativeGraphStorage,
   type GraphStoreSnapshot,
@@ -28,6 +26,10 @@ import {
   workflowReviewSyncScopeRequest,
 } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
+import {
+  type AuthoritativeGraphRetainedHistoryPolicy,
+  type GraphWriteTransaction,
+} from "@io/graph-kernel";
 
 import {
   createBearerShareAuthorizationContext,

@@ -32,7 +32,8 @@ Relevant source:
 
 - `../../src/graph/runtime/client.ts`
 - `../../src/graph/runtime/store.ts`
-- `../../src/graph/runtime/sync.ts`
+- `../../src/graph/runtime/synced-client.ts`
+- `../../lib/graph-sync/src/index.ts`
 
 ## UI-Adjacent Contracts
 

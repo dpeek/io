@@ -1,4 +1,14 @@
-import { core } from "../core";
+import {
+  cloneAuthoritativeGraphWriteResult,
+  type AuthoritativeGraphWriteResult,
+  type AuthoritativeWriteScope,
+  type GraphWriteOperation,
+  type GraphWriteTransaction,
+} from "@io/graph-kernel";
+
+import type { ReplicationReadAuthorizer } from "./authority-types";
+import { createTransactionValidationIssue } from "./authority-validation-helpers";
+import { core } from "./core";
 import {
   edgeId,
   fieldVisibility,
@@ -11,17 +21,8 @@ import {
   type GraphFieldVisibility,
   type GraphFieldWritePolicy,
   type ResolvedEdgeOutput,
-} from "../schema";
-import { createStore, type GraphStore, type GraphStoreSnapshot } from "../store";
-import {
-  cloneAuthoritativeGraphWriteResult,
-  type AuthoritativeGraphWriteResult,
-  type AuthoritativeWriteScope,
-  type GraphWriteOperation,
-  type GraphWriteTransaction,
-  type ReplicationReadAuthorizer,
-} from "./contracts";
-import { createTransactionValidationIssue } from "./validation-helpers";
+} from "./schema";
+import { createStore, type GraphStore, type GraphStoreSnapshot } from "./store";
 
 type FieldAuthorityPolicy = {
   readonly key: string;

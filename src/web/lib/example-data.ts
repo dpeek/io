@@ -1,4 +1,4 @@
-import type { NamespaceClient } from "@io/core/graph";
+import { type NamespaceClient } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";

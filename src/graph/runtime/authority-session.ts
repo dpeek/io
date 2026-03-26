@@ -1,40 +1,54 @@
-import { GraphValidationError, type GraphValidationResult } from "../client";
-import type { AnyTypeOutput } from "../schema";
-import type { GraphStore, GraphStoreSnapshot } from "../store";
 import {
   cloneAuthoritativeGraphRetainedHistoryPolicy,
   cloneAuthoritativeGraphWriteResult,
-  type SyncDiagnostics,
   type AuthoritativeGraphChangesAfterResult,
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteHistory,
   type AuthoritativeGraphWriteResult,
-  type AuthoritativeGraphWriteSession,
   type AuthoritativeWriteScope,
   type GraphWriteTransaction,
-  type IncrementalSyncResult,
-  type ReplicationReadAuthorizer,
-  type SyncFreshness,
+  sameGraphWriteTransaction,
   unboundedAuthoritativeGraphRetainedHistoryPolicy,
-} from "./contracts";
-import { classifyIncrementalSyncFallbackReason, formatAuthoritativeGraphCursor } from "./cursor";
+} from "@io/graph-kernel";
+import {
+  classifyIncrementalSyncFallbackReason,
+  cloneSyncDiagnostics,
+  cloneSyncScope,
+  createIncrementalSyncFallback,
+  createIncrementalSyncPayload,
+  graphSyncScope,
+  prepareGraphWriteTransaction,
+  type IncrementalSyncResult,
+  type SyncCompleteness,
+  type SyncDiagnostics,
+  type SyncFreshness,
+  type SyncScope,
+  type TotalSyncPayload,
+} from "@io/graph-sync";
+import { materializeGraphWriteTransactionSnapshot } from "@io/graph-sync";
+
 import {
   createEdgeIndex,
   createFieldAuthorityPolicyIndex,
+  filterReplicatedSnapshot,
   filterReplicatedWriteResult,
-} from "./replication";
+} from "./authority-replication";
+import type { AuthoritativeGraphWriteSession, ReplicationReadAuthorizer } from "./authority-types";
 import {
-  materializeGraphWriteTransactionSnapshot,
-  prepareGraphWriteTransaction,
-  sameGraphWriteTransaction,
-} from "./transactions";
-import {
-  createIncrementalSyncFallback,
-  createIncrementalSyncPayload,
   prepareAuthoritativeGraphWriteResult,
   validateAuthoritativeGraphWriteTransaction,
-} from "./validation";
-import { createTransactionValidationIssue, invalidTransactionResult } from "./validation-helpers";
+} from "./authority-validation";
+import {
+  createTransactionValidationIssue,
+  invalidTransactionResult,
+} from "./authority-validation-helpers";
+import {
+  GraphValidationError,
+  type GraphValidationIssue,
+  type GraphValidationResult,
+} from "./client";
+import type { AnyTypeOutput } from "./schema";
+import { createStore, type GraphStore, type GraphStoreSnapshot } from "./store";
 
 function buildAuthoritativeGraphWriteReplayResult(
   result: AuthoritativeGraphWriteResult,
@@ -85,6 +99,18 @@ type AuthoritativeGraphWriteRecord =
       transaction: GraphWriteTransaction;
       result: Extract<GraphValidationResult<GraphWriteTransaction>, { ok: false }>;
     };
+
+function normalizePreparedTransactionResult(result: {
+  value: GraphWriteTransaction;
+  issues: readonly Pick<GraphValidationIssue, "code" | "message" | "path">[];
+}): Extract<GraphValidationResult<GraphWriteTransaction>, { ok: false }> {
+  return invalidTransactionResult(
+    result.value,
+    result.issues.map((issue) =>
+      createTransactionValidationIssue(issue.path, issue.code, issue.message),
+    ),
+  );
+}
 
 export function createAuthoritativeGraphWriteSession<const T extends Record<string, AnyTypeOutput>>(
   store: GraphStore,
@@ -285,14 +311,20 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
     result: AuthoritativeGraphWriteResult;
     snapshot: GraphStoreSnapshot;
   } {
-    const prepared = prepareGraphWriteTransaction(transaction);
-    if (!prepared.ok) throw new GraphValidationError(prepared.result);
+    const validationStore = options.sourceSnapshot ? createStore(options.sourceSnapshot) : store;
+    const preparedTransaction = prepareGraphWriteTransaction(transaction);
+    if (!preparedTransaction.ok) {
+      throw new GraphValidationError(
+        normalizePreparedTransactionResult(preparedTransaction.result),
+      );
+    }
 
-    const existing = txRecords.get(prepared.value.id);
+    const normalizedTransaction = preparedTransaction.value;
+    const existing = txRecords.get(normalizedTransaction.id);
     if (existing) {
-      if (!sameGraphWriteTransaction(existing.transaction, prepared.value)) {
+      if (!sameGraphWriteTransaction(existing.transaction, normalizedTransaction)) {
         throw new GraphValidationError(
-          invalidTransactionResult(prepared.value, [
+          invalidTransactionResult(normalizedTransaction, [
             createTransactionValidationIssue(
               ["id"],
               "sync.tx.id.conflict",
@@ -311,34 +343,20 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
       throw new GraphValidationError(existing.result);
     }
 
-    const materialized = materializeGraphWriteTransactionSnapshot(store, prepared.value, {
-      sourceSnapshot: options.sourceSnapshot,
-    });
-    if (!materialized.ok) {
-      txRecords.set(prepared.value.id, {
-        ok: false,
-        transaction: prepared.value,
-        result: materialized.result,
-      });
-      throw new GraphValidationError(materialized.result);
-    }
-
-    const validation = validateAuthoritativeGraphWriteTransaction(
-      prepared.value,
-      store,
+    const prepared = validateAuthoritativeGraphWriteTransaction(
+      normalizedTransaction,
+      validationStore,
       namespace,
       {
         writeScope: options.writeScope,
       },
     );
-    if (!validation.ok) {
-      txRecords.set(prepared.value.id, {
-        ok: false,
-        transaction: prepared.value,
-        result: validation,
-      });
-      throw new GraphValidationError(validation);
-    }
+    if (!prepared.ok) throw new GraphValidationError(prepared);
+
+    const materialized = materializeGraphWriteTransactionSnapshot(validationStore, prepared.value, {
+      sourceSnapshot: options.sourceSnapshot,
+    });
+    if (!materialized.ok) throw new Error("Validated transactions must materialize successfully.");
 
     store.replace(materialized.value);
     sequence += 1;
@@ -374,3 +392,34 @@ export function createAuthoritativeGraphWriteSession<const T extends Record<stri
     getRetainedHistoryPolicy,
   };
 }
+
+export function createAuthoritativeTotalSyncPayload<const T extends Record<string, AnyTypeOutput>>(
+  store: GraphStore,
+  namespace: T,
+  options: {
+    authorizeRead?: ReplicationReadAuthorizer;
+    completeness?: SyncCompleteness;
+    cursor?: string;
+    diagnostics?: SyncDiagnostics;
+    freshness?: SyncFreshness;
+    scope?: SyncScope;
+  } = {},
+): TotalSyncPayload {
+  return {
+    mode: "total",
+    scope: cloneSyncScope(options.scope ?? graphSyncScope),
+    snapshot: filterReplicatedSnapshot(store, namespace, {
+      authorizeRead: options.authorizeRead,
+    }),
+    cursor: options.cursor ?? "full",
+    completeness: options.completeness ?? "complete",
+    freshness: options.freshness ?? "current",
+    ...(options.diagnostics ? { diagnostics: cloneSyncDiagnostics(options.diagnostics) } : {}),
+  };
+}
+
+function formatAuthoritativeGraphCursor(prefix: string, sequence: number): string {
+  return `${prefix}${sequence}`;
+}
+
+export type { AuthoritativeGraphWriteSession, ReplicationReadAuthorizer } from "./authority-types";

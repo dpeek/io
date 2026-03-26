@@ -1,4 +1,4 @@
-import type { GraphStore } from "@io/core/graph";
+import { type GraphStore } from "@io/core/graph";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
 

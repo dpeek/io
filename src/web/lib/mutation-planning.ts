@@ -1,13 +1,12 @@
 import {
-  canonicalizeGraphWriteTransaction,
   createStore,
   createTypeClient,
   type AnyTypeOutput,
-  type GraphWriteTransaction,
   type NamespaceClient,
   type GraphStore,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
+import { canonicalizeGraphWriteTransaction, type GraphWriteTransaction } from "@io/graph-kernel";
 
 function createRecordingStore(snapshot: GraphStoreSnapshot): {
   readonly store: GraphStore;

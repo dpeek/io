@@ -1,4 +1,4 @@
-import type { EdgeOutput } from "@io/core/graph";
+import { type EdgeOutput } from "@io/core/graph";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object") return false;

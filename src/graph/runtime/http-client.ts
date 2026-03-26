@@ -1,3 +1,6 @@
+import type { AuthoritativeGraphWriteResult, GraphWriteTransaction } from "@io/graph-kernel";
+import type { SyncPayload, SyncScopeRequest, SyncState } from "@io/graph-sync";
+
 import { applyHttpSyncRequest } from "./http-sync-request";
 import { createGraphId } from "./id";
 import type { AnyTypeOutput } from "./schema";
@@ -6,15 +9,7 @@ import {
   type QueryResultPage,
   type SerializedQueryRequest,
 } from "./serialized-query";
-import {
-  createSyncedTypeClient,
-  type AuthoritativeGraphWriteResult,
-  type GraphWriteTransaction,
-  type SyncPayload,
-  type SyncScopeRequest,
-  type SyncState,
-  type SyncedTypeClient,
-} from "./sync";
+import { createSyncedTypeClient, type SyncedTypeClient } from "./synced-client";
 
 export type FetchImpl = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 

@@ -3,6 +3,13 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+import {
+  createGraphWriteTransactionFromSnapshots,
+  type AuthoritativeGraphWriteResult,
+  type GraphWriteTransaction,
+} from "@io/graph-kernel";
+import { validateIncrementalSyncResult } from "@io/graph-sync";
+
 import { kitchenSink } from "../testing/kitchen-sink.js";
 import {
   createJsonPersistedAuthoritativeGraph,
@@ -10,6 +17,11 @@ import {
   type PersistedAuthoritativeGraphState,
   type PersistedAuthoritativeGraphStorage,
   type PersistedAuthoritativeGraphStorageLoadResult,
+} from "./authority";
+import {
+  createAuthoritativeTotalSyncPayload,
+  createAuthoritativeGraphWriteSession,
+  validateAuthoritativeTotalSyncPayload,
 } from "./authority";
 import { authorizeRead } from "./authorization";
 import { createBootstrappedSnapshot } from "./bootstrap";
@@ -19,15 +31,6 @@ import { core } from "./core";
 import { createIdMap, applyIdMap } from "./identity";
 import { defineType, edgeId, fieldPolicyDescriptor } from "./schema";
 import { createStore, type GraphStoreSnapshot } from "./store";
-import {
-  createAuthoritativeGraphWriteSession,
-  createGraphWriteTransactionFromSnapshots,
-  createTotalSyncPayload,
-  validateAuthoritativeTotalSyncPayload,
-  validateIncrementalSyncResult,
-  type AuthoritativeGraphWriteResult,
-  type GraphWriteTransaction,
-} from "./sync";
 
 const tempDirs: string[] = [];
 let testCursorEpoch = 0;
@@ -923,9 +926,8 @@ describe("persisted authoritative graph", () => {
       status: kitchenSink.status.values.inReview.id,
       confidentialNotes: "Authority-only notes",
     });
-    const payload = createTotalSyncPayload(store, {
+    const payload = createAuthoritativeTotalSyncPayload(store, kitchenSink, {
       cursor: "server:1",
-      namespace: kitchenSink,
     });
 
     expect(validateAuthoritativeTotalSyncPayload(payload, kitchenSink).ok).toBe(true);

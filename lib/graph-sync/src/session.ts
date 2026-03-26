@@ -1,14 +1,17 @@
-import type { GraphStore, GraphStoreSnapshot } from "@io/graph-kernel";
+import {
+  cloneAuthoritativeGraphWriteResult,
+  type AuthoritativeGraphWriteResult,
+  type GraphStore,
+  type GraphStoreSnapshot,
+} from "@io/graph-kernel";
 
 import {
   appendSyncActivity,
-  cloneAuthoritativeGraphWriteResult,
   cloneState,
   cloneSyncDiagnostics,
   cloneSyncScope,
   cloneSyncScopeRequest,
   graphSyncScope,
-  type AuthoritativeGraphWriteResult,
   type AuthoritativeGraphWriteResultValidator,
   type IncrementalSyncFallbackReason,
   type IncrementalSyncResult,
@@ -129,6 +132,7 @@ export function createTotalSyncSession(
 
     const prepared = prepareIncrementalSyncResultForApply(store.snapshot(), result, state.cursor, {
       currentScope: state.scope,
+      validateWriteResult: options.validateWriteResult,
     });
     if (!prepared.ok) throw new GraphSyncValidationError(prepared.result);
 

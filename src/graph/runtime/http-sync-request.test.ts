@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
+import { graphSyncScope } from "@io/graph-sync";
+
 import { applyHttpSyncRequest, readHttpSyncRequest } from "./http-sync-request";
-import { graphSyncScope } from "./sync";
 
 describe("http sync request transport", () => {
   it("writes explicit graph scope requests", () => {

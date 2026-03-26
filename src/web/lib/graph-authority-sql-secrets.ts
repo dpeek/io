@@ -1,4 +1,4 @@
-import type { GraphStoreSnapshot } from "@io/core/graph";
+import { type GraphStoreSnapshot } from "@io/core/graph";
 
 import type {
   WebAppAuthoritySecretInventoryRecord,

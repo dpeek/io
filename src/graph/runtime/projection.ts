@@ -4,7 +4,7 @@ import {
   type ModuleSyncScopeRequest,
   type SyncScope,
   type SyncScopeRequest,
-} from "./sync/index.js";
+} from "@io/graph-sync";
 
 export const projectionSourceScopeKinds = [
   "graph",

@@ -2,6 +2,7 @@
 
 import { expect, setDefaultTimeout, test } from "bun:test";
 
+import { createTotalSyncPayload } from "@io/graph-sync";
 import { createTestRenderer } from "@opentui/core/testing";
 import { createRoot, flushSync } from "@opentui/react";
 import { act } from "react";
@@ -12,16 +13,11 @@ import {
   useGraphRuntime,
   useGraphSyncState,
 } from "../graph/adapters/react-opentui/index.js";
-import {
-  bootstrap,
-  createStore,
-  createSyncedTypeClient,
-  createTotalSyncPayload,
-  createTypeClient,
-} from "../graph/index.js";
+import { bootstrap, createStore, createTypeClient } from "../graph/index.js";
 import { core } from "../graph/modules/core.js";
 import { ops } from "../graph/modules/ops.js";
 import { pkm } from "../graph/modules/pkm.js";
+import { createSyncedTypeClient } from "../graph/runtime/index.js";
 import { useCommitQueueScope, useProjectBranchScope, useWorkflowProjectionIndex } from "./index.js";
 
 (

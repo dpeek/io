@@ -1,5 +1,5 @@
-import { graphSyncScope } from "@io/core/graph";
 import { workflowReviewSyncScopeRequest } from "@io/core/graph/modules/ops/workflow";
+import { graphSyncScope } from "@io/graph-sync";
 
 import type { WorkflowReadRequest } from "./workflow-transport.js";
 

@@ -898,9 +898,9 @@ commands target.
 
 - `src/graph/runtime/identity.ts` and `src/graph/runtime/bootstrap.ts` to lock
   stable schema-id and bootstrap behavior in code comments and tests
-- `src/graph/runtime/sync/contracts.ts`, `src/graph/runtime/sync/authority.ts`,
-  and `src/graph/runtime/sync/replication.ts` to freeze tx, cursor, replay, and
-  replicated-field semantics
+- `lib/graph-sync/src/contracts.ts`, `src/graph/runtime/authority-session.ts`,
+  and `src/graph/runtime/authority-replication.ts` to freeze tx, cursor,
+  replay, and replicated-field semantics
 - `src/graph/runtime/persisted-authority.ts` to keep the durable storage
   boundary small and explicit
 - `src/web/lib/graph-authority-do.ts` to harden the SQLite-backed single-graph

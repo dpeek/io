@@ -1,10 +1,12 @@
 import {
-  isAuthoritativeGraphRetainedHistoryPolicy,
-  type AuthoritativeGraphRetainedHistoryPolicy,
   type PersistedAuthoritativeGraphStorageCommitInput as DurableAuthorityCommitInput,
   type PersistedAuthoritativeGraphStoragePersistInput as DurableAuthorityPersistInput,
 } from "@io/core/graph";
 import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/ops/workflow";
+import {
+  isAuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeGraphRetainedHistoryPolicy,
+} from "@io/graph-kernel";
 
 import type {
   WebAppAuthoritySecretInventoryRecord,

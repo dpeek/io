@@ -1,26 +1,13 @@
 import {
   canonicalizeGraphWriteTransaction,
-  createGraphWriteOperationsFromSnapshots,
-  createGraphWriteTransactionFromSnapshots,
-  sameGraphWriteTransaction,
+  cloneGraphWriteTransaction,
   type GraphStore,
   type GraphStoreSnapshot,
+  type GraphWriteTransaction,
 } from "@io/graph-kernel";
 
-import {
-  cloneGraphWriteTransaction,
-  isObjectRecord,
-  type GraphSyncValidationResult,
-  type GraphWriteTransaction,
-} from "./contracts";
+import { isObjectRecord, type GraphSyncValidationResult } from "./contracts";
 import { createGraphSyncValidationIssue, invalidGraphWriteTransactionResult } from "./validation";
-
-export {
-  canonicalizeGraphWriteTransaction,
-  createGraphWriteOperationsFromSnapshots,
-  createGraphWriteTransactionFromSnapshots,
-  sameGraphWriteTransaction,
-};
 
 export function logicalFactKey(edge: GraphStoreSnapshot["edges"][number]): string {
   return `${edge.s}\0${edge.p}\0${edge.o}`;
@@ -61,7 +48,7 @@ function validateGraphWriteTransactionShape(
     );
   }
 
-  candidate.ops.forEach((operation, index) => {
+  candidate.ops.forEach((operation: unknown, index: number) => {
     const opPath = `ops[${index}]`;
     if (!isObjectRecord(operation)) {
       issues.push(

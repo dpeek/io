@@ -1,6 +1,6 @@
 "use client";
 
-import type { SyncScope, SyncScopeRequest } from "@io/core/graph";
+import { type SyncScope, type SyncScopeRequest } from "@io/graph-sync";
 import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";

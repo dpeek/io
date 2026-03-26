@@ -1,17 +1,16 @@
 "use client";
 
+import { ops } from "@io/core/graph/modules/ops";
+import { pkm } from "@io/core/graph/modules/pkm";
 import {
   applyHttpSyncRequest,
   createHttpGraphClient,
   createHttpGraphTxIdFactory,
   defaultHttpGraphUrl,
-  graphSyncScope,
-  type SyncScopeRequest,
   type SyncedTypeClient,
-} from "@io/core/graph";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+} from "@io/core/graph/runtime";
 import { GraphMutationRuntimeProvider } from "@io/core/graph/runtime/react";
+import { graphSyncScope, type SyncScopeRequest } from "@io/graph-sync";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
 import { Skeleton } from "@io/web/skeleton";

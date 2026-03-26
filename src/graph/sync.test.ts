@@ -1,33 +1,37 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-  GraphSyncWriteError,
   GraphValidationError,
   bootstrap,
-  createAuthoritativeGraphWriteResultValidator,
-  createAuthoritativeGraphWriteSession,
-  createAuthoritativeTotalSyncValidator,
-  createIncrementalSyncFallback,
-  createIncrementalSyncPayload,
-  createModuleSyncScope,
   createStore,
-  createSyncedTypeClient,
-  createTotalSyncController,
-  createTotalSyncPayload,
-  createTotalSyncSession,
   createTypeClient,
   edgeId,
   formatValidationPath,
-  type GraphWriteTransaction,
-  isIncrementalSyncFallback,
   typeId,
+} from "@io/core/graph";
+import {
+  createAuthoritativeGraphWriteResultValidator,
+  createAuthoritativeGraphWriteSession,
+  createAuthoritativeTotalSyncValidator,
   validateAuthoritativeGraphWriteResult,
   validateAuthoritativeGraphWriteTransaction,
   validateAuthoritativeTotalSyncPayload,
+} from "@io/core/graph/authority";
+import { core } from "@io/core/graph/modules";
+import { GraphSyncWriteError, createSyncedTypeClient } from "@io/core/graph/runtime";
+import { type GraphWriteTransaction } from "@io/graph-kernel";
+import {
+  createIncrementalSyncFallback,
+  createIncrementalSyncPayload,
+  createModuleSyncScope,
+  createTotalSyncController,
+  createTotalSyncPayload,
+  createTotalSyncSession,
+  GraphSyncValidationError,
+  isIncrementalSyncFallback,
   validateIncrementalSyncPayload,
   validateIncrementalSyncResult,
-} from "@io/core/graph";
-import { core } from "@io/core/graph/modules";
+} from "@io/graph-sync";
 
 import { createTestGraph, createTestStore, testNamespace } from "./test-graph.js";
 
@@ -1993,12 +1997,12 @@ describe("total sync", () => {
       gapError = caught;
     }
 
-    expect(gapError).toBeInstanceOf(GraphValidationError);
-    const validationError = gapError as GraphValidationError<void>;
+    expect(gapError).toBeInstanceOf(GraphSyncValidationError);
+    const validationError = gapError as GraphSyncValidationError<void>;
     expect(validationError.result.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          source: "runtime",
+          source: "sync",
           code: "sync.incremental.recovery",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",
@@ -2929,55 +2933,49 @@ describe("authoritative graph writes", () => {
     expect(result.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          source: "runtime",
+          source: "sync",
           code: "sync.incremental.mode",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",
         }),
         expect.objectContaining({
-          source: "runtime",
+          source: "sync",
           code: "sync.incremental.scope",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",
         }),
         expect.objectContaining({
-          source: "runtime",
+          source: "sync",
           code: "sync.incremental.after.empty",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",
         }),
         expect.objectContaining({
-          source: "runtime",
+          source: "sync",
           code: "sync.incremental.completeness",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",
         }),
         expect.objectContaining({
-          source: "runtime",
+          source: "sync",
           code: "sync.incremental.freshness",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",
         }),
         expect.objectContaining({
-          source: "runtime",
+          source: "sync",
           code: "sync.incremental.transaction.replayed",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",
         }),
         expect.objectContaining({
-          source: "runtime",
+          source: "sync",
           code: "sync.incremental.fallback",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",
         }),
         expect.objectContaining({
-          source: "runtime",
-          code: "sync.incremental.fallback.transactions",
-          predicateKey: "$sync:incremental",
-          nodeId: "$sync:incremental",
-        }),
-        expect.objectContaining({
-          source: "runtime",
+          source: "sync",
           code: "sync.tx.ops.empty",
           predicateKey: "$sync:incremental",
           nodeId: "$sync:incremental",

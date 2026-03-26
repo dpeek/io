@@ -1,10 +1,8 @@
 import {
   GraphValidationError,
-  readHttpSyncRequest,
   SerializedQueryValidationError,
   validateSerializedQueryRequest,
   type AuthorizationContext,
-  type GraphWriteTransaction,
   type SerializedQueryRequest,
   type SerializedQueryResponse,
 } from "@io/core/graph";
@@ -19,6 +17,8 @@ import {
   type ProjectBranchScopeQuery,
   type WorkflowBranchStateValue,
 } from "@io/core/graph/modules/ops/workflow";
+import { readHttpSyncRequest } from "@io/core/graph/runtime";
+import { type GraphWriteTransaction } from "@io/graph-kernel";
 
 import type {
   WebAppAuthority,

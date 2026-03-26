@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
+import { createModuleSyncScope, graphSyncScope } from "@io/graph-sync";
+
 import {
   type DependencyKey,
   findRetainedProjectionRecord,
@@ -18,7 +20,6 @@ import {
   matchesModuleReadScope,
   matchesModuleReadScopeRequest,
 } from "./projection.js";
-import { createModuleSyncScope, graphSyncScope } from "./sync/index.js";
 
 describe("projection runtime contracts", () => {
   it("builds and validates dependency keys from one shared helper", () => {

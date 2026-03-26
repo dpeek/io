@@ -6,7 +6,7 @@ import type {
 import type {
   SyncState as CompatibilitySyncState,
   SyncStatus as CompatibilitySyncStatus,
-} from "./sync.js";
+} from "./synced-client.js";
 
 const compatibilityStatus: CompatibilitySyncStatus = "pushing";
 const packageStatus: PackageSyncStatus = "ready";

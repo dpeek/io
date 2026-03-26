@@ -1,12 +1,14 @@
 import { describe, expect, it } from "bun:test";
 
-import { createStore } from "@io/graph-kernel";
-
 import {
-  applyGraphWriteTransaction,
   canonicalizeGraphWriteTransaction,
   createGraphWriteOperationsFromSnapshots,
   createGraphWriteTransactionFromSnapshots,
+  createStore,
+} from "@io/graph-kernel";
+
+import {
+  applyGraphWriteTransaction,
   materializeGraphWriteTransactionSnapshot,
   prepareGraphWriteTransaction,
 } from "./transactions";

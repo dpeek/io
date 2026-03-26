@@ -1,9 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import { createStore } from "@io/graph-kernel";
+import { createGraphWriteTransactionFromSnapshots, createStore } from "@io/graph-kernel";
 
 import {
-  createGraphWriteTransactionFromSnapshots,
   createIncrementalSyncFallback,
   createIncrementalSyncPayload,
   createTotalSyncPayload,

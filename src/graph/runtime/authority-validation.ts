@@ -1,51 +1,46 @@
 import {
-  GraphValidationError,
-  validateGraphStore,
-  type GraphValidationIssue,
-  type GraphValidationResult,
-} from "../client";
-import type { AnyTypeOutput } from "../schema";
-import { createStore, type GraphStore, type GraphStoreSnapshot } from "../store";
-import {
   cloneAuthoritativeGraphRetainedHistoryPolicy,
   cloneAuthoritativeGraphWriteResult,
-  cloneSyncDiagnostics,
   cloneGraphWriteTransaction,
+  isAuthoritativeGraphRetainedHistoryPolicy,
+  isAuthoritativeWriteScope,
+  type AuthoritativeGraphWriteResult,
+  type AuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeWriteScope,
+  type GraphWriteTransaction,
+} from "@io/graph-kernel";
+import {
+  cloneSyncDiagnostics,
   cloneSyncScope,
   createModuleSyncScope,
   graphSyncScope,
-  isAuthoritativeGraphRetainedHistoryPolicy,
-  isGraphSyncScope,
+  isCursorAtOrAfter,
   isIncrementalSyncFallbackReason,
-  isAuthoritativeWriteScope,
-  isObjectRecord,
   isSyncCompleteness,
   isSyncFreshness,
+  parseAuthoritativeGraphCursor,
   sameSyncScope,
-  type SyncDiagnostics,
-  type AuthoritativeGraphWriteResult,
-  type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteResultValidator,
-  type AuthoritativeWriteScope,
-  type GraphWriteTransaction,
-  type SyncCompleteness,
   type IncrementalSyncFallback,
   type IncrementalSyncFallbackReason,
   type IncrementalSyncPayload,
   type IncrementalSyncResult,
+  type SyncCompleteness,
+  type SyncDiagnostics,
   type SyncFreshness,
   type SyncScope,
   type TotalSyncPayload,
   type TotalSyncPayloadValidator,
-} from "./contracts";
-import { isCursorAtOrAfter, parseAuthoritativeGraphCursor } from "./cursor";
-import { validateAuthoritativeFieldWritePolicies } from "./replication";
+} from "@io/graph-sync";
 import {
   logicalFactKey,
   materializeGraphWriteTransactionSnapshot,
   prepareGraphWriteTransaction,
-} from "./transactions";
+} from "@io/graph-sync";
+
+import { validateAuthoritativeFieldWritePolicies } from "./authority-replication";
 import {
+  createTransactionValidationIssue,
   createGraphWriteResultValidationIssue,
   createIncrementalSyncValidationIssue,
   createPayloadValidationIssue,
@@ -60,7 +55,15 @@ import {
   prefixGraphWriteResultIssues,
   prefixIncrementalSyncTransactionIssues,
   withValidationValue,
-} from "./validation-helpers";
+} from "./authority-validation-helpers";
+import {
+  GraphValidationError,
+  validateGraphStore,
+  type GraphValidationIssue,
+  type GraphValidationResult,
+} from "./client";
+import type { AnyTypeOutput } from "./schema";
+import { createStore, type GraphStore, type GraphStoreSnapshot } from "./store";
 
 type SyncValidationIssueFactory = (
   path: string[],
@@ -73,6 +76,26 @@ const graphIncrementalFallbackReasons = new Set<IncrementalSyncFallbackReason>([
   "gap",
   "reset",
 ]);
+
+function isGraphSyncScope(scope: SyncScope): scope is Extract<SyncScope, { kind: "graph" }> {
+  return scope.kind === "graph";
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function normalizeTransactionValidationResult(result: {
+  value: GraphWriteTransaction;
+  issues: readonly Pick<GraphValidationIssue, "code" | "message" | "path">[];
+}): Extract<GraphValidationResult<GraphWriteTransaction>, { ok: false }> {
+  return invalidTransactionResult(
+    result.value,
+    result.issues.map((issue) =>
+      createTransactionValidationIssue(issue.path, issue.code, issue.message),
+    ),
+  );
+}
 
 function materializeSyncScope(scope: unknown): SyncScope {
   if (isObjectRecord(scope) && scope.kind === "module") {
@@ -299,7 +322,7 @@ function materializeTotalSyncPayload(
   };
 }
 
-export function prepareTotalSyncPayload(
+function prepareTotalSyncPayload(
   payload: TotalSyncPayload,
   options: {
     preserveSnapshot?: GraphStoreSnapshot;
@@ -600,7 +623,7 @@ function validateTotalSyncPayloadShape(payload: TotalSyncPayload): readonly Grap
 
 // A successful incremental result may still be empty. That represents either a
 // no-op pull at the head cursor or a cursor advance with no replicated writes.
-export function createIncrementalSyncPayload(
+function createIncrementalSyncPayload(
   transactions: readonly AuthoritativeGraphWriteResult[],
   options: {
     after: string;
@@ -627,7 +650,7 @@ export function createIncrementalSyncPayload(
 
 // `fallback` is reserved for cases where the caller must recover with a total
 // sync rather than apply an empty incremental payload.
-export function createIncrementalSyncFallback(
+function createIncrementalSyncFallback(
   fallback: IncrementalSyncFallbackReason,
   options: {
     after: string;
@@ -934,26 +957,7 @@ function validateIncrementalSyncPayloadShape(
   };
 }
 
-export function validateIncrementalSyncPayload(
-  payload: IncrementalSyncPayload,
-): GraphValidationResult<IncrementalSyncPayload> {
-  const prepared = validateIncrementalSyncPayloadShape(payload);
-  if (prepared.issues.length > 0) {
-    return exposeIncrementalSyncValidationResult(
-      invalidIncrementalSyncResult(prepared.value, prepared.issues),
-    ) as GraphValidationResult<IncrementalSyncPayload>;
-  }
-
-  return exposeIncrementalSyncValidationResult({
-    ok: true,
-    phase: "authoritative",
-    event: "reconcile",
-    value: prepared.value,
-    changedPredicateKeys: [],
-  }) as GraphValidationResult<IncrementalSyncPayload>;
-}
-
-export function validateIncrementalSyncResult(
+function validateIncrementalSyncResult(
   result: IncrementalSyncResult,
 ): GraphValidationResult<IncrementalSyncResult> {
   const prepared = validateIncrementalSyncPayloadShape(result as IncrementalSyncPayload, {
@@ -1203,10 +1207,16 @@ export function validateAuthoritativeGraphWriteTransaction<
   } = {},
 ): GraphValidationResult<GraphWriteTransaction> {
   const prepared = prepareGraphWriteTransaction(transaction);
-  if (!prepared.ok) return prepared.result;
+  if (!prepared.ok) {
+    return exposeGraphWriteValidationResult(normalizeTransactionValidationResult(prepared.result));
+  }
 
   const materialized = materializeGraphWriteTransactionSnapshot(store, prepared.value);
-  if (!materialized.ok) return exposeGraphWriteValidationResult(materialized.result);
+  if (!materialized.ok) {
+    return exposeGraphWriteValidationResult(
+      normalizeTransactionValidationResult(materialized.result),
+    );
+  }
   const writePolicyIssues = validateAuthoritativeFieldWritePolicies(
     prepared.value,
     materialized.value,

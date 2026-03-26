@@ -1,22 +1,16 @@
 import {
-  applyGraphWriteTransaction,
   defineAdmissionPolicy,
   type AuthSubjectRef,
   type AdmissionPolicy,
   type AuthorizationContext,
   type AnyTypeOutput,
-  type AuthoritativeGraphRetainedHistoryPolicy,
-  type AuthoritativeWriteScope,
   authorizeCommand,
   authorizeRead,
   authorizeWrite,
   bootstrap,
   collectScalarCodecs,
   collectTypeIndex,
-  createIncrementalSyncFallback,
-  createIncrementalSyncPayload,
   createModuleReadScope,
-  createModuleSyncScope,
   createPersistedAuthoritativeGraph,
   createStore,
   createTypeClient,
@@ -26,10 +20,8 @@ import {
   type GraphFieldAuthority,
   isEntityType,
   isSecretBackedField,
-  type ModuleSyncScope,
   type PrincipalKind,
   type Cardinality,
-  type GraphWriteTransaction,
   type NamespaceClient,
   type PersistedAuthoritativeGraph,
   type PersistedAuthoritativeGraphStorageCommitInput,
@@ -51,14 +43,12 @@ import {
   normalizeSerializedQueryRequest,
   type NormalizedQueryFilter,
   type NormalizedQueryRequest,
-  type ReplicationReadAuthorizer,
-  type SyncDiagnostics,
   type GraphStore,
   type GraphStoreSnapshot,
-  type AuthoritativeGraphWriteResult,
   validateShareGrant,
   matchesModuleReadScopeRequest,
 } from "@io/core/graph";
+import { type ReplicationReadAuthorizer } from "@io/core/graph/authority";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import {
@@ -90,6 +80,19 @@ import {
   type WorkflowMutationResult,
 } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
+import {
+  type AuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeWriteScope,
+  type GraphWriteTransaction,
+  type AuthoritativeGraphWriteResult,
+} from "@io/graph-kernel";
+import {
+  createIncrementalSyncFallback,
+  createIncrementalSyncPayload,
+  createModuleSyncScope,
+  type ModuleSyncScope,
+  type SyncDiagnostics,
+} from "@io/graph-sync";
 
 import type {
   BearerShareLookupInput,
@@ -2687,7 +2690,14 @@ function planCapabilityVersionInvalidationTransaction(
 
   const beforeStore = createStore(snapshot);
   const afterStore = createStore(snapshot);
-  applyGraphWriteTransaction(afterStore, transaction);
+  for (const operation of transaction.ops) {
+    if (operation.op === "retract") {
+      afterStore.retract(operation.edgeId);
+      continue;
+    }
+
+    afterStore.assertEdge(operation.edge);
+  }
 
   const affectedPrincipalIds = resolveCapabilityVersionAffectedPrincipalIds(
     beforeStore,
@@ -2723,7 +2733,14 @@ function planCapabilityVersionInvalidationTransaction(
     webAppGraph,
     transaction.id,
     (_mutationGraph, mutationStore) => {
-      applyGraphWriteTransaction(mutationStore, filteredTransaction);
+      for (const operation of filteredTransaction.ops) {
+        if (operation.op === "retract") {
+          mutationStore.retract(operation.edgeId);
+          continue;
+        }
+
+        mutationStore.assertEdge(operation.edge);
+      }
 
       for (const principalId of affectedPrincipalIds) {
         if (!hasEntityOfType(mutationStore, principalId, principalTypeId)) {

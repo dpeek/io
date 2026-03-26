@@ -1,6 +1,24 @@
 import { describe, expect, it } from "bun:test";
 
+import {
+  createGraphWriteTransactionFromSnapshots,
+  type AuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeGraphWriteResult,
+  type GraphWriteTransaction,
+} from "@io/graph-kernel";
+import {
+  createIncrementalSyncFallback,
+  createIncrementalSyncPayload,
+  createModuleSyncScope,
+  createTotalSyncPayload,
+  type SyncPayload,
+} from "@io/graph-sync";
+
 import { pkm } from "../modules/pkm.js";
+import {
+  createAuthoritativeTotalSyncPayload,
+  createAuthoritativeGraphWriteSession,
+} from "./authority";
 import { bootstrap } from "./bootstrap";
 import { GraphValidationError, createTypeClient } from "./client";
 import { core } from "./core";
@@ -16,19 +34,7 @@ import { createIdMap, applyIdMap } from "./identity";
 import { defineType, edgeId, typeId } from "./schema";
 import { serializedQueryVersion, type QueryResultPage } from "./serialized-query";
 import { createStore, type GraphStoreSnapshot } from "./store";
-import {
-  type AuthoritativeGraphRetainedHistoryPolicy,
-  createAuthoritativeGraphWriteSession,
-  createGraphWriteTransactionFromSnapshots,
-  createIncrementalSyncFallback,
-  createIncrementalSyncPayload,
-  createModuleSyncScope,
-  createSyncedTypeClient,
-  createTotalSyncPayload,
-  type AuthoritativeGraphWriteResult,
-  type GraphWriteTransaction,
-  type SyncPayload,
-} from "./sync";
+import { createSyncedTypeClient } from "./synced-client";
 
 const item = defineType({
   values: { key: "test:item", name: "Item" },
@@ -444,10 +450,9 @@ describe("createHttpGraphClient", () => {
         const after = url.searchParams.get("after") ?? undefined;
         const payload: SyncPayload = after
           ? authority.writes.getIncrementalSyncResult(after)
-          : createTotalSyncPayload(authority.store, {
+          : createAuthoritativeTotalSyncPayload(authority.store, hiddenGraph, {
               cursor: authority.writes.getBaseCursor(),
               diagnostics: createAuthoritySyncDiagnostics(authority),
-              namespace: hiddenGraph,
             });
         return Response.json(payload);
       }
@@ -535,10 +540,9 @@ describe("createHttpGraphClient", () => {
         const after = url.searchParams.get("after") ?? undefined;
         const payload: SyncPayload = after
           ? authority.writes.getIncrementalSyncResult(after)
-          : createTotalSyncPayload(authority.store, {
+          : createAuthoritativeTotalSyncPayload(authority.store, hiddenGraph, {
               cursor: authority.writes.getBaseCursor(),
               diagnostics: createAuthoritySyncDiagnostics(authority),
-              namespace: hiddenGraph,
             });
         return Response.json(payload);
       }
@@ -721,9 +725,8 @@ describe("createHttpGraphClient", () => {
       authorityStore.assert(documentTypeId, documentNamePredicateId, "Documents");
     });
 
-    const payload = createTotalSyncPayload(authorityStore, {
+    const payload = createAuthoritativeTotalSyncPayload(authorityStore, pkm, {
       cursor: "server:1",
-      namespace: pkm,
     });
 
     const client = createSyncedTypeClient(pkm, {

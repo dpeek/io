@@ -2,6 +2,16 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import {
+  isAuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeGraphWriteHistory,
+  type AuthoritativeGraphWriteResult,
+  unboundedAuthoritativeGraphRetainedHistoryPolicy,
+} from "@io/graph-kernel";
+import { graphSyncScope, type TotalSyncPayload } from "@io/graph-sync";
+
+import { validateAuthoritativeTotalSyncPayload } from "./authority-validation";
+import {
   createPersistedAuthoritativeGraph,
   persistedAuthoritativeGraphStateVersion,
   type JsonPersistedAuthoritativeGraphOptions,
@@ -15,18 +25,24 @@ import {
 } from "./persisted-authority";
 import type { AnyTypeOutput } from "./schema";
 import type { GraphStore, GraphStoreSnapshot } from "./store";
-import {
-  graphSyncScope,
-  isAuthoritativeGraphRetainedHistoryPolicy,
-  type AuthoritativeGraphRetainedHistoryPolicy,
-  type AuthoritativeGraphWriteHistory,
-  type AuthoritativeGraphWriteResult,
-  type TotalSyncPayload,
-  unboundedAuthoritativeGraphRetainedHistoryPolicy,
-  validateAuthoritativeTotalSyncPayload,
-} from "./sync";
 
 export * from "./persisted-authority";
+export {
+  createAuthoritativeGraphWriteSession,
+  createAuthoritativeTotalSyncPayload,
+} from "./authority-session";
+export type {
+  AuthoritativeGraphWriteSession,
+  ReplicatedPredicateTarget,
+  ReplicationReadAuthorizer,
+} from "./authority-types";
+export {
+  createAuthoritativeGraphWriteResultValidator,
+  createAuthoritativeTotalSyncValidator,
+  validateAuthoritativeGraphWriteResult,
+  validateAuthoritativeGraphWriteTransaction,
+  validateAuthoritativeTotalSyncPayload,
+} from "./authority-validation";
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";

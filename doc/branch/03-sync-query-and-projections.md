@@ -834,7 +834,7 @@ Current shipped workflow proof:
 
 ## 13. Recommended First Code Targets
 
-- `src/graph/runtime/sync/contracts.ts` and `doc/graph/sync.md`:
+- `lib/graph-sync/src/contracts.ts` and `doc/graph/sync.md`:
   extend `SyncScope`, completeness, and fallback semantics beyond whole-graph
 - `src/graph/runtime/http-client.ts` and `src/web/lib/server-routes.ts`: add
   scoped bootstrap and scoped incremental pull transport shapes

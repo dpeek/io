@@ -1,4 +1,4 @@
-import type { GraphStore } from "@io/core/graph";
+import { type GraphStore } from "@io/core/graph";
 import { useRef, useSyncExternalStore } from "react";
 
 import { getFirstObject } from "./helpers.js";

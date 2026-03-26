@@ -6,19 +6,21 @@ This document is the entry point for agents working on sync payloads, authoritat
 
 ## Implementation Layout
 
-The public runtime compatibility surface remains `../../src/graph/runtime/sync.ts`.
-The extracted sync-core package now lives at `../../lib/graph-sync/`.
-The remaining runtime implementation under `../../src/graph/runtime/sync/` is the compatibility
-and authority/client layer on top of that package:
+The sync package now lives at `../../lib/graph-sync/` and is consumed through
+the workspace package `@io/graph-sync`.
+
+Authority-owned runtime behavior now lives under `../../src/graph/runtime/`:
 
 - `@io/graph-kernel`: authoritative write-envelope contracts, canonicalization, and snapshot-diff helpers
-- `@io/graph-sync`: sync contracts, cursor helpers, sync-core validation, sync-specific transaction materialization/apply helpers, total sync sessions, and compatibility re-exports of kernel-owned write-envelope symbols
-- `authority.ts`: authoritative write session state, history replay, and incremental delivery
-- `session.ts`: synced typed client and runtime-specific wrapper behavior, including the legacy `"pushing"` flush state that stays in the compatibility layer
+- `@io/graph-sync`: sync contracts, cursor helpers, sync-core validation, sync-specific transaction materialization/apply helpers, and total sync sessions
+- `authority.ts`: persisted authority orchestration and the public authority entrypoint
+- `authority-session.ts`: authoritative write session state, history replay, and incremental delivery
+- `synced-client.ts`: runtime synced-client behavior, including the runtime-only `"pushing"` flush state
 
 ## Current Contract
 
-The current engine already supports two authoritative delivery shapes in `../../src/graph/runtime/sync.ts`:
+The current engine already supports two authoritative delivery shapes across
+`@io/graph-sync` and the authority runtime:
 
 - total payloads for bootstrap and recovery
 - incremental payloads for ordered authoritative write delivery after a cursor
@@ -238,7 +240,7 @@ authoritative sync events:
 - `sync.flush()` pushes queued writes
 - `sync.sync()` pulls authoritative state
 - `sync.getPendingTransactions()` and `sync.getState()` expose queue and delivery state
-- the runtime compatibility barrel widens `SyncStatus` with `"pushing"` while
+- the runtime synced-client surface widens `SyncStatus` with `"pushing"` while
   `sync.flush()` is in flight; that synced-client state does not live in
   `@io/graph-sync`
 - `SyncState.requestedScope` preserves the active graph-or-module scope request even before a total snapshot arrives
@@ -250,8 +252,9 @@ authoritative sync events:
 ## Ownership Boundary
 
 - `@io/graph-kernel` owns the authoritative write-envelope contract: `AuthoritativeGraphCursor`, `GraphWriteTransaction`, `GraphWriteOperation`, `AuthoritativeWriteScope`, retained-history policy, write results, and the canonical clone/canonicalize/snapshot-diff helpers around them.
-- `@io/graph-sync` owns the sync-specific payload/session contract layered on top of those kernel symbols. It re-exports the kernel write-envelope surface for compatibility, but does not redefine it.
-- The runtime compatibility layer under `src/graph/runtime/sync/` owns synced-client behavior such as `createSyncedTypeClient(...)`, `GraphSyncWriteError`, and the wider `SyncStatus`/`SyncState` model that can report `"pushing"`.
+- `@io/graph-sync` owns the sync-specific payload/session contract layered on top of those kernel symbols. Consumers should import kernel-owned write-envelope symbols directly from `@io/graph-kernel`, not through `@io/graph-sync`.
+- `@io/core/graph/runtime` owns synced-client behavior such as `createSyncedTypeClient(...)`, `GraphSyncWriteError`, and the wider `SyncStatus`/`SyncState` model that can report `"pushing"`.
+- `@io/core/graph/authority` owns authority orchestration such as persisted authorities and authoritative write sessions.
 - Consumer packages own transport and endpoint policy: when to call `createSyncPayload()` or `getIncrementalSyncResult(...)`, how to expose them over HTTP or another transport, how to construct any `authorizeRead` callback from request-local auth context, and what auth wraps those endpoints.
 - The current web transport proof uses one shared HTTP sync-request shape on
   `GET /api/sync`: optional `after`, plus an explicit scope request via either

@@ -5,12 +5,12 @@ import {
   createStore,
   createTypeClient,
   type AuthorizationContext,
-  type GraphWriteTransaction,
   type GraphStoreSnapshot,
   type WebPrincipalSummary,
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
+import { type GraphWriteTransaction } from "@io/graph-kernel";
 
 import { createAnonymousAuthorizationContext, issueBearerShareToken } from "../lib/auth-bridge.js";
 import { createTestWebAppAuthority } from "../lib/authority-test-helpers.js";

@@ -11,6 +11,6 @@ export * from "./projection";
 export * from "./serialized-query";
 export * from "./schema";
 export * from "./store";
-export * from "./sync";
+export * from "./synced-client";
 export * from "./type-module";
 export * from "./reference-policy";

@@ -1,25 +1,26 @@
 import { describe, expect, it } from "bun:test";
 
+import { type AuthoritativeGraphWriteResult, type GraphWriteTransaction } from "@io/graph-kernel";
+import { type SyncPayload } from "@io/graph-sync";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import {
-  createAuthoritativeGraphWriteSession,
   createBootstrappedSnapshot,
   createStore,
-  createTotalSyncPayload,
   createTypeClient,
   type AnyTypeOutput,
-  type AuthoritativeGraphWriteResult,
-  type FetchImpl,
   type GraphStoreSnapshot,
-  type GraphWriteTransaction,
   type NamespaceClient,
-  type SyncPayload,
 } from "../graph/index.js";
 import { core } from "../graph/modules/index.js";
 import { ops } from "../graph/modules/ops.js";
 import { pkm } from "../graph/modules/pkm.js";
+import {
+  createAuthoritativeGraphWriteSession,
+  createAuthoritativeTotalSyncPayload,
+} from "../graph/runtime/authority.js";
+import { type FetchImpl } from "../graph/runtime/index.js";
 import { kitchenSink } from "../graph/testing/kitchen-sink.js";
 import { createGraphMcpServer, createGraphMcpSession } from "./graph.js";
 
@@ -27,6 +28,7 @@ const productGraph = { ...pkm, ...ops } as const;
 
 type GraphNamespace = Record<string, AnyTypeOutput>;
 type MockAuthority = {
+  readonly namespace: GraphNamespace;
   readonly store: ReturnType<typeof createStore>;
   readonly writes: {
     apply(transaction: GraphWriteTransaction): AuthoritativeGraphWriteResult;
@@ -60,7 +62,7 @@ function createAuthority<const T extends GraphNamespace>(
     },
   );
 
-  return { graph, store, writes };
+  return { graph, namespace: { ...core, ...namespace }, store, writes };
 }
 
 function createAuthorityFromSnapshot<const T extends GraphNamespace>(
@@ -79,7 +81,7 @@ function createAuthorityFromSnapshot<const T extends GraphNamespace>(
     },
   );
 
-  return { graph, store, writes };
+  return { graph, namespace: { ...core, ...namespace }, store, writes };
 }
 
 function createProductAuthority() {
@@ -174,7 +176,7 @@ function createMockFetch(authority: MockAuthority): FetchImpl {
       const after = url.searchParams.get("after") ?? undefined;
       const payload: SyncPayload = after
         ? authority.writes.getIncrementalSyncResult(after)
-        : createTotalSyncPayload(authority.store, {
+        : createAuthoritativeTotalSyncPayload(authority.store, authority.namespace, {
             cursor: authority.writes.getCursor() ?? authority.writes.getBaseCursor(),
           });
       return Response.json(payload);

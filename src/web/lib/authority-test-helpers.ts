@@ -1,4 +1,4 @@
-import type { AuthorizationContext } from "@io/core/graph";
+import { type AuthorizationContext } from "@io/core/graph";
 import type {
   WorkflowMutationAction,
   WorkflowMutationResult,

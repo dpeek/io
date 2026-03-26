@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { graphSyncScope } from "@io/core/graph";
+import { graphSyncScope } from "@io/graph-sync";
 
 import {
   isWebSyncProofScopeKey,

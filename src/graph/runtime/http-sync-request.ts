@@ -1,4 +1,4 @@
-import { graphSyncScope, type SyncScopeRequest } from "./sync";
+import { graphSyncScope, type SyncScopeRequest } from "@io/graph-sync";
 
 export type HttpSyncRequest = {
   readonly after?: string;

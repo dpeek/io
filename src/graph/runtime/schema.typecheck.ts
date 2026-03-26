@@ -1,4 +1,4 @@
-import type { GraphSecretFieldAuthority as RootGraphSecretFieldAuthority } from "@io/core/graph";
+import { type GraphSecretFieldAuthority as RootGraphSecretFieldAuthority } from "@io/core/graph";
 import type { GraphSecretFieldAuthority as RuntimeGraphSecretFieldAuthority } from "@io/core/graph/runtime";
 
 import { core } from "./core.js";

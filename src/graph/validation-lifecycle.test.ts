@@ -3,17 +3,17 @@ import { describe, expect, it } from "bun:test";
 import {
   GraphValidationError,
   bootstrap,
-  createAuthoritativeGraphWriteSession,
   createStore,
-  createSyncedTypeClient,
-  createTotalSyncPayload,
   createTypeClient,
   applyIdMap,
   defineScalar,
   defineType,
   edgeId,
 } from "@io/core/graph";
+import { createAuthoritativeGraphWriteSession } from "@io/core/graph/authority";
 import { core, stringTypeModule } from "@io/core/graph/modules";
+import { createSyncedTypeClient } from "@io/core/graph/runtime";
+import { createTotalSyncPayload } from "@io/graph-sync";
 
 import { testNamespace } from "./test-graph.js";
 

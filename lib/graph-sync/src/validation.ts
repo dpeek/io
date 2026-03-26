@@ -1,9 +1,18 @@
-import type { GraphStoreSnapshot } from "@io/graph-kernel";
-
 import {
+  createStore,
   cloneAuthoritativeGraphRetainedHistoryPolicy,
   cloneAuthoritativeGraphWriteResult,
   cloneGraphWriteTransaction,
+  isAuthoritativeGraphRetainedHistoryPolicy,
+  isAuthoritativeWriteScope,
+  type AuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeGraphWriteResult,
+  type AuthoritativeWriteScope,
+  type GraphStoreSnapshot,
+  type GraphWriteTransaction,
+} from "@io/graph-kernel";
+
+import {
   cloneIncrementalSyncResult,
   cloneSyncDiagnostics,
   cloneSyncScope,
@@ -11,20 +20,15 @@ import {
   createModuleSyncScope,
   exposeGraphSyncValidationResult,
   graphSyncScope,
-  isAuthoritativeGraphRetainedHistoryPolicy,
-  isAuthoritativeWriteScope,
   isGraphSyncScope,
   isIncrementalSyncFallbackReason,
   isObjectRecord,
   isSyncCompleteness,
   isSyncFreshness,
   sameSyncScope,
-  type AuthoritativeGraphRetainedHistoryPolicy,
-  type AuthoritativeGraphWriteResult,
-  type AuthoritativeWriteScope,
+  type AuthoritativeGraphWriteResultValidator,
   type GraphSyncValidationIssue,
   type GraphSyncValidationResult,
-  type GraphWriteTransaction,
   type IncrementalSyncFallback,
   type IncrementalSyncFallbackReason,
   type IncrementalSyncPayload,
@@ -37,7 +41,11 @@ import {
   type TotalSyncPayload,
 } from "./contracts";
 import { isCursorAtOrAfter, parseAuthoritativeGraphCursor } from "./cursor";
-import { logicalFactKey, prepareGraphWriteTransaction } from "./transactions";
+import {
+  logicalFactKey,
+  materializeGraphWriteTransactionSnapshot,
+  prepareGraphWriteTransaction,
+} from "./transactions";
 
 const totalSyncPayloadValidationKey = "$sync:payload";
 const incrementalSyncValidationKey = "$sync:incremental";
@@ -951,7 +959,12 @@ function validateIncrementalSyncPayloadShape(
   ) {
     const parsedAfter = parseAuthoritativeGraphCursor(candidate.after);
     const parsedCursor = parseAuthoritativeGraphCursor(candidate.cursor);
-    if (parsedAfter && parsedCursor && !isCursorAtOrAfter(parsedCursor, parsedAfter)) {
+    if (
+      parsedAfter &&
+      parsedCursor &&
+      parsedAfter.prefix === parsedCursor.prefix &&
+      !isCursorAtOrAfter(parsedCursor, parsedAfter)
+    ) {
       issues.push(
         createIncrementalSyncValidationIssue(
           ["cursor"],
@@ -1046,6 +1059,7 @@ export function prepareIncrementalSyncResultForApply(
   currentCursor?: string,
   options: {
     currentScope?: SyncScope;
+    validateWriteResult?: AuthoritativeGraphWriteResultValidator;
   } = {},
 ):
   | {
@@ -1093,31 +1107,44 @@ export function prepareIncrementalSyncResultForApply(
 
   if ("fallback" in validation.value) {
     return {
-      ok: true,
-      value: validation.value,
+      ok: false,
+      result: invalidIncrementalSyncResult(validation.value, [
+        createIncrementalSyncValidationIssue(
+          ["fallback"],
+          "sync.incremental.recovery",
+          `Incremental sync requires total snapshot recovery because the authority reported "${validation.value.fallback}".`,
+        ),
+      ]) as Extract<GraphSyncValidationResult<SyncPayload>, { ok: false }>,
     };
   }
 
-  const edgeById = new Map(snapshot.edges.map((edge) => [edge.id, { ...edge }]));
-  const retracted = new Set(snapshot.retracted);
-  for (const txResult of validation.value.transactions) {
-    for (const operation of txResult.transaction.ops) {
-      if (operation.op === "retract") {
-        if (edgeById.has(operation.edgeId)) retracted.add(operation.edgeId);
-        continue;
-      }
-
-      edgeById.set(operation.edge.id, { ...operation.edge });
+  const validationStore = createStore(snapshot);
+  for (const [index, txResult] of validation.value.transactions.entries()) {
+    const materialized = materializeGraphWriteTransactionSnapshot(
+      validationStore,
+      txResult.transaction,
+      {
+        allowExistingAssertEdgeIds: true,
+      },
+    );
+    if (!materialized.ok) {
+      return {
+        ok: false,
+        result: invalidIncrementalSyncResult(
+          validation.value,
+          prefixIncrementalSyncTransactionIssues(index, materialized.result.issues),
+        ) as Extract<GraphSyncValidationResult<SyncPayload>, { ok: false }>,
+      };
     }
+
+    options.validateWriteResult?.(txResult, validationStore);
+    validationStore.replace(materialized.value);
   }
 
   return {
     ok: true,
     value: validation.value,
-    snapshot: {
-      edges: [...edgeById.values()],
-      retracted: [...retracted],
-    },
+    snapshot: validationStore.snapshot(),
   };
 }
 

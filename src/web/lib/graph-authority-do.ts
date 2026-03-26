@@ -1,4 +1,4 @@
-import type { AuthoritativeGraphRetainedHistoryPolicy } from "@io/core/graph";
+import { type AuthoritativeGraphRetainedHistoryPolicy } from "@io/graph-kernel";
 
 import type { WebAppAuthority, WebAppAuthorityOptions } from "./authority.js";
 import { createWebAppAuthority } from "./authority.js";

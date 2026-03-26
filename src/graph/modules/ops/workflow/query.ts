@@ -1,4 +1,4 @@
-import type { NamespaceClient } from "@io/core/graph";
+import { type NamespaceClient } from "@io/core/graph";
 
 import type {
   RetainedProjectionCheckpointRecord,

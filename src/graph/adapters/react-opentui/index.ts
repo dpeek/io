@@ -1,4 +1,10 @@
 import {
+  sameSyncActivity,
+  sameSyncDiagnostics,
+  sameSyncScope,
+  sameSyncScopeRequest,
+} from "@io/graph-sync";
+import {
   createElement,
   createContext,
   useContext,
@@ -11,14 +17,10 @@ import {
 import { GraphMutationRuntimeProvider } from "../../runtime/react/persisted-mutation.js";
 import type { AnyTypeOutput } from "../../runtime/schema.js";
 import {
-  sameSyncActivity,
-  sameSyncDiagnostics,
-  sameSyncScope,
-  sameSyncScopeRequest,
   type SyncState,
   type SyncedTypeClient,
   type SyncedTypeSyncController,
-} from "../../runtime/sync/contracts.js";
+} from "../../runtime/synced-client.js";
 
 type GraphSchema = Record<string, AnyTypeOutput>;
 type AnyGraphRuntime = SyncedTypeClient<GraphSchema>;

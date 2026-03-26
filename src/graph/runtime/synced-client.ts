@@ -1,375 +1,132 @@
-import { createBootstrappedSnapshot } from "../bootstrap";
 import {
-  GraphValidationError,
-  createTypeClient,
-  validateGraphStore,
-  type NamespaceClient,
-} from "../client";
-import { core } from "../core";
-import type { AnyTypeOutput } from "../schema";
-import { createStore, type GraphStore, type GraphStoreSnapshot } from "../store";
-import {
-  GraphSyncWriteError,
-  appendSyncActivity,
-  cloneAuthoritativeGraphWriteResult,
   cloneGraphWriteTransaction,
-  cloneSyncDiagnostics,
-  cloneSyncScope,
-  cloneSyncScopeRequest,
-  cloneState,
-  graphSyncScope,
-  isObjectRecord,
+  createGraphWriteTransactionFromSnapshots,
+  type AuthoritativeGraphWriteResult,
+  type GraphStore,
+  type GraphWriteTransaction,
+} from "@io/graph-kernel";
+import {
+  cloneState as clonePackageSyncState,
+  createTotalSyncSession,
   sameSyncActivity,
   sameSyncDiagnostics,
   sameSyncScope,
   sameSyncScopeRequest,
-  type AuthoritativeGraphWriteResultValidator,
-  type AuthoritativeGraphWriteResult,
-  type GraphWriteSink,
-  type GraphWriteTransaction,
-  type IncrementalSyncFallbackReason,
-  type IncrementalSyncResult,
-  type ReplicationReadAuthorizer,
-  type SyncCompleteness,
+  GraphSyncValidationError,
+  type GraphSyncValidationIssue,
+  type GraphSyncValidationResult,
   type SyncFreshness,
-  type SyncDiagnostics,
-  type SyncScope,
-  type SyncScopeRequest,
-  type SyncState,
-  type SyncStateListener,
-  type SyncStatus,
   type SyncPayload,
+  type SyncScopeRequest,
   type SyncSource,
-  type SyncedTypeClient,
-  type TotalSyncController,
-  type TotalSyncPayload,
-  type TotalSyncPayloadValidator,
-  type TotalSyncSession,
-} from "./contracts";
-import { filterReplicatedSnapshot } from "./replication";
-import {
-  applyGraphWriteTransaction,
-  createGraphWriteTransactionFromSnapshots,
-  materializeGraphWriteTransactionSnapshot,
-} from "./transactions";
+  type SyncState as PackageSyncState,
+  type SyncStatus as PackageSyncStatus,
+} from "@io/graph-sync";
+import { applyGraphWriteTransaction } from "@io/graph-sync";
+
 import {
   createAuthoritativeGraphWriteResultValidator,
   createAuthoritativeTotalSyncValidator,
-  prepareAuthoritativeGraphWriteResult,
-  prepareIncrementalSyncResultForApply,
-  prepareTotalSyncPayload,
-  validateIncrementalSyncResult,
-} from "./validation";
-import { invalidGraphWriteResult, prefixGraphWriteResultIssues } from "./validation-helpers";
+} from "./authority-validation";
+import { createBootstrappedSnapshot } from "./bootstrap";
+import {
+  GraphValidationError,
+  createTypeClient,
+  validateGraphStore,
+  type GraphValidationIssue,
+  type GraphValidationResult,
+  type NamespaceClient,
+} from "./client";
+import { core } from "./core";
+import type { AnyTypeOutput } from "./schema";
+import { createStore, type GraphStoreSnapshot } from "./store";
 
-export function createTotalSyncSession(
-  store: GraphStore,
-  options: {
-    requestedScope?: SyncScopeRequest;
-    validate?: TotalSyncPayloadValidator;
-    validateWriteResult?: AuthoritativeGraphWriteResultValidator;
-    preserveSnapshot?: GraphStoreSnapshot;
-  } = {},
-): TotalSyncSession {
-  let state: SyncState = {
-    mode: "total",
-    requestedScope: cloneSyncScopeRequest(options.requestedScope ?? graphSyncScope),
-    scope: graphSyncScope,
-    status: "idle",
-    completeness: "incomplete",
-    freshness: "stale",
-    pendingCount: 0,
-    recentActivities: [],
-  };
-  const listeners = new Set<SyncStateListener>();
+export type SyncStatus = PackageSyncStatus | "pushing";
 
-  function recordActivity(activity: SyncState["recentActivities"][number]): void {
-    state = {
-      ...state,
-      recentActivities: appendSyncActivity(state.recentActivities, activity),
-    };
-  }
+export type SyncState = Omit<PackageSyncState, "status"> & {
+  readonly status: SyncStatus;
+};
 
-  function publish(next: SyncState): void {
-    state = {
-      ...next,
-      recentActivities: state.recentActivities,
-    };
-    const snapshot = cloneState(state);
-    for (const listener of new Set(listeners)) listener(snapshot);
-  }
+export type SyncStateListener = (state: SyncState) => void;
 
-  function applyTotalPayload(payload: TotalSyncPayload) {
-    const prepared = prepareTotalSyncPayload(payload, options);
-    if (!prepared.ok) throw new GraphValidationError(prepared.result);
+export type GraphWriteSink = (
+  transaction: GraphWriteTransaction,
+) => AuthoritativeGraphWriteResult | Promise<AuthoritativeGraphWriteResult>;
 
-    const materialized = prepared.value;
-    options.validate?.(materialized);
-    store.replace(materialized.snapshot);
-    const syncedAt = new Date();
-    recordActivity({
-      kind: "total",
-      cursor: materialized.cursor,
-      freshness: materialized.freshness,
-      at: syncedAt,
-    });
-    publish({
-      ...state,
-      mode: materialized.mode,
-      scope: materialized.scope,
-      status: "ready",
-      completeness: materialized.completeness,
-      freshness: materialized.freshness,
-      pendingCount: 0,
-      recentActivities: state.recentActivities,
-      cursor: materialized.cursor,
-      lastSyncedAt: syncedAt,
-      fallback: undefined,
-      diagnostics: materialized.diagnostics
-        ? cloneSyncDiagnostics(materialized.diagnostics)
-        : undefined,
-      error: undefined,
-    });
-    return materialized;
-  }
-
-  function applyIncrementalResult(result: IncrementalSyncResult) {
-    if ("fallback" in result) {
-      const validation = validateIncrementalSyncResult(result);
-      if (validation.ok && "fallback" in validation.value) {
-        recordActivity({
-          kind: "fallback",
-          after: validation.value.after,
-          cursor: validation.value.cursor,
-          freshness: validation.value.freshness,
-          reason: validation.value.fallback,
-          at: new Date(),
-        });
-      }
-    }
-
-    const prepared = prepareIncrementalSyncResultForApply(store, result, state.cursor, {
-      currentScope: state.scope,
-      validateWriteResult: options.validateWriteResult,
-    });
-    if (!prepared.ok) {
-      throw new GraphValidationError<SyncPayload | AuthoritativeGraphWriteResult>(
-        prepared.result as never,
-      );
-    }
-
-    if (prepared.snapshot) {
-      store.replace(prepared.snapshot);
-    }
-
-    const syncedAt = new Date();
-    recordActivity({
-      kind: "incremental",
-      after: prepared.value.after,
-      cursor: prepared.value.cursor,
-      freshness: prepared.value.freshness,
-      transactionCount: prepared.value.transactions.length,
-      txIds: prepared.value.transactions.map((transaction) => transaction.txId),
-      writeScopes: prepared.value.transactions.map((transaction) => transaction.writeScope),
-      at: syncedAt,
-    });
-    publish({
-      ...state,
-      scope: prepared.value.scope,
-      status: "ready",
-      completeness: prepared.value.completeness,
-      freshness: prepared.value.freshness,
-      recentActivities: state.recentActivities,
-      cursor: prepared.value.cursor,
-      lastSyncedAt: syncedAt,
-      fallback: undefined,
-      diagnostics: prepared.value.diagnostics
-        ? cloneSyncDiagnostics(prepared.value.diagnostics)
-        : undefined,
-      error: undefined,
-    });
-    return prepared.value;
-  }
-
-  function apply(payload: SyncPayload): SyncPayload {
-    return payload.mode === "incremental"
-      ? applyIncrementalResult(payload)
-      : applyTotalPayload(payload);
-  }
-
-  function applyWriteResult(result: AuthoritativeGraphWriteResult): AuthoritativeGraphWriteResult {
-    const prepared = prepareAuthoritativeGraphWriteResult(result);
-    if (!prepared.ok) throw new GraphValidationError(prepared.result);
-
-    const materialized = prepared.value;
-    const candidateSnapshot = materializeGraphWriteTransactionSnapshot(
-      store,
-      materialized.transaction,
-      {
-        allowExistingAssertEdgeIds: true,
-      },
-    );
-    if (!candidateSnapshot.ok) {
-      throw new GraphValidationError(
-        invalidGraphWriteResult(
-          materialized,
-          prefixGraphWriteResultIssues(candidateSnapshot.result.issues),
-        ),
-      );
-    }
-    options.validateWriteResult?.(materialized);
-    applyGraphWriteTransaction(store, materialized.transaction);
-    const syncedAt = new Date();
-    recordActivity({
-      kind: "write",
-      txId: materialized.txId,
-      cursor: materialized.cursor,
-      freshness: "current",
-      replayed: materialized.replayed,
-      writeScope: materialized.writeScope,
-      at: syncedAt,
-    });
-    publish({
-      ...state,
-      status: "ready",
-      freshness: "current",
-      recentActivities: state.recentActivities,
-      cursor: materialized.cursor,
-      lastSyncedAt: syncedAt,
-      fallback: undefined,
-      diagnostics: state.diagnostics ? cloneSyncDiagnostics(state.diagnostics) : undefined,
-      error: undefined,
-    });
-    return cloneAuthoritativeGraphWriteResult(materialized);
-  }
-
-  async function pull(source: SyncSource): Promise<SyncPayload> {
-    const sourceState = cloneState(state);
-    let fallback: IncrementalSyncFallbackReason | undefined;
-    let diagnostics = sourceState.diagnostics
-      ? cloneSyncDiagnostics(sourceState.diagnostics)
-      : undefined;
-    publish({
-      ...state,
-      status: "syncing",
-      error: undefined,
-    });
-
-    try {
-      const payload = await source(sourceState);
-      if (payload.mode === "incremental" && "fallback" in payload) {
-        const validation = validateIncrementalSyncResult(payload);
-        if (validation.ok && "fallback" in validation.value) {
-          fallback = validation.value.fallback;
-          diagnostics = validation.value.diagnostics
-            ? cloneSyncDiagnostics(validation.value.diagnostics)
-            : undefined;
-        }
-      } else if (payload.mode === "incremental") {
-        const validation = validateIncrementalSyncResult(payload);
-        if (validation.ok) {
-          diagnostics = validation.value.diagnostics
-            ? cloneSyncDiagnostics(validation.value.diagnostics)
-            : undefined;
-        }
-      } else {
-        const prepared = prepareTotalSyncPayload(payload, {
-          preserveSnapshot: options.preserveSnapshot,
-        });
-        if (prepared.ok) {
-          diagnostics = prepared.value.diagnostics
-            ? cloneSyncDiagnostics(prepared.value.diagnostics)
-            : undefined;
-        }
-      }
-      return apply(payload);
-    } catch (error) {
-      publish({
-        ...state,
-        status: "error",
-        freshness: "stale",
-        fallback: fallback ?? state.fallback,
-        diagnostics,
-        error,
-      });
-      throw error;
-    }
-  }
-
-  function getState(): SyncState {
-    return cloneState(state);
-  }
-
-  function subscribe(listener: SyncStateListener): () => void {
-    listeners.add(listener);
-
-    return () => {
-      listeners.delete(listener);
-    };
-  }
-
-  return {
-    apply,
-    applyWriteResult,
-    pull,
-    getState,
-    subscribe,
-  };
+export interface SyncedTypeSyncController {
+  apply(payload: SyncPayload): SyncPayload;
+  applyWriteResult(result: AuthoritativeGraphWriteResult): AuthoritativeGraphWriteResult;
+  flush(): Promise<readonly AuthoritativeGraphWriteResult[]>;
+  sync(): Promise<SyncPayload>;
+  getPendingTransactions(): readonly GraphWriteTransaction[];
+  getState(): SyncState;
+  subscribe(listener: SyncStateListener): () => void;
 }
 
-export function createTotalSyncPayload<const T extends Record<string, AnyTypeOutput>>(
-  store: GraphStore,
-  options: {
-    authorizeRead?: ReplicationReadAuthorizer;
-    completeness?: SyncCompleteness;
-    cursor?: string;
-    diagnostics?: SyncDiagnostics;
-    freshness?: SyncFreshness;
-    namespace?: T;
-    scope?: SyncScope;
-  } = {},
-): TotalSyncPayload {
-  return {
-    mode: "total" as const,
-    scope: cloneSyncScope(options.scope ?? graphSyncScope),
-    snapshot: options.namespace
-      ? filterReplicatedSnapshot(store, options.namespace, {
-          authorizeRead: options.authorizeRead,
-        })
-      : store.snapshot(),
-    cursor: options.cursor ?? "full",
-    completeness: options.completeness ?? "complete",
-    freshness: options.freshness ?? "current",
-    ...(options.diagnostics ? { diagnostics: cloneSyncDiagnostics(options.diagnostics) } : {}),
-  };
+export type SyncedTypeClient<T extends Record<string, AnyTypeOutput>> = {
+  store: GraphStore;
+  graph: NamespaceClient<typeof core & T>;
+  sync: SyncedTypeSyncController;
+};
+
+export class GraphSyncWriteError extends Error {
+  override readonly name: string;
+  readonly transaction: GraphWriteTransaction;
+  override readonly cause: unknown;
+
+  constructor(transaction: GraphWriteTransaction, cause: unknown) {
+    super(`Failed to push pending graph write "${transaction.id}".`);
+    this.name = "GraphSyncWriteError";
+    this.transaction = cloneGraphWriteTransaction(transaction);
+    this.cause = cause;
+  }
 }
 
-export function createTotalSyncController(
-  store: GraphStore,
-  options: {
-    pull: SyncSource;
-    requestedScope?: SyncScopeRequest;
-    validate?: TotalSyncPayloadValidator;
-    validateWriteResult?: AuthoritativeGraphWriteResultValidator;
-    preserveSnapshot?: GraphStoreSnapshot;
-  },
-): TotalSyncController {
-  const session = createTotalSyncSession(store, {
-    requestedScope: options.requestedScope,
-    preserveSnapshot: options.preserveSnapshot,
-    validate: options.validate,
-    validateWriteResult: options.validateWriteResult,
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function cloneSyncState(state: SyncState): SyncState {
+  const cloned = clonePackageSyncState({
+    ...state,
+    status: state.status === "pushing" ? "syncing" : state.status,
   });
-
   return {
-    apply: session.apply,
-    applyWriteResult: session.applyWriteResult,
-    sync() {
-      return session.pull(options.pull);
-    },
-    getState: session.getState,
-    subscribe: session.subscribe,
+    ...cloned,
+    status: state.status,
   };
+}
+
+function cloneRuntimeSyncValidationIssue(issue: GraphSyncValidationIssue): GraphValidationIssue {
+  return {
+    code: issue.code,
+    message: issue.message,
+    source: "runtime",
+    path: Object.freeze([...issue.path]),
+    predicateKey: issue.predicateKey,
+    nodeId: issue.nodeId,
+  };
+}
+
+function toRuntimeSyncValidationResult<T>(
+  result: Extract<GraphSyncValidationResult<T>, { ok: false }>,
+): Extract<GraphValidationResult<T>, { ok: false }> {
+  return {
+    ok: false,
+    phase: result.phase,
+    event: result.event,
+    value: result.value,
+    changedPredicateKeys: [...result.changedPredicateKeys],
+    issues: result.issues.map((issue) => cloneRuntimeSyncValidationIssue(issue)),
+  };
+}
+
+function normalizeSessionError(error: unknown): unknown {
+  if (error instanceof GraphSyncValidationError) {
+    return new GraphValidationError(toRuntimeSyncValidationResult(error.result));
+  }
+
+  return error;
 }
 
 export function createSyncedTypeClient<const T extends Record<string, AnyTypeOutput>>(
@@ -384,13 +141,12 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
   const schemaSnapshot = createBootstrappedSnapshot(namespace);
   const store = createStore(schemaSnapshot);
   const authoritativeStore = createStore(schemaSnapshot);
-  const preserveSnapshot = schemaSnapshot;
   const rawGraph = createTypeClient(store, { ...core, ...namespace }) as NamespaceClient<
     typeof core & T
   >;
   const session = createTotalSyncSession(authoritativeStore, {
     requestedScope: options.requestedScope,
-    preserveSnapshot,
+    preserveSnapshot: schemaSnapshot,
     validate: createAuthoritativeTotalSyncValidator(namespace),
     validateWriteResult: createAuthoritativeGraphWriteResultValidator(
       authoritativeStore,
@@ -450,7 +206,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
 
   function currentState(): SyncState {
     const state = session.getState();
-    return cloneState({
+    return cloneSyncState({
       ...state,
       status: statusOverride ?? state.status,
       freshness: freshnessOverride ?? state.freshness,
@@ -524,7 +280,12 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
       acknowledgePending?: boolean;
     } = {},
   ): AuthoritativeGraphWriteResult {
-    const applied = session.applyWriteResult(result);
+    let applied: AuthoritativeGraphWriteResult;
+    try {
+      applied = session.applyWriteResult(result);
+    } catch (error) {
+      throw normalizeSessionError(error);
+    }
 
     if (options.acknowledgePending && pendingTransactions[0]?.id === applied.txId) {
       pendingTransactions = pendingTransactions.slice(1);
@@ -659,7 +420,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
           return applied;
         } catch (error) {
           publishState();
-          throw error;
+          throw normalizeSessionError(error);
         }
       },
       applyWriteResult(result) {
@@ -670,7 +431,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
           return applied;
         } catch (error) {
           publishState();
-          throw error;
+          throw normalizeSessionError(error);
         }
       },
       async flush() {
@@ -725,7 +486,7 @@ export function createSyncedTypeClient<const T extends Record<string, AnyTypeOut
           return applied;
         } catch (error) {
           publishState();
-          throw error;
+          throw normalizeSessionError(error);
         }
       },
       getPendingTransactions() {

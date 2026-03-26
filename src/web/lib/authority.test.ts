@@ -3,7 +3,6 @@ import { describe, expect, it, setDefaultTimeout } from "bun:test";
 import {
   createIdMap,
   createStore,
-  createSyncedTypeClient,
   createTypeClient,
   applyIdMap,
   defineSecretField,
@@ -12,7 +11,6 @@ import {
   type AnyTypeOutput,
   type AuthSubjectRef,
   type AuthorizationContext,
-  type GraphWriteTransaction,
   type InvalidationEvent,
   type SerializedQueryRequest,
   type GraphStoreSnapshot,
@@ -28,6 +26,8 @@ import {
   workflowReviewSyncScopeRequest,
 } from "@io/core/graph/modules/ops/workflow";
 import { pkm } from "@io/core/graph/modules/pkm";
+import { createSyncedTypeClient } from "@io/core/graph/runtime";
+import { type GraphWriteTransaction } from "@io/graph-kernel";
 
 import {
   createBearerShareAuthorizationContext,

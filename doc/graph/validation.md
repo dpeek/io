@@ -19,7 +19,8 @@ Relevant source:
 - `../../src/graph/runtime/client-core.ts`
 - `../../src/graph/runtime/client-validation.ts`
 - `../../src/graph/runtime/client.ts`
-- `../../src/graph/runtime/sync.ts`
+- `../../src/graph/runtime/authority-validation.ts`
+- `../../lib/graph-sync/src/validation.ts`
 
 ## Current Local Lifecycle
 

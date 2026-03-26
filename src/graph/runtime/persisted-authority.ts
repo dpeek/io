@@ -1,20 +1,22 @@
-import { createTypeClient, type NamespaceClient } from "./client";
-import type { AnyTypeOutput } from "./schema";
-import type { GraphStore, GraphStoreSnapshot } from "./store";
 import {
-  createAuthoritativeGraphWriteSession,
-  createTotalSyncPayload,
+  sameAuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphChangesAfterResult,
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteHistory,
   type AuthoritativeWriteScope,
   type AuthoritativeGraphWriteResult,
   type GraphWriteTransaction,
-  type IncrementalSyncResult,
-  type ReplicationReadAuthorizer,
-  sameAuthoritativeGraphRetainedHistoryPolicy,
-  type SyncFreshness,
-} from "./sync";
+} from "@io/graph-kernel";
+import { type IncrementalSyncResult, type SyncFreshness } from "@io/graph-sync";
+
+import {
+  createAuthoritativeGraphWriteSession,
+  createAuthoritativeTotalSyncPayload,
+} from "./authority-session";
+import type { ReplicationReadAuthorizer } from "./authority-types";
+import { createTypeClient, type NamespaceClient } from "./client";
+import type { AnyTypeOutput } from "./schema";
+import type { GraphStore, GraphStoreSnapshot } from "./store";
 
 export const persistedAuthoritativeGraphStateVersion = 1 as const;
 
@@ -136,7 +138,7 @@ export type PersistedAuthoritativeGraph<T extends Record<string, AnyTypeOutput>>
   createSyncPayload(options?: {
     authorizeRead?: ReplicationReadAuthorizer;
     freshness?: SyncFreshness;
-  }): ReturnType<typeof createTotalSyncPayload>;
+  }): ReturnType<typeof createAuthoritativeTotalSyncPayload>;
   applyTransaction(
     transaction: GraphWriteTransaction,
     options?: {
@@ -289,7 +291,7 @@ export async function createPersistedAuthoritativeGraph<
     graph,
     startupDiagnostics,
     createSyncPayload(syncOptions = {}) {
-      return createTotalSyncPayload(store, {
+      return createAuthoritativeTotalSyncPayload(store, namespace, {
         authorizeRead: syncOptions.authorizeRead,
         cursor: writes.getCursor() ?? writes.getBaseCursor(),
         diagnostics: {
@@ -297,7 +299,6 @@ export async function createPersistedAuthoritativeGraph<
           retainedBaseCursor: writes.getBaseCursor(),
         },
         freshness: syncOptions.freshness ?? "current",
-        namespace,
       });
     },
     applyTransaction,

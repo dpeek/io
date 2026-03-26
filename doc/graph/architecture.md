@@ -28,7 +28,9 @@ This document is the high-level entry point for agents reasoning about the engin
 - `../../src/graph/runtime/bootstrap.ts`: schema bootstrap into store facts
 - `../../src/graph/runtime/client.ts`: typed CRUD, refs, query, and validation lifecycle
 - `../../src/graph/runtime/authority.ts`: persisted authority orchestration, storage contracts, and JSON hydration/commit/persist helpers
-- `../../src/graph/runtime/sync.ts`: authoritative validation, sync sessions, write replay, and state
+- `../../src/graph/runtime/authority-session.ts`: authoritative write sessions, retained history, and incremental delivery
+- `../../src/graph/runtime/synced-client.ts`: runtime synced client state, write flushing, and reconcile behavior
+- `../../lib/graph-sync/src/`: shared sync contracts, payload validation, cursor helpers, and total sync sessions
 - `../../src/graph/runtime/type-module.ts`: typed scalar/enum module contracts
 
 ## What Is Current

@@ -26,8 +26,7 @@ cursored incremental delivery, and total sync sessions.
 - auth bridge, policy-version, or share-route concerns
 - schema bootstrap, projection planning, or principal-aware read filtering
 
-Kernel-owned write-envelope symbols come from `@io/graph-kernel` and are
-re-exported here for compatibility. Ownership stays with the kernel package.
+Kernel-owned write-envelope symbols come from `@io/graph-kernel` directly.
 
 ## Common Workflows
 
@@ -35,7 +34,7 @@ re-exported here for compatibility. Ownership stays with the kernel package.
 - Describe incremental delivery: `createIncrementalSyncPayload`
 - Signal a required reset: `createIncrementalSyncFallback`
 - Validate transport input: `validateTotalSyncPayload`, `validateIncrementalSyncResult`
-- Derive sync writes from snapshots: `createGraphWriteTransactionFromSnapshots`
+- Derive write envelopes from snapshots: `createGraphWriteTransactionFromSnapshots` from `@io/graph-kernel`
 - Apply payloads to a store: `createTotalSyncSession`
 
 ## Important Semantics
@@ -57,7 +56,7 @@ Everything intended for consumers is re-exported from the package root.
 - `createTotalSyncPayload`, `createIncrementalSyncPayload`, `createIncrementalSyncFallback`
 - `createTotalSyncSession`, `createTotalSyncController`
 - cursor helpers from `cursor`
-- kernel-owned graph write transaction helpers re-exported through `transactions`
+- sync-owned transaction materialization/apply helpers from `transactions`
 - package-owned validation helpers from `validation`
 
 ## Build Output

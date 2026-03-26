@@ -1,44 +1,15 @@
 import {
-  authoritativeWriteScopes,
   cloneAuthoritativeGraphRetainedHistoryPolicy,
   cloneAuthoritativeGraphWriteResult,
-  cloneGraphWriteTransaction,
   isAuthoritativeGraphRetainedHistoryPolicy,
-  isAuthoritativeWriteScope,
   sameAuthoritativeGraphRetainedHistoryPolicy,
-  unboundedAuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphCursor,
   type AuthoritativeGraphRetainedHistoryPolicy,
   type AuthoritativeGraphWriteResult,
   type AuthoritativeWriteScope,
   type GraphStore,
   type GraphStoreSnapshot,
-  type GraphWriteAssertOperation,
-  type GraphWriteOperation,
-  type GraphWriteRetractOperation,
-  type GraphWriteTransaction,
 } from "@io/graph-kernel";
-
-export {
-  authoritativeWriteScopes,
-  cloneAuthoritativeGraphRetainedHistoryPolicy,
-  cloneAuthoritativeGraphWriteResult,
-  cloneGraphWriteTransaction,
-  isAuthoritativeGraphRetainedHistoryPolicy,
-  isAuthoritativeWriteScope,
-  sameAuthoritativeGraphRetainedHistoryPolicy,
-  unboundedAuthoritativeGraphRetainedHistoryPolicy,
-};
-export type {
-  AuthoritativeGraphCursor,
-  AuthoritativeGraphRetainedHistoryPolicy,
-  AuthoritativeGraphWriteResult,
-  AuthoritativeWriteScope,
-  GraphWriteAssertOperation,
-  GraphWriteOperation,
-  GraphWriteRetractOperation,
-  GraphWriteTransaction,
-};
 
 /** Sync completeness reported by a transport payload. */
 export type SyncCompleteness = "complete" | "incomplete";
@@ -427,12 +398,41 @@ export function isObjectRecord(value: unknown): value is Record<string, unknown>
 }
 
 export function cloneTotalSyncPayload(payload: TotalSyncPayload): TotalSyncPayload {
+  const snapshot = isObjectRecord(payload.snapshot)
+    ? (payload.snapshot as Record<string, unknown>)
+    : {};
+  const edges = Array.isArray(snapshot.edges)
+    ? snapshot.edges.flatMap((edge: unknown) => {
+        if (!isObjectRecord(edge)) return [];
+        if (
+          typeof edge.id !== "string" ||
+          typeof edge.s !== "string" ||
+          typeof edge.p !== "string" ||
+          typeof edge.o !== "string"
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            id: edge.id,
+            s: edge.s,
+            p: edge.p,
+            o: edge.o,
+          },
+        ];
+      })
+    : [];
+  const retracted = Array.isArray(snapshot.retracted)
+    ? snapshot.retracted.filter((edgeId: unknown): edgeId is string => typeof edgeId === "string")
+    : [];
+
   return {
     ...payload,
     scope: cloneSyncScope(payload.scope),
     snapshot: {
-      edges: payload.snapshot.edges.map((edge) => ({ ...edge })),
-      retracted: [...payload.snapshot.retracted],
+      edges,
+      retracted,
     },
     diagnostics: payload.diagnostics ? cloneSyncDiagnostics(payload.diagnostics) : undefined,
   };

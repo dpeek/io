@@ -1,25 +1,28 @@
 import {
-  type AuthoritativeGraphRetainedHistoryPolicy,
-  type AuthoritativeGraphWriteResult,
-  type AuthoritativeWriteScope,
   createIdMap,
-  createAuthoritativeGraphWriteSession,
   createBootstrappedSnapshot,
   applyIdMap,
   defineType,
-  createSyncedTypeClient,
   createStore,
-  createTotalSyncPayload,
   createTypeClient,
-  type GraphWriteTransaction,
-  type IncrementalSyncResult,
-  type SyncedTypeClient,
-  type SyncFreshness,
-  type TotalSyncPayload,
 } from "@io/core/graph";
+import { createAuthoritativeGraphWriteSession } from "@io/core/graph/authority";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
 import { pkm } from "@io/core/graph/modules/pkm";
+import { createSyncedTypeClient, type SyncedTypeClient } from "@io/core/graph/runtime";
+import {
+  type AuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeGraphWriteResult,
+  type AuthoritativeWriteScope,
+  type GraphWriteTransaction,
+} from "@io/graph-kernel";
+import {
+  createTotalSyncPayload,
+  type IncrementalSyncResult,
+  type SyncFreshness,
+  type TotalSyncPayload,
+} from "@io/graph-sync";
 
 import { seedExampleGraph } from "./example-data.js";
 import { planRecordedMutation } from "./mutation-planning.js";

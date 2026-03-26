@@ -1,10 +1,7 @@
-import {
-  matchesModuleReadScopeRequest,
-  type SyncPayload,
-  type SyncState,
-  type SyncedTypeSyncController,
-} from "@io/core/graph";
+import { matchesModuleReadScopeRequest } from "@io/core/graph";
 import { workflowReviewModuleReadScope } from "@io/core/graph/modules/ops/workflow";
+import { type SyncedTypeSyncController } from "@io/core/graph/runtime";
+import { type SyncPayload, type SyncState } from "@io/graph-sync";
 
 import {
   requestWorkflowLive,

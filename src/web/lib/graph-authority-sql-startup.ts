@@ -1,11 +1,13 @@
-import type {
-  AuthoritativeGraphRetainedHistoryPolicy,
-  AuthoritativeWriteScope,
-  PersistedAuthoritativeGraphStartupDiagnostics,
-  PersistedAuthoritativeGraphStartupRepairReason,
-  PersistedAuthoritativeGraphStartupResetReason,
-  PersistedAuthoritativeGraphStorageLoadResult,
+import {
+  type PersistedAuthoritativeGraphStartupDiagnostics,
+  type PersistedAuthoritativeGraphStartupRepairReason,
+  type PersistedAuthoritativeGraphStartupResetReason,
+  type PersistedAuthoritativeGraphStorageLoadResult,
 } from "@io/core/graph";
+import {
+  type AuthoritativeGraphRetainedHistoryPolicy,
+  type AuthoritativeWriteScope,
+} from "@io/graph-kernel";
 
 type SqlRow = Record<string, unknown>;
 

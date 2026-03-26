@@ -2,18 +2,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 
-import {
-  GraphSyncWriteError,
-  GraphValidationError,
-  createHttpGraphClient,
-  defaultHttpGraphUrl,
-  isEntityType,
-  type AnyTypeOutput,
-  type FetchImpl,
-  type SyncedTypeClient,
-} from "../graph/index.js";
+import { GraphValidationError, isEntityType, type AnyTypeOutput } from "../graph/index.js";
 import { ops } from "../graph/modules/ops.js";
 import { pkm } from "../graph/modules/pkm.js";
+import {
+  GraphSyncWriteError,
+  createHttpGraphClient,
+  defaultHttpGraphUrl,
+  type FetchImpl,
+  type SyncedTypeClient,
+} from "../graph/runtime/index.js";
 import {
   GraphMcpToolError,
   buildSelectionFromPaths,

@@ -1,14 +1,17 @@
-import type { GraphValidationIssue, GraphValidationResult } from "../client";
 import {
   cloneAuthoritativeGraphWriteResult,
   cloneGraphWriteTransaction,
-  cloneIncrementalSyncResult,
-  cloneTotalSyncPayload,
   type AuthoritativeGraphWriteResult,
   type GraphWriteTransaction,
+} from "@io/graph-kernel";
+import {
+  cloneIncrementalSyncResult,
+  cloneTotalSyncPayload,
   type IncrementalSyncResult,
   type TotalSyncPayload,
-} from "./contracts";
+} from "@io/graph-sync";
+
+import type { GraphValidationIssue, GraphValidationResult } from "./client";
 
 const totalSyncPayloadValidationKey = "$sync:payload";
 const incrementalSyncValidationKey = "$sync:incremental";
@@ -230,7 +233,7 @@ export function exposeGraphWriteResultValidationResult(
 }
 
 export function prefixGraphWriteResultIssues(
-  issues: readonly GraphValidationIssue[],
+  issues: readonly Pick<GraphValidationIssue, "code" | "message" | "path">[],
 ): GraphValidationIssue[] {
   return issues.map((issue) =>
     createGraphWriteResultValidationIssue(
@@ -243,7 +246,7 @@ export function prefixGraphWriteResultIssues(
 
 export function prefixIncrementalSyncTransactionIssues(
   index: number,
-  issues: readonly GraphValidationIssue[],
+  issues: readonly Pick<GraphValidationIssue, "code" | "message" | "path">[],
 ): GraphValidationIssue[] {
   return issues.map((issue) =>
     createIncrementalSyncValidationIssue(
