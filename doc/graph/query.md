@@ -54,7 +54,7 @@ What does not exist yet:
 
 - one reusable serialized query contract across graph, web, MCP, and modules
 - durable graph-owned saved-query entities
-- a generic query container and renderer binding model
+- a full productized generic query container runtime and editor UI
 - a web query editor that can build, preview, save, and embed queries
 
 ## Goals
@@ -472,7 +472,10 @@ type SavedView = {
   id: string;
   queryId: string;
   rendererId: string;
-  rendererParams?: Record<string, QueryLiteral>;
+  rendererDefinition?:
+    | { kind: "list"; item: QueryListItemRendererDefinition }
+    | { kind: "table"; columns: readonly QueryTableRendererColumnDefinition[] }
+    | { kind: "card-grid"; card: QueryCardRendererDefinition };
   containerDefaults?: QueryContainerDefaults;
 };
 ```
@@ -652,9 +655,37 @@ type QueryContainerSpec = {
 
 type RendererBinding = {
   rendererId: string;
-  rendererParams?: Record<string, QueryLiteral>;
+  rendererDefinition?:
+    | { kind: "list"; item: QueryListItemRendererDefinition }
+    | { kind: "table"; columns: readonly QueryTableRendererColumnDefinition[] }
+    | { kind: "card-grid"; card: QueryCardRendererDefinition };
 };
 ```
+
+The first shared web contract for this model now lives in
+`../../src/web/lib/query-container.ts` and is exported as
+`@io/core/web/query-container`. It covers:
+
+- `QueryContainerSpec` for saved and inline query bindings
+- `RendererBinding`, `QueryRendererCapability`, and
+  `QuerySurfaceRendererCompatibility` for explicit compatibility checks
+- `validateQueryContainerSpec(...)` and
+  `validateRendererBindingCompatibility(...)` so routes do not infer
+  compatibility ad hoc
+- `resolveQueryContainerState(...)` for the canonical loading, empty, error,
+  ready, paginated, stale, and refreshing container states
+- `createQueryContainerRuntime(...)` plus stable cache-key helpers so browser
+  surfaces execute saved and inline queries through one controller path with
+  shared page caching, per-container pagination state, explicit refresh, and
+  fail-closed stale-cursor recovery
+- the first shared browser renderer registry in
+  `../../src/web/components/query-renderers.tsx` with stable built-in ids
+  `core:list`, `core:table`, and `core:card-grid`
+- the first shared browser mount seams in
+  `../../src/web/components/query-container-surface.tsx` and
+  `../../src/web/components/query-route-mount.tsx` so routes can mount query
+  containers through shared validation, loading, error, empty, and pagination
+  chrome instead of route-local wiring
 
 Rules:
 
@@ -663,6 +694,10 @@ Rules:
 - inline queries are valid for drafts, previews, temporary dialogs, and URL
   state
 - saved-query containers are the durable product-grade path
+- data cache identity is renderer-independent and derived from the resolved
+  query identity, execution context, and page settings
+- page lifecycle remains container-local through `containerId` even when
+  multiple containers share the same cached query pages
 
 ### Renderer contract
 
@@ -670,19 +705,26 @@ Renderers are installed module or host components keyed by stable ids.
 
 They are not stored as executable code inside the graph.
 
+The first host-owned renderer set now uses stable ids:
+
+- `core:list`
+- `core:table`
+- `core:card-grid`
+
 A renderer receives:
 
-- one `QueryResultItem`
-- container layout context
-- selection state and item actions
-- optional entity ref if the item maps to a visible entity already present in
-  local synced scope state
+- normalized query result items for the active page
+- container pagination state plus whether another page is available
+- loading ownership from the shared query container runtime rather than ad hoc
+  fetch logic
+- stale and refreshing state so host chrome and renderer layout stay aligned
+- explicit declarative item, column, or card definitions
 
 The container owns:
 
 - fetching and refresh lifecycle
 - pagination controls
-- loading, error, and empty states
+- loading, error, empty, stale, and refreshing states
 - live registration and invalidation behavior
 
 The renderer owns:
@@ -755,6 +797,30 @@ The editor should use the query catalog to render intuitive controls:
   range or comparison builder
 
 The editor must display human labels but bind stable field ids internally.
+
+Current proof status:
+
+- `../../src/web/lib/query-editor.ts` now defines the shared form-first draft,
+  query surface catalog, validation rules, and serialization bridge into the
+  generic `SerializedQueryRequest` plus `QueryParameterDefinition[]`
+- `../../src/web/components/query-editor.tsx` now mounts that draft model
+  through typed source, filter, sort, pagination, and parameter sections
+- `../../src/web/lib/query-workbench.ts` now adds shared route-state parsing,
+  draft preview serialization, browser-persisted proof saved-query/view
+  storage, editor hydration for reopen flows, saved-source resolution with
+  parameter overrides, and a bounded collection preview executor for the
+  current proof route
+- the current `/views` proof route now uses that shared workbench path to:
+  preview inline drafts in a real query container, reopen saved queries or
+  saved views from route state, rehydrate the form editor from those saved
+  definitions, update the active saved ids without losing query identity,
+  apply parameter overrides, and fail closed when a saved query, saved view,
+  route draft, or saved-route parameter override becomes invalid or stale,
+  including current-catalog hydration failures when a previously saved surface
+  definition no longer exists
+- the current save flow still uses browser-local proof persistence; graph-owned
+  durable persistence remains the follow-up step once the durable model is
+  wired through the authority path
 
 ### Advanced mode
 
@@ -857,6 +923,14 @@ For the shipped generic route, that means callers should discard the old
 cursor, rerun the active query from page 1, or refresh the active query before
 trying to page again.
 
+The current shared web runtime makes that explicit in two more cases:
+
+- changing saved-query params or any other query-identity input creates a new
+  cache identity and restarts from page 1
+- changing principal or policy interpretation also creates a new cache
+  identity, so the container does not try to reuse a page cursor from the old
+  policy view
+
 ### Container behavior on incremental sync
 
 When the underlying synced scope changes, a query container should react based
@@ -884,6 +958,10 @@ When live registration is active:
   to the first page and preserves UI explanation rather than silently showing
   partial state
 
+Under the current Branch 3 fail-closed model, that refresh path is always a
+restart-or-requery path for generic query containers rather than a row-level
+delta merge.
+
 ### Visibility and viewport rules
 
 The frontend should avoid live work for hidden containers when reasonable.
@@ -909,6 +987,16 @@ The frontend query cache should key result pages by:
 - renderer-independent window settings
 
 Renderer choice should not change the data cache key.
+
+The shipped shared runtime now makes that split explicit:
+
+- one data cache key per resolved query identity and execution context
+- one page key per opaque pagination cursor under that data cache key
+- one container instance key per `containerId` plus data cache key so repeated
+  mounts can retain local page position without forcing independent refetches
+
+Refreshing resets the active instance back to page 1 and clears cached
+continuation pages for that query identity.
 
 ### Shared container caches
 

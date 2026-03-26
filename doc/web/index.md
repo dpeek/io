@@ -98,6 +98,37 @@ command registries. Browser launch and attach do not go through Worker routes:
 the browser now probes a separate localhost `browser-agent` runtime over
 `../../src/browser-agent/transport.ts`, and `/workflow` keeps unavailable local
 runtime state explicit until that bridge is reachable.
+command registries. The shared browser query-container contract now also lives
+behind the dedicated `@io/core/web/query-container` export, so routes can bind
+saved or inline queries, renderer compatibility, and lifecycle state through
+one reusable surface instead of route-local props. The first reusable route
+mount seam now layers on top of that contract through
+`query-renderers.tsx`, `query-container-surface.tsx`, and
+`query-route-mount.tsx`, giving browser routes one shared path for query
+validation, default loading and error chrome, pagination controls, and the
+initial built-in `core:list`, `core:table`, and `core:card-grid` layouts with
+declarative item, column, and card definitions plus shared inline and saved
+query mounting helpers.
+The current query-authoring proof now also includes a form-first editor
+foundation in `query-editor.tsx` and `query-editor.ts` that lets routes author
+source selection, typed filters, sort clauses, pagination defaults, and
+parameter definitions before execution or save flows land.
+
+Current editor interaction model:
+
+- source selection resets the draft against one registered query surface at a
+  time and repopulates field-aware controls from that surface definition
+- filters and sorts derive valid fields and operators from the selected source
+  instead of route-local JSON editors
+- pagination edits stay in draft state as window inputs (`after`, `limit`)
+  until the surface converts them into the serialized and normalized execution
+  requests
+- validation errors render inline beside the affected draft controls and the
+  serialized/normalized inspectors stay fail closed when the draft is invalid
+- browser launch and attach do not go through Worker routes: the browser now
+  probes a separate localhost `browser-agent` runtime over
+  `../../src/browser-agent/transport.ts`, and `/workflow` keeps unavailable
+  local runtime state explicit until that bridge is reachable
 
 ## Docs
 
@@ -130,6 +161,21 @@ runtime state explicit until that bridge is reachable.
   title, reusing the generic entity inspector for the selected record plus the
   explorer's generic draft-backed create flow inside a shared dialog with the
   base dialog header and footer primitives
+- `../../src/web/components/query-renderers.tsx`: host-owned query renderer
+  registry keyed by stable renderer ids plus the first built-in list, table,
+  and card-grid layouts, explicit renderer binding helpers, and declarative
+  item/column/card definitions
+- `../../src/web/components/query-editor.tsx`: form-first query authoring
+  surface that renders source selection, field-aware filters, sort,
+  pagination, parameter editing, serialized-request inspection, and the first
+  route-backed reopen/update flows for saved queries and saved views from the
+  shared query catalog
+- `../../src/web/components/query-container-surface.tsx`: shared query
+  container mount that validates renderer bindings, executes query pages, and
+  renders the common loading, error, empty, stale, and pagination chrome
+- `../../src/web/components/query-route-mount.tsx`: shared route composition
+  seam that lets routes mount one query container through common page chrome
+  instead of route-local wiring
 - `../../src/web/components/workflow-page.tsx`: `/workflow` composition that
   binds the browser route to the shipped `workflow-review` sync scope and
   hands startup off to the workflow-native review contract
@@ -176,6 +222,22 @@ runtime state explicit until that bridge is reachable.
   serialized query, and workflow surfaces
 - `../../src/web/lib/query-transport.ts`: web-owned `POST /api/query` path
   constant plus the shared generic serialized-query client helper re-export
+- `../../src/web/lib/query-container.ts`: shared query-container and
+  renderer-binding contract covering saved and inline query references,
+  container pagination and refresh policy, explicit renderer compatibility
+  metadata, validation helpers, and the canonical loading, empty, error,
+  paginated, stale, and refreshing container states exported via
+  `@io/core/web/query-container`, plus the shared container runtime/controller
+  that resolves saved or inline queries through one execution path, derives
+  renderer-independent cache keys, keeps page state scoped per container
+  instance, restarts from page 1 when saved-query identity or execution
+  context changes invalidate the current page, and fails closed on stale
+  pagination by resetting or refreshing instead of silently continuing with
+  invalid cursors
+- `../../src/web/lib/query-editor.ts`: shared query-editor draft, query
+  surface catalog, field-aware validation, and serialization helpers that keep
+  inline drafts aligned with the generic serialized-query contract plus future
+  saved-query parameter metadata
 - `../../src/web/lib/graph-authority-internal-routes.ts`: web-only
   session-principal lookup-and-repair, bearer-share hash lookup, and
   authoritative policy-version handlers kept separate from the Durable Object
@@ -207,6 +269,30 @@ runtime state explicit until that bridge is reachable.
 - `../../src/browser-agent/transport.ts`: shared localhost browser-agent
   transport contract covering runtime health, launch-session requests, and
   active-session lookup so browser and local runtime use the same typed bridge
+
+## Query Container Refresh Model
+
+The current Branch 3 browser model stays fail closed.
+
+- live invalidation or scoped refresh does not merge arbitrary deltas into a
+  generic query container page
+- the container keeps the last page visible but marks it stale while refresh is
+  pending
+- refresh reruns the active query from the first valid page
+- if a continuation cursor is rejected as `projection-stale`, scope-mismatched,
+  or policy-mismatched, the container either resets to the first cached page or
+  re-fetches page 1 with explicit recovery state
+- changing saved-query params or principal/policy interpretation changes the
+  container cache identity, so the route starts from a fresh first page instead
+  of trying to continue an older pagination cursor
+- stale saved-query, saved-view, and draft route state now also fail closed
+  when the current query catalog can no longer hydrate their surface
+  definitions, so the workbench renders an explicit recovery card instead of
+  crashing or silently drifting to another query
+- the current proof anchors for those guarantees live in
+  `../../src/web/lib/query-container.test.ts`,
+  `../../src/web/lib/query-workbench.test.ts`, and
+  `../../src/web/components/query-workbench.test.tsx`
 - `../../src/web/lib/authority.ts`: shared web authority behavior, secret-field
   mutation flow, the current web-owned `/api/commands` envelope, the shared
   write/command authorization seam, principal-aware sync filtering that omits

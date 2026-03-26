@@ -6,6 +6,7 @@ import {
   createStore,
   createTypeClient,
   applyIdMap,
+  serializedQueryVersion,
   type PredicateRef,
 } from "@io/core/graph";
 import {
@@ -27,6 +28,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/w
 import { useMemo, useState } from "react";
 
 import { kitchenSink } from "../../graph/testing/kitchen-sink.js";
+import type {
+  QueryContainerSpec,
+  QueryContainerRuntimeValue,
+  QuerySurfaceRendererCompatibility,
+} from "../lib/query-container.js";
+import type { QueryWorkbenchRouteSearch } from "../lib/query-workbench.js";
+import {
+  createCardGridRendererBinding,
+  createListRendererBinding,
+  createTableRendererBinding,
+} from "./query-renderers.js";
+import { QueryRouteMountView } from "./query-route-mount.js";
+import { QueryWorkbench } from "./query-workbench.js";
 
 type AnyPredicateRef = PredicateRef<any, any>;
 
@@ -41,9 +55,45 @@ type ViewsPageFixture = {
   readonly items: readonly ViewsPageItem[];
 };
 
+const queryRendererPreviewSurface = {
+  compatibleRendererIds: ["core:list", "core:table", "core:card-grid"],
+  itemEntityIds: "optional",
+  queryKind: "collection",
+  resultKind: "collection",
+  sourceKinds: ["inline"],
+  surfaceId: "views:query-renderer-preview",
+} as const satisfies QuerySurfaceRendererCompatibility;
+
+const queryRendererPreviewSpec = {
+  containerId: "views-query-renderer-preview",
+  pagination: {
+    mode: "paged",
+    pageSize: 2,
+  },
+  query: {
+    kind: "inline",
+    request: {
+      version: serializedQueryVersion,
+      query: {
+        kind: "collection",
+        indexId: "views:query-renderer-preview",
+      },
+    },
+  },
+  renderer: {
+    ...createListRendererBinding({
+      descriptionField: "summary",
+      metaFields: [
+        { fieldId: "status", label: "Status" },
+        { fieldId: "owner", label: "Owner" },
+      ],
+      titleField: "title",
+    }),
+  },
+} as const satisfies QueryContainerSpec;
+
 const supportedViewKinds = genericWebFieldViewCapabilities.map((capability) => capability.kind);
 const supportedEditorKinds = genericWebFieldEditorCapabilities.map((capability) => capability.kind);
-
 const linkPreview = defineType({
   values: { key: "web:linkPreview", name: "Link Preview" },
   fields: {
@@ -307,6 +357,108 @@ function createViewsPageFixture(): ViewsPageFixture {
   };
 }
 
+function createQueryRendererPreviewValue(): QueryContainerRuntimeValue {
+  const result = {
+    kind: "collection",
+    freshness: {
+      completeness: "complete",
+      freshness: "current",
+    },
+    items: [
+      {
+        key: "row:workflow-shell",
+        entityId: "workflow-branch:1",
+        payload: {
+          owner: "Avery Operator",
+          status: "active",
+          summary: "Shared route helper preview using the list renderer.",
+          title: "Workflow shell",
+        },
+      },
+      {
+        key: "row:query-cards",
+        entityId: "workflow-branch:2",
+        payload: {
+          owner: "Sam Reviewer",
+          status: "ready",
+          summary: "Same query result rendered through the first reusable card and table views.",
+          title: "Query cards",
+        },
+      },
+    ],
+  } as const;
+
+  return {
+    cacheKey: "views:query-renderer-preview",
+    instanceKey: "views:query-renderer-preview",
+    pageKey: "views:query-renderer-preview:first",
+    request: queryRendererPreviewSpec.query.request,
+    snapshot: { result },
+    state: {
+      kind: "ready",
+      result,
+    },
+  };
+}
+
+function QueryRendererPreviewGallery() {
+  const previewValue = createQueryRendererPreviewValue();
+
+  return (
+    <div className="grid gap-4">
+      <Card className="border-border/70 bg-card/95 border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Query Renderer Preview</CardTitle>
+          <CardDescription>
+            The same query container binding can now mount through a shared route helper and switch
+            layouts by stable renderer id instead of route-local rendering code.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Badge variant="outline">core:list</Badge>
+          <Badge variant="outline">core:table</Badge>
+          <Badge variant="outline">core:card-grid</Badge>
+          <Badge variant="outline">route helper</Badge>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 2xl:grid-cols-3">
+        {(["core:list", "core:table", "core:card-grid"] as const).map((rendererId) => (
+          <QueryRouteMountView
+            description="Shared route-mount chrome for reusable query container renderers."
+            initialValue={previewValue}
+            key={rendererId}
+            spec={{
+              ...queryRendererPreviewSpec,
+              containerId: `views-query-renderer-preview:${rendererId}`,
+              renderer:
+                rendererId === "core:list"
+                  ? queryRendererPreviewSpec.renderer
+                  : rendererId === "core:table"
+                    ? createTableRendererBinding([
+                        { fieldId: "title", label: "Title" },
+                        { fieldId: "status", label: "Status" },
+                        { fieldId: "owner", label: "Owner" },
+                      ])
+                    : createCardGridRendererBinding({
+                        badgeField: "status",
+                        descriptionField: "summary",
+                        fields: [
+                          { fieldId: "owner", label: "Owner" },
+                          { fieldId: "updatedAt", label: "Updated" },
+                        ],
+                        titleField: "title",
+                      }),
+            }}
+            surface={queryRendererPreviewSurface}
+            title={rendererId}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function KindCoverageCard({
   coveredKinds,
   supportedKinds,
@@ -461,7 +613,13 @@ function ViewsPageCatalog() {
   );
 }
 
-export function ViewsPage() {
+export function ViewsPage({
+  onSearchChange,
+  search = {},
+}: {
+  readonly onSearchChange?: (search: QueryWorkbenchRouteSearch) => void | Promise<void>;
+  readonly search?: QueryWorkbenchRouteSearch;
+}) {
   const [fixtureVersion, setFixtureVersion] = useState(0);
 
   return (
@@ -490,6 +648,8 @@ export function ViewsPage() {
         </Button>
       </div>
 
+      <QueryRendererPreviewGallery />
+      <QueryWorkbench onSearchChange={onSearchChange} search={search} />
       <ViewsPageCatalog key={fixtureVersion} />
     </div>
   );

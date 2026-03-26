@@ -61,6 +61,7 @@
     "./stackable": "./src/stackable.tsx",
     "./switch": "./src/switch.tsx",
     "./tabs": "./src/tabs.tsx",
+    "./table": "./src/table.tsx",
     "./textarea": "./src/textarea.tsx",
     "./theme": "./src/theme.tsx",
     "./toggle-group": "./src/toggle-group.tsx",

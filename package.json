@@ -28,6 +28,7 @@
     "./graph/modules/pkm/document": "./src/graph/modules/pkm/document/schema.ts",
     "./graph/adapters/react-dom": "./src/graph/adapters/react-dom/index.ts",
     "./graph/adapters/react-opentui": "./src/graph/adapters/react-opentui/index.ts",
+    "./web/query-container": "./src/web/lib/query-container.ts",
     "./lib": "./src/lib/index.ts",
     "./lib/config": "./src/lib/config.ts",
     "./tsconfig/base": "./tsconfig.base.json"
