@@ -9,7 +9,6 @@ import {
   edgeId,
   type AnyTypeOutput,
   type AuthSubjectRef,
-  type InvalidationEvent,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
@@ -30,6 +29,7 @@ import {
   type SerializedQueryRequest,
 } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
+import { type InvalidationEvent } from "@io/graph-projection";
 
 import {
   createBearerShareAuthorizationContext,

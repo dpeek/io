@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { defineInvalidationEvent } from "@io/core/graph";
+import { defineInvalidationEvent } from "@io/graph-projection";
 
 import { createWorkflowReviewLiveScopeRouter } from "./workflow-live-scope-router.js";
 import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-transport.js";

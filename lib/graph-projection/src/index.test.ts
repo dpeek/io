@@ -4,24 +4,24 @@ import { createModuleSyncScope, graphSyncScope } from "@io/graph-sync";
 
 import {
   type DependencyKey,
-  findRetainedProjectionRecord,
   createDependencyKey,
   createModuleReadScope,
   createModuleReadScopeRequest,
   createProjectionDependencyKey,
   createScopeDependencyKey,
-  defineModuleReadScopeDefinition,
   defineInvalidationEvent,
+  defineModuleReadScopeDefinition,
   defineProjectionCatalog,
   defineProjectionSpec,
-  isRetainedProjectionMetadataCompatible,
+  findRetainedProjectionRecord,
   isDependencyKey,
   isInvalidationEventCompatibleWithTarget,
+  isRetainedProjectionMetadataCompatible,
   matchesModuleReadScope,
   matchesModuleReadScopeRequest,
-} from "./projection.js";
+} from "./index.js";
 
-describe("projection runtime contracts", () => {
+describe("graph projection contracts", () => {
   it("builds and validates dependency keys from one shared helper", () => {
     expect(createDependencyKey("projection", "ops/workflow:project-branch-board")).toBe(
       "projection:ops/workflow:project-branch-board",

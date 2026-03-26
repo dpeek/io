@@ -1,3 +1,12 @@
+/**
+ * Public entrypoint for the graph projection package.
+ *
+ * This surface owns shared Branch 3 projection/runtime metadata contracts,
+ * retained projection compatibility helpers, module read-scope definitions,
+ * dependency keys, and invalidation routing contracts. Kernel/store
+ * primitives, authority persistence, client transports, and workflow-local
+ * projection implementations stay outside this package.
+ */
 import {
   createModuleSyncScope,
   createModuleSyncScopeRequest,
@@ -40,6 +49,15 @@ export const dependencyKeyKinds = ["predicate", "projection", "scope", "shard"] 
 
 export type DependencyKeyKind = (typeof dependencyKeyKinds)[number];
 
+/**
+ * Conservative invalidation unit shared by projection builders, authorities,
+ * and live registration routers.
+ *
+ * Dependency keys are intentionally coarse. A key must identify a stable
+ * dependency family using the `<kind>:<value>` format. False positives are
+ * acceptable because callers can re-pull conservatively. False negatives are
+ * not acceptable because they risk serving stale state without a refresh.
+ */
 export type DependencyKey = `${DependencyKeyKind}:${string}`;
 
 export type ProjectionDependencyKey = DependencyKey;
@@ -62,6 +80,18 @@ export type InvalidationDelivery =
   | CursorAdvancedInvalidationDelivery
   | ScopedDeltaInvalidationDelivery;
 
+/**
+ * Conservative freshness signal for projections and scope subscribers.
+ *
+ * Delivery semantics are intentionally narrow:
+ * - `cursor-advanced` means the caller should re-pull from the authoritative
+ *   source or retained projection state at `sourceCursor` or later.
+ * - `scoped-delta` is reserved for deterministic local merge contracts and
+ *   must not require consumers to inspect unauthorized raw facts.
+ *
+ * Events may be duplicated or wider than the exact changed rows. They are not
+ * an authoritative change log.
+ */
 export interface InvalidationEvent {
   readonly eventId: string;
   readonly graphId: string;
@@ -77,6 +107,15 @@ export type InvalidationTarget = {
   readonly scopeId?: string;
 };
 
+/**
+ * Stable definition for one shipped module read scope.
+ *
+ * Scope identity is `{ moduleId, scopeId, definitionHash }`. Change
+ * `definitionHash` whenever previously retained scoped state, scoped cursors,
+ * or projection compatibility assumptions should no longer be treated as
+ * interchangeable with the new definition. `policyFilterVersion` is excluded
+ * here because authorities resolve it at delivery time.
+ */
 export interface ModuleReadScopeDefinition {
   readonly kind: "module";
   readonly moduleId: string;
@@ -84,6 +123,13 @@ export interface ModuleReadScopeDefinition {
   readonly definitionHash: string;
 }
 
+/**
+ * Declarative contract for a rebuildable projection surface.
+ *
+ * `definitionHash` is the compatibility boundary for retained checkpoints and
+ * rows. Change it whenever the projection's rebuild inputs, row meaning, or
+ * query-visible semantics become incompatible with previously retained state.
+ */
 export interface ProjectionSpec {
   readonly projectionId: string;
   readonly kind: ProjectionKind;
@@ -94,6 +140,12 @@ export interface ProjectionSpec {
   readonly visibilityMode: ProjectionVisibilityMode;
 }
 
+/**
+ * Shared compatibility metadata for retained projection artifacts.
+ *
+ * Retained rows and checkpoints are considered reusable only when both
+ * `projectionId` and `definitionHash` match the caller's expected metadata.
+ */
 export interface RetainedProjectionMetadata<
   ProjectionId extends string = string,
   DefinitionHash extends string = string,
@@ -102,6 +154,13 @@ export interface RetainedProjectionMetadata<
   readonly definitionHash: DefinitionHash;
 }
 
+/**
+ * Rebuildable retained checkpoint for one projection.
+ *
+ * This record is discardable derived state. It must be sufficient to resume or
+ * restart a rebuild together with authoritative facts. If it is missing or
+ * incompatible, callers rebuild instead of mutating the checkpoint in place.
+ */
 export interface RetainedProjectionCheckpointRecord<
   ProjectionId extends string = string,
   DefinitionHash extends string = string,
@@ -111,6 +170,13 @@ export interface RetainedProjectionCheckpointRecord<
   readonly projectedAt: string;
 }
 
+/**
+ * Rebuildable retained row for one projection.
+ *
+ * Retained rows are cache materializations of authoritative state. They may be
+ * dropped and recomputed from authoritative facts, retained blob metadata, and
+ * the matching `ProjectionSpec`.
+ */
 export interface RetainedProjectionRowRecord<
   RowKind extends string = string,
   Value = unknown,
@@ -143,6 +209,16 @@ export type RetainedProjectionRecordLookupResult<T extends RetainedProjectionMet
 function assertNonEmptyString(value: string, label: string): void {
   if (value.length === 0) {
     throw new TypeError(`${label} must not be empty.`);
+  }
+}
+
+function assertKnownValue<const T extends readonly string[]>(
+  values: T,
+  value: string,
+  label: string,
+): asserts value is T[number] {
+  if (!(values as readonly string[]).includes(value)) {
+    throw new TypeError(`${label} must be one of ${values.join(", ")}.`);
   }
 }
 
@@ -203,6 +279,8 @@ function freezeOptionalUniqueValues(
 }
 
 function freezeInvalidationDelivery(delivery: InvalidationDelivery): InvalidationDelivery {
+  assertKnownValue(invalidationDeliveryKinds, delivery.kind, "delivery.kind");
+
   if (delivery.kind === "cursor-advanced") {
     return Object.freeze({ kind: delivery.kind });
   }
@@ -212,6 +290,12 @@ function freezeInvalidationDelivery(delivery: InvalidationDelivery): Invalidatio
   return Object.freeze({ ...delivery });
 }
 
+/**
+ * Normalize a dependency key to the canonical `<kind>:<value>` form.
+ *
+ * Callers may pass a raw id/value or an already-prefixed dependency key. The
+ * returned key always preserves the requested `kind` prefix.
+ */
 export function createDependencyKey<K extends DependencyKeyKind>(
   kind: K,
   value: string,
@@ -251,6 +335,7 @@ export function isDependencyKey(value: unknown): value is DependencyKey {
 export function defineModuleReadScopeDefinition<const T extends ModuleReadScopeDefinition>(
   definition: T,
 ): Readonly<T> {
+  assertKnownValue(["module"] as const, definition.kind, "kind");
   assertNonEmptyString(definition.moduleId, "moduleId");
   assertNonEmptyString(definition.scopeId, "scopeId");
   assertNonEmptyString(definition.definitionHash, "definitionHash");
@@ -305,7 +390,10 @@ export function matchesModuleReadScope(
 
 export function defineProjectionSpec<const T extends ProjectionSpec>(spec: T): Readonly<T> {
   assertNonEmptyString(spec.projectionId, "projectionId");
+  assertKnownValue(projectionKinds, spec.kind, "kind");
   assertNonEmptyString(spec.definitionHash, "definitionHash");
+  assertKnownValue(projectionRebuildStrategies, spec.rebuildStrategy, "rebuildStrategy");
+  assertKnownValue(projectionVisibilityModes, spec.visibilityMode, "visibilityMode");
   if (spec.sourceScopeKinds.length === 0) {
     throw new TypeError("sourceScopeKinds must not be empty.");
   }
@@ -314,6 +402,10 @@ export function defineProjectionSpec<const T extends ProjectionSpec>(spec: T): R
   }
 
   assertUniqueValues(spec.sourceScopeKinds, "sourceScopeKinds");
+  for (const sourceScopeKind of spec.sourceScopeKinds) {
+    assertKnownValue(projectionSourceScopeKinds, sourceScopeKind, "sourceScopeKinds");
+  }
+
   assertUniqueValues(spec.dependencyKeys, "dependencyKeys");
   for (const dependencyKey of spec.dependencyKeys) {
     assertDependencyKey(dependencyKey, "dependencyKeys");

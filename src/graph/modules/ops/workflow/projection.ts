@@ -8,7 +8,8 @@ import {
   defineProjectionSpec,
   type DependencyKey,
   type InvalidationEvent,
-} from "../../../runtime/projection.js";
+} from "@io/graph-projection";
+
 import opsIds from "../../ops.json";
 import { pkm } from "../../pkm.js";
 import {

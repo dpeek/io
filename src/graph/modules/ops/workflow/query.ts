@@ -1,10 +1,10 @@
 import { type GraphClient } from "@io/graph-client";
+import {
+  findRetainedProjectionRecord,
+  type RetainedProjectionCheckpointRecord,
+  type RetainedProjectionRowRecord,
+} from "@io/graph-projection";
 
-import type {
-  RetainedProjectionCheckpointRecord,
-  RetainedProjectionRowRecord,
-} from "../../../runtime/projection.js";
-import { findRetainedProjectionRecord } from "../../../runtime/projection.js";
 import { applyIdMap } from "../../../runtime/schema.js";
 import { core } from "../../core.js";
 import opsIds from "../../ops.json";

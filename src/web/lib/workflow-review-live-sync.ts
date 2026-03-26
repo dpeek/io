@@ -1,6 +1,6 @@
-import { matchesModuleReadScopeRequest } from "@io/core/graph";
 import { workflowReviewModuleReadScope } from "@io/core/graph/modules/ops/workflow";
 import { type GraphClientSyncController } from "@io/graph-client";
+import { matchesModuleReadScopeRequest } from "@io/graph-projection";
 import { type SyncPayload, type SyncState } from "@io/graph-sync";
 
 import {

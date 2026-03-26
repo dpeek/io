@@ -457,6 +457,10 @@ Responsibilities:
 ### Projection runtime
 
 Lives as an authority-adjacent worker or queue-driven background runtime.
+The current extracted shared contract boundary for projection metadata,
+dependency keys, module read scopes, invalidation types, and retained
+projection compatibility lives in `@io/graph-projection`; workflow-specific
+projection manifests and host-specific storage adapters stay outside it.
 
 Responsibilities:
 

@@ -101,7 +101,7 @@ Current behavior:
   payloads beside the authority tables so workflow reads can survive restart
   from durable derived state instead of rebuilding only on demand
 - retained workflow projection checkpoint and row metadata now shares the
-  `src/graph/runtime/projection.ts` contract surface, and the workflow read
+  `@io/graph-projection` contract surface, and the workflow read
   proof treats `projectionId` plus `definitionHash` as an explicit retained
   version seam instead of an authority-local string convention
 - startup now validates retained workflow projection rows against

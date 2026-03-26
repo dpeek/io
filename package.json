@@ -44,6 +44,7 @@
     "@io/graph-authority": "workspace:*",
     "@io/graph-client": "workspace:*",
     "@io/graph-kernel": "workspace:*",
+    "@io/graph-projection": "workspace:*",
     "@io/graph-sync": "workspace:*",
     "@io/web": "workspace:*",
     "@linear/sdk": "^76.0.0",

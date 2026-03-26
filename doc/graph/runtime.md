@@ -8,6 +8,8 @@ Authority-owned APIs now live in `@io/graph-authority`, and client-owned APIs
 such as `createGraphClient(...)`,
 `createSyncedGraphClient(...)`, `createHttpGraphClient(...)`, and
 `createBootstrappedSnapshot(...)` now live in `@io/graph-client`.
+Shared Branch 3 projection/runtime metadata contracts now live in
+`@io/graph-projection`.
 
 ## Current Runtime Surface
 
@@ -137,11 +139,10 @@ runtime surface:
   `entity-predicate-slice` share selector, durable `ShareGrant` shape, and the
   validation helpers that reject malformed or non-shareable share slices before
   runtime enforcement consumes them
-- `../../src/graph/runtime/projection.ts` owns the shared Branch 3 read-scope
-  and projection metadata contracts, including `ModuleReadScopeDefinition`,
-  `ProjectionSpec`, and helpers that keep requested scope ids,
-  delivered `definitionHash` values, and projection catalogs aligned across
-  runtime consumers
+- `../../lib/graph-projection/src/index.ts`, consumed as
+  `@io/graph-projection`, owns the shared Branch 3 read-scope definitions,
+  projection metadata contracts, dependency keys, invalidation contracts, and
+  retained projection compatibility helpers
 - `../../src/graph/runtime/serialize.ts` contains internal helpers for turning store state into plain objects and schema views
 - `../../src/graph/modules/core/input.ts` contains input-kind guards used by scalar codecs
 

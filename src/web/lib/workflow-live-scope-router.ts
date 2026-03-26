@@ -1,4 +1,4 @@
-import { isInvalidationEventCompatibleWithTarget, type DependencyKey } from "@io/core/graph";
+import { isInvalidationEventCompatibleWithTarget, type DependencyKey } from "@io/graph-projection";
 
 import type {
   WorkflowReviewLiveInvalidation,

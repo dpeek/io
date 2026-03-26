@@ -160,7 +160,7 @@ for the branch board and commit queue, so projection ids and `definitionHash`
 values stay shared with the authority-side scope proof instead of living in
 web-local constants.
 The first retained projection storage seam now shares checkpoint and row
-metadata through `../../src/graph/runtime/projection.ts`, and retained workflow
+metadata through `@io/graph-projection`, and retained workflow
 reads treat `{ projectionId, definitionHash }` as the explicit compatibility
 boundary. A retained row set for the right `projectionId` but the wrong
 `definitionHash` is incompatible state that must rebuild, not a silent or

@@ -2,7 +2,6 @@ export * from "./runtime/bootstrap.js";
 export * from "./runtime/contracts.js";
 export * from "./runtime/id.js";
 export * from "./runtime/identity.js";
-export * from "./runtime/projection.js";
 export * from "./runtime/schema.js";
 export * from "./runtime/store.js";
 export * from "./runtime/type-module.js";

@@ -12,6 +12,7 @@ the workspace package `@io/graph-sync`.
 The relevant package split is now:
 
 - `@io/graph-kernel`: authoritative write-envelope contracts, canonicalization, and snapshot-diff helpers
+- `@io/graph-projection`: shared module scope definitions, projection metadata, dependency keys, invalidation contracts, and retained projection compatibility helpers
 - `@io/graph-sync`: sync contracts, cursor helpers, sync-core validation, sync-specific transaction materialization/apply helpers, and total sync sessions
 - `@io/graph-client`: synced-client runtime behavior, including the runtime-only `"pushing"` flush state
 - `json-storage.ts`: shipped JSON persistence adapter for durable authorities
@@ -53,9 +54,10 @@ side:
 
 That first scoped proof is now defined from one shared graph-owned seam:
 
-- `../../src/graph/runtime/projection.ts` exports the public Branch 3
-  `ModuleReadScopeDefinition`, `ProjectionSpec`, `DependencyKey`, and
-  `InvalidationEvent` helpers
+- `../../lib/graph-projection/src/index.ts`, consumed as
+  `@io/graph-projection`, exports the public Branch 3
+  `ModuleReadScopeDefinition`, `ProjectionSpec`, `DependencyKey`,
+  `InvalidationEvent`, and retained projection compatibility helpers
 - `../../src/graph/modules/ops/workflow/projection.ts` owns the canonical
   `workflowReviewModuleReadScope`, `workflowReviewSyncScopeRequest`, and the
   first workflow projection descriptors plus the explicit

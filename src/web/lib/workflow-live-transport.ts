@@ -1,4 +1,4 @@
-import { type DependencyKey, type InvalidationEvent } from "@io/core/graph";
+import { type DependencyKey, type InvalidationEvent } from "@io/graph-projection";
 
 export const webWorkflowLivePath = "/api/workflow-live";
 

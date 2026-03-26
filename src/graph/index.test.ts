@@ -100,6 +100,24 @@ const forbiddenRootModuleExports = [
   "graphIconSeeds",
 ] as const;
 
+const forbiddenProjectionContractValueExports = [
+  "createDependencyKey",
+  "createModuleReadScope",
+  "createModuleReadScopeRequest",
+  "createProjectionDependencyKey",
+  "createScopeDependencyKey",
+  "defineInvalidationEvent",
+  "defineProjectionCatalog",
+  "defineProjectionSpec",
+  "findRetainedProjectionRecord",
+  "isInvalidationEventCompatibleWithTarget",
+  "matchesModuleReadScopeRequest",
+  "projectionKinds",
+  "projectionRebuildStrategies",
+  "projectionSourceScopeKinds",
+  "projectionVisibilityModes",
+] as const;
+
 const requiredRuntimeReactExports = [
   "GraphMutationRuntimeProvider",
   "createWebFieldResolver",
@@ -226,6 +244,10 @@ describe("@io/core/graph package entry surfaces", () => {
       expect(Object.keys(rootExports)).not.toContain(name);
     }
     for (const name of forbiddenRuntimeModuleExports) {
+      expect(Object.keys(runtimeExports)).not.toContain(name);
+    }
+    for (const name of forbiddenProjectionContractValueExports) {
+      expect(Object.keys(rootExports)).not.toContain(name);
       expect(Object.keys(runtimeExports)).not.toContain(name);
     }
 

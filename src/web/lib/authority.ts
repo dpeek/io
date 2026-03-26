@@ -2,20 +2,17 @@ import {
   type AuthSubjectRef,
   type AnyTypeOutput,
   bootstrap,
-  createModuleReadScope,
   createStore,
   edgeId,
   type GraphFieldAuthority,
   isEntityType,
   isSecretBackedField,
   type Cardinality,
-  type InvalidationEvent,
   type PredicatePolicyDescriptor,
   type WebPrincipalSummary,
   resolveFieldPolicyDescriptor,
   type GraphStore,
   type GraphStoreSnapshot,
-  matchesModuleReadScopeRequest,
 } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
 import { ops } from "@io/core/graph/modules/ops";
@@ -90,6 +87,11 @@ import {
   type AuthoritativeGraphWriteResult,
   type GraphWriteScope,
 } from "@io/graph-kernel";
+import {
+  createModuleReadScope,
+  matchesModuleReadScopeRequest,
+  type InvalidationEvent,
+} from "@io/graph-projection";
 import {
   createIncrementalSyncFallback,
   createIncrementalSyncPayload,
