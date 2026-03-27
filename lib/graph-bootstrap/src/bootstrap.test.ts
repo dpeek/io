@@ -1,76 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { createGraphClient } from "@io/graph-client";
-import {
-  createGraphStore,
-  defineType,
-  edgeId,
-  typeId,
-  type GraphStoreSnapshot,
-} from "@io/graph-kernel";
+import { createGraphStore, defineType, edgeId, typeId } from "@io/graph-kernel";
 
 import { bootstrap } from "./bootstrap.js";
-import {
-  bootstrapTimestampIso,
-  core,
-  coreGraphBootstrapOptions,
-  graphIconSeeds,
-  testDefs,
-  testGraph,
-  workflow,
-} from "./test-fixtures.js";
-
-function canonicalizeSnapshot(snapshot: GraphStoreSnapshot) {
-  return {
-    edges: snapshot.edges
-      .map((edge) => `${edge.id}\0${edge.s}\0${edge.p}\0${edge.o}`)
-      .sort((left, right) => left.localeCompare(right)),
-    retracted: [...snapshot.retracted].sort((left, right) => left.localeCompare(right)),
-  };
-}
+import { core, coreGraphBootstrapOptions, graphIconSeeds, workflow } from "./test-fixtures.js";
 
 describe("bootstrap", () => {
-  it("keeps schema-authored and runtime-created entities stable across restart bootstrap", () => {
-    const store = createGraphStore();
-    bootstrap(store, core, coreGraphBootstrapOptions);
-    bootstrap(store, testGraph, coreGraphBootstrapOptions);
-
-    const graph = createGraphClient(store, testGraph, testDefs);
-    const coreGraph = createGraphClient(store, core);
-    const runtimeId = graph.item.create({ name: "Runtime Item", title: "One" });
-    const runtimeEntity = graph.item.get(runtimeId);
-    const schemaType = coreGraph.type.get(typeId(testGraph.item));
-    const snapshotBeforeRestart = canonicalizeSnapshot(store.snapshot());
-
-    expect(schemaType.createdAt?.toISOString()).toBe(bootstrapTimestampIso);
-    expect(schemaType.updatedAt?.toISOString()).toBe(bootstrapTimestampIso);
-    expect(runtimeEntity.createdAt?.toISOString()).not.toBe(bootstrapTimestampIso);
-    expect(runtimeEntity.updatedAt?.toISOString()).not.toBe(bootstrapTimestampIso);
-
-    const restartedStore = createGraphStore(store.snapshot());
-    const versionBeforeBootstrap = restartedStore.version();
-    bootstrap(restartedStore, core, coreGraphBootstrapOptions);
-    bootstrap(restartedStore, testGraph, coreGraphBootstrapOptions);
-
-    const restartedGraph = createGraphClient(restartedStore, testGraph, testDefs);
-    const restartedCoreGraph = createGraphClient(restartedStore, core);
-    const restartedRuntimeEntity = restartedGraph.item.get(runtimeId);
-    const restartedSchemaType = restartedCoreGraph.type.get(typeId(testGraph.item));
-
-    expect(restartedStore.version()).toBe(versionBeforeBootstrap);
-    expect(canonicalizeSnapshot(restartedStore.snapshot())).toEqual(snapshotBeforeRestart);
-    expect(restartedRuntimeEntity.name).toBe("Runtime Item");
-    expect(restartedRuntimeEntity.title).toBe("One");
-    expect(restartedRuntimeEntity.createdAt?.toISOString()).toBe(
-      runtimeEntity.createdAt?.toISOString(),
-    );
-    expect(restartedRuntimeEntity.updatedAt?.toISOString()).toBe(
-      runtimeEntity.updatedAt?.toISOString(),
-    );
-    expect(restartedSchemaType.createdAt?.toISOString()).toBe(bootstrapTimestampIso);
-    expect(restartedSchemaType.updatedAt?.toISOString()).toBe(bootstrapTimestampIso);
-  });
-
   it("seeds domain-owned icons and reuses them across additive bootstrap passes", () => {
     const store = createGraphStore();
     bootstrap(store, core, coreGraphBootstrapOptions);

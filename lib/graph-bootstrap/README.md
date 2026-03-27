@@ -26,6 +26,7 @@ internals rather than additional public entrypoints.
 ## What It Does Not Own
 
 - typed graph client APIs
+- client-facing composition behavior over bootstrapped stores or snapshots
 - sync transport or HTTP/query helpers
 - kernel ids, store primitives, or schema authoring
 - authority persistence or session logic

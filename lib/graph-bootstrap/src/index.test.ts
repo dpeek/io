@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createGraphClient } from "@io/graph-client";
-import { createGraphStore, typeId } from "@io/graph-kernel";
+import { createGraphStore, edgeId, typeId } from "@io/graph-kernel";
 
 import { bootstrap, createBootstrappedSnapshot, requireGraphBootstrapCoreSchema } from "./index.js";
 import * as graphBootstrap from "./index.js";
@@ -25,30 +24,34 @@ describe("graph-bootstrap package surface", () => {
 });
 
 describe("graph-bootstrap examples", () => {
-  it("bootstraps a live store for a graph client", () => {
+  it("bootstraps core and domain schema facts into a live store", () => {
     const store = createGraphStore();
     const coreSchema = requireGraphBootstrapCoreSchema(core);
+    const nodeCreatedAtPredicateId = edgeId(core.node.fields.createdAt);
+    const nodeNamePredicateId = edgeId(core.node.fields.name);
+    const nodeTypePredicateId = edgeId(core.node.fields.type);
 
     bootstrap(store, core, coreGraphBootstrapOptions);
     bootstrap(store, testGraph, { ...coreGraphBootstrapOptions, coreSchema });
 
-    const graph = createGraphClient(store, testDefs);
-    const runtimeId = graph.item.create({ name: "Example Item", title: "One" });
-
-    expect(graph.type.get(typeId(testGraph.item)).createdAt?.toISOString()).toBe(
+    expect(store.facts(typeId(testGraph.item), nodeTypePredicateId)[0]?.o).toBe(typeId(core.type));
+    expect(store.facts(typeId(testGraph.item), nodeNamePredicateId)[0]?.o).toBe(
+      testGraph.item.values.name,
+    );
+    expect(store.facts(typeId(testGraph.item), nodeCreatedAtPredicateId)[0]?.o).toBe(
       bootstrapTimestampIso,
     );
-    expect(graph.item.get(runtimeId).title).toBe("One");
   });
 
-  it("creates client-safe snapshots with caller-supplied bootstrap options", () => {
+  it("creates bootstrapped snapshots with caller-supplied bootstrap options", () => {
     const snapshot = createBootstrappedSnapshot(testDefs, coreGraphBootstrapOptions);
     const store = createGraphStore(snapshot);
-    const graph = createGraphClient(store, testDefs);
+    const iconSvgPredicateId = edgeId(core.icon.fields.svg);
+    const nodeCreatedAtPredicateId = edgeId(core.node.fields.createdAt);
 
-    expect(graph.type.get(typeId(testGraph.item)).createdAt?.toISOString()).toBe(
+    expect(store.facts(typeId(testGraph.item), nodeCreatedAtPredicateId)[0]?.o).toBe(
       bootstrapTimestampIso,
     );
-    expect(graph.icon.get(graphIconSeeds.string.id).svg).toContain("<svg");
+    expect(store.facts(graphIconSeeds.string.id, iconSvgPredicateId)[0]?.o).toContain("<svg");
   });
 });

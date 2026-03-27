@@ -43,8 +43,8 @@ export async function run(paths: string[]) {
 
   try {
     await $`tsgo --noEmit`;
-    await $`oxfmt ${targets}`;
-    await $`oxlint --fix ${targets}`;
+    await $`vp fmt ${targets}`;
+    await $`vp lint --fix ${targets}`;
     if (await hasTestTargets(targets)) {
       await $`bun test ${targets}`;
     }

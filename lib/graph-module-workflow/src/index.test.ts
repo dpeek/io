@@ -8,14 +8,14 @@ import {
   documentBlockKind,
   documentPlacement,
   documentSchema,
-} from "./document/schema.js";
+} from "./document.js";
 import {
   envVar,
   envVarNameBlankMessage,
   envVarNameInvalidMessage,
   envVarNamePattern,
   envVarSchema,
-} from "./env-var/schema.js";
+} from "./env-var.js";
 import { workflow as canonicalWorkflow } from "./index.js";
 import * as workflowExports from "./index.js";
 import {

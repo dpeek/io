@@ -16,6 +16,7 @@ transport helpers.
 ## What It Owns
 
 - typed graph client construction over `GraphStore`
+- composition of bootstrapped stores and snapshots into typed and synced clients
 - entity refs, predicate refs, and field-group refs
 - local create, update, delete, and typed query helpers
 - client-facing validation results and `GraphValidationError`

@@ -1,12 +1,15 @@
 {
   "editor.defaultFormatter": "oxc.oxc-vscode",
+  "oxc.fmt.configPath": "./vite.config.ts",
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxc": "explicit"
+  },
   "typescript.preferences.importModuleSpecifierEnding": "js",
   "typescript.reportStyleChecksAsWarnings": false,
   "typescript.updateImportsOnFileMove.enabled": "always",
   "typescript.experimental.useTsgo": true,
-  "oxc.enable": true,
   "explorer.confirmDragAndDrop": false,
   "explorer.confirmDelete": false,
   "workbench.startupEditor": "none",
@@ -15,17 +18,12 @@
   "files.exclude": {
     "**/.vscode": false,
     "**/node_modules": false,
-    "**/.oxlintrc.json": false,
-    "**/.oxfmtrc.json": false,
     "**/bun.lock": false,
     "**/.gitignore": false,
     "**/tsconfig.json": false,
     "**/package.json": false,
     "**/bunfig.toml": false,
     "**/.env": false,
-    "**/components.json": false,
-    "**/tmp": false,
-    "**/skills-lock.json": false,
-    "**/.agents": false
+    "**/tmp": false
   }
 }
