@@ -23,9 +23,9 @@ defines the reusable platform model that later surfaces should converge on.
 The repo currently has three different read/query shapes:
 
 - local typed entity queries via `TypeQuerySpec` in
-  `../../lib/graph-client/src/core.ts`
+  `../../lib/graph-client/src/app.ts`
 - one workflow-specific serialized read transport via
-  `../../src/web/lib/workflow-transport.ts`
+  `../../lib/app/src/web/lib/workflow-transport.ts`
 - the Branch 3 target `ReadQuery` contract described in
   `../branch/03-sync-query-and-projections.md`
 
@@ -43,7 +43,7 @@ What exists today:
   `requestSerializedQuery(...)` helper so browser, MCP, and future callers can
   issue the generic envelope without depending on workflow-specific request
   shapes
-- `../../src/web/lib/authority.ts` now exposes one reusable
+- `../../lib/app/src/web/lib/authority.ts` now exposes one reusable
   `executeSerializedQuery(...)` seam that normalizes serialized requests and
   routes the first supported families through bounded authority-owned plans
 - authority-owned workflow reads rebuild from authoritative graph state and
@@ -663,8 +663,8 @@ type RendererBinding = {
 ```
 
 The first shared web contract for this model now lives in
-`../../src/web/lib/query-container.ts` and is exported as
-`@io/core/web/query-container`. It covers:
+`../../lib/app/src/web/lib/query-container.ts` and is exported as
+`@io/app/web/query-container`. It covers:
 
 - `QueryContainerSpec` for saved and inline query bindings
 - `RendererBinding`, `QueryRendererCapability`, and
@@ -679,11 +679,11 @@ The first shared web contract for this model now lives in
   shared page caching, per-container pagination state, explicit refresh, and
   fail-closed stale-cursor recovery
 - the first shared browser renderer registry in
-  `../../src/web/components/query-renderers.tsx` with stable built-in ids
+  `../../lib/app/src/web/components/query-renderers.tsx` with stable built-in ids
   `core:list`, `core:table`, and `core:card-grid`
 - the first shared browser mount seams in
-  `../../src/web/components/query-container-surface.tsx` and
-  `../../src/web/components/query-route-mount.tsx` so routes can mount query
+  `../../lib/app/src/web/components/query-container-surface.tsx` and
+  `../../lib/app/src/web/components/query-route-mount.tsx` so routes can mount query
   containers through shared validation, loading, error, empty, and pagination
   chrome instead of route-local wiring
 
@@ -800,12 +800,12 @@ The editor must display human labels but bind stable field ids internally.
 
 Current proof status:
 
-- `../../src/web/lib/query-editor.ts` now defines the shared form-first draft,
+- `../../lib/app/src/web/lib/query-editor.ts` now defines the shared form-first draft,
   query surface catalog, validation rules, and serialization bridge into the
   generic `SerializedQueryRequest` plus `QueryParameterDefinition[]`
-- `../../src/web/components/query-editor.tsx` now mounts that draft model
+- `../../lib/app/src/web/components/query-editor.tsx` now mounts that draft model
   through typed source, filter, sort, pagination, and parameter sections
-- `../../src/web/lib/query-workbench.ts` now adds shared route-state parsing,
+- `../../lib/app/src/web/lib/query-workbench.ts` now adds shared route-state parsing,
   draft preview serialization, browser-persisted proof saved-query/view
   storage, editor hydration for reopen flows, saved-source resolution with
   parameter overrides, and a bounded collection preview executor for the

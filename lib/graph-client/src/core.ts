@@ -409,7 +409,7 @@ export type FlatPredicateEntry = {
   predicate: EdgeOutput;
 };
 
-export type PredicateValue = unknown[] | unknown | undefined;
+export type PredicateValue = unknown;
 export type ReadPredicateValueOptions = {
   strictRequired?: boolean;
 };

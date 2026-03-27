@@ -14,7 +14,7 @@
     "noUnusedLocals": true,
     "resolveJsonModule": true,
     "paths": {
-      "@io/core/*": ["./src/*"],
+      "@io/app/*": ["./lib/app/src/*"],
       "@io/graph-authority": ["./lib/graph-authority/src/index.ts"],
       "@io/graph-bootstrap": ["./lib/graph-bootstrap/src/index.ts"],
       "@io/graph-client": ["./lib/graph-client/src/index.ts"],
@@ -35,5 +35,5 @@
     "verbatimModuleSyntax": true,
     "noEmit": true
   },
-  "include": ["src/**/*", "io.ts"]
+  "include": ["auth.ts", "io.ts", "vite.config.ts"]
 }

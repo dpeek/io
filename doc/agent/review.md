@@ -2,7 +2,7 @@
 
 Current repo note:
 
-- review handling exists in [service.ts](../../src/agent/service.ts)
+- review handling exists in [service.ts](../../lib/app/src/agent/service.ts)
 - the current repo config keeps `reviewPlanningEnabled = false` in `./io.ts`, so
   `In Review` tasks are not auto-routed today
 - use this contract for manual review runs or if review routing is re-enabled in

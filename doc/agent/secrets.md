@@ -33,7 +33,7 @@ contracts it described are now implemented.
 
 - [core secret type](../../lib/graph-module-core/src/core/secret.ts)
 - [env-var type](../../lib/graph-module-workflow/src/env-var/type.ts)
-- [runtime schema](../../src/graph/runtime/schema.ts)
+- [runtime schema](../../lib/app/src/graph/runtime/schema.ts)
 - [type-module helpers](../../lib/graph-module/src/type-module.ts)
-- [web authority](../../src/web/lib/authority.ts)
-- [MCP schema filtering](../../src/mcp/schema.ts)
+- [web authority](../../lib/app/src/web/lib/authority.ts)
+- [MCP schema filtering](../../lib/app/src/mcp/schema.ts)

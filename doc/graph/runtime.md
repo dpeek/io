@@ -5,7 +5,7 @@
 This document is the entry point for agents working on the graph engine's
 low-level runtime seams after the package split.
 
-There is no longer a public non-React `@io/core/graph/runtime` surface. The
+There is no longer a public non-React `@io/app/graph/runtime` surface. The
 old catch-all runtime layer has been collapsed into the owning packages plus a
 small extracted module-authoring surface.
 
@@ -92,8 +92,8 @@ Key source files:
 Key source files:
 
 - `../../lib/graph-module-core/src/index.ts`
-- `../../lib/graph-module-core/src/core.ts`
-- `../../lib/graph-module-core/src/core/bootstrap.ts`
+- `../../lib/graph-module-core/src/app.ts`
+- `../../lib/graph-module-core/src/app/bootstrap.ts`
 - `../../lib/graph-module-core/src/icon/seed.ts`
 - `../../lib/graph-module-core/src/icon/resolve.ts`
 
@@ -111,13 +111,13 @@ package:
   capabilities, graph-aware SVG helpers, `GraphIcon`, structured-value
   editors, and tag-aware entity-reference behavior
 
-The root package no longer exports `@io/core/graph/runtime/react`, and the old
+The root package no longer exports `@io/app/graph/runtime/react`, and the old
 `react-opentui` adapter was removed because its runtime provider and query
 hooks were host-neutral.
 
 ### Internal Inspection Helpers
 
-`../../src/graph/inspect.ts` contains internal helpers for turning store state
+`../../lib/app/src/graph/inspect.ts` contains internal helpers for turning store state
 into plain objects and schema views.
 
 Those helpers are intentionally not exported from the package surface because

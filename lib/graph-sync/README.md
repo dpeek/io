@@ -62,8 +62,10 @@ Everything intended for consumers is re-exported from the package root.
 
 ## Build Output
 
-Run `bun run build` in this package to emit `./out`.
-Run `bun test` in this package to execute the extracted sync-core unit tests.
+Run `vp run @io/graph-sync#build` from the workspace root, or `bun run build`
+in this package, to emit `./out`.
+Run `vp run @io/graph-sync#test` from the workspace root, or `bun run test` in
+this package, to execute the extracted sync-core unit tests.
 
 Tests stay colocated in `./src`, but the build uses `tsconfig.build.json` so
 `*.test.ts` files are not emitted into `./out`.

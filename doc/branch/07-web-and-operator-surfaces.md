@@ -36,7 +36,7 @@ policy, sync, or module contracts.
 
 ### Likely Repo Boundaries
 
-- `src/web/`
+- `lib/app/src/web/`
 - shared web component packages
 - TUI or operator integration surfaces that consume workflow state
 
@@ -164,7 +164,7 @@ Branch 7 owns the surface model that sits between upstream platform contracts
 and concrete UI screens.
 
 Inference: the bootstrap and module-host interfaces below are still partly
-provisional. `src/graph/runtime/contracts.ts` now publishes the stable Branch 2
+provisional. `lib/app/src/graph/runtime/contracts.ts` now publishes the stable Branch 2
 minimum for identity bootstrap:
 
 - `WebPrincipalSession`
@@ -172,7 +172,7 @@ minimum for identity bootstrap:
 - `WebPrincipalBootstrapPayload`
 
 The richer app-shell, capability, and module-host surfaces below continue to
-normalize the seams implied by the current `src/web` shell, the recommended
+normalize the seams implied by the current `lib/app/src/web` shell, the recommended
 `web/app-shell`, `web/module-host`, and `web/auth-bridge` split, and the
 Branch 7 brief.
 
@@ -439,9 +439,9 @@ Responsibilities:
 
 Current implementation anchors:
 
-- `src/web/components/graph-runtime-bootstrap.tsx`
-- `src/web/lib/server-routes.ts`
-- `src/web/worker/index.ts`
+- `lib/app/src/web/components/graph-runtime-bootstrap.tsx`
+- `lib/app/src/web/lib/server-routes.ts`
+- `lib/app/src/web/worker/index.ts`
 
 Contract rules:
 
@@ -454,7 +454,7 @@ Contract rules:
 ### `WebPrincipalBootstrapPayload`
 
 The stable current-proof bootstrap contract is the minimal identity payload
-published from `src/graph/runtime/contracts.ts`.
+published from `lib/app/src/graph/runtime/contracts.ts`.
 
 Canonical shape:
 
@@ -524,7 +524,7 @@ Contract rules:
 
 ### `OperatorSessionFeed`
 
-Inference: the current live and retained TUI is CLI-owned in `src/agent`, but
+Inference: the current live and retained TUI is CLI-owned in `lib/app/src/agent`, but
 the branch brief requires operator surfaces as downstream product contracts.
 
 Canonical shape:
@@ -553,9 +553,9 @@ Branch 7 spans four runtime zones.
 
 Current repo anchors:
 
-- `src/web/router.tsx`
-- `src/web/routes/__root.tsx`
-- `src/web/components/app-shell.tsx`
+- `lib/app/src/web/router.tsx`
+- `lib/app/src/web/routes/__root.tsx`
+- `lib/app/src/web/components/app-shell.tsx`
 
 Responsibilities:
 
@@ -577,10 +577,10 @@ Derived state:
 
 Current repo anchors:
 
-- `src/web/components/graph-runtime-bootstrap.tsx`
-- `src/web/components/graph-explorer-page.tsx`
-- `src/web/components/sync-page.tsx`
-- `src/web/components/views-page.tsx`
+- `lib/app/src/web/components/graph-runtime-bootstrap.tsx`
+- `lib/app/src/web/components/graph-explorer-page.tsx`
+- `lib/app/src/web/components/sync-page.tsx`
+- `lib/app/src/web/components/views-page.tsx`
 
 Responsibilities:
 
@@ -602,8 +602,8 @@ Derived state:
 
 Current repo anchors:
 
-- `src/web/worker/index.ts`
-- `src/web/lib/server-routes.ts`
+- `lib/app/src/web/worker/index.ts`
+- `lib/app/src/web/lib/server-routes.ts`
 
 Responsibilities:
 
@@ -619,11 +619,11 @@ Authoritative state:
 
 Current repo anchors:
 
-- `src/web/lib/graph-authority-do.ts`
-- `src/web/lib/authority.ts`
-- `src/web/worker/index.ts`
-- `src/agent/tui-runtime.ts`
-- `src/agent/server.ts`
+- `lib/app/src/web/lib/graph-authority-do.ts`
+- `lib/app/src/web/lib/authority.ts`
+- `lib/app/src/web/worker/index.ts`
+- `lib/app/src/agent/tui-runtime.ts`
+- `lib/app/src/agent/server.ts`
 
 Responsibilities:
 
@@ -1027,18 +1027,18 @@ Rules:
 
 ## 13. Recommended First Code Targets
 
-- `src/web/components/graph-runtime-bootstrap.tsx`: extract a formal browser
+- `lib/app/src/web/components/graph-runtime-bootstrap.tsx`: extract a formal browser
   bootstrap contract from the current whole-graph proof
-- `src/web/router.tsx`, `src/web/routes/__root.tsx`, and
-  `src/web/components/app-shell.tsx`: replace static built-in navigation with a
+- `lib/app/src/web/router.tsx`, `lib/app/src/web/routes/__root.tsx`, and
+  `lib/app/src/web/components/app-shell.tsx`: replace static built-in navigation with a
   route-contribution registry
-- new `src/web/module-host/` package or equivalent: host registry, guard
+- new `lib/app/src/web/module-host/` package or equivalent: host registry, guard
   logic, and surface host context
-- `src/web/components/graph-explorer-page.tsx`,
-  `src/web/components/sync-page.tsx`, and
-  `src/web/components/views-page.tsx`: register existing built-in
+- `lib/app/src/web/components/graph-explorer-page.tsx`,
+  `lib/app/src/web/components/sync-page.tsx`, and
+  `lib/app/src/web/components/views-page.tsx`: register existing built-in
   surfaces through the same host contract
-- `src/web/lib/server-routes.ts` and `src/web/worker/index.ts`: split future
+- `lib/app/src/web/lib/server-routes.ts` and `lib/app/src/web/worker/index.ts`: split future
   bootstrap/session delivery from raw graph sync and mutation routes
-- `src/agent/tui/` plus future workflow operator routes: adapt retained or
+- `lib/app/src/agent/tui/` plus future workflow operator routes: adapt retained or
   graph-native session feeds into the branch-owned operator-surface contract

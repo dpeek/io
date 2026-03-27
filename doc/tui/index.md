@@ -13,16 +13,16 @@ stable home.
 package.
 
 - keep terminal workflow screen composition, shell chrome, and CLI entry flow
-  in `../../src/tui/*`
+  in `../../lib/app/src/tui/*`
 - keep graph source resolution, startup hydration sequencing, initial
   project-or-branch selection, and startup failure presentation in
-  `../../src/tui/server.ts` and `../../src/tui/startup.ts`
+  `../../lib/app/src/tui/server.ts` and `../../lib/app/src/tui/startup.ts`
 - keep reusable host-neutral graph React bindings in
   `../../lib/graph-react/src/*`
 - keep reusable workflow projection contracts, sync-scope descriptors, and
   read helpers in `../../lib/graph-module-workflow/src/*` and
-  `../../src/graph/runtime/*`
-- keep the retained Linear/session monitor in `../../src/agent/tui/*` until
+  `../../lib/app/src/graph/runtime/*`
+- keep the retained Linear/session monitor in `../../lib/app/src/agent/tui/*` until
   workflow views replace it
 
 ## Entry Points
@@ -66,7 +66,7 @@ The first workflow TUI action model is intentionally narrow. It exposes only:
 - one branch-scoped session action for the selected `WorkflowBranch`
 - one commit-scoped session action for the selected `WorkflowCommit`
 
-Both actions are derived from selected subject state in `src/tui/model.ts`
+Both actions are derived from selected subject state in `lib/app/src/tui/model.ts`
 rather than from ad hoc renderer checks. The current derived subject fields are:
 
 - selected branch state
@@ -123,7 +123,7 @@ Non-goals for this action slice:
 - no general editing surface for branch goals, commit titles, or repository
   metadata
 - no launch-history, replay, finalization, or retained-transcript UX in
-  `src/tui/*`; those remain outside this minimal action slice until later work
+  `lib/app/src/tui/*`; those remain outside this minimal action slice until later work
 
 ## Startup Contract
 
@@ -169,39 +169,39 @@ Non-goals for this first contract:
 
 ## Migration Notes
 
-- `../../src/tui/*` owns workflow branch-board, branch-detail, and commit-queue
+- `../../lib/app/src/tui/*` owns workflow branch-board, branch-detail, and commit-queue
   composition, projection-consumption hooks, plus shell focus, selection, and
   derived action availability behavior
-- `../../src/agent/tui/*` still owns the live supervisor or worker monitor,
+- `../../lib/app/src/agent/tui/*` still owns the live supervisor or worker monitor,
   retained attach and replay flows, transcript shaping, and Codex event
   normalization
-- later session-launch work should start from `../../src/tui/*` because the
+- later session-launch work should start from `../../lib/app/src/tui/*` because the
   workflow shell already owns branch and commit selection; launch wiring should
   reuse shared runtime services rather than copy legacy session-monitor UI
-- later replay work should stay in `../../src/agent/tui/*` until the workflow
+- later replay work should stay in `../../lib/app/src/agent/tui/*` until the workflow
   shell can read graph-backed `AgentSession` and `AgentSessionEvent` history
   directly
-- keep workflow shell regressions in `../../src/tui/ui.test.ts` and retained
-  session-monitor regressions in `../../src/agent/tui/ui.test.ts` so the
+- keep workflow shell regressions in `../../lib/app/src/tui/ui.test.ts` and retained
+  session-monitor regressions in `../../lib/app/src/agent/tui/ui.test.ts` so the
   product boundary stays explicit while both surfaces coexist
 
 ## Code Surface
 
-- [tui/index.ts](../../src/tui/index.ts): public TUI surface exports
-- [tui/projection.ts](../../src/tui/projection.ts): workflow-owned React hooks
+- [tui/index.ts](../../lib/app/src/tui/index.ts): public TUI surface exports
+- [tui/projection.ts](../../lib/app/src/tui/projection.ts): workflow-owned React hooks
   that bind synced graph runtimes to projection reads for branch-board and
   commit-queue screens
-- [tui/server.ts](../../src/tui/server.ts): `io tui` CLI parsing, synced graph
+- [tui/server.ts](../../lib/app/src/tui/server.ts): `io tui` CLI parsing, synced graph
   bootstrap, and startup sequencing
-- [tui/startup.ts](../../src/tui/startup.ts): resolved graph source and initial
+- [tui/startup.ts](../../lib/app/src/tui/startup.ts): resolved graph source and initial
   workflow scope contract used by `io tui`
-- [tui/model.ts](../../src/tui/model.ts): startup loading and failure surfaces
+- [tui/model.ts](../../lib/app/src/tui/model.ts): startup loading and failure surfaces
   plus workflow screen models, selected subject state, and derived action
   availability built from startup reads and projection queries
-- [tui/layout.ts](../../src/tui/layout.ts): render-oriented branch board,
+- [tui/layout.ts](../../lib/app/src/tui/layout.ts): render-oriented branch board,
   branch detail, commit queue, and operator action presentation model
-- [tui/tui.tsx](../../src/tui/tui.tsx): OpenTUI runtime wrapper and shell
+- [tui/tui.tsx](../../lib/app/src/tui/tui.tsx): OpenTUI runtime wrapper and shell
   rendering plus startup hydration, failure presentation, and read-only focus
   and selection handling
-- [tui/ui.test.ts](../../src/tui/ui.test.ts): startup hydration and workflow UI
+- [tui/ui.test.ts](../../lib/app/src/tui/ui.test.ts): startup hydration and workflow UI
   coverage

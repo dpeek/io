@@ -38,7 +38,7 @@ Without this branch, every new product slice remains hard-wired into the repo.
 
 ### Likely Repo Boundaries
 
-- `src/graph/modules/`
+- `lib/app/src/graph/modules/`
 - future module runtime and installer packages
 - web module host registration surfaces
 - agent workflow and command registration surfaces
@@ -111,7 +111,7 @@ Branch 4 owns the graph-scoped module lifecycle:
 This branch exists separately because the current repo already proves module-
 shaped authoring, but not module-shaped activation. Without Branch 4, new
 schema or UI slices still require manual wiring in source files such as
-`src/web/lib/authority.ts` and static route composition in `src/web/routes/`.
+`lib/app/src/web/lib/authority.ts` and static route composition in `lib/app/src/web/routes/`.
 
 The platform outcome is simple: one graph should be able to install a module
 and have that module become active through authoritative, inspectable, and
@@ -669,14 +669,14 @@ registrations.
 
 ### Current repo mapping
 
-- `src/graph/runtime/contracts.ts` already provides root-safe
+- `lib/app/src/graph/runtime/contracts.ts` already provides root-safe
   `ModulePermissionRequest`, `ObjectViewSpec`, `WorkflowSpec`, and
   `GraphCommandSpec`.
-- `src/graph/modules/` already provides built-in schema slices.
-- `src/web/lib/authority.ts` currently hardcodes `{ ...core, ...pkm, ...ops }`
+- `lib/app/src/graph/modules/` already provides built-in schema slices.
+- `lib/app/src/web/lib/authority.ts` currently hardcodes `{ ...core, ...pkm, ...ops }`
   into one runtime graph. Branch 4 replaces that hardcoded assembly with a
   registry built from installed module records.
-- `src/web/routes/` currently uses static file routes. Branch 4 does not own
+- `lib/app/src/web/routes/` currently uses static file routes. Branch 4 does not own
   route UX, but it must expose the registration data that lets Branch 7 host
   module-provided surfaces.
 
@@ -1013,19 +1013,19 @@ own fact storage itself.
   Publish authority-owned permission contracts from `graph-authority`, and keep
   module-authored manifest or definition contracts in `graph-module` instead of
   reviving a mixed runtime bucket.
-- `lib/graph-module/src/index.ts` and `src/graph/index.ts`
+- `lib/graph-module/src/index.ts` and `lib/app/src/graph/index.ts`
   Keep module-definition authorship on `graph-module`, and keep the root graph
   surface curated instead of reintroducing a catch-all runtime barrel.
-- `src/graph/modules/workflow/env-var/module.ts`
+- `lib/app/src/graph/modules/workflow/env-var/module.ts`
   Wrap the existing env-var schema and secret-aware descriptors as the first
   optional built-in module bundle.
-- `src/graph/modules/workflow/document/module.ts`
+- `lib/app/src/graph/modules/workflow/document/module.ts`
   Wrap the existing document slice as a second optional built-in bundle with
   one real object-view and workflow registration.
-- `src/web/lib/module-catalog.ts` and `src/web/lib/module-installer.ts`
+- `lib/app/src/web/lib/module-catalog.ts` and `lib/app/src/web/lib/module-installer.ts`
   Add trusted builtin or local discovery plus authoritative planning and
   activation logic here.
-- `src/web/lib/authority.ts`, `src/web/lib/graph-authority-do.ts`, and
-  `src/web/lib/server-routes.ts`
+- `lib/app/src/web/lib/authority.ts`, `lib/app/src/web/lib/graph-authority-do.ts`, and
+  `lib/app/src/web/lib/server-routes.ts`
   Extend the existing web authority with installed-module storage and module
   install or uninstall endpoints.

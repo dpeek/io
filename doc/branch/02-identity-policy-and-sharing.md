@@ -41,7 +41,7 @@ module permissions, agent behavior, and any future federation surface.
 ### Likely Repo Boundaries
 
 - graph policy contracts
-- auth bridge code in `src/web/`
+- auth bridge code in `lib/app/src/web/`
 - future authority policy runtime
 - module permission descriptors
 
@@ -446,7 +446,7 @@ Identifier rules:
   become live inputs to principal projection.
 - `policyVersion` is the authority-served policy snapshot version for one graph.
   In the current single-graph web proof, the authoritative source is the
-  compiled contract snapshot in `src/web/lib/policy-version.ts`, not a graph
+  compiled contract snapshot in `lib/app/src/web/lib/policy-version.ts`, not a graph
   row or client cache.
 - the Worker auth bridge and the authority runtime must import that same
   `policyVersion` source so request projection and stale-context checks compare
@@ -472,10 +472,10 @@ Identifier rules:
   - a fresh request built after that lookup succeeds without any separate
     invalidation channel
 - proof anchors:
-  - `src/web/lib/policy-version.test.ts`
-  - `src/web/worker/index.test.ts`
-  - `src/web/lib/authority.test.ts`
-  - `src/web/lib/graph-authority-do.test.ts`
+  - `lib/app/src/web/lib/policy-version.test.ts`
+  - `lib/app/src/web/worker/index.test.ts`
+  - `lib/app/src/web/lib/authority.test.ts`
+  - `lib/app/src/web/lib/graph-authority-do.test.ts`
 
 Lifecycle rules:
 
@@ -597,7 +597,7 @@ Contract rules:
 - `authorizeCommand(...)` uses command policy plus predicate policy; either may
   deny
 - `ModulePermissionRequest` is published once from
-  `src/graph/runtime/contracts.ts`; Branch 2 does not define a second install
+  `lib/app/src/graph/runtime/contracts.ts`; Branch 2 does not define a second install
   request shape
 - `ModulePermissionRequest.key` is the stable permission identifier used for
   install plans, durable grants, approval UI state, and revocation
@@ -658,7 +658,7 @@ Current Branch 2 read baseline in the single-graph proof:
   shared predicates remain omitted from sync and fail explicit direct reads with
   `policy.read.forbidden`
 - the end-to-end proof for those read-path outcomes lives in
-  `src/web/lib/authority.test.ts` and `src/web/lib/graph-authority-do.test.ts`
+  `lib/app/src/web/lib/authority.test.ts` and `lib/app/src/web/lib/graph-authority-do.test.ts`
 
 ## 5. Runtime Architecture
 
@@ -733,7 +733,7 @@ Stored in the Branch 1 graph tables:
 Stored in the current single-graph web authority code:
 
 - the authoritative compiled `policyVersion` constant in
-  `src/web/lib/policy-version.ts`
+  `lib/app/src/web/lib/policy-version.ts`
 
 Stored in the Better Auth store:
 
@@ -1044,19 +1044,19 @@ Important failure modes:
 
 ## 13. Recommended First Code Targets
 
-- `src/graph/runtime/schema.ts`: keep `GraphFieldAuthority` stable and add the
+- `lib/app/src/graph/runtime/schema.ts`: keep `GraphFieldAuthority` stable and add the
   principal-aware policy descriptor surface beside it rather than inside route
   code
-- `src/graph/runtime/contracts.ts`: publish the canonical `AdmissionPolicy`
+- `lib/app/src/graph/runtime/contracts.ts`: publish the canonical `AdmissionPolicy`
   contract beside the existing auth and grant vocabulary
-- `src/graph/runtime/contracts.ts`: publish the canonical
+- `lib/app/src/graph/runtime/contracts.ts`: publish the canonical
   `ModulePermissionRequest` plus the command-policy vocabulary it lowers
   through
 - `lib/graph-authority/src/replication.ts`: add principal-aware filtering
   on top of the existing replication visibility rules
-- `src/web/lib/authority.ts`: introduce request-bound `AuthorizationContext`
+- `lib/app/src/web/lib/authority.ts`: introduce request-bound `AuthorizationContext`
   evaluation and final read or write enforcement
-- `src/web/lib/auth-bridge.ts`: add the Better Auth session-to-principal
+- `lib/app/src/web/lib/auth-bridge.ts`: add the Better Auth session-to-principal
   projection seam
 - `lib/graph-module-core/src/core/`: add core principal, role, capability, and share
   graph types that downstream branches can reference, including

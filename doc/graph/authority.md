@@ -70,7 +70,7 @@ Consumer-owned for now:
 - dispatch registries and command naming
 - HTTP or RPC routes such as `POST /api/commands`
 - Better Auth request/session projection and host bridges
-- Durable Object and SQLite storage adapters in `src/web/lib/*`
+- Durable Object and SQLite storage adapters in `lib/app/src/web/lib/*`
 - per-type method lowering APIs above the shared write boundary
 
 ## Predicate-Level Visibility
@@ -250,7 +250,7 @@ The current web Worker path keeps that boundary explicit in durable storage as
 well.
 
 - graph facts and retained sync history live in raw-SQL SQLite-backed Durable
-  Object tables owned by `../../src/web/lib/graph-authority-do.ts`
+  Object tables owned by `../../lib/app/src/web/lib/graph-authority-do.ts`
 - the Durable Object constructor bootstraps SQL schema synchronously, while full
   runtime hydration stays in `blockConcurrencyWhile(...)`
 - plaintext secret values live only in the authority-only `io_secret_value`

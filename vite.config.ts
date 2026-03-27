@@ -7,6 +7,14 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  staged: {
+    "*": "vp check --fix",
+  },
+  run: {
+    cache: {
+      scripts: true,
+    },
+  },
   plugins: [
     cloudflare({
       persistState: {
@@ -16,13 +24,28 @@ export default defineConfig({
     tanstackRouter({
       target: "react",
       autoCodeSplitting: true,
-      routesDirectory: "./src/web/routes",
-      generatedRouteTree: "./src/web/routeTree.gen.ts",
+      routesDirectory: "./lib/app/src/web/routes",
+      generatedRouteTree: "./lib/app/src/web/routeTree.gen.ts",
     }),
     react(),
     tailwindPlugin(),
   ],
   build: {
     outDir: resolve("./out/web"),
+  },
+  fmt: {
+    ignorePatterns: ["*.gen.ts", "**/out/**"],
+  },
+  lint: {
+    ignorePatterns: ["*.gen.ts", "**/out/**"],
+    options: {
+      typeAware: true,
+      typeCheck: true,
+    },
+    rules: {
+      "typescript/await-thenable": "off",
+      "typescript/unbound-method": "off",
+      "typescript/no-base-to-string": "off",
+    },
   },
 });

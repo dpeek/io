@@ -42,4 +42,5 @@ The package root re-exports the curated host-neutral surface from `./src`:
 - mutation validation and persisted mutation helpers
 - synced runtime provider, context, sync-state, and query hooks
 
-Run `bun test ./src` in this package to execute the colocated tests.
+Run `vp run @io/graph-react#test` from the workspace root, or `bun run test` in
+this package, to execute the colocated tests.

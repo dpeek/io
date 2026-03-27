@@ -66,7 +66,7 @@ function normalizeMoneyCurrency(value: unknown): MoneyCurrencyKey {
   const token = expectStringInput(value).trim().toLowerCase();
   const currencyKey = currencyByToken.get(token);
   if (!currencyKey) {
-    throw new Error(`Unknown currency "${value}".`);
+    throw new Error(`Unknown currency "${token}".`);
   }
   return currencyKey;
 }

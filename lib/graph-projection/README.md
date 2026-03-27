@@ -26,7 +26,7 @@ live invalidation targeting.
 - authority write sessions, retained-history persistence, or projection storage adapters
 - client transport, HTTP wiring, React hooks, or UI adapters
 - workflow-specific projection row shapes, query logic, or module-local projection manifests
-- web-specific SQL adapters under `src/web/lib/*`
+- web-specific SQL adapters under `lib/app/src/web/lib/*`
 
 ## Package Relationships
 
@@ -65,8 +65,10 @@ Everything intended for consumers is re-exported from the package root.
 
 ## Build Output
 
-Run `bun run build` in this package to emit `./out`.
-Run `bun test` in this package to execute the extracted projection contract
+Run `vp run @io/graph-projection#build` from the workspace root, or
+`bun run build` in this package, to emit `./out`.
+Run `vp run @io/graph-projection#test` from the workspace root, or
+`bun run test` in this package, to execute the extracted projection contract
 tests.
 
 Tests stay colocated in `./src`, but the build uses `tsconfig.build.json` so

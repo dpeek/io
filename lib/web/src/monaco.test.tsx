@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import { MonacoSourceEditor, sourcePreviewMonacoOptions } from "@io/web/monaco";
 import { renderToStaticMarkup } from "react-dom/server";

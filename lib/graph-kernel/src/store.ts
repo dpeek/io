@@ -155,11 +155,7 @@ export function createStore(initialSnapshot?: GraphStoreSnapshot): GraphStore {
     return `${left}\0${right}`;
   }
 
-  function addEdgeId(
-    index: Map<string, Set<GraphId>> | Map<GraphId, Set<GraphId>>,
-    key: string,
-    edgeId: GraphId,
-  ): void {
+  function addEdgeId(index: Map<string, Set<GraphId>>, key: string, edgeId: GraphId): void {
     let edgeIds = index.get(key);
     if (!edgeIds) {
       edgeIds = new Set<GraphId>();

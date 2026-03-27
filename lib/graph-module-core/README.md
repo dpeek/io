@@ -41,7 +41,7 @@ current default DOM/browser implementation, including:
 - the default built-in browser behavior for the current `core:` module
 
 This subpath replaces the former `@io/graph-react-dom` package and the retired
-root `@io/core/graph/adapters/react-dom` compatibility surface.
+root `@io/app/graph/adapters/react-dom` compatibility surface.
 
 The package root stays React-free. Callers that need the browser layer import
 the `react-dom` subpath directly.

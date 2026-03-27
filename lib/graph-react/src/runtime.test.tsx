@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/react */
 
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 
 import { bootstrap } from "@io/graph-bootstrap";
 import { createSyncedGraphClient, createGraphClient } from "@io/graph-client";

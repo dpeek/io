@@ -48,7 +48,7 @@ side:
 - current proof note:
   that `policyFilterVersion` is sourced from the authority-resolved
   `getPolicyVersion()` value, which currently defaults to the shared compiled
-  contract in `src/web/lib/policy-version.ts`, so scoped callers must treat a
+  contract in `lib/app/src/web/lib/policy-version.ts`, so scoped callers must treat a
   version change as a policy-contract rebuild rather than an ordinary data
   delta
 
@@ -81,7 +81,7 @@ The first live invalidation proof is intentionally conservative:
   router restarted, so the caller re-registers from its current scoped cursor
   and performs an explicit scoped `/api/sync` pull. The first shipped caller
   helper for that path now lives in
-  `../../src/web/lib/workflow-review-live-sync.ts`
+  `../../lib/app/src/web/lib/workflow-review-live-sync.ts`
 - direct scoped-delta delivery remains a reserved contract shape; the current
   proof only emits `cursor-advanced`
 
@@ -269,9 +269,9 @@ authoritative sync events:
   explicit graph-or-module request on both bootstrap and incremental refreshes,
   so whole-graph recovery stays available without relying on an implicit
   missing-param fallback.
-- The web Worker is one such consumer: `src/web/lib/graph-authority-do.ts` now owns the SQLite-backed Durable Object storage path, while `src/web/lib/authority.ts` stays focused on the shared web authority behavior and request handlers.
+- The web Worker is one such consumer: `lib/app/src/web/lib/graph-authority-do.ts` now owns the SQLite-backed Durable Object storage path, while `lib/app/src/web/lib/authority.ts` stays focused on the shared web authority behavior and request handlers.
 - The current web authority layer now includes a thin consumer-owned command
-  dispatcher in `src/web/lib/authority.ts` over a shared scoped command seam,
+  dispatcher in `lib/app/src/web/lib/authority.ts` over a shared scoped command seam,
   so routes can lower supported `/api/commands` payloads into the shared write
   boundary without binding directly to one bespoke method entrypoint. Each
   supported command declares its authoritative write scope explicitly, and

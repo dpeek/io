@@ -65,5 +65,7 @@ transport helpers.
 
 ## Build Output
 
-Run `bun run build` in this package to emit `./out`.
-Run `bun test` in this package to execute the package-local tests.
+Run `vp run @io/graph-client#build` from the workspace root, or `bun run build`
+in this package, to emit `./out`.
+Run `vp run @io/graph-client#test` from the workspace root, or `bun run test`
+in this package, to execute the package-local tests.

@@ -1,6 +1,6 @@
 # Agent CLI Overview
 
-The `io` binary dispatches `io <cmd> ...` to `./src/task/<cmd>.ts` and calls
+The `io` binary dispatches `io <cmd> ...` to `./lib/app/src/task/<cmd>.ts` and calls
 that module's exported `run(args)` function.
 
 Current top-level task modules are:
@@ -33,7 +33,7 @@ If `entrypointPath` is omitted, the loader defaults to `./io.ts` plus
 
 - `io tui [entrypointPath] [--graph-url <url>] [--project <projectId>] [--branch <branchId>]`
 
-`io tui` boots the new terminal workflow product shell from `src/tui/*`.
+`io tui` boots the new terminal workflow product shell from `lib/app/src/tui/*`.
 `io agent tui ...` remains the legacy retained session monitor.
 The CLI now initializes the synced workflow graph client before rendering and
 fails closed when startup cannot materialize the initial workflow surface.
@@ -79,13 +79,13 @@ The first workflow TUI startup contract is intentionally small:
 
 ## Relevant Code
 
-- [cli/index.ts](../../src/cli/index.ts): top-level task dispatch
-- [task/agent.ts](../../src/task/agent.ts) and
-  [agent/server.ts](../../src/agent/server.ts): `io agent ...`
-- [task/browser-agent.ts](../../src/task/browser-agent.ts) and
-  [browser-agent/server.ts](../../src/browser-agent/server.ts): `io browser-agent`
-- [task/mcp.ts](../../src/task/mcp.ts) and
-  [mcp/index.ts](../../src/mcp/index.ts): `io mcp ...`
+- [cli/index.ts](../../lib/app/src/cli/index.ts): top-level task dispatch
+- [task/agent.ts](../../lib/app/src/task/agent.ts) and
+  [agent/server.ts](../../lib/app/src/agent/server.ts): `io agent ...`
+- [task/browser-agent.ts](../../lib/app/src/task/browser-agent.ts) and
+  [browser-agent/server.ts](../../lib/app/src/browser-agent/server.ts): `io browser-agent`
+- [task/mcp.ts](../../lib/app/src/task/mcp.ts) and
+  [mcp/index.ts](../../lib/app/src/mcp/index.ts): `io mcp ...`
 
 ## Browser-Agent Command
 

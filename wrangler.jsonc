@@ -3,7 +3,7 @@
   "name": "io",
   "compatibility_date": "2026-02-12",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "./src/web/worker/index.ts",
+  "main": "./lib/app/src/web/worker/index.ts",
   "preview_urls": true,
   "durable_objects": {
     "bindings": [

@@ -54,9 +54,9 @@ an adapter around an external tracker.
 
 ### Likely Repo Boundaries
 
-- `src/agent/`
-- `src/tui/`
-- `src/graph/adapters/react-opentui/`
+- `lib/app/src/agent/`
+- `lib/app/src/tui/`
+- `lib/app/src/graph/adapters/react-opentui/`
 - future workflow-engine and context-retrieval packages
 - graph-native workflow modules
 - workflow TUI surfaces
@@ -181,8 +181,8 @@ Stability target for this branch:
   workflow state
 - a TUI read model for backlog branches, in-flight branches, commit queues, and
   attached repository branch inventory
-- agent runtime changes needed so `src/agent/service.ts`,
-  `src/agent/context.ts`, `src/agent/workspace.ts`, and `src/agent/tui/*` can
+- agent runtime changes needed so `lib/app/src/agent/service.ts`,
+  `lib/app/src/agent/context.ts`, `lib/app/src/agent/workspace.ts`, and `lib/app/src/agent/tui/*` can
   consume graph-native project, repository, branch, and commit state
 
 ### Out of scope
@@ -933,9 +933,9 @@ interface CommitQueueScopeResult {
 ### `ContextBundleRequest`
 
 - purpose: replace today's issue-centric prompt assembly in
-  `src/agent/context.ts` with a graph-backed branch or commit retrieval
+  `lib/app/src/agent/context.ts` with a graph-backed branch or commit retrieval
   contract
-- caller: `src/agent/service.ts` or its graph-native successor
+- caller: `lib/app/src/agent/service.ts` or its graph-native successor
 - callee: workflow context retrieval engine using Branch 3 scope reads
 - inputs:
   - `projectId`
@@ -1186,8 +1186,8 @@ type CodexSessionLaunchResult = CodexSessionLaunchSuccess | CodexSessionLaunchFa
 ### `AgentSessionAppend`
 
 - purpose: persist the same session and event model already used by
-  `src/agent/tui/session-events.ts`
-- caller: `src/agent/service.ts`, `src/agent/runner/codex.ts`, TUI bridge
+  `lib/app/src/agent/tui/session-events.ts`
+- caller: `lib/app/src/agent/service.ts`, `lib/app/src/agent/runner/codex.ts`, TUI bridge
 - callee: authoritative workflow runtime
 - inputs:
   - session creation payloads derived from current `AgentSessionRef`
@@ -1223,26 +1223,26 @@ type CodexSessionLaunchResult = CodexSessionLaunchSuccess | CodexSessionLaunchFa
 
 `Context retrieval engine`
 
-- current equivalent is `src/agent/context.ts` plus repo-local doc resolution
+- current equivalent is `lib/app/src/agent/context.ts` plus repo-local doc resolution
 - new responsibility is to resolve graph-backed branch or commit context bundles
   and freeze them per session
 
 `Codex session launcher`
 
-- current equivalents are `src/agent/service.ts` and
-  `src/agent/runner/codex.ts`
+- current equivalents are `lib/app/src/agent/service.ts` and
+  `lib/app/src/agent/runner/codex.ts`
 - launches interactive sessions against the selected branch or active commit
 - records retained session history through the authoritative runtime
 
 `Workspace manager`
 
-- current equivalent is `src/agent/workspace.ts`
+- current equivalent is `lib/app/src/agent/workspace.ts`
 - remains local process and filesystem machinery
 - manages repository worktree reservation for active commit execution
 
 `Operator surfaces`
 
-- current equivalents are `src/agent/tui/*` and future Branch 7 web surfaces
+- current equivalents are `lib/app/src/agent/tui/*` and future Branch 7 web surfaces
 - consume branch, commit, and session views from graph-backed reads
 
 ### Process boundaries
@@ -1678,7 +1678,7 @@ Branch 1 storage.
 
 ### Slice 3: Graph-backed workflow TUI shell
 
-- goal: build `src/tui` as a new graph-backed workflow surface that renders the
+- goal: build `lib/app/src/tui` as a new graph-backed workflow surface that renders the
   branch board, branch detail, commit queue, and the first explicit operator
   action set
 - prerequisite contracts:
@@ -1696,7 +1696,7 @@ Branch 1 storage.
   - the terminal product surface can render workflow state directly from the
     graph
   - the repo can support a graph-native TUI separate from the legacy
-    `src/agent/tui/*` session monitor
+    `lib/app/src/agent/tui/*` session monitor
   - action availability can be derived from selected branch and commit subject
     state before launch or mutation wiring exists
 - what it postpones:
@@ -1750,19 +1750,19 @@ First action-set rule for Slice 3:
 
 ## 13. Recommended First Code Targets
 
-- `src/graph/modules/workflow/`: add the first built-in graph-native
+- `lib/app/src/graph/modules/workflow/`: add the first built-in graph-native
   workflow module for project, repository, branch, commit, repository-branch,
   repository-commit, session, artifact, decision, and context-bundle types
-- `src/tui/`: add the new graph-backed workflow TUI surface as a sibling to
-  `src/web`
-- `src/graph/adapters/react-opentui/`: provide graph context and query
+- `lib/app/src/tui/`: add the new graph-backed workflow TUI surface as a sibling to
+  `lib/app/src/web`
+- `lib/app/src/graph/adapters/react-opentui/`: provide graph context and query
   consumption for the workflow TUI
-- `src/agent/service.ts`: replace Linear-first task selection with
+- `lib/app/src/agent/service.ts`: replace Linear-first task selection with
   project-backed branch selection and session launch
-- `src/agent/context.ts`: replace issue-centric prompt assembly with
+- `lib/app/src/agent/context.ts`: replace issue-centric prompt assembly with
   branch-specific and commit-specific `ContextBundleRequest` paths
-- `src/agent/tui/session-events.ts`: keep the existing event envelope and move
+- `lib/app/src/agent/tui/session-events.ts`: keep the existing event envelope and move
   persistence behind it as the retained session history contract
-- `src/agent/workspace.ts`: keep local execution mechanics, but drive worktree
+- `lib/app/src/agent/workspace.ts`: keep local execution mechanics, but drive worktree
   reservation and commit finalization from graph-native repository, branch, and
   commit state

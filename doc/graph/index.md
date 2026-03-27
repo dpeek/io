@@ -2,13 +2,13 @@
 
 ## Purpose
 
-The graph engine now spans the root `@io/core/graph` package plus the extracted
+The graph engine now spans the root `@io/app/graph` package plus the extracted
 `@io/graph-kernel`, `@io/graph-bootstrap`, `@io/graph-client`,
 `@io/graph-module`, `@io/graph-module-core`,
 `@io/graph-module-workflow`, `@io/graph-authority`, `@io/graph-sync`, and
 `@io/graph-projection` workspace packages.
 
-The root `@io/core/graph` surface owns a small curated graph helper layer:
+The root `@io/app/graph` surface owns a small curated graph helper layer:
 selected kernel aliases and graph-owned icon helpers. The extracted packages
 own the layered engine boundaries: kernel storage and write envelopes,
 module-definition authorship, the built-in `core:` namespace, schema
@@ -76,13 +76,13 @@ compose shared `@io/web` primitives rather than duplicate browser chrome.
 
 ## Canonical Package Exports
 
-The root `@io/core` package publishes these graph subpaths from
+The root `@io/app` package publishes these graph subpaths from
 `../../package.json`:
 
-- `@io/core/graph`: `../../src/graph/index.ts`; re-exports
+- `@io/app/graph`: `../../lib/app/src/graph/index.ts`; re-exports
   curated kernel aliases plus graph-owned icon helpers
 
-There is no longer a root `@io/core/graph/adapters/react-dom` export. Browser
+There is no longer a root `@io/app/graph/adapters/react-dom` export. Browser
 callers import `@io/graph-module-core/react-dom` directly.
 
 The workspace also publishes:
@@ -122,7 +122,7 @@ The workspace also publishes:
   read-scope definitions, projection metadata, dependency keys, invalidation
   contracts, and retained projection compatibility helpers
 
-The root `@io/core/graph` surface stays focused on a small helper layer and
+The root `@io/app/graph` surface stays focused on a small helper layer and
 icon contracts. Definition-time authorship now lives on `@io/graph-module`.
 The built-in `core:` namespace now lives on `@io/graph-module-core`.
 Bootstrap, client, authority, sync, projection, the host-neutral React layer,
@@ -140,7 +140,7 @@ extracted too.
 - `../../lib/graph-module-core/src/`: canonical `core:` namespace assembly,
   built-in scalar/entity/enum families, bootstrap inputs, colocated icon
   seeds, and structured-value helpers
-- `../../src/graph/inspect.ts`: internal graph inspection helpers; not part of
+- `../../lib/app/src/graph/inspect.ts`: internal graph inspection helpers; not part of
   the published package surface
 - `../../lib/graph-bootstrap/src/`: additive bootstrap runtime and convergent
   bootstrapped snapshots
@@ -164,10 +164,10 @@ extracted too.
 - `../../lib/graph-module-core/src/react-dom/`: the canonical DOM capability
   registries, field/filter adapters, `GraphIcon`, structured-value editors,
   and tag-aware reference behavior
-- `../../src/graph/icon.ts`: graph-owned icon helpers
-- `../../src/graph/testing/kitchen-sink/`: private test fixtures used by graph
+- `../../lib/app/src/graph/icon.ts`: graph-owned icon helpers
+- `../../lib/app/src/graph/testing/kitchen-sink/`: private test fixtures used by graph
   proof coverage
-- `../../src/graph/*.test.ts`,
+- `../../lib/app/src/graph/*.test.ts`,
   `../../lib/graph-react/src/*.test.tsx`,
   `../../lib/graph-module-core/src/react-dom/*.test.tsx`: focused package-surface proof
   coverage

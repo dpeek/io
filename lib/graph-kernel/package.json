@@ -12,11 +12,15 @@
   },
   "scripts": {
     "build": "tsgo -p tsconfig.build.json",
+    "check": "vp check ./src",
     "clean": "rm -rf out",
+    "format": "vp fmt ./src",
+    "lint": "vp lint ./src",
     "test": "bun test ./src",
     "types": "tsgo --noEmit"
   },
   "devDependencies": {
-    "@typescript/native-preview": "^7.0.0-dev.20260226.1"
+    "@typescript/native-preview": "^7.0.0-dev.20260226.1",
+    "vite-plus": "^0.1.14"
   }
 }

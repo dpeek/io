@@ -43,11 +43,11 @@ moving, all downstream branches will thrash.
 
 ### Likely Repo Boundaries
 
-- `src/graph/`
-- `src/graph/runtime/`
+- `lib/app/src/graph/`
+- `lib/app/src/graph/runtime/`
 - authority and storage runtime packages that split out from the current graph
   runtime
-- the current Durable Object authority path in `src/web/lib/`
+- the current Durable Object authority path in `lib/app/src/web/lib/`
 
 ### Dependencies
 
@@ -896,7 +896,7 @@ commands target.
 
 ## 13. Recommended First Code Targets
 
-- `src/graph/runtime/identity.ts`, `lib/graph-module-core/src/core/bootstrap.ts`, and
+- `lib/app/src/graph/runtime/identity.ts`, `lib/graph-module-core/src/core/bootstrap.ts`, and
   `lib/graph-bootstrap/src/index.ts` to lock stable schema-id and bootstrap
   behavior in code comments and tests
 - `lib/graph-sync/src/contracts.ts`, `lib/graph-authority/src/session.ts`, and
@@ -904,7 +904,7 @@ commands target.
   replicated-field semantics
 - `lib/graph-authority/src/persisted-authority.ts` to keep the durable storage
   boundary small and explicit
-- `src/web/lib/graph-authority-do.ts` to harden the SQLite-backed single-graph
+- `lib/app/src/web/lib/graph-authority-do.ts` to harden the SQLite-backed single-graph
   authority proof
-- `src/web/lib/authority.ts` to keep secret-handle mutation logic aligned with
+- `lib/app/src/web/lib/authority.ts` to keep secret-handle mutation logic aligned with
   the branch contract

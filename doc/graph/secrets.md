@@ -34,9 +34,9 @@ Env vars consume this contract, but they do not define it.
 The shipped plaintext write path is still consumer-owned:
 
 - command envelope: `write-secret-field`
-- authority implementation: `../../src/web/lib/authority.ts`
+- authority implementation: `../../lib/app/src/web/lib/authority.ts`
 - durable side storage: `io_secret_value` in
-  `../../src/web/lib/graph-authority-do.ts`
+  `../../lib/app/src/web/lib/graph-authority-do.ts`
 
 That proof works for any secret-backed predicate. `workflow:envVar` is one consumer
 of it.
@@ -51,7 +51,7 @@ of it.
 
 ## Relevant Files
 
-- `../../src/graph/index.ts`
+- `../../lib/app/src/graph/index.ts`
 - `../../lib/graph-module/src/type-module.ts`
 - `../../lib/graph-module-core/src/core/secret.ts`
 - `../../lib/graph-module-workflow/src/env-var/type.ts`

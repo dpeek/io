@@ -877,14 +877,14 @@ The stable rule is not the exact string prefix. The stable rule is:
 
 ## 13. Recommended First Code Targets
 
-- Add one new built-in module family under `src/graph/modules/` for blob, job,
+- Add one new built-in module family under `lib/app/src/graph/modules/` for blob, job,
   derivative, and provenance types plus one initial file or document slice.
 - Add one shared Branch 5 contract module for `ObjectStorageRef`,
   `BlobIngestQueueMessage`, and extractor registration types so Worker,
   queue-consumer, and module code do not re-declare them.
-- Extend `src/web/worker/index.ts` and `src/web/lib/server-routes.ts` with
+- Extend `lib/app/src/web/worker/index.ts` and `lib/app/src/web/lib/server-routes.ts` with
   upload-session, finalize, and object-read routes.
-- Add a new Worker-side runtime surface beside `src/web/lib/authority.ts` for
+- Add a new Worker-side runtime surface beside `lib/app/src/web/lib/authority.ts` for
   R2 upload verification, queue enqueue, and blob read access checks.
 - Add one queue-consumer runtime package or directory for job claim, extractor
   dispatch, derivative write, provenance commit, retry, and orphan sweeping.

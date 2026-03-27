@@ -200,7 +200,7 @@ review:
   `active: false`
 
 The first authority-owned runtime seam now lives beside the web authority in
-`../../src/web/lib/authority.ts`. `createWebAppAuthority(...)` exposes
+`../../lib/app/src/web/lib/authority.ts`. `createWebAppAuthority(...)` exposes
 `readProjectBranchScope(...)`, `readCommitQueueScope(...)`,
 `rebuildRetainedWorkflowProjection()`, and
 `planWorkflowReviewLiveRegistration(...)`, validates retained workflow
@@ -211,10 +211,10 @@ principal, and maps read-policy and live-registration failures back onto
 stable workflow codes such as `policy-denied`, `policy-changed`, and
 `scope-changed`.
 The first shipped web transport proofs for those reads and live registrations
-now live in `../../src/web/lib/workflow-transport.ts`,
-`../../src/web/lib/workflow-live-transport.ts`, and
-`../../src/web/lib/server-routes.ts`. The first shipped caller seam for the
-live proof now lives in `../../src/web/lib/workflow-review-live-sync.ts`:
+now live in `../../lib/app/src/web/lib/workflow-transport.ts`,
+`../../lib/app/src/web/lib/workflow-live-transport.ts`, and
+`../../lib/app/src/web/lib/server-routes.ts`. The first shipped caller seam for the
+live proof now lives in `../../lib/app/src/web/lib/workflow-review-live-sync.ts`:
 
 - `POST /api/workflow-read`
 - request body:
@@ -262,9 +262,9 @@ directly, but the ownership line stays explicit:
 - `graph` owns the fixed workflow review sync scope descriptor,
   `createWorkflowProjectionIndex(...)`, and the stable
   `ProjectBranchScope` plus `CommitQueueScope` read contracts
-- `../../src/tui/server.ts` owns CLI parsing, graph URL selection, initial
+- `../../lib/app/src/tui/server.ts` owns CLI parsing, graph URL selection, initial
   project-and-branch resolution, and startup failure presentation
-- `../../src/tui/startup.ts` owns the startup contract defaults and the
+- `../../lib/app/src/tui/startup.ts` owns the startup contract defaults and the
   `--graph-url` / workflow-config / default precedence that selects the graph
   source before hydration starts
 - the first TUI hydration remains read-only: it consumes graph-backed

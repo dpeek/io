@@ -10,7 +10,7 @@ host-neutral React layer, and host-specific adapters.
 
 Typed refs and synced-client ergonomics now live in `@io/graph-client`,
 primarily through `../../lib/graph-client/src/graph.ts`,
-`../../lib/graph-client/src/core.ts`, and `../../lib/graph-client/src/refs.ts`.
+`../../lib/graph-client/src/app.ts`, and `../../lib/graph-client/src/refs.ts`.
 That surface exports:
 
 - typed `EntityRef`
@@ -34,15 +34,15 @@ That surface exports:
 Relevant source:
 
 - `../../lib/graph-client/src/graph.ts`
-- `../../lib/graph-client/src/core.ts`
+- `../../lib/graph-client/src/app.ts`
 - `../../lib/graph-client/src/refs.ts`
-- `../../src/graph/runtime/store.ts`
+- `../../lib/app/src/graph/runtime/store.ts`
 - `../../lib/graph-client/src/sync.ts`
 - `../../lib/graph-sync/src/index.ts`
 
 ## UI-Adjacent Contracts
 
-Across `@io/graph-client` and the root `@io/core/graph` surface, the engine
+Across `@io/graph-client` and the root `@io/app/graph` surface, the engine
 exposes enough surface for higher-level UI work:
 
 - field metadata and filter contracts from type modules
@@ -99,12 +99,12 @@ from `../../lib/graph-module-core/src/react-dom/`:
 There is no dedicated `react-opentui` adapter anymore. The workflow TUI reads
 the same host-neutral runtime provider and query hooks directly from
 `@io/graph-react`, while workflow projection hooks still live in
-`../../src/tui/projection.ts`.
+`../../lib/app/src/tui/projection.ts`.
 
 ## Boundary Rules
 
 - `ObjectViewSpec`, `WorkflowSpec`, and `GraphCommandSpec` stay on the root
-  `@io/core/graph` surface as pure data contracts
+  `@io/app/graph` surface as pure data contracts
 - `@io/graph-react` may read those root-safe contracts and
   type-module metadata, but it should not introduce DOM tags, route
   registration, or authoritative command execution

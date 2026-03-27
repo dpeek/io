@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
-import { createStore } from "@io/core/graph";
+import { createStore } from "@io/app/graph";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 import { core, coreGraphBootstrapOptions, defaultMoneyCurrencyKey } from "@io/graph-module-core";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { kitchenSink } from "../../../../src/graph/testing/kitchen-sink.js";
+import { kitchenSink } from "../../../app/src/graph/testing/kitchen-sink.js";
 import { PredicateFieldEditor, PredicateFieldView, defaultWebFieldResolver } from "./index.js";
 
 const requiredExports = [

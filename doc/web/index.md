@@ -61,24 +61,24 @@ Failure behavior outside the payload:
 
 Current proof anchors:
 
-- `../../src/web/worker/index.test.ts`: anonymous, ready, expired,
+- `../../lib/app/src/web/worker/index.test.ts`: anonymous, ready, expired,
   `auth.principal_missing`, and `auth.session_unavailable` worker responses
-- `../../src/web/lib/auth-client.test.ts`: shared client projection, retry, and
+- `../../lib/app/src/web/lib/auth-client.test.ts`: shared client projection, retry, and
   bootstrap-error handling
-- `../../src/web/components/auth-shell.test.tsx`: graph-route gating for
+- `../../lib/app/src/web/components/auth-shell.test.tsx`: graph-route gating for
   signed-out, expired, ready, and retryable bootstrap-error states
 
 ## Ownership Boundary
 
 `web` is the browser product surface package, not the shared browser-primitive
-package. The terminal sibling surface lives in `../../src/tui/*`.
+package. The terminal sibling surface lives in `../../lib/app/src/tui/*`.
 
 - keep reusable browser UI and editor chrome in `../../lib/web/src/*`
 - keep graph-aware field resolver, predicate mutation, and typed preview logic
   in `../../lib/graph-react/src/*`,
   `../../lib/graph-module-core/src/react-dom/*`
 - keep route/page composition, explorer state, and Worker
-  authority wiring in `../../src/web/*`
+  authority wiring in `../../lib/app/src/web/*`
 
 In practice, `web` should compose `@io/web` primitives such as shared inputs,
 comboboxes, markdown rendering, Monaco loading, and source/preview shells, but
@@ -96,10 +96,10 @@ and compatibility surface for the first shipped board and commit-queue reads.
 Those routes are still web-owned surfaces rather than published graph-owned
 command registries. Browser launch and attach do not go through Worker routes:
 the browser now probes a separate localhost `browser-agent` runtime over
-`../../src/browser-agent/transport.ts`, and `/workflow` keeps unavailable local
+`../../lib/app/src/browser-agent/transport.ts`, and `/workflow` keeps unavailable local
 runtime state explicit until that bridge is reachable.
 command registries. The shared browser query-container contract now also lives
-behind the dedicated `@io/core/web/query-container` export, so routes can bind
+behind the dedicated `@io/app/web/query-container` export, so routes can bind
 saved or inline queries, renderer compatibility, and lifecycle state through
 one reusable surface instead of route-local props. The first reusable route
 mount seam now layers on top of that contract through
@@ -127,7 +127,7 @@ Current editor interaction model:
   serialized/normalized inspectors stay fail closed when the draft is invalid
 - browser launch and attach do not go through Worker routes: the browser now
   probes a separate localhost `browser-agent` runtime over
-  `../../src/browser-agent/transport.ts`, and `/workflow` keeps unavailable
+  `../../lib/app/src/browser-agent/transport.ts`, and `/workflow` keeps unavailable
   local runtime state explicit until that bridge is reachable
 
 ## Docs
@@ -140,63 +140,63 @@ Current editor interaction model:
 
 ## Layout
 
-- `../../src/web/router.tsx`, `../../src/web/routeTree.gen.ts`: router assembly
+- `../../lib/app/src/web/router.tsx`, `../../lib/app/src/web/routeTree.gen.ts`: router assembly
   and generated route tree for the SPA routes, including `/workflow` and
   `/graph`
 - `../../auth.ts`: Better Auth CLI config entrypoint that keeps schema
   generation on a dedicated auth-store path without coupling it to the Worker's
   runtime bindings
-- `../../src/web/routes/`: top-level pages including `workflow`, `sync`,
+- `../../lib/app/src/web/routes/`: top-level pages including `workflow`, `sync`,
   `views`, and the graph explorer routes
-- `../../src/web/components/home-page.tsx`: session-aware landing page that
+- `../../lib/app/src/web/components/home-page.tsx`: session-aware landing page that
   keeps the signed-out auth entry flow and the signed-in bootstrap summary in
   one place
-- `../../src/web/components/auth-shell.tsx`: principal-bootstrap consumer
+- `../../lib/app/src/web/components/auth-shell.tsx`: principal-bootstrap consumer
   hook, sign-in/sign-out chrome, provisional create-account form, and the gate
   that keeps graph surfaces from booting until bootstrap state is known
-- `../../src/web/components/graph-runtime-bootstrap.tsx`: shared synced graph
+- `../../lib/app/src/web/components/graph-runtime-bootstrap.tsx`: shared synced graph
   runtime bootstrap for browser pages
-- `../../src/web/components/entity-type-browser.tsx`: reusable list/detail
+- `../../lib/app/src/web/components/entity-type-browser.tsx`: reusable list/detail
   browser for one entity type keyed only by the target type id plus the list
   title, reusing the generic entity inspector for the selected record plus the
   explorer's generic draft-backed create flow inside a shared dialog with the
   base dialog header and footer primitives
-- `../../src/web/components/query-renderers.tsx`: host-owned query renderer
+- `../../lib/app/src/web/components/query-renderers.tsx`: host-owned query renderer
   registry keyed by stable renderer ids plus the first built-in list, table,
   and card-grid layouts, explicit renderer binding helpers, and declarative
   item/column/card definitions
-- `../../src/web/components/query-editor.tsx`: form-first query authoring
+- `../../lib/app/src/web/components/query-editor.tsx`: form-first query authoring
   surface that renders source selection, field-aware filters, sort,
   pagination, parameter editing, serialized-request inspection, and the first
   route-backed reopen/update flows for saved queries and saved views from the
   shared query catalog
-- `../../src/web/components/query-container-surface.tsx`: shared query
+- `../../lib/app/src/web/components/query-container-surface.tsx`: shared query
   container mount that validates renderer bindings, executes query pages, and
   renders the common loading, error, empty, stale, and pagination chrome
-- `../../src/web/components/query-route-mount.tsx`: shared route composition
+- `../../lib/app/src/web/components/query-route-mount.tsx`: shared route composition
   seam that lets routes mount one query container through common page chrome
   instead of route-local wiring
-- `../../src/web/components/workflow-page.tsx`: `/workflow` composition that
+- `../../lib/app/src/web/components/workflow-page.tsx`: `/workflow` composition that
   binds the browser route to the shipped `workflow-review` sync scope and
   hands startup off to the workflow-native review contract
-- `../../src/web/components/workflow-review-page.tsx`: route-level workflow
+- `../../lib/app/src/web/components/workflow-review-page.tsx`: route-level workflow
   review startup surface that resolves the initial project, reads
   `ProjectBranchScope` and `CommitQueueScope`, re-pulls them after
   workflow-review invalidations through the scoped live transport, and keeps
   missing or partial workflow-review data explicit instead of widening to
   whole-graph bootstrap
-- `../../src/web/lib/workflow-review-contract.ts`: explicit `/workflow`
+- `../../lib/app/src/web/lib/workflow-review-contract.ts`: explicit `/workflow`
   startup contract covering scoped bootstrap, route search selection, initial
   project inference, first-branch selection, and missing-data handling before
   richer browser workflow composition lands
-- `../../src/web/components/explorer/index.ts`: explorer entrypoint for the
+- `../../lib/app/src/web/components/explorer/index.ts`: explorer entrypoint for the
   graph and sync pages
-- `../../src/web/components/explorer/`: graph explorer modules split by
+- `../../lib/app/src/web/components/explorer/`: graph explorer modules split by
   responsibility, including shared catalog/navigation helpers, the unified
   inspector shell, draft-backed generic create bindings, field editors, the
   sync inspector, and the `/graph` entity-selection path now reusing the shared
   typed browser component for record lists plus default entity editing
-- `../../src/web/components/sync-page.tsx`: top-level sync monitor for
+- `../../lib/app/src/web/components/sync-page.tsx`: top-level sync monitor for
   authority cursor, pending writes, recent authoritative activity, and
   surfaced write-scope diagnostics for acknowledged and pulled writes, plus
   cursor-advance diagnostics when incremental replication filters out all
@@ -206,7 +206,7 @@ Current editor interaction model:
   whole-graph recovery and the first named
   `workflow` review scope, inspect delivered scope metadata, and trigger
   scoped refreshes over the shared `/api/sync` transport contract
-- `../../src/web/components/app-shell.tsx`: shared shell and navigation
+- `../../lib/app/src/web/components/app-shell.tsx`: shared shell and navigation
 - `../../lib/web/src/markdown.tsx`: shared markdown renderer with Bun-first and
   `react-markdown` fallback behavior reused by graph field views and previews
 - `../../lib/web/src/source-preview.tsx`,
@@ -214,59 +214,59 @@ Current editor interaction model:
   bootstrapping, shared source-editor preset, and panel styling reused by graph
   DOM field editors and future browser editors that need the same chrome, but
   without moving graph predicate semantics into `@io/web`
-- `../../src/web/lib/graph-authority-do.ts`: SQLite-backed Durable Object
+- `../../lib/app/src/web/lib/graph-authority-do.ts`: SQLite-backed Durable Object
   adapter entrypoint that bootstraps graph tables in the constructor, hydrates
   retained history during authority init, commits graph and secret side-storage
   changes in one Durable Object storage transaction, and routes between the
   internal Worker-only auth helpers plus the public sync, command, generic
   serialized query, and workflow surfaces
-- `../../src/web/lib/query-transport.ts`: web-owned `POST /api/query` path
+- `../../lib/app/src/web/lib/query-transport.ts`: web-owned `POST /api/query` path
   constant plus the shared generic serialized-query client helper re-export
-- `../../src/web/lib/query-container.ts`: shared query-container and
+- `../../lib/app/src/web/lib/query-container.ts`: shared query-container and
   renderer-binding contract covering saved and inline query references,
   container pagination and refresh policy, explicit renderer compatibility
   metadata, validation helpers, and the canonical loading, empty, error,
   paginated, stale, and refreshing container states exported via
-  `@io/core/web/query-container`, plus the shared container runtime/controller
+  `@io/app/web/query-container`, plus the shared container runtime/controller
   that resolves saved or inline queries through one execution path, derives
   renderer-independent cache keys, keeps page state scoped per container
   instance, restarts from page 1 when saved-query identity or execution
   context changes invalidate the current page, and fails closed on stale
   pagination by resetting or refreshing instead of silently continuing with
   invalid cursors
-- `../../src/web/lib/query-editor.ts`: shared query-editor draft, query
+- `../../lib/app/src/web/lib/query-editor.ts`: shared query-editor draft, query
   surface catalog, field-aware validation, and serialization helpers that keep
   inline drafts aligned with the generic serialized-query contract plus future
   saved-query parameter metadata
-- `../../src/web/lib/graph-authority-internal-routes.ts`: web-only
+- `../../lib/app/src/web/lib/graph-authority-internal-routes.ts`: web-only
   session-principal lookup-and-repair, bearer-share hash lookup, and
   authoritative policy-version handlers kept separate from the Durable Object
   storage composition entrypoint
-- `../../src/web/lib/better-auth.ts`: shared Better Auth option/factory helper
+- `../../lib/app/src/web/lib/better-auth.ts`: shared Better Auth option/factory helper
   for the dedicated `AUTH_DB` binding, optional trusted-origin wiring, the
   stable `/api/auth` base path, and the minimal email/password browser demo
   flow
-- `../../src/web/lib/auth-client.ts`: Better Auth React client mutations plus
+- `../../lib/app/src/web/lib/auth-client.ts`: Better Auth React client mutations plus
   the shared principal-bootstrap fetch and shell-state projection helpers
-- `../../src/web/lib/workflow-transport.ts`: shared `POST /api/workflow-read`
+- `../../lib/app/src/web/lib/workflow-transport.ts`: shared `POST /api/workflow-read`
   request and response envelopes plus the fetch helper that browser, TUI, or
   MCP callers can reuse for the first shipped `ProjectBranchScope` and
   `CommitQueueScope` compatibility proof while generic serialized-query callers
   move to `../../lib/graph-client/src/http.ts` via `@io/graph-client`
-- `../../src/web/lib/workflow-live-transport.ts`: shared
+- `../../lib/app/src/web/lib/workflow-live-transport.ts`: shared
   `POST /api/workflow-live` request and response envelopes plus the fetch
   helper that callers can reuse for the first ephemeral workflow review live
   registration, queued invalidation pull, and removal proof
-- `../../src/web/lib/workflow-review-live-sync.ts`: browser-facing caller
+- `../../lib/app/src/web/lib/workflow-review-live-sync.ts`: browser-facing caller
   helper that composes `workflow-live-transport` with the scoped `/api/sync`
   client so workflow-review callers can register once, scoped-refresh on
   `cursor-advanced`, and recover from inactive pulls with re-registration plus
   another scoped re-pull
-- `../../src/web/lib/workflow-review-refresh.ts`: small browser route refresh
+- `../../lib/app/src/web/lib/workflow-review-refresh.ts`: small browser route refresh
   loop that keeps `/workflow` registered against workflow-review live
   invalidations, triggers scoped refreshes only, and tears the registration
   down on route exit
-- `../../src/browser-agent/transport.ts`: shared localhost browser-agent
+- `../../lib/app/src/browser-agent/transport.ts`: shared localhost browser-agent
   transport contract covering runtime health, launch-session requests, and
   active-session lookup so browser and local runtime use the same typed bridge
 
@@ -290,10 +290,10 @@ The current Branch 3 browser model stays fail closed.
   definitions, so the workbench renders an explicit recovery card instead of
   crashing or silently drifting to another query
 - the current proof anchors for those guarantees live in
-  `../../src/web/lib/query-container.test.ts`,
-  `../../src/web/lib/query-workbench.test.ts`, and
-  `../../src/web/components/query-workbench.test.tsx`
-- `../../src/web/lib/authority.ts`: shared web authority behavior, secret-field
+  `../../lib/app/src/web/lib/query-container.test.ts`,
+  `../../lib/app/src/web/lib/query-workbench.test.ts`, and
+  `../../lib/app/src/web/components/query-workbench.test.tsx`
+- `../../lib/app/src/web/lib/authority.ts`: shared web authority behavior, secret-field
   mutation flow, the current web-owned `/api/commands` envelope, the shared
   write/command authorization seam, principal-aware sync filtering that omits
   denied predicates from total and incremental sync payloads, excludes
@@ -311,10 +311,10 @@ The current Branch 3 browser model stays fail closed.
   authenticated session identity, conservative `cursor-advanced` invalidation
   emission for accepted workflow writes through the shared transaction hook
   plus dependency-key fan-out into matching live registrations,
-- `../../src/web/lib/workflow-authority.ts`,
-  `../../src/web/lib/workflow-authority-aggregate-handlers.ts`,
-  `../../src/web/lib/workflow-authority-commit-handlers.ts`,
-  `../../src/web/lib/workflow-authority-shared.ts`: workflow mutation authority
+- `../../lib/app/src/web/lib/workflow-authority.ts`,
+  `../../lib/app/src/web/lib/workflow-authority-aggregate-handlers.ts`,
+  `../../lib/app/src/web/lib/workflow-authority-commit-handlers.ts`,
+  `../../lib/app/src/web/lib/workflow-authority-shared.ts`: workflow mutation authority
   routing split between the public mutation dispatcher, aggregate-local
   project/repository/branch handlers, commit lifecycle handlers, and shared
   entity lookup plus uniqueness guards so branch reconciliation and
@@ -334,27 +334,27 @@ The current Branch 3 browser model stays fail closed.
   consumed by both tests and the Durable Object adapter, including an opt-out
   seeded-example bootstrap path used by web authority tests plus a cached
   graph-metadata/bootstrap path for repeated authority construction
-- `../../src/web/lib/workflow-live-scope-router.ts`: in-memory workflow review
+- `../../lib/app/src/web/lib/workflow-live-scope-router.ts`: in-memory workflow review
   registration router that renews, expires, and removes ephemeral live scope
   registrations while indexing them by session, scope, and dependency key,
   queueing matching invalidations, and reporting `active: false` when callers
   need to re-register after expiry or router loss
-- `../../src/web/lib/authority-test-helpers.ts`: no-seed test authority
+- `../../lib/app/src/web/lib/authority-test-helpers.ts`: no-seed test authority
   factory plus cached persisted workflow baseline helpers for the slow web
   authority and Durable Object suites
-- `../../src/web/lib/mutation-planning.ts`: shared snapshot-backed mutation
+- `../../lib/app/src/web/lib/mutation-planning.ts`: shared snapshot-backed mutation
   planner that records asserted and retracted store operations directly instead
   of diffing whole-store before/after snapshots
-- `../../src/web/lib/example-runtime.ts`: seeded sync-proof runtime fixture
+- `../../lib/app/src/web/lib/example-runtime.ts`: seeded sync-proof runtime fixture
   that now reuses a cached seeded authority baseline and direct recorded
   mutation planning for hidden-only cursor tests while seeding the local
   workflow shell fixture used by `io tui`
-- `../../src/web/lib/`: worker-backed graph authority, generic secret-field
+- `../../lib/app/src/web/lib/`: worker-backed graph authority, generic secret-field
   mutation contracts, seeded example data/runtime fixtures, and HTTP route
   helpers
-- `../../src/web/lib/example-runtime.test.ts`: sync proof coverage for the
+- `../../lib/app/src/web/lib/example-runtime.test.ts`: sync proof coverage for the
   web-owned example runtime fixture
-- `../../src/web/worker/index.ts`: Worker entrypoint for SPA assets and graph
+- `../../lib/app/src/web/worker/index.ts`: Worker entrypoint for SPA assets and graph
   APIs. It mounts the shared Better Auth handler at `/api/auth/*`, then
   resolves a request-bound `AuthorizationContext` for graph routes and forwards
   that stable contract to the Durable Object authority path. The current worker
@@ -363,7 +363,7 @@ The current Branch 3 browser model stays fail closed.
   resolves the current authoritative `policyVersion` through the Durable
   Object's internal lookup seam before projecting request auth, with that
   served version sourced from the compiled contract snapshot in
-  `../../src/web/lib/policy-version.ts`, forwards
+  `../../lib/app/src/web/lib/policy-version.ts`, forwards
   anonymous requests as anonymous, resolves authenticated subjects through the
   Durable Object's internal lookup-and-repair seam, serves
   `GET /api/bootstrap` as the explicit
@@ -378,11 +378,11 @@ The current Branch 3 browser model stays fail closed.
   `Cookie` headers before forwarding to the Durable Object, and fails closed
   when an authenticated session or bearer share token no longer resolves to an
   active graph-backed authorization context.
-- `../../src/web/worker/index.test.ts`: end-to-end admission coverage for the
+- `../../lib/app/src/web/worker/index.test.ts`: end-to-end admission coverage for the
   shipped Worker path, including bootstrap, explicit allowlist admission,
   domain-gated open signup, deny, admitted-but-unbound principals, and the
   explicit initial role-binding workflow
-- `../../src/web/lib/graph-authority-do.test.ts`: Durable Object lookup-and-
+- `../../lib/app/src/web/lib/graph-authority-do.test.ts`: Durable Object lookup-and-
   repair coverage for the same first authenticated-use admission branches
 - `../../migrations/auth-store/`: committed Better Auth schema migrations for
   the dedicated D1 auth store, applied separately from Durable Object

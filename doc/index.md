@@ -36,7 +36,7 @@ the graph-first application direction the rest of the workspace is proving.
 - `./agent/cli.md`: current `io agent ...` and `io mcp ...` command surface
 - `./agent/index.md`: agent runtime overview, scheduler layout, and operator surfaces
 - `./agent/tui.md`: operator-facing TUI layout and retained runtime display
-- `./graph/index.md`: graph workspace layout including the root `@io/core/graph`
+- `./graph/index.md`: graph workspace layout including the root `@io/app/graph`
   surface, extracted `lib/graph-*` packages, adapters, taxonomies, and
   focused subdocs
 - `./graph/computed.md`: proposed computed-value layer for lazy, memoized, read-only graph derivations
@@ -49,14 +49,14 @@ the graph-first application direction the rest of the workspace is proving.
 - `./README.md`: architecture and vision doc map for the numbered roadmap and branch docs
 - `./branch/README.md`: platform branches as parallel workstreams with canonical specs where available
 - `./index.md`: repo map and context entrypoint
-- `../src/agent/`: scheduler, context assembly, tracker integration, retained runtime,
+- `../lib/app/src/agent/`: scheduler, context assembly, tracker integration, retained runtime,
   and the operator TUI
-- `../src/tui/`: graph-backed terminal workflow product surface
-- `../src/config/`, `../src/lib/`: shared config loading and typed config surface
-- `../src/graph/`: root `@io/core/graph` wrappers, local schema and module
+- `../lib/app/src/tui/`: graph-backed terminal workflow product surface
+- `../lib/app/src/lib/`: shared config loading and typed config surface
+- `../lib/app/src/graph/`: root `@io/app/graph` wrappers, local schema and module
   authoring, graph adapters, and graph-owned icon helpers
 - `../lib/graph-*/`: extracted graph kernel, bootstrap, client, authority,
   sync, and projection packages
-- `../src/web/`: worker-backed browser surfaces and the SQLite Durable Object
+- `../lib/app/src/web/`: worker-backed browser surfaces and the SQLite Durable Object
   authority path that backs the web shell
-- `../src/cli/`: operator command surface
+- `../lib/app/src/cli/`: operator command surface

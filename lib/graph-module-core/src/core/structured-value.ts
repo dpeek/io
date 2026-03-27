@@ -78,7 +78,7 @@ export function getStructuredValueKindLabel(kind: StructuredValueKind): string {
 export function normalizeStructuredValueKind(value: unknown): StructuredValueKind {
   const token = expectStringInput(value).trim().toLowerCase();
   if (!isStructuredValueKind(token)) {
-    throw new Error(`Unknown structured value kind "${value}".`);
+    throw new Error(`Unknown structured value kind "${token}".`);
   }
   return token;
 }

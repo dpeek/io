@@ -39,32 +39,32 @@ The repo already has the foundations needed for a browser-first workflow
 surface:
 
 - `web` has authenticated graph bootstrap through
-  `src/web/components/graph-runtime-bootstrap.tsx`
+  `lib/app/src/web/components/graph-runtime-bootstrap.tsx`
 - the app shell already exposes a `/workflow` route in
-  `src/web/routes/workflow.tsx` and `src/web/components/app-shell.tsx`
+  `lib/app/src/web/routes/workflow.tsx` and `lib/app/src/web/components/app-shell.tsx`
 - the authority already serves workflow projection reads through
-  `src/web/lib/server-routes.ts` and `src/web/lib/authority.ts`
+  `lib/app/src/web/lib/server-routes.ts` and `lib/app/src/web/lib/authority.ts`
 - the authority already serves workflow live registration and invalidation
-  through `src/web/lib/workflow-live-transport.ts`,
-  `src/web/lib/workflow-live-websocket.ts`, and
-  `src/web/lib/workflow-review-live-websocket-sync.ts`
+  through `lib/app/src/web/lib/workflow-live-transport.ts`,
+  `lib/app/src/web/lib/workflow-live-websocket.ts`, and
+  `lib/app/src/web/lib/workflow-review-live-websocket-sync.ts`
 - the workflow schema already includes `AgentSession`, `AgentSessionEvent`,
   `WorkflowArtifact`, `WorkflowDecision`, and `ContextBundle` in
   `doc/graph/workflow.md`
 - `tui` already proves the desired branch-board, branch-detail, commit-queue,
-  and subject-scoped action model in `src/tui/*`
+  and subject-scoped action model in `lib/app/src/tui/*`
 - `agent` already exposes a canonical session event envelope in
-  `src/agent/tui/session-events.ts` and a live subscription seam in
-  `src/agent/service.ts`
+  `lib/app/src/agent/tui/session-events.ts` and a live subscription seam in
+  `lib/app/src/agent/service.ts`
 
 ### What the current browser route does now
 
 The current `/workflow` route now lands on a workflow-native review layout for
 phase 1.
 
-- `src/web/components/workflow-page.tsx` boots the shipped workflow-review
+- `lib/app/src/web/components/workflow-page.tsx` boots the shipped workflow-review
   scoped runtime before the page renders
-- `src/web/components/workflow-review-page.tsx` renders browser-owned branch
+- `lib/app/src/web/components/workflow-review-page.tsx` renders browser-owned branch
   board, branch detail, and commit queue panels
 - startup and empty states stay explicit instead of widening back to the whole
   graph or dropping into the generic entity browser
@@ -93,9 +93,9 @@ Today it already proves:
 
 But it still does not launch anything on `main`.
 
-- `src/tui/tui.tsx` supports an `onAction` callback, but the CLI bootstrap in
-  `src/tui/server.ts` does not wire one
-- `src/tui/model.ts` still states that the first contract does not launch
+- `lib/app/src/tui/tui.tsx` supports an `onAction` callback, but the CLI bootstrap in
+  `lib/app/src/tui/server.ts` does not wire one
+- `lib/app/src/tui/model.ts` still states that the first contract does not launch
   sessions or perform workflow writes
 
 That matters because the TUI is the best semantic reference for the workflow
@@ -105,11 +105,11 @@ surface, but it is not yet the shipping execution path either.
 
 Live session behavior is still agent-owned:
 
-- the canonical event schema is in `src/agent/tui/session-events.ts`
+- the canonical event schema is in `lib/app/src/agent/tui/session-events.ts`
 - live publication is process-local through `createAgentSessionEventBus()`
 - `AgentService.observeSessionEvents(...)` is an in-memory subscription seam
 - retained attach and replay are still rebuilt from runtime files in
-  `src/agent/tui-runtime.ts` and described in `doc/agent/tui.md`
+  `lib/app/src/agent/tui-runtime.ts` and described in `doc/agent/tui.md`
 
 The repo does not currently implement a graph-backed `AgentSessionAppend`
 write path. The contract exists in `doc/branch/06-workflow-and-agent-runtime.md`,
@@ -194,7 +194,7 @@ The browser remains the main operator surface:
 - the app shell exposes `/workflow` as the primary workflow route
 - the page binds to the workflow review scope, not the whole graph
 - browser navigation, filtering, selection, and inline action affordances live
-  in `src/web/*`
+  in `lib/app/src/web/*`
 
 ### Workflow authority
 
@@ -267,7 +267,7 @@ different branch.
 
 Implementation notes:
 
-- treat `src/tui/model.ts` as the semantic reference
+- treat `lib/app/src/tui/model.ts` as the semantic reference
 - do not import TUI layout or OpenTUI code into the browser
 - extract shared workflow action-policy logic if the browser needs the same
   availability rules
@@ -460,21 +460,21 @@ Acceptance criteria:
 
 ### Browser workflow surface
 
-- replace `src/web/components/workflow-page.tsx`
-- add dedicated workflow route components under `src/web/components/workflow/`
+- replace `lib/app/src/web/components/workflow-page.tsx`
+- add dedicated workflow route components under `lib/app/src/web/components/workflow/`
 - bind `GraphRuntimeBootstrap` to the workflow review scope for this route
-- reuse `src/web/lib/workflow-review-live-websocket-sync.ts` for freshness
+- reuse `lib/app/src/web/lib/workflow-review-live-websocket-sync.ts` for freshness
 
 ### Shared workflow policy
 
 - extract a shared action-policy and subject-state layer from the semantics
-  currently embedded in `src/tui/model.ts`
+  currently embedded in `lib/app/src/tui/model.ts`
 - keep layout and interaction rendering web-owned and TUI-owned separately
 
 ### Browser-agent runtime
 
-- add a new local runtime package or entrypoint under `src/agent/` or
-  `src/browser-agent/`
+- add a new local runtime package or entrypoint under `lib/app/src/agent/` or
+  `lib/app/src/browser-agent/`
 - keep workspace, PTY, git, and Codex runner ownership there
 - teach it to append authoritative session history as it executes
 

@@ -44,7 +44,6 @@ import {
   setNestedValue,
   uniqueEncodedPredicateValues,
   validResult,
-  type ClearFieldValue,
   type CreateInputOfType,
   type FlatPredicateEntry,
   type GraphDeleteValidationResult,
@@ -455,7 +454,7 @@ function normalizeMutationValue(
   typeByKey: Map<string, AnyTypeOutput>,
   enumValuesByRange: Map<string, Set<string>>,
   issues: GraphValidationIssue[],
-): unknown | ClearFieldValue | undefined {
+): unknown {
   const fieldPath = formatValidationPath([...entry.path, entry.field]);
 
   if (nextValue === clearFieldValue) {

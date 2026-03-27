@@ -20,7 +20,7 @@ import {
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 import { validateIncrementalSyncResult } from "@io/graph-sync";
 
-import { kitchenSink } from "../../../src/graph/testing/kitchen-sink.js";
+import { kitchenSink } from "../../app/src/graph/testing/kitchen-sink.js";
 import {
   authorizeRead,
   createJsonPersistedAuthoritativeGraph,

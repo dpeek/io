@@ -41,7 +41,7 @@ This document is the high-level entry point for agents reasoning about the engin
 - `../../lib/graph-sync/src/`: shared sync contracts, payload validation, cursor helpers, and total sync sessions
 - `../../lib/graph-react/src/`: host-neutral React hooks, resolver primitives,
   and synced-runtime helpers
-- `../../src/graph/inspect.ts`: internal graph inspection helpers that are not part of the public package surface
+- `../../lib/app/src/graph/inspect.ts`: internal graph inspection helpers that are not part of the public package surface
 
 ## What Is Current
 

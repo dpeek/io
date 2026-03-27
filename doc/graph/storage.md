@@ -47,15 +47,15 @@ Official references:
 
 The first raw-SQL Durable Object adapter now splits into:
 
-- `../../src/web/lib/graph-authority-sql-storage.ts` for the stable
+- `../../lib/app/src/web/lib/graph-authority-sql-storage.ts` for the stable
   persisted-authority SQL storage seam for durable reads, writes, and schema
   bootstrap
-- `../../src/web/lib/graph-authority-sql-startup.ts` for startup metadata
+- `../../lib/app/src/web/lib/graph-authority-sql-startup.ts` for startup metadata
   hydration, retained-history recovery classification, and stable startup
   diagnostics assembly
-- `../../src/web/lib/graph-authority-internal-routes.ts` for the web-only
+- `../../lib/app/src/web/lib/graph-authority-internal-routes.ts` for the web-only
   session-principal and bearer-share lookup route parsing plus error mapping
-- `../../src/web/lib/graph-authority-do.ts` for Durable Object bootstrap,
+- `../../lib/app/src/web/lib/graph-authority-do.ts` for Durable Object bootstrap,
   request routing, and authority wiring
 
 Current behavior:
@@ -63,11 +63,11 @@ Current behavior:
 - the Durable Object constructor bootstraps the SQLite schema synchronously
 - secret-side inventory reads, live-secret plaintext hydration, side-table
   upserts, and orphan pruning now live behind
-  `../../src/web/lib/graph-authority-sql-secrets.ts` instead of staying
+  `../../lib/app/src/web/lib/graph-authority-sql-secrets.ts` instead of staying
   interleaved with graph-row persistence helpers
 - retained workflow projection checkpoint bootstrap, durable reads, and
   replacement writes now live behind
-  `../../src/web/lib/graph-authority-sql-workflow-projection.ts` instead of
+  `../../lib/app/src/web/lib/graph-authority-sql-workflow-projection.ts` instead of
   staying inline in the main adapter storage file
 - startup inspects secret side-table inventory before loading plaintext,
   prunes unreferenced secret rows, and only hydrates the plaintext rows still
@@ -656,12 +656,12 @@ Done in the current web Durable Object path:
   `writeScope` or `retainedHistoryPolicy` and rewrite them through the same
   shared persistence contract instead of claiming exact historical authority
   origin
-- coverage in `../../src/web/lib/graph-authority-do.test.ts` exercises
+- coverage in `../../lib/app/src/web/lib/graph-authority-do.test.ts` exercises
   constructor bootstrap, restart hydration, retained-history pruning, reset
   baselines, rollback on SQL failure, secret side-storage behavior, and
   retraction fidelity, including persisted write-scope recovery
 - the web Durable Object authority path in
-  `../../src/web/lib/graph-authority-do.ts` no longer uses
+  `../../lib/app/src/web/lib/graph-authority-do.ts` no longer uses
   `state.storage.get/put(...)` whole-blob persistence
 
 Still deferred:

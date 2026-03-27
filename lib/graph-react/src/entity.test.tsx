@@ -1,8 +1,8 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { createTestGraph, testNamespace } from "../../../src/graph/test-graph.js";
+import { createTestGraph, testNamespace } from "../../app/src/graph/test-graph.js";
 import { EntityPredicates, PredicateRelatedEntities } from "./index.js";
 
 function setupGraph() {

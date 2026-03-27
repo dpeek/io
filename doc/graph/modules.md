@@ -47,7 +47,7 @@ workflow, env-var, and document slice symbols.
 - type-specific directories keep schema, metadata, filters, and helper enums
   together with common files such as `type.ts`, `meta.ts`, `filter.ts`,
   `kind.ts`, `index.ts`, and `data.ts`
-- `../../src/graph/testing/kitchen-sink/`: private graph test fixtures, not a
+- `../../lib/app/src/graph/testing/kitchen-sink/`: private graph test fixtures, not a
   published module surface
 
 ## Choosing Structured Values

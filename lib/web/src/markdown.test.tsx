@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -9,7 +9,7 @@ type BunMarkdownApi = typeof Bun.markdown;
 const originalBunMarkdown = Bun.markdown;
 
 function setBunMarkdown(markdown: BunMarkdownApi | undefined) {
-  (Bun as typeof Bun & { markdown?: BunMarkdownApi }).markdown = markdown;
+  Reflect.set(Bun as Record<string, unknown>, "markdown", markdown);
 }
 
 afterEach(() => {

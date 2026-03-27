@@ -22,7 +22,7 @@ The key boundary is:
 - [`../../auth.ts`](../../auth.ts) exports a Better Auth config entrypoint for
   the CLI. It uses in-memory SQLite only to let the Better Auth generator
   produce SQL; it is not the Worker runtime database.
-- [`../../src/web/lib/better-auth.ts`](../../src/web/lib/better-auth.ts)
+- [`../../lib/app/src/web/lib/better-auth.ts`](../../lib/app/src/web/lib/better-auth.ts)
   exports the shared Better Auth Worker config shape:
   - `AUTH_DB`
   - `BETTER_AUTH_SECRET`
@@ -31,7 +31,7 @@ The key boundary is:
   - the stable `/api/auth` base path
   - the Worker passes the Cloudflare `AUTH_DB` D1 binding straight through to
     Better Auth, which requires a runtime with native D1 adapter support
-- [`../../src/web/worker/index.ts`](../../src/web/worker/index.ts) mounts that
+- [`../../lib/app/src/web/worker/index.ts`](../../lib/app/src/web/worker/index.ts) mounts that
   shared Better Auth instance before the graph API and SPA asset routes so the
   auth handler is part of the real Worker surface.
 

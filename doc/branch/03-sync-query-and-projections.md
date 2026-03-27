@@ -840,12 +840,12 @@ Current shipped workflow proof:
 
 - `lib/graph-sync/src/contracts.ts` and `doc/graph/sync.md`:
   extend `SyncScope`, completeness, and fallback semantics beyond whole-graph
-- `lib/graph-client/src/http.ts` and `src/web/lib/server-routes.ts`: add
+- `lib/graph-client/src/http.ts` and `lib/app/src/web/lib/server-routes.ts`: add
   scoped bootstrap and scoped incremental pull transport shapes
 - `lib/graph-client/src/graph.ts`, `lib/graph-client/src/core.ts`, and
   `lib/graph-client/src/query.ts`: keep typed local entity and neighborhood
   reads, but separate them from projection-backed collection queries
-- `src/web/lib/graph-authority-do.ts`: publish dependency-key invalidations and
+- `lib/app/src/web/lib/graph-authority-do.ts`: publish dependency-key invalidations and
   retain derived projection/checkpoint state beside the authority
-- `src/graph/runtime/` new surfaces for scope planning and projection runtime,
+- `lib/app/src/graph/runtime/` new surfaces for scope planning and projection runtime,
   with tests modeled after the existing sync and authority suites

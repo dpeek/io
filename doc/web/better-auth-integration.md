@@ -16,14 +16,14 @@ Repo sources used for this guide:
 - `doc/branch/02-identity-policy-and-sharing.md`
 - `doc/03-target-platform-architecture.md`
 - `doc/web/index.md`
-- `src/web/worker/index.ts`
-- `src/web/lib/auth-bridge.ts`
-- `src/web/lib/server-routes.ts`
-- `src/web/lib/graph-authority-do.ts`
-- `src/web/lib/authority.ts`
+- `lib/app/src/web/worker/index.ts`
+- `lib/app/src/web/lib/auth-bridge.ts`
+- `lib/app/src/web/lib/server-routes.ts`
+- `lib/app/src/web/lib/graph-authority-do.ts`
+- `lib/app/src/web/lib/authority.ts`
 - `lib/graph-authority/src/contracts.ts`
 - `lib/graph-authority/src/authorization.ts`
-- `src/graph/runtime/contracts.ts`
+- `lib/app/src/graph/runtime/contracts.ts`
 - `lib/graph-module-core/src/core/identity.ts`
 - `package.json`
 - `wrangler.jsonc`
@@ -60,14 +60,14 @@ Repo:
   - `AuthorizationContext`
   - `AdmissionPolicy`
   - `PrincipalKind`
-- `src/graph/runtime/contracts.ts` already defines the remaining root-safe auth
+- `lib/app/src/graph/runtime/contracts.ts` already defines the remaining root-safe auth
   shell boundary:
   - `AuthSubjectRef`
   - `AuthenticatedSession`
   - `WebPrincipalSession`
   - `WebPrincipalSummary`
   - `WebPrincipalBootstrapPayload`
-- `src/web/lib/auth-bridge.ts` already defines the stable request-time
+- `lib/app/src/web/lib/auth-bridge.ts` already defines the stable request-time
   projection seam:
   - `projectSessionToPrincipal(...)`
   - `createAnonymousAuthorizationContext(...)`
@@ -90,15 +90,15 @@ Repo:
 
 Repo:
 
-- `src/web/worker/index.ts` already forwards `/api/sync`, `/api/tx`, and
+- `lib/app/src/web/worker/index.ts` already forwards `/api/sync`, `/api/tx`, and
   `/api/commands` to the Durable Object with a request-scoped
   `AuthorizationContext` encoded in `x-io-authorization-context`.
-- `src/web/lib/server-routes.ts` already validates and consumes that header and
+- `lib/app/src/web/lib/server-routes.ts` already validates and consumes that header and
   passes a typed `AuthorizationContext` into sync, transaction, and command
   handlers.
-- `src/web/lib/graph-authority-do.ts` already requires a request-bound
+- `lib/app/src/web/lib/graph-authority-do.ts` already requires a request-bound
   `AuthorizationContext` before serving those routes.
-- `src/web/lib/authority.ts` already enforces authorization from that context:
+- `lib/app/src/web/lib/authority.ts` already enforces authorization from that context:
   - direct reads filter by `authorizeRead(...)`
   - sync payloads omit denied predicates
   - writes validate with `authorizeWrite(...)`
@@ -111,27 +111,27 @@ Repo:
 
 Repo:
 
-- `src/web/worker/index.ts` now verifies Better Auth session state for
+- `lib/app/src/web/worker/index.ts` now verifies Better Auth session state for
   `/api/sync`, `/api/tx`, and `/api/commands`, bypasses Better Auth's cookie
   cache on those graph routes, reduces verified session state into the repo's
   stable `AuthenticatedSession` contract, and forwards anonymous requests as
   anonymous instead of defaulting every browser request to the operator
   principal.
-- `src/web/lib/auth-bridge.ts` now keeps the stable projection seam and also
+- `lib/app/src/web/lib/auth-bridge.ts` now keeps the stable projection seam and also
   owns the Better Auth-specific reduction helpers that turn Worker session
   results into `AuthenticatedSession | null` before principal lookup runs.
 - `package.json` now carries pinned `better-auth` runtime and the current
   Better Auth `auth` CLI migration dependency.
 - `auth.ts` now gives the Better Auth CLI a repo-local config entrypoint for
   generating committed auth-store SQL migrations.
-- `src/web/lib/better-auth.ts` now owns the shared Better Auth Worker factory
+- `lib/app/src/web/lib/better-auth.ts` now owns the shared Better Auth Worker factory
   and stable `/api/auth` base path, including optional trusted-origin env
   parsing.
-- `src/web/worker/index.ts` now mounts `/api/auth/*` through that shared
+- `lib/app/src/web/worker/index.ts` now mounts `/api/auth/*` through that shared
   Better Auth handler before graph API forwarding and SPA asset handling.
-- `src/web/lib/auth-client.ts` now provides the shared Better Auth SPA client
+- `lib/app/src/web/lib/auth-client.ts` now provides the shared Better Auth SPA client
   wrapper for same-origin session reads.
-- `src/web/components/auth-shell.tsx` now exposes the minimal signed-in or
+- `lib/app/src/web/components/auth-shell.tsx` now exposes the minimal signed-in or
   signed-out shell behavior, including sign-in, sign-out, and a provisional
   email/password create-account flow for local demos.
 - graph-backed routes now gate `GraphRuntimeBootstrap` behind that client-side
@@ -139,10 +139,10 @@ Repo:
   browsers by default.
 - `wrangler.jsonc` now declares a dedicated `AUTH_DB` D1 binding with a
   separate `migrations/auth-store` path and `better_auth_migrations` table.
-- `src/web/lib/graph-authority-do.ts` now exposes a Worker-only internal fetch
+- `lib/app/src/web/lib/graph-authority-do.ts` now exposes a Worker-only internal fetch
   path that resolves a verified auth subject through the authority before the
   public graph routes are forwarded.
-- `src/web/lib/authority.ts` now resolves `AuthSubjectRef` through
+- `lib/app/src/web/lib/authority.ts` now resolves `AuthSubjectRef` through
   `core:authSubjectProjection`, projects principal kind plus active role
   bindings into `SessionPrincipalProjection`, and repairs missing exact-subject
   projections or missing principals idempotently on first authenticated use.
@@ -156,10 +156,10 @@ Repo:
   `lib/graph-module-core/src/core/identity.ts`.
 - graph-backed initial-access approvals now also have one explicit contract:
   the authority-owned `core:admissionApproval` entity and the bootstrap or
-  approval command paths in `src/web/lib/authority.ts`.
+  approval command paths in `lib/app/src/web/lib/authority.ts`.
 - `capabilityGrantIds` and capability grant lookup are only placeholders today.
 - `policyVersion` is currently sourced from one shared authority-owned
-  compiled constant in `src/web/lib/policy-version.ts`, which still serves
+  compiled constant in `lib/app/src/web/lib/policy-version.ts`, which still serves
   version `0` for the current proof.
 
 ### Contract And Implementation Gaps That Matter
@@ -173,7 +173,7 @@ Repo:
   when repair cannot produce a single principal.
 - `doc/03-target-platform-architecture.md` says session claims may include graph
   principal id plus capability snapshot or version. The current stable contract
-  in `src/graph/runtime/contracts.ts` does not trust or require that. The
+  in `lib/app/src/graph/runtime/contracts.ts` does not trust or require that. The
   stable request input is still a reduced session plus graph lookup.
 - The Branch 2 sample `GraphPrincipal` model includes `capabilityVersion` and
   `defaultRoleIds`, but the shipped `core:principal` type currently has only:
@@ -237,8 +237,8 @@ In this repo the graph should own:
 
 Repo:
 
-- `src/web/lib/auth-bridge.ts` is the stable seam for this layer.
-- `src/web/worker/index.ts` is the current host-specific request entrypoint.
+- `lib/app/src/web/lib/auth-bridge.ts` is the stable seam for this layer.
+- `lib/app/src/web/worker/index.ts` is the current host-specific request entrypoint.
 
 In this repo the Worker auth bridge should own:
 
@@ -259,7 +259,7 @@ It should not own:
 
 Repo:
 
-- `src/web/lib/authority.ts` and `lib/graph-authority/src/authorization.ts` already
+- `lib/app/src/web/lib/authority.ts` and `lib/graph-authority/src/authorization.ts` already
   enforce final policy from `AuthorizationContext`.
 
 In this repo the authority runtime should own:
@@ -289,7 +289,7 @@ The clean boundary for this repo is:
   - how the browser signs in
   - how request cookies are turned into `AuthenticatedSession`
 
-Branch 7 may host the auth bridge code under `src/web/*`, but it must not
+Branch 7 may host the auth bridge code under `lib/app/src/web/*`, but it must not
 redefine Branch 2's principal or authorization semantics.
 
 ## Main Design Decisions
@@ -329,7 +329,7 @@ Why this is the right split for this repo:
 
 Repo:
 
-- `src/web/worker/index.ts` is already the single Cloudflare Worker entrypoint.
+- `lib/app/src/web/worker/index.ts` is already the single Cloudflare Worker entrypoint.
 
 External:
 
@@ -360,7 +360,7 @@ External:
 
 Inference:
 
-- `src/web/worker/index.ts` should call Better Auth for every `/api/sync`,
+- `lib/app/src/web/worker/index.ts` should call Better Auth for every `/api/sync`,
   `/api/tx`, and `/api/commands` request.
 - For graph routes, use `disableCookieCache: true` when verifying the session.
 
@@ -438,7 +438,7 @@ Recommended first slice:
 
 ### Worker Mounting
 
-Recommended route order in `src/web/worker/index.ts`:
+Recommended route order in `lib/app/src/web/worker/index.ts`:
 
 1. `/api/auth/*` -> Better Auth handler
 2. `/api/sync` -> resolve request `AuthorizationContext`, forward to DO
@@ -453,7 +453,7 @@ the single browser-facing host.
 
 Current repo file:
 
-- `src/web/lib/better-auth.ts`
+- `lib/app/src/web/lib/better-auth.ts`
 
 Recommended shape:
 
@@ -506,7 +506,7 @@ Inference:
 
 Current repo impact:
 
-- `src/web/components/graph-runtime-bootstrap.tsx` already uses same-origin
+- `lib/app/src/web/components/graph-runtime-bootstrap.tsx` already uses same-origin
   fetches to `/api/sync` and `/api/tx`.
 - Those fetches will naturally include same-origin cookies.
 
@@ -723,7 +723,7 @@ So the first slice must enforce uniqueness transactionally in authority code.
 
 ### Better Auth Session Verification In The Worker
 
-1. `src/web/worker/index.ts` receives `/api/sync`, `/api/tx`, or
+1. `lib/app/src/web/worker/index.ts` receives `/api/sync`, `/api/tx`, or
    `/api/commands`.
 2. It creates or retrieves the Better Auth instance for the current env.
 3. It calls `auth.api.getSession({ headers: request.headers, query: { disableCookieCache: true } })`.
@@ -749,7 +749,7 @@ function reduceBetterAuthSession(result: BetterAuthSessionResult): Authenticated
 }
 ```
 
-This reduction belongs in `src/web/lib/auth-bridge.ts` or a Better Auth-specific
+This reduction belongs in `lib/app/src/web/lib/auth-bridge.ts` or a Better Auth-specific
 helper beside it. It should remain Worker-owned code, not graph runtime code.
 
 ### `projectSessionToPrincipal(...)`
@@ -797,7 +797,7 @@ Current first-slice values still expected in this repo:
 - `capabilityVersion = 0`
 - `policyVersion =` the current compiled value returned by
   `GET /_internal/policy-version`, sourced from
-  `src/web/lib/policy-version.ts`
+  `lib/app/src/web/lib/policy-version.ts`
 
 ### Forwarding To The Durable Object
 
@@ -811,7 +811,7 @@ This part already exists and should stay.
 
 Repo:
 
-- `src/web/lib/authority.ts` already enforces:
+- `lib/app/src/web/lib/authority.ts` already enforces:
   - read filtering
   - write validation
   - command validation
@@ -921,7 +921,7 @@ Repo:
 Recommended first slice:
 
 - keep one shared Worker-and-authority `policyVersion` source in
-  `src/web/lib/policy-version.ts`, and have the Worker refresh it from the
+  `lib/app/src/web/lib/policy-version.ts`, and have the Worker refresh it from the
   authority's `GET /_internal/policy-version` route on each graph request
 - keep `capabilityVersion = 0`
 - do not invent partial capability-version semantics before the graph model
@@ -1021,7 +1021,7 @@ The repo now includes the runtime foundation described here:
 
 ### File-By-File Change Plan
 
-`src/web/lib/better-auth.ts`
+`lib/app/src/web/lib/better-auth.ts`
 
 - keep the shared Better Auth instance factory
 - configure:
@@ -1032,7 +1032,7 @@ The repo now includes the runtime foundation described here:
   - optional `trustedOrigins`
   - chosen providers as follow-on auth UX work needs them
 
-`src/web/lib/auth-bridge.ts`
+`lib/app/src/web/lib/auth-bridge.ts`
 
 - keep `projectSessionToPrincipal(...)` as the stable projection seam
 - add Better Auth-specific reduction helpers, for example:
@@ -1040,7 +1040,7 @@ The repo now includes the runtime foundation described here:
   - `createWorkerAuthorizationContext(...)`
 - do not embed graph lookup logic directly in Better Auth parsing helpers
 
-`src/web/worker/index.ts`
+`lib/app/src/web/worker/index.ts`
 
 - keep `/api/auth/*` mounted through the shared Better Auth handler
 - replace `createRequestAuthorizationContext(...)` with:
@@ -1050,7 +1050,7 @@ The repo now includes the runtime foundation described here:
   - authority lookup/repair callback
 - stop forwarding the hardcoded operator principal
 
-`src/web/lib/graph-authority-do.ts`
+`lib/app/src/web/lib/graph-authority-do.ts`
 
 - now exposes an internal authority lookup/repair seam callable by the Worker
   before the public graph request is forwarded
@@ -1059,7 +1059,7 @@ The repo now includes the runtime foundation described here:
   - still compatible with a future Durable Object RPC migration if the repo
     adopts that style later
 
-`src/web/lib/authority.ts`
+`lib/app/src/web/lib/authority.ts`
 
 - now implements authority-owned helpers to:
   - resolve a subject projection
@@ -1078,17 +1078,17 @@ The repo now includes the runtime foundation described here:
   - `capabilityVersion` on principal or an equivalent version source
   - future grant types
 
-`src/graph/runtime/contracts.ts`
+`lib/app/src/graph/runtime/contracts.ts`
 
 - no change required for the basic Better Auth integration
 - optional later change if the repo wants a dedicated conflict error code such
   as `auth.principal_conflict`
 
-`src/web/lib/auth-client.ts` or equivalent new client file
+`lib/app/src/web/lib/auth-client.ts` or equivalent new client file
 
 - add Better Auth client wiring for SPA sign-in and session-aware UI
 
-`src/web/routes/*` and `src/web/components/*`
+`lib/app/src/web/routes/*` and `lib/app/src/web/components/*`
 
 - add sign-in or signed-out shell behavior
 - gate graph runtime bootstrap so unauthenticated users do not immediately try
@@ -1098,15 +1098,15 @@ The repo now includes the runtime foundation described here:
 
 Recommended new or updated tests:
 
-- `src/web/worker/index.test.ts`
+- `lib/app/src/web/worker/index.test.ts`
   - verify `/api/auth/*` routing
   - verify real session-derived `AuthorizationContext`
   - verify unauthenticated requests become anonymous
-- `src/web/lib/auth-bridge.test.ts`
+- `lib/app/src/web/lib/auth-bridge.test.ts`
   - add Better Auth reduction tests
-- `src/web/lib/graph-authority-do.test.ts`
+- `lib/app/src/web/lib/graph-authority-do.test.ts`
   - add internal subject lookup/repair coverage
-- `src/web/lib/authority.test.ts`
+- `lib/app/src/web/lib/authority.test.ts`
   - add projection creation, idempotent repair, and role binding lookup tests
 
 ## Recommended Sequencing
@@ -1122,7 +1122,7 @@ Recommended new or updated tests:
 5. Load role bindings from the graph.
 6. Keep:
    - `policyVersion` sourced from the shared compiled contract snapshot in
-     `src/web/lib/policy-version.ts`
+     `lib/app/src/web/lib/policy-version.ts`
    - `capabilityGrantIds = []`
    - `capabilityVersion = 0`
 7. Do not auto-grant roles on sign-in.
@@ -1210,14 +1210,14 @@ Recommendation:
 Current repo state:
 
 - Worker and authority both currently use the shared compiled source in
-  `src/web/lib/policy-version.ts`
+  `lib/app/src/web/lib/policy-version.ts`
 - the current proof needs one authoritative source so request projection and
   stale-context enforcement cannot drift
 
 Recommendation:
 
 - use one shared authority-owned source now:
-  `src/web/lib/policy-version.ts`
+  `lib/app/src/web/lib/policy-version.ts`
 - treat that value as the compiled policy snapshot version for the current
   single-graph proof
 - have the Worker fetch the current served value from
@@ -1340,9 +1340,9 @@ Current first authenticated-use outcomes in the shipped single-graph proof:
   calls `POST /api/access/activate` so the authority can bind the approved
   initial roles in a separate durable step
 - proof anchors:
-  - `src/web/worker/index.test.ts` covers those branches through the real
+  - `lib/app/src/web/worker/index.test.ts` covers those branches through the real
     Worker-to-Durable-Object request path
-  - `src/web/lib/graph-authority-do.test.ts` covers the same branches at the
+  - `lib/app/src/web/lib/graph-authority-do.test.ts` covers the same branches at the
     Durable Object lookup-and-repair seam
 
 What it still does not have yet is the full end-user auth product surface. The

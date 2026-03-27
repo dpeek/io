@@ -167,7 +167,7 @@ export function createSyncedGraphClient<
   let captureSnapshot: GraphStoreSnapshot | undefined;
   let statusOverride: GraphClientSyncStatus | undefined;
   let freshnessOverride: SyncFreshness | undefined;
-  let errorOverride: unknown | undefined;
+  let errorOverride: unknown;
   const listeners = new Set<GraphClientSyncStateListener>();
   const typeHandleCache = new WeakMap<object, object>();
   const entityRefCache = new WeakMap<object, object>();

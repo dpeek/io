@@ -66,16 +66,7 @@ function CodeEditorFallback({
   );
 }
 
-export function MonacoSourceEditor({
-  height = 360,
-  language,
-  onChange,
-  options,
-  placeholder,
-  sourceKind,
-  theme = "vs",
-  value,
-}: {
+export function MonacoSourceEditor(props: {
   height?: number | string;
   language?: string;
   onChange?(nextValue: string): void;
@@ -85,6 +76,7 @@ export function MonacoSourceEditor({
   theme?: string;
   value: string;
 }) {
+  const { height = 360, language, options, placeholder, sourceKind, theme = "vs", value } = props;
   const [Editor, setEditor] = useState<MonacoEditorComponent | null>(null);
 
   useEffect(() => {
@@ -110,7 +102,7 @@ export function MonacoSourceEditor({
   if (!Editor) {
     return (
       <CodeEditorFallback
-        onChange={onChange}
+        onChange={props.onChange}
         placeholder={placeholder}
         sourceKind={sourceKind}
         value={value}
@@ -126,7 +118,7 @@ export function MonacoSourceEditor({
     <div className={sourcePreviewEditorFrameClassName} {...sourceData}>
       <div hidden>
         <CodeEditorFallback
-          onChange={onChange}
+          onChange={props.onChange}
           placeholder={placeholder}
           sourceKind={sourceKind}
           value={value}
@@ -143,7 +135,7 @@ export function MonacoSourceEditor({
             value={value}
           />
         }
-        onChange={(nextValue) => onChange?.(nextValue ?? "")}
+        onChange={(nextValue) => props.onChange?.(nextValue ?? "")}
         options={options}
         theme={theme}
         value={value}

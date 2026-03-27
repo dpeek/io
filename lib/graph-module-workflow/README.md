@@ -26,9 +26,9 @@
 - generic helpers from `@io/graph-module`
 - `core:` schema/contracts from `@io/graph-module-core`
 - host-neutral React helpers from `@io/graph-react`
-- web authority handlers in `src/web/lib/*`
+- web authority handlers in `lib/app/src/web/lib/*`
 - live transport, routes, Durable Object composition, or other host/runtime adapters
-- workflow UI components in `src/web/components/*` or `src/tui/*`
+- workflow UI components in `lib/app/src/web/components/*` or `lib/app/src/tui/*`
 
 The package root is the canonical internal import surface for built-in
 `workflow:` contracts, projection metadata, and query helpers. Web and TUI

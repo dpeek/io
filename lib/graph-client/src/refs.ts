@@ -44,10 +44,8 @@ function createPredicateRef<T extends EdgeOutput, Defs extends Record<string, An
   store: GraphStore,
   subjectId: string,
   field: T,
-  applyMutation: (value: unknown | typeof clearFieldValue) => void,
-  validateMutation: (
-    value: unknown | typeof clearFieldValue,
-  ) => ReturnType<typeof validateUpdateEntity>,
+  applyMutation: (value: unknown) => void,
+  validateMutation: (value: unknown) => ReturnType<typeof validateUpdateEntity>,
   scalarByKey: Map<string, ScalarTypeOutput<any>>,
   typeByKey: Map<string, AnyTypeOutput>,
   enumValuesByRange: Map<string, Set<string>>,
@@ -199,15 +197,11 @@ function buildFieldRefs<T extends FieldsOutput, Defs extends Record<string, AnyT
   subjectId: string,
   fields: T,
   path: string[],
-  applyMutation: (
-    path: string[],
-    fieldName: string,
-    value: unknown | typeof clearFieldValue,
-  ) => void,
+  applyMutation: (path: string[], fieldName: string, value: unknown) => void,
   validateMutation: (
     path: string[],
     fieldName: string,
-    value: unknown | typeof clearFieldValue,
+    value: unknown,
   ) => ReturnType<typeof validateUpdateEntity>,
   scalarByKey: Map<string, ScalarTypeOutput<any>>,
   typeByKey: Map<string, AnyTypeOutput>,
@@ -274,20 +268,12 @@ export function createEntityRef<T extends TypeOutput, Defs extends Record<string
   entityLookup: EntityLookup<Defs>,
 ): EntityRef<T, Defs> {
   const coreSchema = requireGraphBootstrapCoreSchema(namespace);
-  const applyMutation = (
-    path: string[],
-    fieldName: string,
-    value: unknown | typeof clearFieldValue,
-  ) => {
+  const applyMutation = (path: string[], fieldName: string, value: unknown) => {
     const patch: Record<string, unknown> = {};
     setNestedValue(patch, path, fieldName, value);
     updateEntity(store, id, typeDef, patch, scalarByKey, typeByKey, enumValuesByRange, namespace);
   };
-  const validateMutation = (
-    path: string[],
-    fieldName: string,
-    value: unknown | typeof clearFieldValue,
-  ) => {
+  const validateMutation = (path: string[], fieldName: string, value: unknown) => {
     const patch: Record<string, unknown> = {};
     setNestedValue(patch, path, fieldName, value);
     return validateUpdateEntity(

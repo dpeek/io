@@ -18,12 +18,12 @@ Measured on 2026-03-23:
 
 The current run profile is concentrated in a small number of suites:
 
-- `src/web/lib/authority.test.ts`: about `73.6s`
-- `src/web/lib/graph-authority-do.test.ts`: about `53.4s`
-- `src/web/lib/workflow-authority.test.ts`: about `50.9s`
-- `src/web/lib/example-runtime.test.ts`: about `14.2s`
-- `src/agent/workspace.test.ts`: about `16.4s`
-- `src/mcp/graph.test.ts`: about `7.5s`
+- `lib/app/src/web/lib/authority.test.ts`: about `73.6s`
+- `lib/app/src/web/lib/graph-authority-do.test.ts`: about `53.4s`
+- `lib/app/src/web/lib/workflow-authority.test.ts`: about `50.9s`
+- `lib/app/src/web/lib/example-runtime.test.ts`: about `14.2s`
+- `lib/app/src/agent/workspace.test.ts`: about `16.4s`
+- `lib/app/src/mcp/graph.test.ts`: about `7.5s`
 
 The web authority tests alone account for about `194s` of testcase time. That
 is the critical path.
@@ -51,22 +51,22 @@ Intermediate milestones from the same day:
 
 Slowest files in that JUnit profile:
 
-- `src/agent/workspace.test.ts`: `7.13s`
-- `src/web/lib/graph-authority-do.test.ts`: `2.70s`
-- `src/mcp/graph.test.ts`: `2.69s`
-- `src/web/components/explorer/catalog.test.ts`: `2.40s`
-- `src/web/lib/authority.test.ts`: `2.32s`
-- `src/graph/validation-lifecycle.test.ts`: `2.07s`
-- `src/web/lib/example-runtime.test.ts`: `1.73s`
+- `lib/app/src/agent/workspace.test.ts`: `7.13s`
+- `lib/app/src/web/lib/graph-authority-do.test.ts`: `2.70s`
+- `lib/app/src/mcp/graph.test.ts`: `2.69s`
+- `lib/app/src/web/components/explorer/catalog.test.ts`: `2.40s`
+- `lib/app/src/web/lib/authority.test.ts`: `2.32s`
+- `lib/app/src/graph/validation-lifecycle.test.ts`: `2.07s`
+- `lib/app/src/web/lib/example-runtime.test.ts`: `1.73s`
 
 Slowest individual testcases in that profile:
 
-- `src/mcp/graph.test.ts`: `reports synced graph status for the product namespace` at `2.32s`
-- `src/agent/workspace.test.ts`: `WorkspaceManager lands task work onto the latest parent feature branch` at `1.48s`
-- `src/agent/workspace.test.ts`: `WorkspaceManager squashes a done feature branch onto its stream branch and cleans up` at `1.36s`
-- `src/web/lib/example-runtime.test.ts`: `proves peers catch up through ordered incremental delivery without extra total snapshots` at `1.32s`
-- `src/web/components/explorer/catalog.test.ts`: `builds entity entries with handles for every explorer entity type` at `1.22s`
-- `src/web/lib/authority.test.ts`: `allows authority-only commands to reuse the shared authority command seam` at `1.19s`
+- `lib/app/src/mcp/graph.test.ts`: `reports synced graph status for the product namespace` at `2.32s`
+- `lib/app/src/agent/workspace.test.ts`: `WorkspaceManager lands task work onto the latest parent feature branch` at `1.48s`
+- `lib/app/src/agent/workspace.test.ts`: `WorkspaceManager squashes a done feature branch onto its stream branch and cleans up` at `1.36s`
+- `lib/app/src/web/lib/example-runtime.test.ts`: `proves peers catch up through ordered incremental delivery without extra total snapshots` at `1.32s`
+- `lib/app/src/web/components/explorer/catalog.test.ts`: `builds entity entries with handles for every explorer entity type` at `1.22s`
+- `lib/app/src/web/lib/authority.test.ts`: `allows authority-only commands to reuse the shared authority command seam` at `1.19s`
 
 This clears both the primary `<120s` target and the secondary `<90s` target.
 
@@ -74,38 +74,38 @@ This clears both the primary `<120s` target and the secondary `<90s` target.
 
 Implemented on 2026-03-23:
 
-- `src/web/lib/authority.ts` now supports `seedExampleGraph: false` so tests
+- `lib/app/src/web/lib/authority.ts` now supports `seedExampleGraph: false` so tests
   can skip seeded PKM example content when they do not need it.
-- `src/web/lib/authority-test-helpers.ts` now provides a no-seed test
+- `lib/app/src/web/lib/authority-test-helpers.ts` now provides a no-seed test
   authority factory plus a cached persisted workflow baseline
   (project/repository/branch/repository-branch) for reuse across slow web
   authority tests.
-- `src/web/lib/authority.test.ts`, `src/web/lib/workflow-authority.test.ts`,
-  and `src/web/lib/graph-authority-do.test.ts` now use that no-seed path; the
+- `lib/app/src/web/lib/authority.test.ts`, `lib/app/src/web/lib/workflow-authority.test.ts`,
+  and `lib/app/src/web/lib/graph-authority-do.test.ts` now use that no-seed path; the
   workflow-heavy suites also reuse the cached persisted baseline instead of
   replaying the same setup flow in every test.
-- `src/web/lib/mutation-planning.ts` now records asserted and retracted store
+- `lib/app/src/web/lib/mutation-planning.ts` now records asserted and retracted store
   operations directly from a snapshot-backed mutation store; both
-  `src/web/lib/workflow-authority.ts` and the secret-field path in
-  `src/web/lib/authority.ts` now use that planner instead of whole-store
+  `lib/app/src/web/lib/workflow-authority.ts` and the secret-field path in
+  `lib/app/src/web/lib/authority.ts` now use that planner instead of whole-store
   before/after diffing.
 - `lib/graph-authority/src/persisted-authority.ts` now reuses a single pre-write
   snapshot through `applyWithSnapshot(...)` in the authoritative write session
   instead of snapshotting the full store again after every accepted write.
-- `src/web/lib/authority.ts` now caches compiled graph metadata plus a
+- `lib/app/src/web/lib/authority.ts` now caches compiled graph metadata plus a
   bootstrapped empty snapshot per graph, which removes most repeated
   authority-construction overhead from both tests and runtime callers.
-- `src/web/lib/example-runtime.ts` now reuses a cached seeded authority
+- `lib/app/src/web/lib/example-runtime.ts` now reuses a cached seeded authority
   baseline and records hidden-only cursor mutations directly instead of
   rebuilding and diffing a fresh seeded runtime graph for every test case.
-- `src/mcp/schema.ts` and `src/mcp/graph.ts` now cache MCP schema/session
-  metadata per namespace, and `src/mcp/graph.test.ts` plus
+- `lib/app/src/mcp/schema.ts` and `lib/app/src/mcp/graph.ts` now cache MCP schema/session
+  metadata per namespace, and `lib/app/src/mcp/graph.test.ts` plus
   `lib/graph-authority/src/authority.test.ts` now reuse cached bootstrapped or
   seeded snapshots instead of repeating raw schema bootstrap in every case.
-- `src/web/lib/example-runtime.test.ts` now uses an explicit `20_000ms`
+- `lib/app/src/web/lib/example-runtime.test.ts` now uses an explicit `20_000ms`
   default timeout so the full profiled suite is stable under the slower JUnit
   reporter.
-- `src/agent/workspace.test.ts` now keeps only the essential git integration
+- `lib/app/src/agent/workspace.test.ts` now keeps only the essential git integration
   proofs: detached issue bootstrap, dirty-work resume/issue switch guard,
   detached landing, standalone stream finalization, child-task landing onto
   the latest parent feature branch, rebase-conflict preservation, feature to
@@ -114,24 +114,24 @@ Implemented on 2026-03-23:
 
 Validation completed for this pass:
 
-- `bun check src/agent`
-- `bun test src/agent/workspace.test.ts`
+- `bun check lib/app/src/agent`
+- `bun test lib/app/src/agent/workspace.test.ts`
 - `bun check src`
 - `bun test ./src --reporter=junit --reporter-outfile tmp/bun-junit.xml`
 
 Remaining hotspots:
 
-- `src/agent/workspace.test.ts`
-- `src/mcp/graph.test.ts`
-- `src/web/lib/graph-authority-do.test.ts`
-- `src/web/components/explorer/catalog.test.ts`
-- `src/graph/validation-lifecycle.test.ts`
+- `lib/app/src/agent/workspace.test.ts`
+- `lib/app/src/mcp/graph.test.ts`
+- `lib/app/src/web/lib/graph-authority-do.test.ts`
+- `lib/app/src/web/components/explorer/catalog.test.ts`
+- `lib/app/src/graph/validation-lifecycle.test.ts`
 
 ## What Is Expensive Now
 
 ### Git-heavy workspace integration
 
-`src/agent/workspace.test.ts` still shells out to real `git`, worktree,
+`lib/app/src/agent/workspace.test.ts` still shells out to real `git`, worktree,
 merge, and rebase flows, but it is now down to the eight end-to-end behaviors
 that matter most. At `7.13s`, it is still the slowest individual file, but it
 no longer dominates the loop. Further reduction would likely mean mocking away
@@ -139,27 +139,27 @@ behavior we still want covered with real repositories.
 
 ### MCP cold-start integration
 
-`src/mcp/graph.test.ts` is now mostly one cold-start case:
+`lib/app/src/mcp/graph.test.ts` is now mostly one cold-start case:
 `createGraphMcpSession > reports synced graph status for the product
 namespace`. The rest of the MCP suite is already down in the tens of
 milliseconds.
 
 ### Durable Object and explorer integration
 
-`src/web/lib/graph-authority-do.test.ts` and
-`src/web/components/explorer/catalog.test.ts` are now the main non-git
+`lib/app/src/web/lib/graph-authority-do.test.ts` and
+`lib/app/src/web/components/explorer/catalog.test.ts` are now the main non-git
 integration costs after the workspace suite.
 
 ### Real integration work in non-web tests
 
 The original web authority bottleneck is no longer first-order:
 
-- `src/agent/workspace.test.ts`: `17.82s` -> `7.13s`
-- `src/web/lib/authority.test.ts`: `22.20s` -> `2.32s`
-- `src/web/lib/graph-authority-do.test.ts`: `25.55s` -> `2.70s`
-- `src/web/lib/workflow-authority.test.ts`: `6.53s` -> `0.49s`
-- `src/web/lib/example-runtime.test.ts`: `14.47s` -> `1.73s`
-- `src/mcp/graph.test.ts`: `7.72s` -> `2.69s`
+- `lib/app/src/agent/workspace.test.ts`: `17.82s` -> `7.13s`
+- `lib/app/src/web/lib/authority.test.ts`: `22.20s` -> `2.32s`
+- `lib/app/src/web/lib/graph-authority-do.test.ts`: `25.55s` -> `2.70s`
+- `lib/app/src/web/lib/workflow-authority.test.ts`: `6.53s` -> `0.49s`
+- `lib/app/src/web/lib/example-runtime.test.ts`: `14.47s` -> `1.73s`
+- `lib/app/src/mcp/graph.test.ts`: `7.72s` -> `2.69s`
 - `lib/graph-authority/src/authority.test.ts`: `2.76s` -> `0.31s`
 
 ## Success Criteria
@@ -193,8 +193,8 @@ Expected outcome:
 
 ### 2. Triage Durable Object and explorer integration
 
-- focus on `src/web/lib/graph-authority-do.test.ts` and
-  `src/web/components/explorer/catalog.test.ts`
+- focus on `lib/app/src/web/lib/graph-authority-do.test.ts` and
+  `lib/app/src/web/components/explorer/catalog.test.ts`
 - look for repeated authority/session bootstrap that can be shared without
   weakening the end-to-end assertions
 
@@ -226,9 +226,9 @@ Expected outcome:
 
 ## Recommended Order
 
-1. Triage the cold-start `src/mcp/graph.test.ts` session-status case.
-2. Triage `src/web/lib/graph-authority-do.test.ts` and `src/web/components/explorer/catalog.test.ts`.
-3. Revisit `src/agent/workspace.test.ts` only if a low-complexity fixture-sharing improvement appears.
+1. Triage the cold-start `lib/app/src/mcp/graph.test.ts` session-status case.
+2. Triage `lib/app/src/web/lib/graph-authority-do.test.ts` and `lib/app/src/web/components/explorer/catalog.test.ts`.
+3. Revisit `lib/app/src/agent/workspace.test.ts` only if a low-complexity fixture-sharing improvement appears.
 4. Reassess whether further optimization is worth the maintenance cost.
 
 ## Validation After Each Step

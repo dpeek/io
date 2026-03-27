@@ -63,13 +63,13 @@ already in place:
   `../../lib/graph-client/src/http.ts`, already provides the typed client,
   local query surface, and HTTP-backed graph adapter
 - the Worker authority already exposes thin sync and write routes in
-  `../../src/web/lib/server-routes.ts`
+  `../../lib/app/src/web/lib/server-routes.ts`
 - the Durable Object wrapper already hosts that authority in
-  `../../src/web/lib/graph-authority-do.ts`
+  `../../lib/app/src/web/lib/graph-authority-do.ts`
 - field visibility and write policy already exist in
-  `../../src/graph/runtime/schema.ts`
+  `../../lib/app/src/graph/runtime/schema.ts`
 - secret-backed and `server-command` fields already reject ordinary writes in
-  `../../src/web/lib/authority.test.ts`
+  `../../lib/app/src/web/lib/authority.test.ts`
 
 That meant the missing work was mostly the MCP adapter, the tool shape, and a
 small amount of schema-to-tool plumbing.
@@ -315,7 +315,7 @@ The first write pass should not expose:
 The long-term direction should still be command-oriented, not CRUD-only.
 
 The repo already has the right conceptual shape for this in
-`./authority.md` and `../../src/graph/runtime/contracts.ts`:
+`./authority.md` and `../../lib/app/src/graph/runtime/contracts.ts`:
 
 - graph methods should lower to explicit authority commands
 - commands should carry policy and execution metadata
@@ -334,11 +334,11 @@ That suggests a staged path:
 The implementation should stay small and keep transport separate from graph
 runtime internals.
 
-- `../../src/task/mcp.ts`: CLI entrypoint for `io mcp ...`
-- `../../src/mcp/index.ts`: MCP server bootstrap
-- `../../src/mcp/graph.ts`: graph-session bootstrap and tool registration
-- `../../src/mcp/schema.ts`: type lookup, selection validation, preview shaping
-- `../../src/mcp/*.test.ts`: protocol and handler coverage
+- `../../lib/app/src/task/mcp.ts`: CLI entrypoint for `io mcp ...`
+- `../../lib/app/src/mcp/index.ts`: MCP server bootstrap
+- `../../lib/app/src/mcp/graph.ts`: graph-session bootstrap and tool registration
+- `../../lib/app/src/mcp/schema.ts`: type lookup, selection validation, preview shaping
+- `../../lib/app/src/mcp/*.test.ts`: protocol and handler coverage
 
 The root `graph` package should not absorb MCP-specific transport logic.
 `graph` should keep owning schema, client, validation, sync, and authority

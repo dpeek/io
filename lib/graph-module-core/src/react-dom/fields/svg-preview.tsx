@@ -1,4 +1,4 @@
-import { sanitizeSvgMarkup } from "@io/core/graph";
+import { sanitizeSvgMarkup } from "@io/app/graph";
 import { EmptyPreview, sourcePreviewPanelClassName } from "@io/web/source-preview";
 import { cn } from "@io/web/utils";
 

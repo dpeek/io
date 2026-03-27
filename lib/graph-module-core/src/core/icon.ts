@@ -1,4 +1,4 @@
-import { sanitizeSvgMarkup } from "@io/core/graph";
+import { sanitizeSvgMarkup } from "@io/app/graph";
 import { defineType } from "@io/graph-module";
 import { entityReferenceComboboxEditorKind, existingEntityReferenceField } from "@io/graph-module";
 

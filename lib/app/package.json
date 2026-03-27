@@ -1,0 +1,71 @@
+{
+  "name": "@io/app",
+  "version": "0.0.1",
+  "private": true,
+  "bin": {
+    "io": "./src/cli/index.ts"
+  },
+  "type": "module",
+  "exports": {
+    "./agent": "./src/agent/index.ts",
+    "./browser-agent": "./src/browser-agent/index.ts",
+    "./cli": "./src/cli/index.ts",
+    "./graph": "./src/graph/index.ts",
+    "./web/better-auth": "./src/web/lib/better-auth.ts",
+    "./web/query-container": "./src/web/lib/query-container.ts",
+    "./lib": "./src/lib/index.ts",
+    "./lib/config": "./src/lib/config.ts"
+  },
+  "scripts": {
+    "build": "sh -c 'cd ../.. && vp build'",
+    "check": "vp check ./src",
+    "format": "vp fmt ./src",
+    "lint": "vp lint ./src",
+    "test": "bun test ./src"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.3.0",
+    "@cloudflare/vite-plugin": "^1.25.0",
+    "@io/graph-authority": "workspace:*",
+    "@io/graph-bootstrap": "workspace:*",
+    "@io/graph-client": "workspace:*",
+    "@io/graph-kernel": "workspace:*",
+    "@io/graph-module": "workspace:*",
+    "@io/graph-module-core": "workspace:*",
+    "@io/graph-module-workflow": "workspace:*",
+    "@io/graph-projection": "workspace:*",
+    "@io/graph-react": "workspace:*",
+    "@io/graph-sync": "workspace:*",
+    "@io/web": "workspace:*",
+    "@linear/sdk": "^76.0.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@opentui/core": "^0.1.87",
+    "@opentui/react": "^0.1.87",
+    "@tailwindcss/vite": "^4.2.1",
+    "@tanstack/react-router": "^1.167.4",
+    "@tanstack/router-plugin": "^1.166.13",
+    "@vitejs/plugin-react": "^6.0.1",
+    "better-auth": "1.5.6",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.4",
+    "react-colorful": "^5.6.1",
+    "react-day-picker": "^9.14.0",
+    "react-dom": "^19.2.4",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.1",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/bun": "^1.3.9",
+    "@types/node": "^25.3.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@typescript/native-preview": "^7.0.0-dev.20260226.1",
+    "vite-plus": "^0.1.14"
+  }
+}

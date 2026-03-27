@@ -278,7 +278,7 @@ function JsonDownloadButton({
 
 function JsonCopyToClipboard({ data, disabled }: { data: any; disabled?: boolean }) {
   const onCopyToClipboard = () => {
-    navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+    void navigator.clipboard.writeText(JSON.stringify(data, null, 2));
   };
 
   return (

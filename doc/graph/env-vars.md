@@ -54,4 +54,4 @@ Behavior today:
 ## Canonical Docs
 
 - `../../../../../doc/graph/env-vars.md`
-- `../../../../../src/graph/secrets.md`
+- `../../../../../lib/app/src/graph/secrets.md`

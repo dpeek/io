@@ -27,7 +27,7 @@ Canonical imports:
 - `@io/graph-module`: focused schema and type-module authoring helpers from
   `../../lib/graph-module/src/index.ts`, including `TypeModule`,
   `ObjectViewSpec`, `WorkflowSpec`, and `GraphCommandSpec`
-- `@io/core/graph`: small root helper surface for curated kernel aliases,
+- `@io/app/graph`: small root helper surface for curated kernel aliases,
   and icon helpers
 - `@io/graph-module-core`: canonical built-in `core:` namespace plus the
   extracted core-owned type modules, datasets, bootstrap inputs, and helper
@@ -168,9 +168,9 @@ from audit history.
 
 Built-in graph modules now live under their owning package trees:
 
-- `../../lib/graph-module-core/src/core/` for `core:` families
+- `../../lib/graph-module-core/src/app/` for `core:` families
 - `../../lib/graph-module-workflow/src/` for public `workflow:` slices
-- `../../lib/graph-module-core/src/core.ts` and
+- `../../lib/graph-module-core/src/app.ts` and
   `../../lib/graph-module-workflow/src/index.ts`: namespace assembly entrypoints
 - `../../lib/graph-module-workflow/src/env-var/schema.ts` and
   `../../lib/graph-module-workflow/src/document/schema.ts`: internal slice
@@ -178,12 +178,12 @@ Built-in graph modules now live under their owning package trees:
 
 Examples:
 
-- `../../lib/graph-module-core/src/core/date.ts`
-- `../../lib/graph-module-core/src/core/url.ts`
-- `../../lib/graph-module-core/src/core/email.ts`
-- `../../lib/graph-module-core/src/core/string.ts`
-- `../../lib/graph-module-core/src/core/number.ts`
-- `../../lib/graph-module-core/src/core/boolean.ts`
+- `../../lib/graph-module-core/src/app/date.ts`
+- `../../lib/graph-module-core/src/app/url.ts`
+- `../../lib/graph-module-core/src/app/email.ts`
+- `../../lib/graph-module-core/src/app/string.ts`
+- `../../lib/graph-module-core/src/app/number.ts`
+- `../../lib/graph-module-core/src/app/boolean.ts`
 - `../../lib/graph-module/src/enum-module.ts`
 - `../../lib/graph-module/src/validated-string.ts`
 
@@ -207,7 +207,7 @@ authoring boundary and publish it through the canonical module subpaths above.
 Physical colocation and package export ownership are separate concerns.
 
 - published type and slice entry files must stay root-safe for
-  `@io/graph-module`, `@io/core/graph`, or the module subpaths
+  `@io/graph-module`, `@io/app/graph`, or the module subpaths
 - root-safe exports may include canonical schema, metadata, filters, pure view
   specs, pure command descriptors, and reusable fixtures
 - published module entry files must not import browser APIs, OpenTUI code, or

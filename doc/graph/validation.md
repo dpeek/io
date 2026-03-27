@@ -14,8 +14,8 @@ The code already enforces a three-layer validation split:
 
 Relevant source:
 
-- `../../src/graph/runtime/schema.ts`
-- `../../src/graph/runtime/type-module.ts`
+- `../../lib/app/src/graph/runtime/schema.ts`
+- `../../lib/app/src/graph/runtime/type-module.ts`
 - `../../lib/graph-client/src/core.ts`
 - `../../lib/graph-client/src/validation.ts`
 - `../../lib/graph-client/src/entity-actions.ts`
