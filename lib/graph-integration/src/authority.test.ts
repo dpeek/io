@@ -17,22 +17,23 @@ import {
   type AuthoritativeGraphWriteResult,
   type GraphWriteTransaction,
 } from "@io/graph-kernel";
-import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 import { validateIncrementalSyncResult } from "@io/graph-sync";
 
-import { kitchenSink } from "../../app/src/graph/testing/kitchen-sink.js";
+import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 import {
   authorizeRead,
   createJsonPersistedAuthoritativeGraph,
   createAuthoritativeGraphWriteSession,
   createAuthoritativeTotalSyncPayload,
   createPersistedAuthoritativeGraph,
+  validateAuthoritativeTotalSyncPayload,
   type AuthorizationContext,
   type PersistedAuthoritativeGraphState,
   type PersistedAuthoritativeGraphStorage,
   type PersistedAuthoritativeGraphStorageLoadResult,
-  validateAuthoritativeTotalSyncPayload,
-} from "./index.js";
+} from "@io/graph-authority";
+
+import { kitchenSink } from "./fixtures/kitchen-sink.js";
 
 const tempDirs: string[] = [];
 let testCursorEpoch = 0;

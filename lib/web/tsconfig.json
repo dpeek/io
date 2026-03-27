@@ -1,7 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@io/web": ["./src/index.ts"],
+      "@io/web/*": ["./src/*"]
+    },
     "types": ["@types/bun"]
   },
   "include": ["./src/**/*"]

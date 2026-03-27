@@ -43,6 +43,8 @@ compose shared `@io/web` primitives rather than duplicate browser chrome.
 
 - [`storage.md`](./storage.md): SQLite-backed Durable Object authority storage
   and persistence boundaries
+- [`../integration.md`](../integration.md): migration plan for moving
+  cross-package graph integration coverage into `@io/graph-integration`
 - [`retained-records.md`](./retained-records.md): proposal for migration-stable
   workspace records above the live graph authority storage
 - [`modules.md`](./modules.md): built-in namespace ownership and module package

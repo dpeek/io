@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import type { CommitQueueScopeResult, ProjectBranchScopeResult } from "@io/graph-module-workflow";
 import { renderToStaticMarkup } from "react-dom/server";

@@ -4,17 +4,9 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindPlugin from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite-plus";
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  staged: {
-    "*": "vp check --fix",
-  },
-  run: {
-    cache: {
-      scripts: true,
-    },
-  },
   plugins: [
     cloudflare({
       persistState: {
@@ -32,20 +24,5 @@ export default defineConfig({
   ],
   build: {
     outDir: resolve("./out/web"),
-  },
-  fmt: {
-    ignorePatterns: ["*.gen.ts", "**/out/**"],
-  },
-  lint: {
-    ignorePatterns: ["*.gen.ts", "**/out/**"],
-    options: {
-      typeAware: true,
-      typeCheck: true,
-    },
-    rules: {
-      "typescript/await-thenable": "off",
-      "typescript/unbound-method": "off",
-      "typescript/no-base-to-string": "off",
-    },
   },
 });

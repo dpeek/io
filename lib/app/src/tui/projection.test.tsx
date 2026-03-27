@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/react */
 
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 
 import { bootstrap } from "@io/graph-bootstrap";
 import { createSyncedGraphClient, createGraphClient } from "@io/graph-client";
@@ -110,7 +110,6 @@ function WorkflowProjectionProbe({ branchId, projectId }: { branchId: string; pr
 
 test(
   "workflow-owned projection hooks read synced workflow scopes",
-  { timeout: 10_000 },
   async () => {
     const { graph, ids, runtime } = createWorkflowRuntimeFixture();
     await runtime.sync.sync();
@@ -166,4 +165,5 @@ test(
       renderer.destroy();
     }
   },
+  { timeout: 10_000 },
 );

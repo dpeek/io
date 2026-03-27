@@ -1,13 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
-import { createStore } from "@io/app/graph";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
+import { createGraphStore as createStore } from "@io/graph-kernel";
 import { core, coreGraphBootstrapOptions, defaultMoneyCurrencyKey } from "@io/graph-module-core";
+import {
+  PredicateFieldEditor,
+  PredicateFieldView,
+  defaultWebFieldResolver,
+} from "@io/graph-module-core/react-dom";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { kitchenSink } from "../../../app/src/graph/testing/kitchen-sink.js";
-import { PredicateFieldEditor, PredicateFieldView, defaultWebFieldResolver } from "./index.js";
+import { kitchenSink } from "../fixtures/kitchen-sink.js";
 
 function createRecordFields() {
   const store = createStore();

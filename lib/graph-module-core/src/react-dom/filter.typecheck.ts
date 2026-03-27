@@ -1,24 +1,44 @@
-import { defineDefaultEnumTypeModule, defineType } from "@io/graph-module";
-import { core } from "@io/graph-module-core";
-
-import { kitchenSink } from "../../../app/src/graph/testing/kitchen-sink.js";
+import { defineDefaultEnumTypeModule, defineEnum, defineType } from "@io/graph-module";
+import { core, durationTypeModule } from "@io/graph-module-core";
 import type { FilterOperandEditorProps } from "./index.js";
 import { defaultWebFilterResolver } from "./index.js";
 
-const defs = { ...core, ...kitchenSink };
-const statusTypeModule = defineDefaultEnumTypeModule(kitchenSink.status);
+const statusType = defineEnum({
+  values: { key: "probe:status", name: "Probe Status" },
+  options: {
+    draft: { name: "Draft" },
+    approved: { name: "Approved" },
+  },
+});
+const statusTypeModule = defineDefaultEnumTypeModule(statusType);
+const record = defineType({
+  values: { key: "probe:record", name: "Probe Record" },
+  fields: {
+    estimate: durationTypeModule.field({
+      cardinality: "one?",
+      meta: {
+        label: "Estimate",
+      },
+    }),
+    status: statusTypeModule.field({
+      cardinality: "one",
+      filter: {
+        operators: ["is"] as const,
+        defaultOperator: "is",
+      },
+    }),
+  },
+});
+const defs = { ...core, record, status: statusType } as const;
 
-const estimateResolution = defaultWebFilterResolver.resolveField(
-  kitchenSink.record.fields.estimate,
-  defs,
-);
+const estimateResolution = defaultWebFilterResolver.resolveField(record.fields.estimate, defs);
 
 if (estimateResolution.status === "resolved") {
   const greaterThan = estimateResolution.resolveOperator("gt");
 
   if (greaterThan) {
     const acceptsNumber: FilterOperandEditorProps<
-      typeof kitchenSink.record.fields.estimate,
+      typeof record.fields.estimate,
       typeof defs,
       "gt"
     > = {
@@ -33,7 +53,7 @@ if (estimateResolution.status === "resolved") {
     void acceptsNumber;
 
     const rejectsString: FilterOperandEditorProps<
-      typeof kitchenSink.record.fields.estimate,
+      typeof record.fields.estimate,
       typeof defs,
       "gt"
     > = {
@@ -53,10 +73,7 @@ if (estimateResolution.status === "resolved") {
   estimateResolution.resolveOperator("contains");
 }
 
-const statusResolution = defaultWebFilterResolver.resolveField(
-  kitchenSink.record.fields.status,
-  defs,
-);
+const statusResolution = defaultWebFilterResolver.resolveField(record.fields.status, defs);
 
 if (statusResolution.status === "resolved") {
   // @ts-expect-error record status narrows enum operators to "is"
@@ -86,7 +103,7 @@ if (broadStatusResolution.status === "resolved") {
       "oneOf"
     > = {
       operator: oneOf,
-      value: [kitchenSink.status.values.draft.id],
+      value: ["probe:status.draft"],
       onChange(value) {
         const nextValue: string[] | undefined = value;
         void nextValue;
@@ -102,7 +119,7 @@ if (broadStatusResolution.status === "resolved") {
     > = {
       operator: oneOf,
       // @ts-expect-error enum multi-select operators require string arrays
-      value: kitchenSink.status.values.draft.id,
+      value: "probe:status.draft",
       onChange(value) {
         const nextValue: string[] | undefined = value;
         void nextValue;

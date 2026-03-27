@@ -22,5 +22,5 @@ root `src/` tree.
 
 ## Validation
 
-Run `bun check lib/app` for typechecking, or `bun test lib/app/src` for the
-package-local test suite.
+Run `bun check` for the repo static check plus cached workspace tests, or
+`turbo run test --filter=@io/app` for the cached `@io/app` suite.

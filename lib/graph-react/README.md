@@ -42,5 +42,7 @@ The package root re-exports the curated host-neutral surface from `./src`:
 - mutation validation and persisted mutation helpers
 - synced runtime provider, context, sync-state, and query hooks
 
-Run `vp run @io/graph-react#test` from the workspace root, or `bun run test` in
+Run `turbo run test --filter=@io/graph-react` from the workspace root, or `bun run test` in
 this package, to execute the colocated tests.
+
+Cross-package traversal coverage now lives in `@io/graph-integration`.

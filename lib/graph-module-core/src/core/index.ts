@@ -58,6 +58,8 @@ export * from "./slug.js";
 
 export * from "./svg.js";
 
+export * from "./svg-sanitization.js";
+
 export * from "./structured-value.js";
 
 export * from "./string.js";

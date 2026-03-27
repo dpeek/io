@@ -1,7 +1,8 @@
-import { sanitizeSvgMarkup } from "@io/app/graph";
 import { useOptionalMutationRuntime, usePredicateField } from "@io/graph-react";
 import { cn } from "@io/web/utils";
 import type { ReactNode } from "react";
+
+import { sanitizeSvgMarkup } from "../core/svg-sanitization.js";
 
 export type SvgMarkupProps = {
   className?: string;

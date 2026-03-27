@@ -2,16 +2,31 @@ import { describe, expect, it } from "bun:test";
 
 import { bootstrap, createBootstrappedSnapshot } from "@io/graph-bootstrap";
 import { createGraphStore, typeId, type GraphStoreSnapshot } from "@io/graph-kernel";
-
+import { defineType } from "@io/graph-module";
 import {
-  bootstrapTimestampIso,
   core,
   coreGraphBootstrapOptions,
-  graphIconSeeds,
-  testDefs,
-  testGraph,
-} from "../../graph-bootstrap/src/test-fixtures.js";
-import { createGraphClient } from "./index.js";
+  resolveDefinitionIconId,
+  stringTypeModule,
+} from "@io/graph-module-core";
+import { createGraphClient } from "@io/graph-client";
+
+const bootstrapTimestampIso = "2000-01-01T00:00:00.000Z";
+const item = defineType({
+  values: { key: "test:item", name: "Item" },
+  fields: {
+    ...core.node.fields,
+    title: stringTypeModule.field({
+      cardinality: "one",
+      meta: {
+        label: "Title",
+      },
+    }),
+  },
+});
+const testGraph = { item } as const;
+const testDefs = { ...core, ...testGraph } as const;
+const stringIconId = resolveDefinitionIconId(stringTypeModule.type.values.icon);
 
 function canonicalizeSnapshot(snapshot: GraphStoreSnapshot) {
   return {
@@ -87,6 +102,6 @@ describe("graph-client bootstrap integration", () => {
     expect(graph.type.get(typeId(testGraph.item)).createdAt?.toISOString()).toBe(
       bootstrapTimestampIso,
     );
-    expect(graph.icon.get(graphIconSeeds.string.id).svg).toContain("<svg");
+    expect(graph.icon.get(stringIconId).svg).toContain("<svg");
   });
 });

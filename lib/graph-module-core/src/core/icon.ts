@@ -1,10 +1,10 @@
-import { sanitizeSvgMarkup } from "@io/app/graph";
 import { defineType } from "@io/graph-module";
 import { entityReferenceComboboxEditorKind, existingEntityReferenceField } from "@io/graph-module";
 
 import { defineCoreIconSeed } from "../icon/seed.js";
 import { node } from "./node.js";
 import { slugTypeModule } from "./slug.js";
+import { sanitizeSvgMarkup } from "./svg-sanitization.js";
 import { stringTypeModule } from "./string.js";
 import { svgTypeModule } from "./svg.js";
 

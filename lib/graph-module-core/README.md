@@ -9,6 +9,7 @@
 - built-in core scalar, enum, entity, dataset, and helper contracts
 - `coreGraphBootstrapOptions`
 - colocated core icon seeds and shared icon-resolution helpers
+- SVG sanitization for the built-in icon and SVG contracts
 - structured-value parsing, normalization, and formatting helpers
 - core-owned identity, admission, share, locale, country, and currency schema
 - core-specific browser defaults from `@io/graph-module-core/react-dom`
@@ -45,3 +46,6 @@ root `@io/app/graph/adapters/react-dom` compatibility surface.
 
 The package root stays React-free. Callers that need the browser layer import
 the `react-dom` subpath directly.
+
+Cross-package integration suites for this package live in
+`@io/graph-integration` so package-local tests can stay boundary-safe.

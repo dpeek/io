@@ -1,0 +1,8 @@
+{
+  "ignorePatterns": ["*.gen.ts", "**/out/**"],
+  "rules": {
+    "typescript/await-thenable": "off",
+    "typescript/unbound-method": "off",
+    "typescript/no-base-to-string": "off"
+  }
+}

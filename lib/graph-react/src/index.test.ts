@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import { createIdMap, createStore, applyIdMap } from "@io/app/graph";
-import { bootstrap } from "@io/graph-bootstrap";
-import { createGraphClient, GraphValidationError } from "@io/graph-client";
-import { defineType } from "@io/graph-module";
-import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { type PredicateRef, GraphValidationError } from "@io/graph-client";
+import {
+  defineDefaultEnumTypeModule,
+  defineEnum,
+  defineType,
+  defineValidatedStringTypeModule,
+} from "@io/graph-module";
 
 import {
   createGraphFieldResolver,
@@ -14,24 +16,77 @@ import {
   performValidatedMutation,
 } from "./index.js";
 
-const item = defineType({
-  values: { key: "probe:item", name: "Item" },
-  fields: {
-    ...core.node.fields,
+const probeStatusType = defineEnum({
+  values: { key: "probe:status", name: "Status" },
+  options: {
+    draft: { name: "Draft" },
+    published: { name: "Published" },
   },
 });
 
-const itemNamespace = applyIdMap(createIdMap({ item }).map, { item });
-const itemDefinitions = { ...core, ...itemNamespace } as const;
+const probeStatusTypeModule = defineDefaultEnumTypeModule(probeStatusType);
+
+const probeTextTypeModule = defineValidatedStringTypeModule({
+  values: { key: "probe:text", name: "Text" },
+  parse: (raw: string) => raw.trim(),
+  filter: {
+    defaultOperator: "contains",
+    operators: {
+      contains: {
+        label: "Contains",
+        operand: {
+          kind: "string",
+          placeholder: "Probe item",
+        },
+        parse: (raw: string) => raw.trim(),
+        format: (operand: string) => operand,
+        test: (value: string, operand: string) => value.includes(operand),
+      },
+    },
+  },
+  placeholder: "Probe item",
+});
+
+const item = defineType({
+  values: { key: "probe:item", name: "Item" },
+  fields: {
+    name: probeTextTypeModule.field({
+      cardinality: "one",
+      meta: {
+        label: "Name",
+        display: {
+          kind: "text",
+        },
+        editor: {
+          kind: "text",
+        },
+      },
+    }),
+    status: probeStatusTypeModule.field({
+      cardinality: "one",
+      meta: {
+        label: "Status",
+      },
+    }),
+  },
+});
+
+const defs = {
+  item,
+  status: probeStatusType,
+  text: probeTextTypeModule.type,
+} as const;
 
 function createNameRef() {
-  const store = createStore();
-  bootstrap(store, core, coreGraphBootstrapOptions);
-  bootstrap(store, itemNamespace, coreGraphBootstrapOptions);
-  const graph = createGraphClient(store, itemNamespace, itemDefinitions);
-  const itemId = graph.item.create({ name: "Probe item" });
-  return { itemId, nameRef: graph.item.ref(itemId).fields.name };
+  return {
+    itemId: "entity:probe:item",
+    nameRef: {
+      field: item.fields.name,
+    } as unknown as PredicateRef<typeof item.fields.name, typeof defs>,
+  };
 }
+
+const statusField = item.fields.status;
 
 describe("@io/graph-react", () => {
   it("keeps the default resolver host-neutral until a host provides capabilities", () => {
@@ -64,7 +119,7 @@ describe("@io/graph-react", () => {
   });
 
   it("keeps the default filter resolver host-neutral until a host provides operand editors", () => {
-    const resolution = defaultGraphFilterResolver.resolveField(core.node.fields.name, core);
+    const resolution = defaultGraphFilterResolver.resolveField(item.fields.name, defs);
 
     expect(resolution.status).toBe("resolved");
     if (resolution.status !== "resolved") return;
@@ -79,12 +134,22 @@ describe("@io/graph-react", () => {
   it("resolves filter operand editors once a host supplies them", () => {
     const resolution = createGraphFilterResolver({
       operandEditors: [{ kind: "string", Component: () => null }],
-    }).resolveField(core.node.fields.name, core);
+    }).resolveField(item.fields.name, defs);
 
     expect(resolution.status).toBe("resolved");
     if (resolution.status !== "resolved") return;
 
     expect(resolution.resolveOperator("contains")?.operand.editor.status).toBe("resolved");
+  });
+
+  it("resolves enum filter metadata once a host provides no operand editors", () => {
+    const resolution = defaultGraphFilterResolver.resolveField(statusField, defs);
+
+    expect(resolution.status).toBe("resolved");
+    if (resolution.status !== "resolved") return;
+
+    const operator = resolution.resolveOperator("is");
+    expect(operator?.operand.kind).toBe("enum");
   });
 
   it("surfaces validation failures through GraphValidationError before mutation", () => {

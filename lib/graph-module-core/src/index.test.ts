@@ -61,6 +61,7 @@ const requiredExports = [
   "resolvePredicateDefinitionIconId",
   "resolveTypeDefinitionIconId",
   "secretHandle",
+  "sanitizeSvgMarkup",
   "stringTypeModule",
   "structuredValueKindOptions",
   "structuredValueKinds",

@@ -1,5 +1,4 @@
 import { applyGraphIdMap, createGraphIdMap, defineType } from "@io/graph-kernel";
-import { core } from "@io/graph-module-core";
 
 import type {
   JsonPersistedAuthoritativeGraphOptions,
@@ -13,20 +12,18 @@ import type {
 
 const item = defineType({
   values: { key: "probe:item", name: "Probe Item" },
-  fields: {
-    ...core.node.fields,
-  },
+  fields: {},
 });
 
 const probeGraph = applyGraphIdMap(createGraphIdMap({ item }).map, { item });
-const probeDefinitions = { ...core, ...probeGraph } as const;
+const probeDefinitions = probeGraph;
 
 const createCursorPrefix: PersistedAuthoritativeGraphCursorPrefixFactory = () => "authority:";
 
 const seed: PersistedAuthoritativeGraphSeed<typeof probeGraph, typeof probeDefinitions> = (
   graph,
 ) => {
-  graph.item.create({ name: "Seeded Item" });
+  graph.item.create({});
 
   // @ts-expect-error persisted authority seeds only receive the typed namespace client
   void graph.snapshot();

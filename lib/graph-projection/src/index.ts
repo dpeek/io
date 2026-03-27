@@ -499,7 +499,9 @@ export function findRetainedProjectionRecord<T extends RetainedProjectionMetadat
       projectionId: metadata.projectionId,
       expectedDefinitionHash: metadata.definitionHash,
       actualDefinitionHashes: Object.freeze(
-        [...new Set(matchesByProjectionId.map((record) => record.definitionHash))].sort(),
+        [...new Set(matchesByProjectionId.map((record) => record.definitionHash))].sort(
+          (left, right) => left.localeCompare(right),
+        ),
       ),
     };
   }

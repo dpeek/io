@@ -1,0 +1,20 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "envMode": "loose",
+  "tasks": {
+    "clean": {
+      "outputLogs": "none"
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**"],
+      "outputs": ["out/**"]
+    },
+    "check": {
+      "dependsOn": ["^check"],
+      "inputs": ["src/**"],
+      "outputs": [],
+      "outputLogs": "errors-only"
+    }
+  }
+}

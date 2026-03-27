@@ -4,12 +4,12 @@ import {
   edgeId,
   fieldTreeId,
   fieldTreeKey,
-  fieldTreeMeta,
   isEnumType,
   isFieldsOutput,
   isScalarType,
   typeId,
 } from "@io/graph-kernel";
+import type { fieldTreeMeta } from "@io/graph-kernel";
 import type {
   AnyTypeOutput,
   Cardinality,

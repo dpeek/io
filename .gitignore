@@ -9,3 +9,5 @@ dist
 .tanstack
 .gitnexus
 .claude
+.turbo
+lib/*/.turbo

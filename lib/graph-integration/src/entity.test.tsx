@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
+import { EntityPredicates, PredicateRelatedEntities } from "@io/graph-react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { createTestGraph, testNamespace } from "../../app/src/graph/test-graph.js";
-import { EntityPredicates, PredicateRelatedEntities } from "./index.js";
+import { createTestGraph, testNamespace } from "./fixtures/test-graph.js";
 
 function setupGraph() {
   const { coreGraph, graph } = createTestGraph();

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "allowJs": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "preserve",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ESNext",
+    "verbatimModuleSyntax": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rewriteRelativeImportExtensions": true
+  }
+}

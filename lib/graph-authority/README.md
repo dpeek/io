@@ -67,5 +67,12 @@ authoritative graph behavior.
 
 Run `vp run @io/graph-authority#build` from the workspace root, or `bun run build`
 in this package, to emit `./out`.
-Run `vp run @io/graph-authority#test` from the workspace root, or `bun run test`
+Run `turbo run test --filter=@io/graph-authority` from the workspace root, or `bun run test`
 in this package, to execute the package-local tests.
+
+## Package Boundary
+
+`@io/graph-authority` intentionally avoids a build-time dependency on
+`@io/graph-module-core`. Package-local typecheck probes use self-contained graph
+fixtures so `turbo build` can preserve the acyclic package graph. Cross-package
+authority coverage now lives in `@io/graph-integration`.

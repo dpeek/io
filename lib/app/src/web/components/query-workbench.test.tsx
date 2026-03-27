@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { serializedQueryVersion } from "@io/graph-client";
 import { renderToStaticMarkup } from "react-dom/server";

@@ -109,7 +109,9 @@ function appendEntityPredicateEntries<
       continue;
     }
 
-    if (!isFieldGroupRef(value)) continue;
+    if (!isFieldGroupRef(value) && (!value || typeof value !== "object" || Array.isArray(value))) {
+      continue;
+    }
     appendEntityPredicateEntries<T, Defs>(value as Record<string, unknown>, nextPath, out);
   }
 

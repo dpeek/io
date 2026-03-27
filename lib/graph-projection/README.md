@@ -67,9 +67,8 @@ Everything intended for consumers is re-exported from the package root.
 
 Run `vp run @io/graph-projection#build` from the workspace root, or
 `bun run build` in this package, to emit `./out`.
-Run `vp run @io/graph-projection#test` from the workspace root, or
+Run `turbo run test --filter=@io/graph-projection` from the workspace root, or
 `bun run test` in this package, to execute the extracted projection contract
 tests.
 
-Tests stay colocated in `./src`, but the build uses `tsconfig.build.json` so
-`*.test.ts` files are not emitted into `./out`.
+The package `tsconfig.json` drives the normal `tsgo` build and emits `./out`.

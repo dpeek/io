@@ -17,6 +17,7 @@ the graph-first application direction the rest of the workspace is proving.
 - `./agent/cli.md`
 - `./agent/tui.md`
 - `./graph/index.md`
+- `./integration.md`
 - `./graph/computed.md`
 - `./graph/mcp.md`
 - `./graph/storage.md`
@@ -39,6 +40,8 @@ the graph-first application direction the rest of the workspace is proving.
 - `./graph/index.md`: graph workspace layout including the root `@io/app/graph`
   surface, extracted `lib/graph-*` packages, adapters, taxonomies, and
   focused subdocs
+- `./integration.md`: plan for consolidating graph integration coverage into a
+  dedicated downstream `@io/graph-integration` package
 - `./graph/computed.md`: proposed computed-value layer for lazy, memoized, read-only graph derivations
 - `./graph/mcp.md`: current graph MCP read surface, opt-in writes, and the remaining command roadmap
 - `./graph/storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,

@@ -3,25 +3,23 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "types": "./out/index.d.ts",
+  "imports": {
+    "#*": "./out/*"
+  },
   "exports": {
     ".": {
-      "types": "./out/index.d.ts",
+      "types": "./src/index.ts",
       "default": "./out/index.js"
     },
     "./react-dom": {
-      "types": "./out/react-dom/index.d.ts",
+      "types": "./src/react-dom/index.ts",
       "default": "./out/react-dom/index.js"
     }
   },
   "scripts": {
-    "build": "tsgo -p tsconfig.build.json",
-    "check": "vp check ./src",
+    "build": "tsgo",
     "clean": "rm -rf out",
-    "format": "vp fmt ./src",
-    "lint": "vp lint ./src",
-    "test": "bun test ./src",
-    "types": "tsgo --noEmit"
+    "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.ts' && oxfmt && bun test ./src"
   },
   "dependencies": {
     "@io/graph-bootstrap": "workspace:*",
@@ -29,12 +27,17 @@
     "@io/graph-module": "workspace:*",
     "@io/graph-react": "workspace:*",
     "@io/web": "workspace:*",
+    "lucide-react": "^0.577.0",
     "react": "^19.2.4"
   },
   "devDependencies": {
+    "@io/graph-client": "workspace:*",
     "@types/bun": "^1.3.9",
     "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "^7.0.0-dev.20260226.1",
-    "vite-plus": "^0.1.14"
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
+    "react-dom": "^19.2.4"
   }
 }

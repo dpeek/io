@@ -4,8 +4,8 @@
  * Internal callers should prefer the owning package (`@io/graph-kernel`,
  * `@io/graph-authority`, `@io/graph-bootstrap`, and friends) over this umbrella
  * barrel. Module-definition authoring now lives on `@io/graph-module`; this
- * surface stays focused on low-level kernel aliases plus root-owned helpers
- * such as SVG sanitization.
+ * surface stays focused on low-level kernel aliases plus compatibility
+ * re-exports such as SVG sanitization.
  */
 export {
   applyGraphIdMap as applyIdMap,
@@ -70,4 +70,4 @@ export {
   type ValidationIssueInput,
 } from "@io/graph-kernel";
 
-export { sanitizeSvgMarkup, type SvgSanitizationResult } from "./icon.js";
+export { sanitizeSvgMarkup, type SvgSanitizationResult } from "@io/graph-module-core";

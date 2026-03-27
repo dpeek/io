@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { createStore, typeId } from "@io/app/graph";
 import { bootstrap } from "@io/graph-bootstrap";

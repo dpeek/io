@@ -1,7 +1,7 @@
-import { sanitizeSvgMarkup } from "@io/app/graph";
 import { EmptyPreview, sourcePreviewPanelClassName } from "@io/web/source-preview";
 import { cn } from "@io/web/utils";
 
+import { sanitizeSvgMarkup } from "../../core/svg-sanitization.js";
 import { SvgMarkup } from "../icon.js";
 
 /** Default browser preview chrome for SVG field/source editors. */

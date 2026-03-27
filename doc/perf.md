@@ -6,6 +6,18 @@ Bring `bun test ./src` down from the current roughly `239s` wall-clock
 baseline to a materially faster default developer loop without losing coverage
 by accident.
 
+As of 2026-03-28, root `bun check` runs one cached repo-wide static
+format/lint/type-check task and then cached Bun tests for workspace packages
+through `turbo run test --affected`.
+
+As of 2026-03-28, Turborepo is also configured to:
+
+- treat package `build` outputs as cached `out/**` artifacts instead of hashing
+  committed build output back into `build` and `test`
+- make `test` depend on dependency `build` tasks for cleaner cache correctness
+- use task-level `inputs` for `--affected`
+- default task logs to `errors-only` with hash markers so agent runs stay quiet
+
 ## Current Baseline
 
 Measured on 2026-03-23:

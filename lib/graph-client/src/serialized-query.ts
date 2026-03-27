@@ -461,7 +461,7 @@ function uniqueSortedStrings(values: readonly string[] | undefined): readonly st
     return undefined;
   }
 
-  return freezeArray([...new Set(values)].sort());
+  return freezeArray([...new Set(values)].sort((left, right) => left.localeCompare(right)));
 }
 
 function canonicalStringify(value: unknown): string {
@@ -924,7 +924,7 @@ function collectReferencedParameterNames(query: ReadQuery): readonly string[] {
     collectReferencedParameterNamesFromFilter(query.filter, names);
   }
 
-  return freezeArray([...names].sort());
+  return freezeArray([...names].sort((left, right) => left.localeCompare(right)));
 }
 
 function resolveQueryParameterBindings(

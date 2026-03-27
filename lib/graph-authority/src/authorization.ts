@@ -286,7 +286,7 @@ function writeScopeAllows(
 function getDeclaredTouchedPredicateIds(
   touchedPredicates: GraphCommandPolicy["touchesPredicates"],
 ): ReadonlySet<string> {
-  return new Set((touchedPredicates ?? []).map((target) => target.predicateId));
+  return new Set<string>((touchedPredicates ?? []).map((target) => target.predicateId));
 }
 
 function wrapCommandWriteDecision(
