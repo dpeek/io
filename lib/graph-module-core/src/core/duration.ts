@@ -3,8 +3,8 @@ import type { TypeModuleFilter } from "@io/graph-module";
 import type { TypeModuleMeta } from "@io/graph-module";
 import { defineScalarModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
 import { expectNumberInput } from "./input.js";
+import { numberType } from "./number.js";
 
 export type DurationUnitKey = "ms" | "s" | "m" | "h" | "d" | "w";
 
@@ -148,7 +148,7 @@ export function convertDurationAmount(value: number, unitKey: DurationUnitKey): 
 }
 
 export const durationType = defineScalar({
-  values: { key: "core:duration", name: "Duration", icon: graphIconSeeds.number },
+  values: { key: "core:duration", name: "Duration", icon: numberType.values.icon },
   encode: (value: number) => String(normalizeDurationInput(value)),
   decode: (raw) => parseDuration(raw),
   validate: ({ value }) => {

@@ -11,7 +11,7 @@ import { SvgFieldEditor } from "./svg.js";
 import { TextFieldEditor } from "./text.js";
 import { UrlFieldEditor } from "./url.js";
 
-/** Built-in browser field editor capabilities for the current DOM adapter. */
+/** Built-in browser field editor capabilities for the core-owned DOM layer. */
 export const genericWebFieldEditorCapabilities = [
   { kind: "checkbox", Component: CheckboxFieldEditor },
   { kind: "color", Component: ColorFieldEditor },

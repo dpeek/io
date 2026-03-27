@@ -1,7 +1,6 @@
 import { defineType } from "@io/graph-module";
 import { defineReferenceField } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
 import { dateTypeModule } from "./date.js";
 import { stringTypeModule } from "./string.js";
 
@@ -14,7 +13,7 @@ export const node = defineType({
     }),
     name: stringTypeModule.field({
       cardinality: "one",
-      icon: graphIconSeeds.string,
+      icon: stringTypeModule.type.values.icon,
       validate: ({ value }) =>
         typeof value === "string" && value.trim().length > 0
           ? undefined
@@ -28,7 +27,7 @@ export const node = defineType({
     }),
     description: stringTypeModule.field({
       cardinality: "one?",
-      icon: graphIconSeeds.string,
+      icon: stringTypeModule.type.values.icon,
       meta: {
         label: "Description",
         editor: {
@@ -43,7 +42,7 @@ export const node = defineType({
     }),
     createdAt: {
       ...dateTypeModule.field({
-        icon: graphIconSeeds.date,
+        icon: dateTypeModule.type.values.icon,
         meta: {
           label: "Created at",
         },
@@ -54,7 +53,7 @@ export const node = defineType({
     },
     updatedAt: {
       ...dateTypeModule.field({
-        icon: graphIconSeeds.date,
+        icon: dateTypeModule.type.values.icon,
         meta: {
           label: "Updated at",
         },

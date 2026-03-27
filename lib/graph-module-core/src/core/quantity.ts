@@ -3,8 +3,8 @@ import type { TypeModuleFilter } from "@io/graph-module";
 import type { TypeModuleMeta } from "@io/graph-module";
 import { defineScalarModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
 import { expectNumberInput, expectRecordInput, expectStringInput } from "./input.js";
+import { numberType } from "./number.js";
 
 export type QuantityValue = Readonly<{
   amount: number;
@@ -71,7 +71,7 @@ export function formatQuantityEditorValue(value: QuantityValue): string {
 }
 
 export const quantityType = defineScalar({
-  values: { key: "core:quantity", name: "Quantity", icon: graphIconSeeds.number },
+  values: { key: "core:quantity", name: "Quantity", icon: numberType.values.icon },
   encode: (value: QuantityValue) => JSON.stringify(normalizeQuantityInput(value)),
   decode: (raw) => decodeQuantity(raw),
   validate: ({ value }) => {

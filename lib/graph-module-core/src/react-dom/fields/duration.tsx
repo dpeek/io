@@ -18,7 +18,7 @@ import {
   useFieldMutationCallbacks,
   validatePredicateValue,
   type AnyFieldProps,
-} from "../internal.js";
+} from "./shared.js";
 
 const durationUnitKeys = new Set(durationUnits.map((unit) => unit.key));
 

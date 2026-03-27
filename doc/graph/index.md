@@ -12,8 +12,8 @@ selected kernel aliases and graph-owned icon helpers. The extracted packages
 own the layered engine boundaries: kernel storage and write envelopes,
 module-definition authorship, the built-in `core:` namespace, schema
 bootstrap, typed client behavior, authoritative runtime behavior, sync
-contracts, projection metadata, the host-neutral React layer, and the browser
-adapter layers.
+contracts, projection metadata, the host-neutral React layer, and the default
+DOM/browser layer.
 
 Naming note: `@io/graph-module` is the extracted authoring package.
 `@io/graph-module-core` is the extracted built-in `core:` package.
@@ -97,8 +97,8 @@ The workspace also publishes:
   curated re-export of kernel schema-authoring primitives
 - `@io/graph-module-core`: `../../lib/graph-module-core/src/index.ts`;
   canonical `core:` namespace assembly, built-in core scalars/entities/enums,
-  bootstrap inputs, icon seeds, structured-value helpers, locale/currency
-  datasets, and other core-owned contracts
+  bootstrap inputs, colocated icon seeds, structured-value helpers,
+  locale/currency datasets, and other core-owned contracts
 - `@io/graph-bootstrap`: `../../lib/graph-bootstrap/src/index.ts`; additive
   schema bootstrap and convergent bootstrapped snapshots
 - `@io/graph-authority`: `../../lib/graph-authority/src/index.ts`; persisted
@@ -125,7 +125,7 @@ The root `@io/core/graph` surface stays focused on a small helper layer and
 icon contracts. Definition-time authorship now lives on `@io/graph-module`.
 The built-in `core:` namespace now lives on `@io/graph-module-core`.
 Bootstrap, client, authority, sync, projection, the host-neutral React layer,
-and the browser adapter layers live on their extracted packages. `workflow:`
+and the default DOM/browser layer live on their extracted packages. `workflow:`
 slice exports stay on the remaining root-package subpath until that module is
 extracted too.
 
@@ -137,8 +137,8 @@ extracted too.
   reference-field policy, secret-field helpers, and pure authored
   command/view/workflow contracts
 - `../../lib/graph-module-core/src/`: canonical `core:` namespace assembly,
-  built-in scalar/entity/enum families, bootstrap inputs, icon seeds, and
-  structured-value helpers
+  built-in scalar/entity/enum families, bootstrap inputs, colocated icon
+  seeds, and structured-value helpers
 - `../../src/graph/inspect.ts`: internal graph inspection helpers; not part of
   the published package surface
 - `../../lib/graph-bootstrap/src/`: additive bootstrap runtime and convergent

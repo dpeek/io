@@ -151,12 +151,13 @@ const requiredReactDomExports = [
 const requiredCoreModuleExports = [
   "core",
   "country",
-  "graphIconSeeds",
   "stringTypeModule",
   "moneyTypeModule",
   "rangeTypeModule",
   "rateTypeModule",
   "coreGraphBootstrapOptions",
+  "resolveDefinitionIconId",
+  "unknownIconSeed",
 ] as const;
 
 const requiredCoreReactDomExports = ["GraphIcon", ...requiredReactDomExports] as const;
@@ -280,6 +281,8 @@ describe("@io/core/graph package entry surfaces", () => {
     await expect(import(retiredAuthoritySubpath)).rejects.toThrow();
     const retiredReactDomAdapterSubpath = "@io/core/graph/adapters/react-dom";
     await expect(import(retiredReactDomAdapterSubpath)).rejects.toThrow();
+    const retiredReactDomSubpath = "@io/core/graph/react-dom";
+    await expect(import(retiredReactDomSubpath)).rejects.toThrow();
 
     expect(probeContractItem.kind).toBe("entity");
     expect(probeContractObjectView).toMatchObject({
@@ -469,6 +472,9 @@ describe("@io/core/graph package entry surfaces", () => {
     expectNamedExports(coreReactDomExports, requiredCoreReactDomExports);
     expect(Object.keys(coreModuleExports)).not.toContain("workflow");
     expect(Object.keys(coreModuleExports)).not.toContain("FilterOperandEditor");
+    expect(Object.keys(coreModuleExports)).not.toContain("GraphIcon");
+    expect(Object.keys(coreModuleExports)).not.toContain("PredicateFieldView");
+    expect(Object.keys(coreModuleExports)).not.toContain("SvgPreview");
     const retiredModulesSubpath = "@io/core/graph/modules";
     await expect(import(retiredModulesSubpath)).rejects.toThrow();
     const retiredCoreModulesSubpath = "@io/core/graph/modules/core";

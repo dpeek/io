@@ -1,5 +1,9 @@
 export * from "./address.js";
 
+export * from "../icon/resolve.js";
+
+export * from "../icon/seed.js";
+
 export * from "./boolean.js";
 
 export * from "./bootstrap.js";

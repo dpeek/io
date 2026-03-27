@@ -3,8 +3,17 @@ import type { TypeModuleMeta } from "@io/graph-module";
 import { defineScalar } from "@io/graph-module";
 import { defineScalarModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
+import { defineCoreIconSeed } from "../icon/seed.js";
 import { expectUrlInput } from "./input.js";
+
+const urlIconSeed = defineCoreIconSeed("url", {
+  name: "URL",
+  svg: `<svg viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none" width="24" height="24" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <path d="M15 3h6v6" />
+  <path d="M10 14 21 3" />
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+</svg>`,
+});
 
 function parseUrl(raw: string): URL {
   return new URL(raw);
@@ -59,7 +68,7 @@ export const urlMeta = {
 >;
 
 export const urlType = defineScalar({
-  values: { key: "core:url", name: "URL", icon: graphIconSeeds.url },
+  values: { key: "core:url", name: "URL", icon: urlIconSeed },
   encode: (value: URL) => expectUrlInput(value).toString(),
   decode: (raw) => new URL(raw),
 });

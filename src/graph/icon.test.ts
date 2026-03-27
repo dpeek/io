@@ -4,7 +4,13 @@ import { createStore, sanitizeSvgMarkup, typeId } from "@io/core/graph";
 import { workflow } from "@io/core/graph/modules/workflow";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, GraphValidationError } from "@io/graph-client";
-import { core, coreGraphBootstrapOptions, graphIconSeeds } from "@io/graph-module-core";
+import {
+  colorTypeModule,
+  core,
+  coreGraphBootstrapOptions,
+  resolveDefinitionIconId,
+  stringTypeModule,
+} from "@io/graph-module-core";
 
 function createGraph() {
   const store = createStore();
@@ -13,6 +19,9 @@ function createGraph() {
   return createGraphClient(store, { ...core, ...workflow });
 }
 
+const stringIconId = resolveDefinitionIconId(stringTypeModule.type.values.icon);
+const colorIconId = resolveDefinitionIconId(colorTypeModule.type.values.icon);
+
 describe("graph icons", () => {
   it("stores sanitized svg markup on create", () => {
     const graph = createGraph();
@@ -20,7 +29,7 @@ describe("graph icons", () => {
     const iconId = graph.icon.create({
       key: "spark",
       name: "Spark",
-      svg: graphIconSeeds.string.svg,
+      svg: graph.icon.get(stringIconId).svg,
     });
 
     const created = graph.icon.get(iconId);
@@ -30,7 +39,8 @@ describe("graph icons", () => {
   });
 
   it("preserves child shape dimensions while stripping root svg dimensions", () => {
-    const result = sanitizeSvgMarkup(graphIconSeeds.color.svg);
+    const graph = createGraph();
+    const result = sanitizeSvgMarkup(graph.icon.get(colorIconId).svg);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("Expected color icon SVG to sanitize.");
 
@@ -67,7 +77,7 @@ describe("graph icons", () => {
     const iconId = graph.icon.create({
       key: "safe",
       name: "Safe",
-      svg: graphIconSeeds.string.svg,
+      svg: graph.icon.get(stringIconId).svg,
     });
 
     const updateResult = graph.icon.validateUpdate(iconId, {
@@ -107,7 +117,7 @@ describe("graph icons", () => {
     const iconId = graph.icon.create({
       key: "planning",
       name: "Planning",
-      svg: graphIconSeeds.string.svg,
+      svg: graph.icon.get(stringIconId).svg,
     });
     const documentTypeId = typeId(workflow.document);
     graph.type.ref(documentTypeId).fields.icon.set(iconId);

@@ -19,6 +19,8 @@ browser adapter surface.
 
 There is no separate `react-opentui` package anymore. TUI code imports the
 shared runtime hooks directly from `@io/graph-react`.
+There is also no `@io/graph-react-dom` package anymore. Browser callers import
+`@io/graph-module-core/react-dom` directly.
 
 ## Source Layout
 

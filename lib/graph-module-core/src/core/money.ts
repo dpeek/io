@@ -4,9 +4,9 @@ import type { TypeModuleFilter } from "@io/graph-module";
 import type { TypeModuleMeta } from "@io/graph-module";
 import { defineScalarModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
 import { currency } from "./currency.js";
 import { expectNumberInput, expectRecordInput, expectStringInput } from "./input.js";
+import { numberType } from "./number.js";
 
 export type MoneyCurrencyKey = EnumModuleValue<typeof currency>;
 
@@ -109,7 +109,7 @@ export function formatMoneyEditorValue(value: MoneyValue): string {
 }
 
 export const moneyType = defineScalar({
-  values: { key: "core:money", name: "Money", icon: graphIconSeeds.number },
+  values: { key: "core:money", name: "Money", icon: numberType.values.icon },
   encode: (value: MoneyValue) => JSON.stringify(normalizeMoneyInput(value)),
   decode: (raw) => decodeMoney(raw),
   validate: ({ value }) => {

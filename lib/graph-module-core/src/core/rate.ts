@@ -3,8 +3,8 @@ import type { TypeModuleFilter } from "@io/graph-module";
 import type { TypeModuleMeta } from "@io/graph-module";
 import { defineScalarModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
 import { expectRecordInput } from "./input.js";
+import { numberType } from "./number.js";
 import {
   formatStructuredValuePart,
   formatStructuredValuePartLiteral,
@@ -71,7 +71,7 @@ export function formatRateEditorValue(value: RateValue): string {
 }
 
 export const rateType = defineScalar({
-  values: { key: "core:rate", name: "Rate", icon: graphIconSeeds.number },
+  values: { key: "core:rate", name: "Rate", icon: numberType.values.icon },
   encode: (value: RateValue) => JSON.stringify(normalizeRateInput(value)),
   decode: (raw) => decodeRate(raw),
   validate: ({ value }) => {

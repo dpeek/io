@@ -8,7 +8,7 @@
 - the canonical `core` namespace assembly
 - built-in core scalar, enum, entity, dataset, and helper contracts
 - `coreGraphBootstrapOptions`
-- the built-in icon seed catalog and icon-resolution helpers
+- colocated core icon seeds and shared icon-resolution helpers
 - structured-value parsing, normalization, and formatting helpers
 - core-owned identity, admission, share, locale, country, and currency schema
 - core-specific browser defaults from `@io/graph-module-core/react-dom`
@@ -39,6 +39,9 @@ current default DOM/browser implementation, including:
 - core structured-value editors and helpers
 - tag-aware entity-reference create-and-attach behavior
 - the default built-in browser behavior for the current `core:` module
+
+This subpath replaces the former `@io/graph-react-dom` package and the retired
+root `@io/core/graph/adapters/react-dom` compatibility surface.
 
 The package root stays React-free. Callers that need the browser layer import
 the `react-dom` subpath directly.

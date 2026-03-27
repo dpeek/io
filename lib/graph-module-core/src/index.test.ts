@@ -7,13 +7,7 @@ import { dateTypeModule } from "./core/date.js";
 import { durationTypeModule } from "./core/duration.js";
 import { emailTypeModule } from "./core/email.js";
 import { enumType } from "./core/enum.js";
-import {
-  graphIconSeeds,
-  icon,
-  iconReferenceField,
-  resolvePredicateDefinitionIconId,
-  resolveTypeDefinitionIconId,
-} from "./core/icon.js";
+import { icon, iconReferenceField } from "./core/icon.js";
 import {
   admissionBootstrapMode,
   admissionPolicy,
@@ -41,6 +35,12 @@ import { svgTypeModule } from "./core/svg.js";
 import { tag } from "./core/tag.js";
 import { coreType } from "./core/type.js";
 import { urlTypeModule } from "./core/url.js";
+import {
+  resolveDefinitionIconId,
+  resolvePredicateDefinitionIconId,
+  resolveTypeDefinitionIconId,
+} from "./icon/resolve.js";
+import { unknownIconSeed } from "./icon/seed.js";
 import * as moduleExports from "./index.js";
 
 const requiredExports = [
@@ -51,14 +51,13 @@ const requiredExports = [
   "country",
   "currency",
   "defaultMoneyCurrencyKey",
-  "graphIconSeedList",
-  "graphIconSeeds",
   "iconReferenceField",
   "moneyTypeModule",
   "normalizeMoneyInput",
   "principal",
   "rangeTypeModule",
   "rateTypeModule",
+  "resolveDefinitionIconId",
   "resolvePredicateDefinitionIconId",
   "resolveTypeDefinitionIconId",
   "secretHandle",
@@ -66,12 +65,20 @@ const requiredExports = [
   "structuredValueKindOptions",
   "structuredValueKinds",
   "tag",
+  "unknownIconSeed",
 ] as const;
 
 const forbiddenExports = [
   "FilterOperandEditor",
+  "GraphIcon",
   "GraphRuntimeProvider",
+  "graphIconSeedList",
+  "graphIconSeeds",
   "OptionComboboxEditor",
+  "PredicateFieldEditor",
+  "PredicateFieldView",
+  "SvgMarkup",
+  "SvgPreview",
   "workflow",
 ] as const;
 
@@ -89,7 +96,10 @@ function expectNamedExports(
   exportsObject: Record<string, unknown>,
   names: readonly string[],
 ): void {
-  expect(Object.keys(exportsObject)).toEqual(expect.arrayContaining([...names]));
+  const exportNames = Object.keys(exportsObject);
+  for (const name of names) {
+    expect(exportNames).toContain(name);
+  }
 }
 
 describe("@io/graph-module-core", () => {
@@ -134,11 +144,12 @@ describe("@io/graph-module-core", () => {
     expect(authSubjectProjection.values.key).toBe("core:authSubjectProjection");
     expect(principalRoleBinding.values.key).toBe("core:principalRoleBinding");
     expect(admissionPolicy.values.key).toBe("core:admissionPolicy");
-    expect(stringTypeModule.type.values.icon).toBe(graphIconSeeds.string);
-    expect(resolveTypeDefinitionIconId(cardinality)).toBe(graphIconSeeds.tag.id);
+    expect(resolveDefinitionIconId(stringTypeModule.type.values.icon)).toBe("seed:icon:string");
+    expect(resolveTypeDefinitionIconId(cardinality)).toBe(resolveDefinitionIconId(tag.values.icon));
     expect(resolvePredicateDefinitionIconId(node.fields.type, coreType)).toBe(
-      graphIconSeeds.edge.id,
+      resolveDefinitionIconId(predicate.values.icon),
     );
+    expect(resolveTypeDefinitionIconId(coreType)).toBe(unknownIconSeed.id);
   });
 
   it("defines the canonical core namespace from package entrypoints", () => {
@@ -199,8 +210,10 @@ describe("@io/graph-module-core", () => {
     expect(canonicalCore.secretHandle.values).toMatchObject({
       key: "core:secretHandle",
       name: "Secret Handle",
-      icon: graphIconSeeds.secret,
     });
+    expect(resolveDefinitionIconId(canonicalCore.secretHandle.values.icon)).toBe(
+      "seed:icon:secret",
+    );
     expect(String(canonicalCore.secretHandle.fields.version.range)).toBe(
       resolvedTypeId(canonicalCore.number),
     );

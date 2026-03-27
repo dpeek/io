@@ -3,8 +3,8 @@ import type { TypeModuleFilter } from "@io/graph-module";
 import type { TypeModuleMeta } from "@io/graph-module";
 import { defineScalarModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
 import { expectNumberInput } from "./input.js";
+import { numberType } from "./number.js";
 
 function formatDecimal(value: number, maximumFractionDigits: number): string {
   if (!Number.isFinite(value)) return String(value);
@@ -43,7 +43,7 @@ export function formatPercent(value: number): string {
 }
 
 export const percentType = defineScalar({
-  values: { key: "core:percent", name: "Percent", icon: graphIconSeeds.number },
+  values: { key: "core:percent", name: "Percent", icon: numberType.values.icon },
   encode: (value: number) => String(normalizePercentInput(value)),
   decode: (raw) => parsePercent(raw),
   validate: ({ value }) => {

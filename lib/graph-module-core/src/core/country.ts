@@ -2,12 +2,22 @@ import type { EnumOptionInput } from "@io/graph-module";
 import { defineEnum } from "@io/graph-module";
 import { defineDefaultEnumTypeModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
+import { defineCoreIconSeed } from "../icon/seed.js";
 
 type CountryOptionData = EnumOptionInput & {
   name: string;
   code: string;
 };
+
+const countryIconSeed = defineCoreIconSeed("country", {
+  name: "Country",
+  svg: `<svg viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none" width="24" height="24" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <path d="M21.54 15H17a2 2 0 0 0-2 2v4.54" />
+  <path d="M7 3.34V5a3 3 0 0 0 3 3v0a2 2 0 0 1 2 2v0c0 1.1 0.9 2 2 2v0a2 2 0 0 0 2-2v0c0-1.1 0.9-2 2-2h3.17" />
+  <path d="M11 21.95V18a2 2 0 0 0-2-2v0a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05" />
+  <circle cx="12" cy="12" r="10" />
+</svg>`,
+});
 
 export const countryOptions = {
   af: {
@@ -997,7 +1007,7 @@ export const countryOptions = {
 } satisfies Record<string, CountryOptionData>;
 
 export const country = defineEnum({
-  values: { key: "core:country", name: "Country", icon: graphIconSeeds.country },
+  values: { key: "core:country", name: "Country", icon: countryIconSeed },
   options: countryOptions,
 });
 

@@ -1,6 +1,6 @@
 import { edgeId, isEntityType, type AnyTypeOutput, type GraphStore, typeId } from "@io/core/graph";
 import { formatValidationPath, GraphValidationError } from "@io/graph-client";
-import { core, graphIconSeeds, resolvePredicateDefinitionIconId } from "@io/graph-module-core";
+import { core, resolvePredicateDefinitionIconId, unknownIconSeed } from "@io/graph-module-core";
 import { format as formatDate } from "date-fns";
 
 import type { WriteSecretFieldWebAuthorityCommand } from "../../lib/authority.js";
@@ -168,7 +168,7 @@ export function resolveDisplayedDefinitionIconId(
   compiledIconId: string,
   graphIconId: string | undefined,
 ): string {
-  if (!graphIconId || graphIconId === graphIconSeeds.unknown.id) return compiledIconId;
+  if (!graphIconId || graphIconId === unknownIconSeed.id) return compiledIconId;
   return graphIconId;
 }
 

@@ -3,8 +3,17 @@ import type { TypeModuleMeta } from "@io/graph-module";
 import { defineScalar } from "@io/graph-module";
 import { defineScalarModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
+import { defineCoreIconSeed } from "../icon/seed.js";
 import { expectStringInput } from "./input.js";
+
+const stringIconSeed = defineCoreIconSeed("string", {
+  name: "String",
+  svg: `<svg viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none" width="24" height="24" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <path d="M17 6.1H3" />
+  <path d="M21 12.1H3" />
+  <path d="M15.1 18H3" />
+</svg>`,
+});
 
 export const stringFilter = {
   defaultOperator: "contains",
@@ -58,7 +67,7 @@ export const stringMeta = {
 } satisfies TypeModuleMeta<string, readonly ["text"], readonly ["text", "textarea"]>;
 
 export const stringType = defineScalar({
-  values: { key: "core:string", name: "String", icon: graphIconSeeds.string },
+  values: { key: "core:string", name: "String", icon: stringIconSeed },
   encode: (value: string) => expectStringInput(value),
   decode: (raw) => raw,
 });

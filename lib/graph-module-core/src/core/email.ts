@@ -1,7 +1,15 @@
 import type { TypeModuleFilter } from "@io/graph-module";
 import { defineValidatedStringTypeModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
+import { defineCoreIconSeed } from "../icon/seed.js";
+
+const emailIconSeed = defineCoreIconSeed("email", {
+  name: "Email",
+  svg: `<svg viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none" width="24" height="24" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <rect width="20" height="16" rx="2" x="2" y="4" />
+  <path d="M22 7l-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+</svg>`,
+});
 
 const emailLocalPattern = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i;
 
@@ -77,7 +85,7 @@ export const emailFilter = {
 } satisfies TypeModuleFilter<string>;
 
 export const emailTypeModule = defineValidatedStringTypeModule({
-  values: { key: "core:email", name: "Email", icon: graphIconSeeds.email },
+  values: { key: "core:email", name: "Email", icon: emailIconSeed },
   parse: parseEmail,
   filter: emailFilter,
   placeholder: emailAddressLabel,

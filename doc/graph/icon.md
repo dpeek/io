@@ -63,17 +63,19 @@ Icon assignment stays explicit:
 
 No global `icon` predicate is inherited from `core:node`.
 
-### Seed Registry
+### Colocated Seeds
 
-`graphIconSeeds` in `../../lib/graph-module-core/src/icon/seed.ts` is the
-canonical built-in core seed registry:
+Built-in core icon seeds are now owned by the type modules that use them.
 
-- each seed owns a stable graph id, slug key, display name, and raw SVG payload
-- the registry is domain-owned rather than globally owned by bootstrap or client
-- schema definitions can reference a seed object directly, similar to enum option references
-- `../../lib/graph-module-core/src/core/bootstrap.ts` passes the core catalog
-  and the core default type/predicate icon resolvers into `@io/graph-bootstrap`
-- bootstrap can also materialize icons through per-id lookup for installable or remapped catalogs,
+- `../../lib/graph-module-core/src/icon/seed.ts` provides the shared `defineCoreIconSeed(...)`
+  helper plus the `unknown` fallback seed
+- concrete seeds live inline beside their owning type or entity definitions under
+  `../../lib/graph-module-core/src/core/`
+- `../../lib/graph-module-core/src/icon/resolve.ts` owns the default type/predicate fallback
+  mapping for `tag`, `edge`, and `unknown`
+- `../../lib/graph-module-core/src/core/bootstrap.ts` passes the shared fallback seed and the
+  core default type/predicate icon resolvers into `@io/graph-bootstrap`
+- bootstrap still materializes icons through per-id lookup for installable or remapped catalogs,
   so definitions only need to commit to stable icon ids
 
 ## Explorer Surface

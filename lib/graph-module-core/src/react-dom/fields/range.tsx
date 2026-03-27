@@ -15,7 +15,7 @@ import {
   useFieldMutationCallbacks,
   validatePredicateValue,
   type AnyFieldProps,
-} from "../internal.js";
+} from "./shared.js";
 import {
   createStructuredValueDraft,
   normalizeStructuredValueDraftKind,

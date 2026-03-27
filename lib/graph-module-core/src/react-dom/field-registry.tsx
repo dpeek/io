@@ -101,7 +101,7 @@ function BadgeFieldView({ predicate }: AnyFieldProps) {
   return <span data-web-field-kind="badge">{formatPredicateValue(predicate, value)}</span>;
 }
 
-/** Built-in browser field view capabilities for the current DOM adapter. */
+/** Built-in browser field view capabilities for `@io/graph-module-core/react-dom`. */
 export const genericWebFieldViewCapabilities = [
   { kind: "boolean", Component: BooleanFieldView },
   colorFieldViewCapability,
@@ -122,7 +122,7 @@ export const genericWebFieldViewCapabilities = [
   entityReferenceListViewCapability,
 ] satisfies readonly PredicateFieldViewCapability<any, any>[];
 
-/** Built-in browser field editor capabilities for the built-in core module. */
+/** Built-in browser field editor capabilities for the built-in core DOM layer. */
 export const genericWebFieldEditorCapabilities = [
   ...genericBaseWebFieldEditorCapabilities,
   { kind: "number/duration", Component: DurationFieldEditor },

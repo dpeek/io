@@ -3,8 +3,8 @@ import type { TypeModuleFilter } from "@io/graph-module";
 import type { TypeModuleMeta } from "@io/graph-module";
 import { defineScalarModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
 import { expectRecordInput } from "./input.js";
+import { numberType } from "./number.js";
 import {
   compareStructuredValueValues,
   formatStructuredValue,
@@ -95,7 +95,7 @@ export function formatRangeEditorValue(value: RangeValue): string {
 }
 
 export const rangeType = defineScalar({
-  values: { key: "core:range", name: "Range", icon: graphIconSeeds.number },
+  values: { key: "core:range", name: "Range", icon: numberType.values.icon },
   encode: (value: RangeValue) => JSON.stringify(normalizeRangeInput(value)),
   decode: (raw) => decodeRange(raw),
   validate: ({ value }) => {

@@ -19,7 +19,7 @@ in [`type-modules.md`](./type-modules.md).
 - `@io/graph-module-core/react-dom`:
   `../../lib/graph-module-core/src/react-dom/index.ts`; core-owned browser
   defaults such as `GraphIcon`, structured-value editors, and tag-aware
-  reference behavior
+  reference behavior; this replaces the former `@io/graph-react-dom` package
 - `@io/core/graph/modules/workflow`: `../../src/graph/modules/workflow.ts`;
   canonical `workflow:` namespace assembly and workflow slice root
 

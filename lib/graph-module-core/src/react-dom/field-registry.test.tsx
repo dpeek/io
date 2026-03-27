@@ -7,7 +7,7 @@ import { core, coreGraphBootstrapOptions, defaultMoneyCurrencyKey } from "@io/gr
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { kitchenSink } from "../../../../src/graph/testing/kitchen-sink.js";
-import { PredicateFieldEditor, PredicateFieldView, defaultWebFieldResolver } from "./resolver.js";
+import { PredicateFieldEditor, PredicateFieldView, defaultWebFieldResolver } from "./index.js";
 
 function createRecordFields() {
   const store = createStore();

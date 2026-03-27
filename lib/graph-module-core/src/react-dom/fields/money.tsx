@@ -16,7 +16,7 @@ import {
   useFieldMutationCallbacks,
   validatePredicateValue,
   type AnyFieldProps,
-} from "../internal.js";
+} from "./shared.js";
 
 const moneyCurrencyKeys = new Set(moneyCurrencies.map((currency) => currency.key));
 

@@ -3,8 +3,18 @@ import type { TypeModuleMeta } from "@io/graph-module";
 import { defineScalar } from "@io/graph-module";
 import { defineScalarModule } from "@io/graph-module";
 
-import { graphIconSeeds } from "../icon/seed.js";
+import { defineCoreIconSeed } from "../icon/seed.js";
 import { expectNumberInput } from "./input.js";
+
+const numberIconSeed = defineCoreIconSeed("number", {
+  name: "Number",
+  svg: `<svg viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none" width="24" height="24" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <path d="M12 3v18" />
+  <rect width="18" height="18" rx="2" x="3" y="3" />
+  <path d="M3 9h18" />
+  <path d="M3 15h18" />
+</svg>`,
+});
 
 function parseNumber(raw: string): number {
   const value = Number(raw);
@@ -67,7 +77,7 @@ export const numberMeta = {
 } satisfies TypeModuleMeta<number, readonly ["number", "text"], readonly ["number", "slider"]>;
 
 export const numberType = defineScalar({
-  values: { key: "core:number", name: "Number", icon: graphIconSeeds.number },
+  values: { key: "core:number", name: "Number", icon: numberIconSeed },
   encode: (value: number) => String(expectNumberInput(value)),
   decode: (raw) => Number(raw),
   validate: ({ value }) =>

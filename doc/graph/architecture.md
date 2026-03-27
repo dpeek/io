@@ -28,8 +28,8 @@ This document is the high-level entry point for agents reasoning about the engin
   reference-field policy, secret-field helpers, and pure authored command/view
   and workflow contracts layered above the kernel
 - `../../lib/graph-module-core/src/`: extracted built-in `core:` namespace
-  package, including core schema families, bootstrap inputs, icon seeds, and
-  core-owned helper contracts
+  package, including core schema families, bootstrap inputs, colocated icon
+  seeds, and core-owned helper contracts
 - `../../lib/graph-bootstrap/src/`: schema bootstrap into live stores plus
   convergent bootstrapped snapshots
 - `../../lib/graph-client/src/`: typed CRUD, refs, local validation, synced-client state, write flushing, reconcile behavior, and HTTP/query client helpers

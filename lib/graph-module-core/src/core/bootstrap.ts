@@ -1,11 +1,8 @@
 import type { GraphBootstrapOptions } from "@io/graph-bootstrap";
 
 import { core } from "../core.js";
-import {
-  graphIconSeedList,
-  resolvePredicateDefinitionIconId,
-  resolveTypeDefinitionIconId,
-} from "../icon/seed.js";
+import { resolvePredicateDefinitionIconId, resolveTypeDefinitionIconId } from "../icon/resolve.js";
+import { unknownIconSeed } from "../icon/seed.js";
 
 /**
  * Domain-owned bootstrap adapter for the built-in core namespace.
@@ -17,7 +14,7 @@ export const coreGraphBootstrapOptions = Object.freeze({
   availableDefinitions: core,
   cacheKey: core,
   coreSchema: core,
-  iconSeeds: graphIconSeedList,
+  iconSeeds: [unknownIconSeed],
   resolvePredicateIconId: resolvePredicateDefinitionIconId,
   resolveTypeIconId: resolveTypeDefinitionIconId,
 }) satisfies GraphBootstrapOptions;

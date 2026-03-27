@@ -10,7 +10,7 @@ import {
   useFieldMutationCallbacks,
   validatePredicateValue,
   type AnyFieldProps,
-} from "../internal.js";
+} from "./shared.js";
 
 function normalizeCommittedQuantity(value: unknown): QuantityValue | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;

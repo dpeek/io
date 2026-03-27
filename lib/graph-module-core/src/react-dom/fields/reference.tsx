@@ -10,8 +10,16 @@ import {
 } from "@io/graph-react";
 
 import { core } from "../../core.js";
+import { OptionComboboxEditor } from "./option-combobox.js";
 import {
-  OptionComboboxEditor,
+  createTagKey,
+  EntityReferenceReadonlyChip,
+  EntityReferenceReadonlyChipList,
+  EntityReferenceOptionContent,
+  getEntityReferenceLabel,
+  type EntityReferenceEntity,
+} from "./reference-ui.js";
+import {
   addPredicateItem,
   clearPredicateValue,
   getPredicateFieldLabel,
@@ -23,15 +31,7 @@ import {
   validatePredicateRemove,
   validatePredicateValue,
   type AnyFieldProps,
-} from "../internal.js";
-import {
-  createTagKey,
-  EntityReferenceReadonlyChip,
-  EntityReferenceReadonlyChipList,
-  EntityReferenceOptionContent,
-  getEntityReferenceLabel,
-  type EntityReferenceEntity,
-} from "./reference-ui.js";
+} from "./shared.js";
 
 type TagCreateGraphHandle = {
   create(input: { color: string; key: string; name: string }): string;

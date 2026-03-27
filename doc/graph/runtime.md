@@ -86,7 +86,7 @@ Key source files:
 
 - canonical `core:` namespace assembly
 - built-in scalar/entity/enum families
-- core bootstrap inputs and icon seed ownership
+- core bootstrap inputs and colocated icon seed ownership
 - structured-value helpers plus locale/country/currency datasets
 
 Key source files:
@@ -95,6 +95,7 @@ Key source files:
 - `../../lib/graph-module-core/src/core.ts`
 - `../../lib/graph-module-core/src/core/bootstrap.ts`
 - `../../lib/graph-module-core/src/icon/seed.ts`
+- `../../lib/graph-module-core/src/icon/resolve.ts`
 
 ### React Runtime
 
