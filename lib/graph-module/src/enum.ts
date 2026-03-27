@@ -5,7 +5,7 @@ import {
   type EnumModuleValue,
   type TypeModuleFilter,
   type TypeModuleMeta,
-} from "./type-module.js";
+} from "./type.js";
 
 type DefaultEnumModuleValue<Type extends EnumTypeOutput<any, any>> = EnumModuleValue<Type>;
 

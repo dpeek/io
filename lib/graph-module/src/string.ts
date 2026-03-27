@@ -5,7 +5,7 @@ import {
   type EditorInputMode,
   type TypeModuleFilter,
   type TypeModuleMeta,
-} from "./type-module.js";
+} from "./type.js";
 
 type ValidatedStringModuleInput<
   Key extends string,

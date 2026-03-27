@@ -2,6 +2,19 @@
 
 `@io/graph-bootstrap` owns graph schema bootstrap and materialization.
 
+## Public API
+
+`src/index.ts` is the curated package surface. It exports:
+
+- `bootstrap(store, definitions, options)`
+- `createBootstrappedSnapshot(definitions, options)`
+- `requireGraphBootstrapCoreSchema(definitions)`
+- type-only bootstrap option and icon-resolution contracts
+
+The implementation lives in focused internal modules such as `bootstrap.ts`,
+`snapshot.ts`, `icons.ts`, and `bootstrap-facts.ts`. Those files are package
+internals rather than additional public entrypoints.
+
 ## What It Owns
 
 - additive `bootstrap(store, definitions, options)` into a live store
