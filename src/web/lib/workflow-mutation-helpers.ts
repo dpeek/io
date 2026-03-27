@@ -1,63 +1,56 @@
 import { edgeId, type GraphStore, type GraphStoreSnapshot } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
+import { workflow } from "@io/core/graph/modules/workflow";
 import {
   type RepositoryCommitLeaseStateValue,
   type RepositoryCommitStateValue,
   repositoryCommitLeaseStateValues,
   repositoryCommitStateValues,
   type WorkflowBranchStateValue,
-  workflowBranchStateValues,
-  workflowCommitStateValues,
+  branchStateValues,
+  commitStateValues,
   type WorkflowCommitStateValue,
   type WorkflowMutationFailureCode,
   type WorkflowMutationSummary,
-} from "@io/core/graph/modules/ops/workflow";
-import { pkm } from "@io/core/graph/modules/pkm";
+} from "@io/core/graph/modules/workflow";
 import { type GraphClient } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
 
 import { planRecordedMutation } from "./mutation-planning.js";
 
-export const productGraph = { ...core, ...pkm, ...ops } as const;
+export const productGraph = { ...core, ...workflow } as const;
 
 export type ProductGraph = typeof productGraph;
 export type ProductGraphClient = GraphClient<ProductGraph>;
 
-const workflowBranchStateIds = Object.fromEntries(
-  workflowBranchStateValues.map((value) => [
-    value,
-    resolvedEnumValue(ops.workflowBranchState.values[value]),
-  ]),
+const branchStateIds = Object.fromEntries(
+  branchStateValues.map((value) => [value, resolvedEnumValue(workflow.branchState.values[value])]),
 ) as Record<WorkflowBranchStateValue, string>;
 
-const workflowCommitStateIds = Object.fromEntries(
-  workflowCommitStateValues.map((value) => [
-    value,
-    resolvedEnumValue(ops.workflowCommitState.values[value]),
-  ]),
+const commitStateIds = Object.fromEntries(
+  commitStateValues.map((value) => [value, resolvedEnumValue(workflow.commitState.values[value])]),
 ) as Record<WorkflowCommitStateValue, string>;
 
 const repositoryCommitStateIds = Object.fromEntries(
   repositoryCommitStateValues.map((value) => [
     value,
-    resolvedEnumValue(ops.repositoryCommitState.values[value]),
+    resolvedEnumValue(workflow.repositoryCommitState.values[value]),
   ]),
 ) as Record<RepositoryCommitStateValue, string>;
 
 const repositoryCommitLeaseStateIds = Object.fromEntries(
   repositoryCommitLeaseStateValues.map((value) => [
     value,
-    resolvedEnumValue(ops.repositoryCommitLeaseState.values[value]),
+    resolvedEnumValue(workflow.repositoryCommitLeaseState.values[value]),
   ]),
 ) as Record<RepositoryCommitLeaseStateValue, string>;
 
-const workflowBranchStateKeysById = invertRecord(workflowBranchStateIds);
-const workflowCommitStateKeysById = invertRecord(workflowCommitStateIds);
+const branchStateKeysById = invertRecord(branchStateIds);
+const commitStateKeysById = invertRecord(commitStateIds);
 const repositoryCommitStateKeysById = invertRecord(repositoryCommitStateIds);
 const repositoryCommitLeaseStateKeysById = invertRecord(repositoryCommitLeaseStateIds);
 
-export const workflowBranchTransitions: Record<
+export const branchTransitions: Record<
   WorkflowBranchStateValue,
   readonly WorkflowBranchStateValue[]
 > = {
@@ -69,7 +62,7 @@ export const workflowBranchTransitions: Record<
   archived: [],
 };
 
-export const workflowCommitTransitions: Record<
+export const commitTransitions: Record<
   WorkflowCommitStateValue,
   readonly WorkflowCommitStateValue[]
 > = {
@@ -182,7 +175,7 @@ export function planWorkflowMutation<TResult>(
 }
 
 export function decodeWorkflowBranchState(value: string): WorkflowBranchStateValue {
-  const state = workflowBranchStateKeysById[value];
+  const state = branchStateKeysById[value];
   if (!state) {
     throw new Error(`Unknown workflow branch state id "${value}".`);
   }
@@ -190,7 +183,7 @@ export function decodeWorkflowBranchState(value: string): WorkflowBranchStateVal
 }
 
 export function decodeWorkflowCommitState(value: string): WorkflowCommitStateValue {
-  const state = workflowCommitStateKeysById[value];
+  const state = commitStateKeysById[value];
   if (!state) {
     throw new Error(`Unknown workflow commit state id "${value}".`);
   }
@@ -246,9 +239,7 @@ function appendTimestampSummary<TSummary extends Record<string, unknown>>(
   };
 }
 
-export function buildProjectSummary(
-  entity: ReturnType<ProductGraphClient["workflowProject"]["get"]>,
-) {
+export function buildProjectSummary(entity: ReturnType<ProductGraphClient["project"]["get"]>) {
   return appendTimestampSummary(entity, {
     entity: "project",
     id: entity.id,
@@ -259,7 +250,7 @@ export function buildProjectSummary(
 }
 
 export function buildRepositorySummary(
-  entity: ReturnType<ProductGraphClient["workflowRepository"]["get"]>,
+  entity: ReturnType<ProductGraphClient["repository"]["get"]>,
 ) {
   return appendTimestampSummary(entity, {
     entity: "repository",
@@ -283,7 +274,7 @@ function readGoalSummary(
 
 export function buildBranchSummary(
   graph: Pick<ProductGraphClient, "document">,
-  entity: ReturnType<ProductGraphClient["workflowBranch"]["get"]>,
+  entity: ReturnType<ProductGraphClient["branch"]["get"]>,
 ) {
   const goalSummary = readGoalSummary(graph, entity.goalDocument);
   return appendTimestampSummary(entity, {
@@ -301,9 +292,7 @@ export function buildBranchSummary(
   }) satisfies WorkflowMutationSummary;
 }
 
-export function buildCommitSummary(
-  entity: ReturnType<ProductGraphClient["workflowCommit"]["get"]>,
-) {
+export function buildCommitSummary(entity: ReturnType<ProductGraphClient["commit"]["get"]>) {
   return appendTimestampSummary(entity, {
     entity: "commit",
     id: entity.id,
@@ -326,7 +315,7 @@ export function buildRepositoryBranchSummary(
     title: entity.name,
     projectId: entity.project,
     repositoryId: entity.repository,
-    ...(entity.workflowBranch ? { workflowBranchId: entity.workflowBranch } : {}),
+    ...(entity.branch ? { branchId: entity.branch } : {}),
     managed: entity.managed,
     branchName: entity.branchName,
     baseBranchName: entity.baseBranchName,
@@ -348,7 +337,7 @@ export function buildRepositoryCommitSummary(
     title: entity.name,
     repositoryId: entity.repository,
     ...(entity.repositoryBranch ? { repositoryBranchId: entity.repositoryBranch } : {}),
-    ...(entity.workflowCommit ? { workflowCommitId: entity.workflowCommit } : {}),
+    ...(entity.commit ? { commitId: entity.commit } : {}),
     state: decodeRepositoryCommitState(entity.state),
     worktree: {
       ...(entity.worktree.path ? { path: entity.worktree.path } : {}),
@@ -370,9 +359,4 @@ export function normalizeRepositoryCommitLeaseState(
   return "unassigned";
 }
 
-export {
-  repositoryCommitLeaseStateIds,
-  repositoryCommitStateIds,
-  workflowBranchStateIds,
-  workflowCommitStateIds,
-};
+export { repositoryCommitLeaseStateIds, repositoryCommitStateIds, branchStateIds, commitStateIds };

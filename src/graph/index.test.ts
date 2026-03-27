@@ -24,17 +24,11 @@ type GraphPackageJson = {
 
 const canonicalGraphSubpaths = [
   "./graph",
-  "./graph/runtime/react",
   "./graph/def",
   "./graph/modules",
   "./graph/modules/core",
-  "./graph/modules/ops",
-  "./graph/modules/ops/env-var",
-  "./graph/modules/ops/workflow",
-  "./graph/modules/pkm",
-  "./graph/modules/pkm/document",
+  "./graph/modules/workflow",
   "./graph/adapters/react-dom",
-  "./graph/adapters/react-opentui",
 ] as const;
 
 const retiredGraphSubpaths = [
@@ -43,14 +37,17 @@ const retiredGraphSubpaths = [
   "./graph/adapters/*",
   "./graph/modules/app",
   "./graph/modules/app/topic",
+  "./graph/modules/workflow/env-var",
+  "./graph/modules/workflow/document",
   "./graph/react-dom",
   "./graph/react-opentui",
   "./graph/react",
+  "./graph/runtime/react",
   "./graph/adapters/react",
+  "./graph/adapters/react-opentui",
   "./graph/schema",
   "./graph/schema/core",
   "./graph/schema/ops",
-  "./graph/schema/ops/env-var",
   "./graph/schema/pkm",
   "./graph/schema/pkm/topic",
   "./graph/schema/test",
@@ -93,8 +90,7 @@ const forbiddenRootModuleExports = [
   "bootstrap",
   "core",
   "createBootstrappedSnapshot",
-  "ops",
-  "pkm",
+  "workflow",
   "country",
   "stringTypeModule",
   "graphIconSeeds",
@@ -118,10 +114,16 @@ const forbiddenProjectionContractValueExports = [
   "projectionVisibilityModes",
 ] as const;
 
-const requiredRuntimeReactExports = [
+const requiredGraphReactExports = [
+  "GraphRuntimeProvider",
   "GraphMutationRuntimeProvider",
-  "createWebFieldResolver",
+  "createGraphFieldResolver",
+  "createGraphFilterResolver",
   "performValidatedMutation",
+  "useGraphQuery",
+  "useGraphRuntime",
+  "useGraphSyncState",
+  "useOptionalGraphRuntime",
   "usePredicateField",
 ] as const;
 
@@ -133,21 +135,12 @@ const requiredReactDomExports = [
   "defaultWebFilterResolver",
 ] as const;
 
-const requiredReactOpenTuiExports = [
-  "GraphRuntimeProvider",
-  "useGraphQuery",
-  "useGraphRuntime",
-  "useGraphSyncState",
-  "useOptionalGraphRuntime",
-] as const;
-
 const requiredModulesExports = [
   "core",
   "country",
   "envVar",
   "graphIconSeeds",
-  "ops",
-  "pkm",
+  "workflow",
   "stringTypeModule",
   "document",
   "documentBlock",
@@ -172,26 +165,26 @@ const requiredWorkflowExports = [
   "repositoryCommit",
   "repositoryCommitLeaseState",
   "repositoryCommitState",
-  "workflowBranchCommitQueueProjectionDependencyKey",
-  "workflowBranch",
-  "workflowBranchKeyPattern",
-  "workflowBranchState",
-  "workflowBranchStateTypeModule",
-  "workflowCommit",
-  "workflowCommitKeyPattern",
-  "workflowCommitState",
-  "workflowCommitStateTypeModule",
-  "workflowProjectBranchBoardProjectionDependencyKey",
-  "workflowProject",
-  "workflowProjectBranchBoardProjection",
-  "workflowProjectionMetadata",
+  "branchCommitQueueProjectionDependencyKey",
+  "branch",
+  "branchKeyPattern",
+  "branchState",
+  "branchStateTypeModule",
+  "commit",
+  "commitKeyPattern",
+  "commitState",
+  "commitStateTypeModule",
+  "projectBranchBoardProjectionDependencyKey",
+  "project",
+  "projectBranchBoardProjection",
+  "projectionMetadata",
   "workflowReviewDependencyKeys",
   "workflowReviewModuleReadScope",
   "workflowReviewScopeDependencyKey",
   "workflowReviewSyncScopeRequest",
-  "workflowProjectKeyPattern",
-  "workflowRepository",
-  "workflowRepositoryKeyPattern",
+  "projectKeyPattern",
+  "repository",
+  "repositoryKeyPattern",
   "workflowSchema",
 ] as const;
 
@@ -421,54 +414,37 @@ describe("@io/core/graph package entry surfaces", () => {
     ]);
   });
 
-  it("keeps the canonical React runtime and host adapter entries separate", async () => {
-    const [runtimeReactExports, reactDomAdapterExports, reactOpentuiAdapterExports] =
-      await Promise.all([
-        import("@io/core/graph/runtime/react"),
-        import("@io/core/graph/adapters/react-dom"),
-        import("@io/core/graph/adapters/react-opentui"),
-      ]);
+  it("keeps graph-react and react-dom focused on separate responsibilities", async () => {
+    const [graphReactExports, reactDomAdapterExports] = await Promise.all([
+      import("@io/graph-react"),
+      import("@io/core/graph/adapters/react-dom"),
+    ]);
 
-    expectNamedExports(runtimeReactExports, requiredRuntimeReactExports);
-    expect(Object.keys(runtimeReactExports)).not.toContain("GraphIcon");
-
+    expectNamedExports(graphReactExports, requiredGraphReactExports);
+    expect(Object.keys(graphReactExports)).not.toContain("GraphIcon");
     expectNamedExports(reactDomAdapterExports, requiredReactDomExports);
     expect(Object.keys(reactDomAdapterExports)).not.toContain("GraphMutationRuntimeProvider");
-    expectNamedExports(reactOpentuiAdapterExports, requiredReactOpenTuiExports);
-    expect(Object.keys(reactOpentuiAdapterExports)).not.toContain("GraphMutationRuntimeProvider");
-    expect(Object.keys(reactOpentuiAdapterExports)).not.toContain("useCommitQueueScope");
-    expect(Object.keys(reactOpentuiAdapterExports)).not.toContain("useProjectBranchScope");
-    expect(Object.keys(reactOpentuiAdapterExports)).not.toContain("useWorkflowProjectionIndex");
+    expect(Object.keys(reactDomAdapterExports)).not.toContain("GraphRuntimeProvider");
   });
 
   it("keeps the canonical module entry surfaces explicit", async () => {
-    const [
-      moduleExports,
-      coreExports,
-      opsExports,
-      pkmExports,
-      envVarExports,
-      workflowExports,
-      documentExports,
-    ] = await Promise.all([
+    const [moduleExports, coreExports, workflowExports] = await Promise.all([
       import("@io/core/graph/modules"),
       import("@io/core/graph/modules/core"),
-      import("@io/core/graph/modules/ops"),
-      import("@io/core/graph/modules/pkm"),
-      import("@io/core/graph/modules/ops/env-var"),
-      import("@io/core/graph/modules/ops/workflow"),
-      import("@io/core/graph/modules/pkm/document"),
+      import("@io/core/graph/modules/workflow"),
     ]);
 
     expectNamedExports(moduleExports, requiredModulesExports);
     expect(Object.keys(coreExports)).toEqual(["core"]);
-    expect(Object.keys(opsExports)).toEqual(["ops"]);
-    expect(Object.keys(pkmExports)).toEqual(["pkm"]);
-    expectNamedExports(envVarExports, requiredEnvVarExports);
+    expectNamedExports(workflowExports, [
+      "workflow",
+      ...requiredWorkflowExports,
+      ...requiredEnvVarExports,
+      ...requiredDocumentExports,
+    ]);
     expectNamedExports(workflowExports, requiredWorkflowExports);
-    expectNamedExports(documentExports, requiredDocumentExports);
-    expect(typeof opsExports.ops.envVar.values.id).toBe("string");
-    expect(typeof opsExports.ops.workflowProject.values.id).toBe("string");
-    expect(typeof pkmExports.pkm.document.values.id).toBe("string");
+    expect(typeof workflowExports.workflow.envVar.values.id).toBe("string");
+    expect(typeof workflowExports.workflow.project.values.id).toBe("string");
+    expect(typeof workflowExports.workflow.document.values.id).toBe("string");
   });
 });

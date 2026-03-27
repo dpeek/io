@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
-
 import type {
   FilterOperandProps,
-  WebFilterEnumOption,
-  WebFilterOperandEditorCapability,
-} from "../../runtime/react/filter.js";
+  GraphFilterEnumOption,
+  GraphFilterOperandEditorCapability,
+} from "@io/graph-react";
+import { useEffect, useState } from "react";
 
 type AnyOperandProps = FilterOperandProps<any, any, any>;
 
@@ -200,7 +199,7 @@ function EnumFilterOperandEditor({ operator, onChange, value }: AnyOperandProps)
       value={isMany ? selectedValues : (selectedValues[0] ?? "")}
     >
       {!isMany ? <option value="">Select an option</option> : null}
-      {operator.operand.options.map((option: WebFilterEnumOption) => (
+      {operator.operand.options.map((option: GraphFilterEnumOption) => (
         <option key={option.value} value={option.value}>
           {option.label}
         </option>
@@ -237,4 +236,4 @@ export const genericWebFilterOperandEditorCapabilities = [
   { kind: "url", Component: UrlFilterOperandEditor },
   { kind: "enum", Component: EnumFilterOperandEditor },
   { kind: "boolean", Component: BooleanFilterOperandEditor },
-] satisfies readonly WebFilterOperandEditorCapability<any, any, any>[];
+] satisfies readonly GraphFilterOperandEditorCapability<any, any, any>[];

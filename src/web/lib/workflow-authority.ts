@@ -2,7 +2,7 @@ import { type GraphStore } from "@io/core/graph";
 import {
   type WorkflowMutationAction,
   type WorkflowMutationResult,
-} from "@io/core/graph/modules/ops/workflow";
+} from "@io/core/graph/modules/workflow";
 import { type AuthoritativeGraphWriteResult, type GraphWriteTransaction } from "@io/graph-kernel";
 
 import type {

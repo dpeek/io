@@ -84,20 +84,14 @@ function formatActionSubjectLabel(model: WorkflowTuiSurfaceModel, action: Workfl
 
   if (action.subject.kind === "commit") {
     const commitQueue = model.commitQueues.find(
-      (queue) => queue.branch.workflowBranch.id === action.subject.branchId,
+      (queue) => queue.branch.branch.id === action.subject.branchId,
     );
-    const commitRow = commitQueue?.rows.find(
-      (row) => row.workflowCommit.id === action.subject.commitId,
-    );
-    return (
-      commitRow?.workflowCommit.commitKey ?? action.subject.commitId ?? action.subject.branchId
-    );
+    const commitRow = commitQueue?.rows.find((row) => row.commit.id === action.subject.commitId);
+    return commitRow?.commit.commitKey ?? action.subject.commitId ?? action.subject.branchId;
   }
 
-  const branchRow = model.branchBoard.rows.find(
-    (row) => row.workflowBranch.id === action.subject.branchId,
-  );
-  return branchRow?.workflowBranch.branchKey ?? action.subject.branchId;
+  const branchRow = model.branchBoard.rows.find((row) => row.branch.id === action.subject.branchId);
+  return branchRow?.branch.branchKey ?? action.subject.branchId;
 }
 
 function WorkflowTuiApp({ model }: WorkflowTuiAppProps) {

@@ -14,16 +14,13 @@ describe("workflow live transport client", () => {
     const payload = {
       kind: "workflow-review-register",
       result: {
-        registrationId: "workflow-review:session:test:scope:ops/workflow:review",
+        registrationId: "workflow-review:session:test:scope:workflow:review",
         sessionId: "session:test",
         principalId: "principal:test",
-        scopeId: "scope:ops/workflow:review",
-        definitionHash: "scope-def:ops/workflow:review:v1",
+        scopeId: "scope:workflow:review",
+        definitionHash: "scope-def:workflow:review:v1",
         policyFilterVersion: "policy:0",
-        dependencyKeys: [
-          "scope:ops/workflow:review",
-          "projection:ops/workflow:project-branch-board",
-        ],
+        dependencyKeys: ["scope:workflow:review", "projection:workflow:project-branch-board"],
         expiresAt: "2026-03-24T00:01:00.000Z",
       },
     } satisfies WorkflowReviewRegisterLiveResponse;
@@ -32,7 +29,7 @@ describe("workflow live transport client", () => {
       {
         kind: "workflow-review-register",
         cursor:
-          "scope:kind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview&definitionHash=scope-def%3Aops%2Fworkflow%3Areview%3Av1&policyFilterVersion=policy%3A0&cursor=web-authority%3A1",
+          "scope:kind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview&definitionHash=scope-def%3Aworkflow%3Areview%3Av1&policyFilterVersion=policy%3A0&cursor=web-authority%3A1",
       },
       {
         fetch: async (input, init) => {
@@ -45,7 +42,7 @@ describe("workflow live transport client", () => {
           expect(JSON.parse(String(init?.body))).toEqual({
             kind: "workflow-review-register",
             cursor:
-              "scope:kind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview&definitionHash=scope-def%3Aops%2Fworkflow%3Areview%3Av1&policyFilterVersion=policy%3A0&cursor=web-authority%3A1",
+              "scope:kind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview&definitionHash=scope-def%3Aworkflow%3Areview%3Av1&policyFilterVersion=policy%3A0&cursor=web-authority%3A1",
           });
 
           return Response.json(payload);
@@ -62,7 +59,7 @@ describe("workflow live transport client", () => {
         {
           kind: "workflow-review-register",
           cursor:
-            "scope:kind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview&definitionHash=scope-def%3Aops%2Fworkflow%3Areview%3Av1&policyFilterVersion=policy%3A999&cursor=web-authority%3A1",
+            "scope:kind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview&definitionHash=scope-def%3Aworkflow%3Areview%3Av1&policyFilterVersion=policy%3A999&cursor=web-authority%3A1",
         },
         {
           fetch: async () =>
@@ -93,17 +90,14 @@ describe("workflow live transport client", () => {
             eventId: "workflow-review:cursor:2",
             graphId: "graph:test",
             sourceCursor: "web-authority:2",
-            dependencyKeys: [
-              "scope:ops/workflow:review",
-              "projection:ops/workflow:project-branch-board",
-            ],
-            affectedScopeIds: ["scope:ops/workflow:review"],
+            dependencyKeys: ["scope:workflow:review", "projection:workflow:project-branch-board"],
+            affectedScopeIds: ["scope:workflow:review"],
             delivery: {
               kind: "cursor-advanced",
             },
           },
         ],
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
         sessionId: "session:test",
       },
     } satisfies WorkflowReviewPullLiveResponse;
@@ -111,7 +105,7 @@ describe("workflow live transport client", () => {
     const response = await requestWorkflowLive(
       {
         kind: "workflow-review-pull",
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
       },
       {
         fetch: async (input, init) => {
@@ -119,7 +113,7 @@ describe("workflow live transport client", () => {
           expect(init?.method).toBe("POST");
           expect(JSON.parse(String(init?.body))).toEqual({
             kind: "workflow-review-pull",
-            scopeId: "scope:ops/workflow:review",
+            scopeId: "scope:workflow:review",
           });
 
           return Response.json(payload);
@@ -135,7 +129,7 @@ describe("workflow live transport client", () => {
       kind: "workflow-review-remove",
       result: {
         removed: true,
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
         sessionId: "session:test",
       },
     } satisfies WorkflowReviewRemoveLiveResponse;
@@ -143,7 +137,7 @@ describe("workflow live transport client", () => {
     const response = await requestWorkflowLive(
       {
         kind: "workflow-review-remove",
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
       },
       {
         url: "https://web.local/app/",

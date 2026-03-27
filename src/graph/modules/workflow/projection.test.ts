@@ -1,19 +1,19 @@
 import { describe, expect, it } from "bun:test";
 
-import { core } from "../../core.js";
+import { core } from "../core.js";
 import {
   compileWorkflowReviewScopeDependencyKeys,
   compileWorkflowReviewWriteDependencyKeys,
   createWorkflowReviewInvalidationEvent,
-  workflowBranchCommitQueueProjection,
-  workflowBranchCommitQueueProjectionDependencyKey,
-  workflowProjectBranchBoardProjection,
-  workflowProjectBranchBoardProjectionDependencyKey,
+  branchCommitQueueProjection,
+  branchCommitQueueProjectionDependencyKey,
+  projectBranchBoardProjection,
+  projectBranchBoardProjectionDependencyKey,
   workflowReviewDependencyKeys,
   workflowReviewModuleReadScope,
   workflowReviewScopeDependencyKey,
 } from "./projection.js";
-import { agentSession, workflowBranch } from "./type.js";
+import { agentSession, branch } from "./type.js";
 
 function resolvedTypeId(typeDef: {
   readonly values: { readonly id?: string; readonly key: string };
@@ -24,12 +24,12 @@ function resolvedTypeId(typeDef: {
 describe("workflow review invalidation contracts", () => {
   it("compiles one explicit dependency-key set for the workflow review scope", () => {
     expect(compileWorkflowReviewScopeDependencyKeys()).toEqual(workflowReviewDependencyKeys);
-    expect(workflowProjectBranchBoardProjection.dependencyKeys).toEqual([
-      workflowProjectBranchBoardProjectionDependencyKey,
+    expect(projectBranchBoardProjection.dependencyKeys).toEqual([
+      projectBranchBoardProjectionDependencyKey,
       workflowReviewScopeDependencyKey,
     ]);
-    expect(workflowBranchCommitQueueProjection.dependencyKeys).toEqual([
-      workflowBranchCommitQueueProjectionDependencyKey,
+    expect(branchCommitQueueProjection.dependencyKeys).toEqual([
+      branchCommitQueueProjectionDependencyKey,
       workflowReviewScopeDependencyKey,
     ]);
   });
@@ -37,7 +37,7 @@ describe("workflow review invalidation contracts", () => {
   it("conservatively invalidates the review scope for workflow writes", () => {
     expect(
       compileWorkflowReviewWriteDependencyKeys({
-        touchedTypeIds: [resolvedTypeId(workflowBranch)],
+        touchedTypeIds: [resolvedTypeId(branch)],
       }),
     ).toEqual(workflowReviewDependencyKeys);
     expect(
@@ -66,8 +66,8 @@ describe("workflow review invalidation contracts", () => {
       sourceCursor: "cursor:workflow-1",
       dependencyKeys: workflowReviewDependencyKeys,
       affectedProjectionIds: [
-        workflowProjectBranchBoardProjection.projectionId,
-        workflowBranchCommitQueueProjection.projectionId,
+        projectBranchBoardProjection.projectionId,
+        branchCommitQueueProjection.projectionId,
       ],
       affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
       delivery: { kind: "cursor-advanced" },

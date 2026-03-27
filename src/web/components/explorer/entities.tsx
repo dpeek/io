@@ -1,5 +1,5 @@
 import { GraphIcon } from "@io/core/graph/adapters/react-dom";
-import { usePredicateField } from "@io/core/graph/runtime/react";
+import { usePredicateField } from "@io/graph-react";
 import { useMemo } from "react";
 
 import { asNodeMetadataFields, flattenPredicateRefs } from "./catalog.js";

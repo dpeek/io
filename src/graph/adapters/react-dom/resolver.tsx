@@ -1,29 +1,42 @@
-import type { ReactNode } from "react";
-
-import type { AnyTypeOutput, EdgeOutput } from "../../index.js";
 import {
   PredicateFieldEditor as GraphPredicateFieldEditor,
   PredicateFieldView as GraphPredicateFieldView,
-  createWebFieldResolver,
+  createGraphFieldResolver,
+  type GraphFieldEditorResolution,
+  type GraphFieldResolver,
+  type GraphFieldViewResolution,
+  type PredicateFieldEditorCapability,
   type PredicateFieldEditorProps,
+  type PredicateFieldProps,
+  type PredicateFieldViewCapability,
   type PredicateFieldViewProps,
   type UnsupportedFieldFallbackProps,
-} from "../../runtime/react/index.js";
+  type UnsupportedFieldReason,
+} from "@io/graph-react";
+import type { ReactNode } from "react";
+
+import type { AnyTypeOutput, EdgeOutput } from "../../index.js";
 import {
   genericWebFieldEditorCapabilities,
   genericWebFieldViewCapabilities,
 } from "./field-registry.js";
 
-export { createWebFieldResolver } from "../../runtime/react/index.js";
+export const createWebFieldResolver = createGraphFieldResolver;
 export type {
   PredicateFieldEditorCapability,
   PredicateFieldProps,
   PredicateFieldViewCapability,
   UnsupportedFieldReason,
-  WebFieldEditorResolution,
-  WebFieldResolver,
-  WebFieldViewResolution,
-} from "../../runtime/react/index.js";
+};
+export type WebFieldEditorResolution<
+  T extends EdgeOutput,
+  Defs extends Record<string, AnyTypeOutput>,
+> = GraphFieldEditorResolution<T, Defs>;
+export type WebFieldResolver = GraphFieldResolver;
+export type WebFieldViewResolution<
+  T extends EdgeOutput,
+  Defs extends Record<string, AnyTypeOutput>,
+> = GraphFieldViewResolution<T, Defs>;
 
 export const defaultWebFieldResolver = createWebFieldResolver({
   view: genericWebFieldViewCapabilities,

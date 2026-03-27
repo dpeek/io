@@ -2,29 +2,30 @@
 
 ## Purpose
 
-`../../src/graph/runtime/react/` and `../../src/graph/adapters/` define the
-graph package's React and host-specific adapter surfaces.
+`../../lib/graph-react/src/` and `../../src/graph/adapters/` define the
+graph package's host-neutral React and host-specific adapter surfaces.
 
 ## Public Entry Surfaces
 
-- `@io/core/graph/runtime/react`: `../../src/graph/runtime/react/index.ts`;
-  graph-aware, host-neutral React hooks and resolver primitives
+- `@io/graph-react`: `../../lib/graph-react/src/index.ts`; graph-aware,
+  host-neutral React hooks, resolver primitives, mutation helpers, and synced
+  runtime hooks
 - `@io/core/graph/adapters/react-dom`:
   `../../src/graph/adapters/react-dom/index.ts`; DOM field views and editors,
   filter resolvers, icon rendering, and field-family modules
-- `@io/core/graph/adapters/react-opentui`:
-  `../../src/graph/adapters/react-opentui/index.ts`; terminal adapter package
-  root for OpenTUI runtime context, sync-state subscriptions, and reusable
-  graph query hooks
+
+There is no separate `react-opentui` package anymore. TUI code imports the
+shared runtime hooks directly from `@io/graph-react`.
 
 ## Source Layout
 
-- `../../src/graph/runtime/react/entity.tsx`,
-  `../../src/graph/runtime/react/predicate.ts`,
-  `../../src/graph/runtime/react/filter.tsx`,
-  `../../src/graph/runtime/react/mutation-validation.ts`,
-  `../../src/graph/runtime/react/persisted-mutation.tsx`,
-  `../../src/graph/runtime/react/resolver.tsx`: host-neutral React helpers
+- `../../lib/graph-react/src/entity.tsx`,
+  `../../lib/graph-react/src/predicate.ts`,
+  `../../lib/graph-react/src/filter.tsx`,
+  `../../lib/graph-react/src/mutation-validation.ts`,
+  `../../lib/graph-react/src/persisted-mutation.tsx`,
+  `../../lib/graph-react/src/resolver.tsx`,
+  `../../lib/graph-react/src/runtime.tsx`: host-neutral React helpers
 - `../../src/graph/adapters/react-dom/field-registry.tsx`,
   `../../src/graph/adapters/react-dom/filter.tsx`,
   `../../src/graph/adapters/react-dom/filter-editors.tsx`,
@@ -33,7 +34,6 @@ graph package's React and host-specific adapter surfaces.
   capability registries
 - `../../src/graph/adapters/react-dom/fields/`: DOM field-family view/editor
   modules and shared preview helpers
-- `../../src/graph/adapters/react-opentui/index.ts`: terminal adapter entry
-  file that exports the OpenTUI graph runtime provider plus reusable graph
-  query hooks; workflow-owned projection consumption now lives in
-  `../../src/tui/projection.ts`
+
+`react-dom` stays browser-specific. It composes the host-neutral contracts from
+`@io/graph-react` into default web field and filter capabilities.

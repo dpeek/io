@@ -101,7 +101,7 @@ describe("query editor component", () => {
     expect(html).toContain('data-query-editor-control="boolean"');
     expect(html).toContain('data-query-editor-control="text"');
     expect(html).toContain('data-query-editor-control="number"');
-    expect(html).toContain("&quot;indexId&quot;: &quot;ops/workflow:project-branch-board&quot;");
+    expect(html).toContain("&quot;indexId&quot;: &quot;workflow:project-branch-board&quot;");
   });
 
   it("renders inline validation feedback near invalid pagination controls", () => {

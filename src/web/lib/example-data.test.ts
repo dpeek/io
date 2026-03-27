@@ -2,20 +2,18 @@ import { expect, test } from "bun:test";
 
 import { createStore } from "@io/core/graph";
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
 import { seedExampleGraph } from "./example-data.js";
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
+const productGraph = { ...core, ...workflow } as const;
 
 test("seedExampleGraph backfills workflow data without duplicating older example documents", () => {
   const store = createStore();
   bootstrap(store, core, coreGraphBootstrapOptions);
-  bootstrap(store, pkm, coreGraphBootstrapOptions);
-  bootstrap(store, ops, coreGraphBootstrapOptions);
+  bootstrap(store, workflow, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
 
   const graphTag = graph.tag.create({
@@ -64,10 +62,10 @@ test("seedExampleGraph backfills workflow data without duplicating older example
   );
   expect(graph.documentPlacement.list()).toHaveLength(3);
   expect(graph.documentBlock.list()).toHaveLength(3);
-  expect(graph.workflowProject.list()).toHaveLength(1);
-  expect(graph.workflowRepository.list()).toHaveLength(1);
-  expect(graph.workflowBranch.list()).toHaveLength(1);
-  expect(graph.workflowCommit.list()).toHaveLength(1);
+  expect(graph.project.list()).toHaveLength(1);
+  expect(graph.repository.list()).toHaveLength(1);
+  expect(graph.branch.list()).toHaveLength(1);
+  expect(graph.commit.list()).toHaveLength(1);
   expect(graph.repositoryBranch.list()).toHaveLength(1);
   expect(graph.repositoryCommit.list()).toHaveLength(1);
   expect(graph.agentSession.list()).toHaveLength(1);

@@ -8,39 +8,30 @@ that backs the published module subpaths.
 ## Public Entry Surfaces
 
 - `@io/core/graph/modules`: `../../src/graph/modules/index.ts`; re-exports
-  `core`, `ops`, and `pkm` plus representative built-ins such as
+  `core` and `workflow` plus representative built-ins such as
   `stringTypeModule`, `envVar`, and `document`
 - `@io/core/graph/modules/core`: `../../src/graph/modules/core.ts`; canonical
   `core:` namespace assembly
-- `@io/core/graph/modules/ops`: `../../src/graph/modules/ops.ts`; canonical
-  `ops:` namespace assembly
-- `@io/core/graph/modules/pkm`: `../../src/graph/modules/pkm.ts`; canonical
-  `pkm:` namespace assembly
-- `@io/core/graph/modules/ops/env-var`:
-  `../../src/graph/modules/ops/env-var/schema.ts`
-- `@io/core/graph/modules/ops/workflow`:
-  `../../src/graph/modules/ops/workflow/schema.ts`
-- `@io/core/graph/modules/pkm/document`:
-  `../../src/graph/modules/pkm/document/schema.ts`
+- `@io/core/graph/modules/workflow`: `../../src/graph/modules/workflow.ts`;
+  canonical `workflow:` namespace assembly and workflow slice root
 
-The namespace subpaths export only their namespace objects. The module root
-re-exports the namespaces plus representative built-ins and slice symbols.
+The `core` entrypoint exports only its namespace object. The `workflow`
+entrypoint exports its namespace object plus the workflow, env-var, and
+document slice symbols. The module root re-exports both namespaces plus
+representative built-ins.
 
 ## Source Layout
 
-- `../../src/graph/modules/core.ts`,
-  `../../src/graph/modules/ops.ts`,
-  `../../src/graph/modules/pkm.ts`: namespace assembly entrypoints that pair
-  `*.json` id maps with slice exports
+- `../../src/graph/modules/core.ts` and
+  `../../src/graph/modules/workflow.ts`: namespace assembly entrypoints that
+  pair `*.json` id maps with slice exports
 - `../../src/graph/modules/core/`: built-in scalar, enum, and helper families
 - `../../src/graph/modules/core/identity/`: Branch 2 identity anchors for
   `principal`, `authSubjectProjection`, and `principalRoleBinding` plus the
   enum vocabulary those graph-owned types depend on
-- `../../src/graph/modules/ops/<slice>/schema.ts`,
-  `../../src/graph/modules/pkm/<slice>/schema.ts`: exported slice entrypoints
-- `../../src/graph/modules/ops/workflow/`: Branch 6 workflow root plus
-  repository execution mappings, state enums, and key validators
-- `../../src/graph/modules/pkm/document/`: reusable markdown documents, ordered
+- `../../src/graph/modules/workflow/`: Branch 6 workflow root and the merged
+  workflow, env-var, and document slice implementation
+- `../../src/graph/modules/workflow/document/`: reusable markdown documents, ordered
   document blocks, and external placement trees
 - type-specific directories keep schema, metadata, filters, and helper enums
   together with common files such as `type.ts`, `meta.ts`, `filter.ts`,

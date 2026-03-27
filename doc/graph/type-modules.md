@@ -45,7 +45,7 @@ The frozen contract is:
 
 - the field range points at the core-owned `core:secretHandle` type
 - the helper publishes the shared secret-field contract consumed by
-  `ops:envVar` and any other secret-backed slice; no consumer type owns that
+  `workflow:envVar` and any other secret-backed slice; no consumer type owns that
   contract
 - the returned field authority always includes `visibility: "replicated"` and
   `write: "server-command"` unless the caller narrows those shared field-policy
@@ -155,13 +155,11 @@ from audit history.
 Built-in graph modules live under `../../src/graph/modules/`:
 
 - `../../src/graph/modules/core/` for `core:` families
-- `../../src/graph/modules/ops/<slice>/` for `ops:` slices
-- `../../src/graph/modules/pkm/<slice>/` for `pkm:` slices
-- `../../src/graph/modules/core.ts`,
-  `../../src/graph/modules/ops.ts`,
-  `../../src/graph/modules/pkm.ts`: namespace assembly entrypoints
-- `../../src/graph/modules/ops/env-var/schema.ts` and
-  `../../src/graph/modules/pkm/document/schema.ts`: exported slice subpaths
+- `../../src/graph/modules/workflow/` for public `workflow:` slices
+- `../../src/graph/modules/core.ts` and
+  `../../src/graph/modules/workflow.ts`: namespace assembly entrypoints
+- `../../src/graph/modules/workflow/env-var/schema.ts` and
+  `../../src/graph/modules/workflow/document/schema.ts`: internal slice entrypoints
 
 Examples:
 
@@ -198,9 +196,8 @@ Physical colocation and package export ownership are separate concerns.
   specs, pure command descriptors, and reusable fixtures
 - published module entry files must not import browser APIs, OpenTUI code, or
   route registration helpers
-- host-specific composition belongs on `@io/core/graph/runtime/react`,
-  `@io/core/graph/adapters/react-dom`, or
-  `@io/core/graph/adapters/react-opentui`
+- host-specific composition belongs on `@io/graph-react` for host-neutral React
+  contracts or `@io/core/graph/adapters/react-dom` for browser defaults
 
 ## Authoring Semantics
 

@@ -1,3 +1,4 @@
+import type { TypeFilterOperator } from "@io/core/graph/def";
 import { type PredicateRef } from "@io/graph-client";
 import {
   isEnumType,
@@ -7,8 +8,6 @@ import {
   typeId,
 } from "@io/graph-kernel";
 import type { ComponentType, ReactNode } from "react";
-
-import type { TypeFilterOperator } from "../../type-module.js";
 
 type FieldFilterContract = {
   defaultOperator: string;
@@ -39,14 +38,14 @@ type FieldFilterOperandShapeOf<T extends EdgeOutput, Key extends FieldFilterOper
     ? OperandShape
     : never;
 
-export type WebFilterOperandOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+export type GraphFilterOperandOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
   FieldFilterOperandShapeOf<T, Key> extends { kind: "enum"; selection: "many" }
     ? string[]
     : FieldFilterOperandShapeOf<T, Key> extends { kind: "enum" }
       ? string
       : AuthoredFieldFilterOperandOf<T, Key>;
 
-export type WebFilterValueOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+export type GraphFilterValueOf<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
   FieldFilterOperandShapeOf<T, Key> extends { kind: "enum" }
     ? string
     : AuthoredFieldFilterValueOf<T, Key>;
@@ -56,7 +55,7 @@ type FilterablePredicateRef<
   Defs extends Record<string, AnyTypeOutput>,
 > = Pick<PredicateRef<T, Defs>, "field" | "predicateId">;
 
-export type WebFilterEnumOption = {
+export type GraphFilterEnumOption = {
   value: string;
   key: string;
   label: string;
@@ -67,12 +66,12 @@ export type FilterOperandProps<
   Defs extends Record<string, AnyTypeOutput>,
   Key extends FieldFilterOperatorKey<T>,
 > = {
-  operator: WebFilterOperatorResolution<T, Defs, Key>;
-  value: WebFilterOperandOf<T, Key> | undefined;
-  onChange: (value: WebFilterOperandOf<T, Key> | undefined) => void;
+  operator: GraphFilterOperatorResolution<T, Defs, Key>;
+  value: GraphFilterOperandOf<T, Key> | undefined;
+  onChange: (value: GraphFilterOperandOf<T, Key> | undefined) => void;
 };
 
-export type WebFilterOperandEditorCapability<
+export type GraphFilterOperandEditorCapability<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
   Key extends FieldFilterOperatorKey<T>,
@@ -81,19 +80,19 @@ export type WebFilterOperandEditorCapability<
   Component: ComponentType<FilterOperandProps<T, Defs, Key>>;
 };
 
-type AnyOperandEditorCapability = WebFilterOperandEditorCapability<any, any, any>;
+type AnyOperandEditorCapability = GraphFilterOperandEditorCapability<any, any, any>;
 
 export type UnsupportedFieldFilterReason = "missing-filter";
 export type UnsupportedFilterOperandReason = "missing-enum-type" | "unsupported-operand-kind";
 
-export type WebFilterOperandEditorResolution<
+export type GraphFilterOperandEditorResolution<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
   Key extends FieldFilterOperatorKey<T>,
 > =
   | {
       status: "resolved";
-      capability: WebFilterOperandEditorCapability<T, Defs, Key>;
+      capability: GraphFilterOperandEditorCapability<T, Defs, Key>;
     }
   | {
       status: "unsupported";
@@ -101,30 +100,30 @@ export type WebFilterOperandEditorResolution<
       kind?: string;
     };
 
-export type WebFilterOperandResolution<
+export type GraphFilterOperandResolution<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
   Key extends FieldFilterOperatorKey<T>,
 > = FieldFilterOperandShapeOf<T, Key> & {
-  editor: WebFilterOperandEditorResolution<T, Defs, Key>;
+  editor: GraphFilterOperandEditorResolution<T, Defs, Key>;
 } & (FieldFilterOperandShapeOf<T, Key> extends { kind: "enum" }
-    ? { options: readonly WebFilterEnumOption[] }
+    ? { options: readonly GraphFilterEnumOption[] }
     : {});
 
-export type WebFilterOperatorResolution<
+export type GraphFilterOperatorResolution<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
   Key extends FieldFilterOperatorKey<T>,
 > = {
   key: Key;
   label: string;
-  operand: WebFilterOperandResolution<T, Defs, Key>;
-  parse: (raw: string) => WebFilterOperandOf<T, Key>;
-  format: (operand: WebFilterOperandOf<T, Key>) => string;
-  test: (value: WebFilterValueOf<T, Key>, operand: WebFilterOperandOf<T, Key>) => boolean;
+  operand: GraphFilterOperandResolution<T, Defs, Key>;
+  parse: (raw: string) => GraphFilterOperandOf<T, Key>;
+  format: (operand: GraphFilterOperandOf<T, Key>) => string;
+  test: (value: GraphFilterValueOf<T, Key>, operand: GraphFilterOperandOf<T, Key>) => boolean;
 };
 
-export type WebRuntimeFilterOperand<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
+export type GraphRuntimeFilterOperand<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> =
   FieldFilterOperandShapeOf<T, Key> extends {
     kind: "enum";
     selection: infer Selection extends "one" | "many";
@@ -139,17 +138,20 @@ export type WebRuntimeFilterOperand<T extends EdgeOutput, Key extends FieldFilte
         value: string;
       };
 
-export type WebRuntimeFilterClause<T extends EdgeOutput, Key extends FieldFilterOperatorKey<T>> = {
+export type GraphRuntimeFilterClause<
+  T extends EdgeOutput,
+  Key extends FieldFilterOperatorKey<T>,
+> = {
   predicateId: string;
   predicateKey: T["key"];
   rangeKey: T["range"];
   cardinality: T["cardinality"];
   operatorKey: Key;
   operatorLabel: string;
-  operand: WebRuntimeFilterOperand<T, Key>;
+  operand: GraphRuntimeFilterOperand<T, Key>;
 };
 
-export type WebFieldFilterResolution<
+export type GraphFieldFilterResolution<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
 > =
@@ -158,41 +160,41 @@ export type WebFieldFilterResolution<
       field: T;
       rangeType: Defs[keyof Defs] | undefined;
       defaultOperator: FieldFilterOperatorKey<T>;
-      operators: readonly WebFilterOperatorResolution<T, Defs, FieldFilterOperatorKey<T>>[];
+      operators: readonly GraphFilterOperatorResolution<T, Defs, FieldFilterOperatorKey<T>>[];
       resolveOperator<Key extends FieldFilterOperatorKey<T>>(
         key: Key,
-      ): WebFilterOperatorResolution<T, Defs, Key> | undefined;
+      ): GraphFilterOperatorResolution<T, Defs, Key> | undefined;
     }
   | {
       status: "unsupported";
       reason: UnsupportedFieldFilterReason;
     };
 
-export type WebFilterResolver = {
+export type GraphFilterResolver = {
   resolveField<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
     field: T,
     defs: Defs,
-  ): WebFieldFilterResolution<T, Defs>;
+  ): GraphFieldFilterResolution<T, Defs>;
   resolvePredicate<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
     predicate: PredicateRef<T, Defs>,
-  ): WebFieldFilterResolution<T, Defs>;
+  ): GraphFieldFilterResolution<T, Defs>;
 };
 
-export type ActiveWebFilterClause<
+export type ActiveGraphFilterClause<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
   Key extends FieldFilterOperatorKey<T>,
 > = {
-  operand: WebFilterOperandOf<T, Key>;
-  operator: WebFilterOperatorResolution<T, Defs, Key>;
+  operand: GraphFilterOperandOf<T, Key>;
+  operator: GraphFilterOperatorResolution<T, Defs, Key>;
   predicate: FilterablePredicateRef<T, Defs>;
 };
 
-type AnyActiveWebFilterClause = ActiveWebFilterClause<any, any, any>;
-type AnyWebRuntimeFilterClause = WebRuntimeFilterClause<any, any>;
+type AnyActiveGraphFilterClause = ActiveGraphFilterClause<any, any, any>;
+type AnyGraphRuntimeFilterClause = GraphRuntimeFilterClause<any, any>;
 
-export type WebRuntimeFilterQuery = {
-  clauses: readonly AnyWebRuntimeFilterClause[];
+export type GraphRuntimeFilterQuery = {
+  clauses: readonly AnyGraphRuntimeFilterClause[];
   combinator: "and";
   entityTypeKey: string;
 };
@@ -263,7 +265,7 @@ function formatEnumOptionLabel(field: EdgeOutput, option: { key: string; name?: 
 function resolveEnumOptions(
   field: EdgeOutput,
   rangeType: EnumTypeLike | undefined,
-): readonly WebFilterEnumOption[] {
+): readonly GraphFilterEnumOption[] {
   if (!rangeType) return [];
   return Object.values(rangeType.options).map((option) => ({
     value: option.id ?? option.key,
@@ -301,7 +303,7 @@ function resolveOperandEditor<
   operand: FieldFilterOperandShapeOf<T, Key>,
   rangeType: Defs[keyof Defs] | undefined,
   operandEditorByKind: ReadonlyMap<string, AnyOperandEditorCapability>,
-): WebFilterOperandEditorResolution<T, Defs, Key> {
+): GraphFilterOperandEditorResolution<T, Defs, Key> {
   if (operand.kind === "enum" && (!rangeType || !isEnumType(rangeType))) {
     return {
       status: "unsupported",
@@ -321,7 +323,7 @@ function resolveOperandEditor<
 
   return {
     status: "resolved",
-    capability: capability as WebFilterOperandEditorCapability<T, Defs, Key>,
+    capability: capability as GraphFilterOperandEditorCapability<T, Defs, Key>,
   };
 }
 
@@ -335,7 +337,7 @@ function resolveOperator<
   key: Key,
   operator: FieldFilterOperatorOf<T, Key>,
   operandEditorByKind: ReadonlyMap<string, AnyOperandEditorCapability>,
-): WebFilterOperatorResolution<T, Defs, Key> {
+): GraphFilterOperatorResolution<T, Defs, Key> {
   const baseOperator = operator as TypeFilterOperator<
     AuthoredFieldFilterValueOf<T, Key>,
     AuthoredFieldFilterOperandOf<T, Key>
@@ -351,12 +353,12 @@ function resolveOperator<
       operand: {
         ...baseOperator.operand,
         editor,
-      } as WebFilterOperandResolution<T, Defs, Key>,
-      parse: baseOperator.parse as (raw: string) => WebFilterOperandOf<T, Key>,
-      format: baseOperator.format as (operand: WebFilterOperandOf<T, Key>) => string,
+      } as GraphFilterOperandResolution<T, Defs, Key>,
+      parse: baseOperator.parse as (raw: string) => GraphFilterOperandOf<T, Key>,
+      format: baseOperator.format as (operand: GraphFilterOperandOf<T, Key>) => string,
       test: baseOperator.test as (
-        value: WebFilterValueOf<T, Key>,
-        operand: WebFilterOperandOf<T, Key>,
+        value: GraphFilterValueOf<T, Key>,
+        operand: GraphFilterOperandOf<T, Key>,
       ) => boolean,
     };
   }
@@ -378,21 +380,21 @@ function resolveOperator<
     return identities ? identities.toResolved(value) : value;
   }
 
-  function parseEnumOperand(raw: string): WebFilterOperandOf<T, Key> {
+  function parseEnumOperand(raw: string): GraphFilterOperandOf<T, Key> {
     if (enumOperand.selection === "many") {
       const canonicalRaw = raw
         .split(",")
         .map((value) => resolveCanonicalValue(value.trim()))
         .join(",");
       const parsed = baseOperator.parse(canonicalRaw) as string[];
-      return parsed.map((value) => resolveRuntimeValue(value)) as WebFilterOperandOf<T, Key>;
+      return parsed.map((value) => resolveRuntimeValue(value)) as GraphFilterOperandOf<T, Key>;
     }
 
     const parsed = baseOperator.parse(resolveCanonicalValue(raw.trim())) as string;
-    return resolveRuntimeValue(parsed) as WebFilterOperandOf<T, Key>;
+    return resolveRuntimeValue(parsed) as GraphFilterOperandOf<T, Key>;
   }
 
-  function formatEnumOperand(operand: WebFilterOperandOf<T, Key>): string {
+  function formatEnumOperand(operand: GraphFilterOperandOf<T, Key>): string {
     if (enumOperand.selection === "many") {
       const runtimeValues = Array.isArray(operand) ? operand : [];
       const canonicalOperand = runtimeValues.map((value) => resolveCanonicalValue(value));
@@ -408,8 +410,8 @@ function resolveOperator<
   }
 
   function testEnumOperand(
-    value: WebFilterValueOf<T, Key>,
-    operand: WebFilterOperandOf<T, Key>,
+    value: GraphFilterValueOf<T, Key>,
+    operand: GraphFilterOperandOf<T, Key>,
   ): boolean {
     const canonicalValue = resolveCanonicalValue(typeof value === "string" ? value : "");
 
@@ -439,7 +441,7 @@ function resolveOperator<
       ...enumOperand,
       editor,
       options: enumOptions,
-    } as unknown as WebFilterOperandResolution<T, Defs, Key>,
+    } as unknown as GraphFilterOperandResolution<T, Defs, Key>,
     parse: parseEnumOperand,
     format: formatEnumOperand,
     test: testEnumOperand,
@@ -450,7 +452,7 @@ function resolveFilterField<T extends EdgeOutput, Defs extends Record<string, An
   field: T,
   rangeType: Defs[keyof Defs] | undefined,
   operandEditorByKind: ReadonlyMap<string, AnyOperandEditorCapability>,
-): WebFieldFilterResolution<T, Defs> {
+): GraphFieldFilterResolution<T, Defs> {
   if (!hasFieldFilter(field)) return { status: "unsupported", reason: "missing-filter" };
 
   const operators = Object.entries(field.filter.operators).map(([key, operator]) =>
@@ -461,7 +463,7 @@ function resolveFilterField<T extends EdgeOutput, Defs extends Record<string, An
       operator as FieldFilterOperatorOf<T, FieldFilterOperatorKey<T>>,
       operandEditorByKind,
     ),
-  ) as readonly WebFilterOperatorResolution<T, Defs, FieldFilterOperatorKey<T>>[];
+  ) as readonly GraphFilterOperatorResolution<T, Defs, FieldFilterOperatorKey<T>>[];
   const operatorByKey = new Map(operators.map((operator) => [operator.key, operator]));
 
   return {
@@ -472,28 +474,31 @@ function resolveFilterField<T extends EdgeOutput, Defs extends Record<string, An
     operators,
     resolveOperator<Key extends FieldFilterOperatorKey<T>>(
       key: Key,
-    ): WebFilterOperatorResolution<T, Defs, Key> | undefined {
-      return operatorByKey.get(key) as WebFilterOperatorResolution<T, Defs, Key> | undefined;
+    ): GraphFilterOperatorResolution<T, Defs, Key> | undefined {
+      return operatorByKey.get(key) as GraphFilterOperatorResolution<T, Defs, Key> | undefined;
     },
   };
 }
 
-export function createWebFilterResolver(input?: {
+/**
+ * Builds a host-neutral filter resolver from host-supplied operand editors.
+ */
+export function createGraphFilterResolver(input?: {
   operandEditors?: readonly AnyOperandEditorCapability[];
-}): WebFilterResolver {
+}): GraphFilterResolver {
   const operandEditorByKind = toCapabilityMap(input?.operandEditors ?? []);
 
   return {
     resolveField<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
       field: T,
       defs: Defs,
-    ): WebFieldFilterResolution<T, Defs> {
+    ): GraphFieldFilterResolution<T, Defs> {
       const rangeType = resolveFieldRangeType(field, defs);
       return resolveFilterField(field, rangeType, operandEditorByKind);
     },
     resolvePredicate<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
       predicate: PredicateRef<T, Defs>,
-    ): WebFieldFilterResolution<T, Defs> {
+    ): GraphFieldFilterResolution<T, Defs> {
       return resolveFilterField(
         predicate.field,
         predicate.rangeType as Defs[keyof Defs] | undefined,
@@ -503,17 +508,17 @@ export function createWebFilterResolver(input?: {
   };
 }
 
-export const defaultWebFilterResolver = createWebFilterResolver();
+export const defaultGraphFilterResolver = createGraphFilterResolver();
 
-export function lowerWebFilterClause<
+export function lowerGraphFilterClause<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
   Key extends FieldFilterOperatorKey<T>,
 >(
   predicate: FilterablePredicateRef<T, Defs>,
-  operator: WebFilterOperatorResolution<T, Defs, Key>,
-  operand: WebFilterOperandOf<T, Key>,
-): WebRuntimeFilterClause<T, Key> {
+  operator: GraphFilterOperatorResolution<T, Defs, Key>,
+  operand: GraphFilterOperandOf<T, Key>,
+): GraphRuntimeFilterClause<T, Key> {
   const base = {
     predicateId: predicate.predicateId,
     predicateKey: predicate.field.key,
@@ -531,7 +536,7 @@ export function lowerWebFilterClause<
         kind: "enum",
         selection: operator.operand.selection,
         value: formattedOperand,
-      } as WebRuntimeFilterOperand<T, Key>,
+      } as GraphRuntimeFilterOperand<T, Key>,
     };
   }
 
@@ -540,32 +545,32 @@ export function lowerWebFilterClause<
     operand: {
       kind: operator.operand.kind,
       value: formattedOperand,
-    } as WebRuntimeFilterOperand<T, Key>,
+    } as GraphRuntimeFilterOperand<T, Key>,
   };
 }
 
-export function lowerWebFilterQuery(input: {
-  clauses: readonly AnyActiveWebFilterClause[];
+export function lowerGraphFilterQuery(input: {
+  clauses: readonly AnyActiveGraphFilterClause[];
   entityTypeKey: string;
-}): WebRuntimeFilterQuery {
+}): GraphRuntimeFilterQuery {
   return {
     entityTypeKey: input.entityTypeKey,
     combinator: "and",
     clauses: input.clauses.map((clause) =>
-      lowerWebFilterClause(clause.predicate, clause.operator, clause.operand),
+      lowerGraphFilterClause(clause.predicate, clause.operator, clause.operand),
     ),
   };
 }
 
-export function compileWebFilterQuery<Subject>(input: {
-  clauses: readonly AnyActiveWebFilterClause[];
+export function compileGraphFilterQuery<Subject>(input: {
+  clauses: readonly AnyActiveGraphFilterClause[];
   entityTypeKey: string;
-  readValue: (subject: Subject, clause: AnyWebRuntimeFilterClause) => unknown;
+  readValue: (subject: Subject, clause: AnyGraphRuntimeFilterClause) => unknown;
 }): {
   matches(subject: Subject): boolean;
-  query: WebRuntimeFilterQuery;
+  query: GraphRuntimeFilterQuery;
 } {
-  const query = lowerWebFilterQuery({
+  const query = lowerGraphFilterQuery({
     clauses: input.clauses,
     entityTypeKey: input.entityTypeKey,
   });

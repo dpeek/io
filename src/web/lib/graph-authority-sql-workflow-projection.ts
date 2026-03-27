@@ -1,4 +1,4 @@
-import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/ops/workflow";
+import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/workflow";
 
 import type { DurableObjectSqlStorageLike } from "./graph-authority-sql-startup.js";
 
@@ -141,15 +141,15 @@ export function readWorkflowProjectionFromSql(
 
 export function replaceWorkflowProjectionRows(
   sql: DurableObjectSqlStorageLike,
-  workflowProjection?: RetainedWorkflowProjectionState,
+  projection?: RetainedWorkflowProjectionState,
 ): void {
   sql.exec("DELETE FROM io_workflow_projection_row");
   sql.exec("DELETE FROM io_workflow_projection_checkpoint");
-  if (!workflowProjection) {
+  if (!projection) {
     return;
   }
 
-  workflowProjection.checkpoints.forEach((checkpoint) => {
+  projection.checkpoints.forEach((checkpoint) => {
     sql.exec(
       `INSERT INTO io_workflow_projection_checkpoint (
         projection_id,
@@ -166,7 +166,7 @@ export function replaceWorkflowProjectionRows(
     );
   });
 
-  workflowProjection.rows.forEach((row) => {
+  projection.rows.forEach((row) => {
     sql.exec(
       `INSERT INTO io_workflow_projection_row (
         projection_id,

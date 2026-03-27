@@ -4,19 +4,18 @@ import { createStore } from "@io/core/graph";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
-import { core } from "../../core.js";
-import { coreGraphBootstrapOptions } from "../../core/bootstrap.js";
-import { ops } from "../../ops.js";
-import { pkm } from "../../pkm.js";
+import { core } from "../core.js";
+import { coreGraphBootstrapOptions } from "../core/bootstrap.js";
+import { workflow } from "../workflow.js";
 import {
   createRetainedWorkflowProjectionState,
   createWorkflowProjectionIndex,
   createWorkflowProjectionIndexFromRetainedState,
   WorkflowProjectionQueryError,
-  workflowProjectionMetadata,
+  projectionMetadata,
 } from "./schema.js";
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
+const productGraph = { ...core, ...workflow } as const;
 
 function date(value: string): Date {
   return new Date(value);
@@ -35,8 +34,7 @@ type WorkflowQueryFixtureOptions = {
 function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
   const store = createStore();
   bootstrap(store, core, coreGraphBootstrapOptions);
-  bootstrap(store, pkm, coreGraphBootstrapOptions);
-  bootstrap(store, ops, coreGraphBootstrapOptions);
+  bootstrap(store, workflow, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
   const includeRepository = options.includeRepository ?? true;
   const includeRepositoryBranches = options.includeRepositoryBranches ?? includeRepository;
@@ -44,14 +42,14 @@ function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
   const includeUnmanagedRepositoryBranch =
     options.includeUnmanagedRepositoryBranch ?? includeRepositoryBranches;
 
-  const projectId = graph.workflowProject.create({
+  const projectId = graph.project.create({
     name: "IO",
     projectKey: "project:io",
     createdAt: date("2026-01-01T00:00:00.000Z"),
     updatedAt: date("2026-01-01T00:00:00.000Z"),
   });
   const repositoryId = includeRepository
-    ? graph.workflowRepository.create({
+    ? graph.repository.create({
         name: "io",
         project: projectId,
         repositoryKey: "repo:io",
@@ -79,65 +77,65 @@ function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
     createdAt: date("2026-01-02T00:00:00.000Z"),
     updatedAt: date("2026-01-05T12:00:00.000Z"),
   });
-  const activeBranchId = graph.workflowBranch.create({
+  const activeBranchId = graph.branch.create({
     name: "Workflow runtime contract",
     project: projectId,
     branchKey: "branch:workflow-runtime-contract",
-    state: ops.workflowBranchState.values.active.id,
+    state: workflow.branchState.values.active.id,
     queueRank: 1,
     goalDocument: branchGoalDocumentId,
     contextDocument: branchContextDocumentId,
     createdAt: date("2026-01-01T00:00:00.000Z"),
     updatedAt: date("2026-01-05T00:00:00.000Z"),
   });
-  const backlogBranchId = graph.workflowBranch.create({
+  const backlogBranchId = graph.branch.create({
     name: "Backlog docs",
     project: projectId,
     branchKey: "branch:backlog-docs",
-    state: ops.workflowBranchState.values.backlog.id,
+    state: workflow.branchState.values.backlog.id,
     queueRank: 3,
     createdAt: date("2026-01-02T00:00:00.000Z"),
     updatedAt: date("2026-01-03T00:00:00.000Z"),
   });
-  const noRankBranchId = graph.workflowBranch.create({
+  const noRankBranchId = graph.branch.create({
     name: "Unranked polish",
     project: projectId,
     branchKey: "branch:unranked-polish",
-    state: ops.workflowBranchState.values.ready.id,
+    state: workflow.branchState.values.ready.id,
     createdAt: date("2026-01-03T00:00:00.000Z"),
     updatedAt: date("2026-01-07T00:00:00.000Z"),
   });
 
-  const commit1Id = graph.workflowCommit.create({
+  const commit1Id = graph.commit.create({
     name: "Define branch board scope",
     branch: activeBranchId,
     commitKey: "commit:define-branch-board-scope",
-    state: ops.workflowCommitState.values.committed.id,
+    state: workflow.commitState.values.committed.id,
     order: 1,
     createdAt: date("2026-01-01T00:00:00.000Z"),
     updatedAt: date("2026-01-02T00:00:00.000Z"),
   });
-  const commit2Id = graph.workflowCommit.create({
+  const commit2Id = graph.commit.create({
     name: "Document commit queue scope",
     branch: activeBranchId,
     commitKey: "commit:document-commit-queue-scope",
-    state: ops.workflowCommitState.values.active.id,
+    state: workflow.commitState.values.active.id,
     order: 2,
     contextDocument: commitContextDocumentId,
     createdAt: date("2026-01-02T00:00:00.000Z"),
     updatedAt: date("2026-01-05T12:00:00.000Z"),
   });
-  const commit3Id = graph.workflowCommit.create({
+  const commit3Id = graph.commit.create({
     name: "Surface session summaries",
     branch: activeBranchId,
     commitKey: "commit:surface-session-summaries",
-    state: ops.workflowCommitState.values.ready.id,
+    state: workflow.commitState.values.ready.id,
     order: 3,
     createdAt: date("2026-01-03T00:00:00.000Z"),
     updatedAt: date("2026-01-06T00:00:00.000Z"),
   });
 
-  graph.workflowBranch.update(activeBranchId, {
+  graph.branch.update(activeBranchId, {
     activeCommit: commit2Id,
     updatedAt: date("2026-01-06T00:00:00.000Z"),
   });
@@ -161,7 +159,7 @@ function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
       name: "workflow/runtime-contract",
       project: projectId,
       repository: repositoryId,
-      workflowBranch: activeBranchId,
+      branch: activeBranchId,
       managed: true,
       branchName: "workflow/runtime-contract",
       baseBranchName: "main",
@@ -175,7 +173,7 @@ function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
       name: "backlog/docs",
       project: projectId,
       repository: repositoryId,
-      workflowBranch: backlogBranchId,
+      branch: backlogBranchId,
       managed: true,
       branchName: "backlog/docs",
       baseBranchName: "main",
@@ -207,12 +205,12 @@ function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
       name: "Define branch board scope",
       repository: repositoryId,
       repositoryBranch: activeRepositoryBranchId,
-      workflowCommit: commit1Id,
-      state: ops.repositoryCommitState.values.committed.id,
+      commit: commit1Id,
+      state: workflow.repositoryCommitState.values.committed.id,
       sha: "abcdef1234567",
       committedAt: date("2026-01-02T12:00:00.000Z"),
       worktree: {
-        leaseState: ops.repositoryCommitLeaseState.values.released.id,
+        leaseState: workflow.repositoryCommitLeaseState.values.released.id,
       },
       createdAt: date("2026-01-01T00:00:00.000Z"),
       updatedAt: date("2026-01-02T12:00:00.000Z"),
@@ -221,12 +219,12 @@ function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
       name: "Document commit queue scope",
       repository: repositoryId,
       repositoryBranch: activeRepositoryBranchId,
-      workflowCommit: commit2Id,
-      state: ops.repositoryCommitState.values.attached.id,
+      commit: commit2Id,
+      state: workflow.repositoryCommitState.values.attached.id,
       worktree: {
         path: "/tmp/io-worktree",
         branchName: "workflow/runtime-contract",
-        leaseState: ops.repositoryCommitLeaseState.values.attached.id,
+        leaseState: workflow.repositoryCommitLeaseState.values.attached.id,
       },
       createdAt: date("2026-01-02T00:00:00.000Z"),
       updatedAt: date("2026-01-05T12:00:00.000Z"),
@@ -237,12 +235,12 @@ function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
     name: "Plan workflow runtime contract",
     project: projectId,
     ...(repositoryId ? { repository: repositoryId } : {}),
-    subjectKind: ops.agentSessionSubjectKind.values.branch.id,
+    subjectKind: workflow.agentSessionSubjectKind.values.branch.id,
     branch: activeBranchId,
     sessionKey: "session:workflow-runtime-contract-plan-01",
-    kind: ops.agentSessionKind.values.planning.id,
+    kind: workflow.agentSessionKind.values.planning.id,
     workerId: "worker-1",
-    runtimeState: ops.agentSessionRuntimeState.values.completed.id,
+    runtimeState: workflow.agentSessionRuntimeState.values.completed.id,
     startedAt: date("2026-01-04T00:00:00.000Z"),
     endedAt: date("2026-01-04T01:00:00.000Z"),
     createdAt: date("2026-01-04T00:00:00.000Z"),
@@ -252,13 +250,13 @@ function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
     name: "Execute commit queue projection",
     project: projectId,
     ...(repositoryId ? { repository: repositoryId } : {}),
-    subjectKind: ops.agentSessionSubjectKind.values.commit.id,
+    subjectKind: workflow.agentSessionSubjectKind.values.commit.id,
     branch: activeBranchId,
     commit: commit2Id,
     sessionKey: "session:workflow-runtime-contract-execution-01",
-    kind: ops.agentSessionKind.values.execution.id,
+    kind: workflow.agentSessionKind.values.execution.id,
     workerId: "worker-2",
-    runtimeState: ops.agentSessionRuntimeState.values.running.id,
+    runtimeState: workflow.agentSessionRuntimeState.values.running.id,
     startedAt: date("2026-01-05T12:30:00.000Z"),
     createdAt: date("2026-01-05T12:30:00.000Z"),
     updatedAt: date("2026-01-05T12:30:00.000Z"),
@@ -302,7 +300,7 @@ describe("workflow projection query helpers", () => {
       projectedAt: "2026-01-10T00:00:00.000Z",
     });
 
-    expect(projection.projections).toEqual(workflowProjectionMetadata);
+    expect(projection.projections).toEqual(projectionMetadata);
 
     const firstPage = projection.readProjectBranchScope({
       projectId: ids.projectId,
@@ -314,7 +312,7 @@ describe("workflow projection query helpers", () => {
 
     expect(firstPage.project.projectKey).toBe("project:io");
     expect(firstPage.repository?.repositoryKey).toBe("repo:io");
-    expect(firstPage.rows.map((row) => row.workflowBranch.branchKey)).toEqual([
+    expect(firstPage.rows.map((row) => row.branch.branchKey)).toEqual([
       "branch:workflow-runtime-contract",
       "branch:backlog-docs",
     ]);
@@ -351,9 +349,7 @@ describe("workflow projection query helpers", () => {
       limit: 2,
     });
 
-    expect(secondPage.rows.map((row) => row.workflowBranch.branchKey)).toEqual([
-      "branch:unranked-polish",
-    ]);
+    expect(secondPage.rows.map((row) => row.branch.branchKey)).toEqual(["branch:unranked-polish"]);
     expect(secondPage.unmanagedRepositoryBranches).toEqual([]);
     expect(secondPage.nextCursor).toBeUndefined();
 
@@ -364,7 +360,7 @@ describe("workflow projection query helpers", () => {
       },
     });
 
-    expect(activeOnly.rows.map((row) => row.workflowBranch.id)).toEqual([ids.activeBranchId]);
+    expect(activeOnly.rows.map((row) => row.branch.id)).toEqual([ids.activeBranchId]);
   });
 
   it("reads one branch commit queue with active commit, repository commit joins, and latest session", () => {
@@ -378,11 +374,11 @@ describe("workflow projection query helpers", () => {
       limit: 2,
     });
 
-    expect(firstPage.branch.workflowBranch.activeCommitId).toBe(ids.commit2Id);
-    expect(firstPage.branch.workflowBranch.goalDocumentId).toBe(ids.branchGoalDocumentId);
-    expect(firstPage.branch.workflowBranch.contextDocumentId).toBe(ids.branchContextDocumentId);
+    expect(firstPage.branch.branch.activeCommitId).toBe(ids.commit2Id);
+    expect(firstPage.branch.branch.goalDocumentId).toBe(ids.branchGoalDocumentId);
+    expect(firstPage.branch.branch.contextDocumentId).toBe(ids.branchContextDocumentId);
     expect(firstPage.branch.activeCommit).toMatchObject({
-      workflowCommit: {
+      commit: {
         id: ids.commit2Id,
         commitKey: "commit:document-commit-queue-scope",
         contextDocumentId: ids.commitContextDocumentId,
@@ -406,10 +402,7 @@ describe("workflow projection query helpers", () => {
         commitId: ids.commit2Id,
       },
     });
-    expect(firstPage.rows.map((row) => row.workflowCommit.id)).toEqual([
-      ids.commit1Id,
-      ids.commit2Id,
-    ]);
+    expect(firstPage.rows.map((row) => row.commit.id)).toEqual([ids.commit1Id, ids.commit2Id]);
     expect(firstPage.rows[0]?.repositoryCommit?.state).toBe("committed");
     expect(firstPage.rows[1]?.repositoryCommit?.state).toBe("attached");
     expect(firstPage.nextCursor).toEqual(expect.any(String));
@@ -420,7 +413,7 @@ describe("workflow projection query helpers", () => {
       limit: 2,
     });
 
-    expect(secondPage.rows.map((row) => row.workflowCommit.id)).toEqual([ids.commit3Id]);
+    expect(secondPage.rows.map((row) => row.commit.id)).toEqual([ids.commit3Id]);
     expect(secondPage.rows[0]?.repositoryCommit).toBeUndefined();
     expect(secondPage.nextCursor).toBeUndefined();
   });
@@ -441,7 +434,7 @@ describe("workflow projection query helpers", () => {
     });
 
     expect(branchBoard.repository?.repositoryKey).toBe("repo:io");
-    expect(branchBoard.rows.map((row) => row.workflowBranch.branchKey)).toEqual([
+    expect(branchBoard.rows.map((row) => row.branch.branchKey)).toEqual([
       "branch:workflow-runtime-contract",
       "branch:backlog-docs",
       "branch:unranked-polish",
@@ -456,8 +449,8 @@ describe("workflow projection query helpers", () => {
     });
 
     expect(commitQueue.branch.repositoryBranch).toBeUndefined();
-    expect(commitQueue.branch.activeCommit?.workflowCommit.id).toBe(ids.commit2Id);
-    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
+    expect(commitQueue.branch.activeCommit?.commit.id).toBe(ids.commit2Id);
+    expect(commitQueue.rows.map((row) => row.commit.id)).toEqual([
       ids.commit1Id,
       ids.commit2Id,
       ids.commit3Id,
@@ -503,7 +496,7 @@ describe("workflow projection query helpers", () => {
       },
     });
     expect(commitQueue.branch.activeCommit).toMatchObject({
-      workflowCommit: {
+      commit: {
         id: ids.commit2Id,
       },
       repositoryCommit: {
@@ -591,7 +584,7 @@ describe("workflow projection query helpers", () => {
       limit: 1,
     });
 
-    expect(refreshedBranchPage.rows[0]?.workflowBranch.id).toBe(ids.activeBranchId);
+    expect(refreshedBranchPage.rows[0]?.branch.id).toBe(ids.activeBranchId);
   });
 
   it("round-trips retained workflow projection rows and checkpoints", () => {
@@ -605,15 +598,15 @@ describe("workflow projection query helpers", () => {
 
     expect(retained.checkpoints).toEqual([
       expect.objectContaining({
-        projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-        definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+        projectionId: projectionMetadata.projectBranchBoard.projectionId,
+        definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
         sourceCursor: "web-authority:42",
         projectedAt: "2026-01-10T00:00:00.000Z",
         projectionCursor: "workflow-projection:retained-01",
       }),
       expect.objectContaining({
-        projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-        definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+        projectionId: projectionMetadata.branchCommitQueue.projectionId,
+        definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
         sourceCursor: "web-authority:42",
         projectedAt: "2026-01-10T00:00:00.000Z",
         projectionCursor: "workflow-projection:retained-01",
@@ -632,15 +625,12 @@ describe("workflow projection query helpers", () => {
       limit: 2,
     });
 
-    expect(branchBoard.rows.map((row) => row.workflowBranch.id)).toEqual([
+    expect(branchBoard.rows.map((row) => row.branch.id)).toEqual([
       ids.activeBranchId,
       ids.backlogBranchId,
     ]);
     expect(branchBoard.freshness.projectionCursor).toBe("workflow-projection:retained-01");
-    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
-      ids.commit1Id,
-      ids.commit2Id,
-    ]);
+    expect(commitQueue.rows.map((row) => row.commit.id)).toEqual([ids.commit1Id, ids.commit2Id]);
     expect(commitQueue.branch.latestSession?.id).toBe(ids.branchCommitSessionId);
   });
 
@@ -656,16 +646,16 @@ describe("workflow projection query helpers", () => {
       createWorkflowProjectionIndexFromRetainedState({
         ...retained,
         checkpoints: retained.checkpoints.map((checkpoint) =>
-          checkpoint.projectionId === workflowProjectionMetadata.branchCommitQueue.projectionId
+          checkpoint.projectionId === projectionMetadata.branchCommitQueue.projectionId
             ? {
                 ...checkpoint,
-                definitionHash: "projection-def:ops/workflow:branch-commit-queue:v999",
+                definitionHash: "projection-def:workflow:branch-commit-queue:v999",
               }
             : checkpoint,
         ),
       }),
     ).toThrow(
-      'Retained workflow projection checkpoint for "ops/workflow:branch-commit-queue" is incompatible. Expected definitionHash "projection-def:ops/workflow:branch-commit-queue:v1" but found projection-def:ops/workflow:branch-commit-queue:v999.',
+      'Retained workflow projection checkpoint for "workflow:branch-commit-queue" is incompatible. Expected definitionHash "projection-def:workflow:branch-commit-queue:v1" but found projection-def:workflow:branch-commit-queue:v999.',
     );
   });
 });

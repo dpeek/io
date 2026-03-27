@@ -2,8 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { createStore, isEntityType } from "@io/core/graph";
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
@@ -18,10 +17,9 @@ function byKey<T extends { key: string }>(entries: readonly T[]) {
 function createCatalogFixture() {
   const store = createStore();
   bootstrap(store, core, coreGraphBootstrapOptions);
-  bootstrap(store, pkm, coreGraphBootstrapOptions);
-  bootstrap(store, ops, coreGraphBootstrapOptions);
+  bootstrap(store, workflow, coreGraphBootstrapOptions);
 
-  const graph = createGraphClient(store, { ...core, ...pkm, ...ops });
+  const graph = createGraphClient(store, { ...core, ...workflow });
   seedExampleGraph(graph);
 
   return { graph, store };
@@ -34,12 +32,12 @@ describe("explorer catalog", () => {
     const catalog = byKey(entries);
 
     expect(entries).toHaveLength(Object.values(explorerNamespace).length);
-    expect(catalog.get("pkm:document")).toMatchObject({
-      key: "pkm:document",
+    expect(catalog.get("workflow:document")).toMatchObject({
+      key: "workflow:document",
       kind: "entity",
       dataCount: 4,
     });
-    expect(catalog.get("pkm:document")?.fieldDefs.map((field) => field.pathLabel)).toEqual(
+    expect(catalog.get("workflow:document")?.fieldDefs.map((field) => field.pathLabel)).toEqual(
       expect.arrayContaining(["description", "isArchived", "slug", "tags"]),
     );
     expect(catalog.get("core:tag")).toMatchObject({
@@ -47,22 +45,22 @@ describe("explorer catalog", () => {
       kind: "entity",
       dataCount: 2,
     });
-    expect(catalog.get("pkm:documentBlock")).toMatchObject({
-      key: "pkm:documentBlock",
+    expect(catalog.get("workflow:documentBlock")).toMatchObject({
+      key: "workflow:documentBlock",
       kind: "entity",
       dataCount: 3,
     });
-    expect(catalog.get("pkm:documentPlacement")).toMatchObject({
-      key: "pkm:documentPlacement",
+    expect(catalog.get("workflow:documentPlacement")).toMatchObject({
+      key: "workflow:documentPlacement",
       kind: "entity",
       dataCount: 3,
     });
-    expect(catalog.get("pkm:documentBlockKind")).toMatchObject({
-      key: "pkm:documentBlockKind",
+    expect(catalog.get("workflow:documentBlockKind")).toMatchObject({
+      key: "workflow:documentBlockKind",
       kind: "enum",
       dataCount: 0,
     });
-    expect(catalog.get("pkm:documentBlockKind")?.optionDefs.length).toBeGreaterThan(0);
+    expect(catalog.get("workflow:documentBlockKind")?.optionDefs.length).toBeGreaterThan(0);
     expect(catalog.get("core:string")).toMatchObject({
       key: "core:string",
       kind: "scalar",
@@ -77,15 +75,15 @@ describe("explorer catalog", () => {
 
     expect(entries).toHaveLength(Object.values(explorerNamespace).filter(isEntityType).length);
     expect(entries.every((entry) => entry.typeDef.kind === "entity")).toBe(true);
-    expect(catalog.get("pkm:document")).toMatchObject({
-      key: "pkm:document",
+    expect(catalog.get("workflow:document")).toMatchObject({
+      key: "workflow:document",
       count: 4,
     });
-    expect(typeof catalog.get("pkm:document")?.create).toBe("function");
-    expect(typeof catalog.get("pkm:document")?.validateCreate).toBe("function");
-    expect(catalog.get("pkm:documentBlock")?.count).toBe(3);
-    expect(catalog.get("pkm:documentPlacement")?.count).toBe(3);
-    expect(catalog.get("ops:envVar")?.count).toBe(0);
+    expect(typeof catalog.get("workflow:document")?.create).toBe("function");
+    expect(typeof catalog.get("workflow:document")?.validateCreate).toBe("function");
+    expect(catalog.get("workflow:documentBlock")?.count).toBe(3);
+    expect(catalog.get("workflow:documentPlacement")?.count).toBe(3);
+    expect(catalog.get("workflow:envVar")?.count).toBe(0);
     expect(catalog.get("core:icon")?.count).toBeGreaterThan(0);
     expect(catalog.get("core:tag")?.count).toBe(2);
     expect(catalog.get("core:type")?.count).toBeGreaterThan(0);

@@ -15,8 +15,8 @@ import {
 describe("sync validation", () => {
   it("accepts module-scoped incremental fallbacks for scope and policy changes", () => {
     const moduleScope = createModuleSyncScope({
-      moduleId: "ops/workflow",
-      scopeId: "scope:ops/workflow:review",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
       definitionHash: "scope-def:v1",
       policyFilterVersion: "policy:v1",
     });
@@ -132,8 +132,8 @@ describe("sync validation", () => {
 
   it("allows incomplete module-scoped total payloads", () => {
     const moduleScope = createModuleSyncScope({
-      moduleId: "ops/workflow",
-      scopeId: "scope:ops/workflow:review",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
       definitionHash: "scope-def:v1",
       policyFilterVersion: "policy:v1",
     });

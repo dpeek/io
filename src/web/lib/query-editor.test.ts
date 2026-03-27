@@ -75,7 +75,7 @@ function createCatalog(): QueryEditorCatalog {
       label: "Workflow Branch Board",
       queryKind: "collection",
       sourceKind: "projection",
-      surfaceId: "ops/workflow:project-branch-board",
+      surfaceId: "workflow:project-branch-board",
     },
     {
       defaultPageSize: 50,
@@ -92,7 +92,7 @@ function createCatalog(): QueryEditorCatalog {
       label: "Branch Commit Queue",
       queryKind: "collection",
       sourceKind: "projection",
-      surfaceId: "ops/workflow:branch-commit-queue",
+      surfaceId: "workflow:branch-commit-queue",
     },
   ]);
 }
@@ -100,12 +100,12 @@ function createCatalog(): QueryEditorCatalog {
 describe("query editor draft", () => {
   it("builds collection requests from the selected source surface", () => {
     const catalog = createCatalog();
-    const draft = createQueryEditorDraft(catalog, "ops/workflow:branch-commit-queue");
+    const draft = createQueryEditorDraft(catalog, "workflow:branch-commit-queue");
     const serialized = serializeQueryEditorDraft(draft, catalog);
 
     expect(serialized.request.query).toEqual({
       kind: "collection",
-      indexId: "ops/workflow:branch-commit-queue",
+      indexId: "workflow:branch-commit-queue",
       order: undefined,
       filter: undefined,
       window: { limit: 50 },
@@ -279,7 +279,7 @@ describe("query editor draft", () => {
         op: "gte",
         value: 2,
       },
-      indexId: "ops/workflow:project-branch-board",
+      indexId: "workflow:project-branch-board",
       kind: "collection",
       window: { limit: 25 },
     });

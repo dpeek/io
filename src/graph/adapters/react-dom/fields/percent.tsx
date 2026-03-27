@@ -1,12 +1,12 @@
-import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@io/web/input-group";
-import { useEffect, useState } from "react";
-
 import {
   formatPredicateEditorValue,
   getPredicateEditorPlaceholder,
   performValidatedMutation,
   usePredicateField,
-} from "../../../runtime/react/index.js";
+} from "@io/graph-react";
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@io/web/input-group";
+import { useEffect, useState } from "react";
+
 import {
   createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,

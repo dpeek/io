@@ -1,11 +1,11 @@
-import { Input } from "@io/web/input";
-import { useEffect, useState } from "react";
-
 import {
   getPredicateEditorPlaceholder,
   performValidatedMutation,
   usePredicateField,
-} from "../../../runtime/react/index.js";
+} from "@io/graph-react";
+import { Input } from "@io/web/input";
+import { useEffect, useState } from "react";
+
 import {
   clearOrRejectRequiredValue,
   normalizeUrlValue,

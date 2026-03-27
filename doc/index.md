@@ -44,7 +44,7 @@ the graph-first application direction the rest of the workspace is proving.
 - `./graph/storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,
   retained-history model, and secret side-storage split
 - `./graph/retained-records.md`: proposed retained-record boundary for data
-  that should survive graph refactors and migrations
+  that should survive graph refactors, recovery, and live-graph rebuilds
 - `./tui/index.md`: terminal workflow product surface and the boundary against legacy agent TUI
 - `./README.md`: architecture and vision doc map for the numbered roadmap and branch docs
 - `./branch/README.md`: platform branches as parallel workstreams with canonical specs where available

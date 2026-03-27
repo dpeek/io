@@ -50,14 +50,21 @@ import { coreType } from "./core/type/index.js";
 import { urlTypeModule } from "./core/url/index.js";
 import { core } from "./index.js";
 import * as moduleExports from "./index.js";
-import { ops as canonicalOps } from "./ops.js";
+import { workflow as canonicalWorkflow } from "./workflow.js";
+import {
+  document,
+  documentBlock,
+  documentBlockKind,
+  documentPlacement,
+  documentSchema,
+} from "./workflow/document/schema.js";
 import {
   envVar,
   envVarNameBlankMessage,
   envVarNameInvalidMessage,
   envVarNamePattern,
   envVarSchema,
-} from "./ops/env-var/schema.js";
+} from "./workflow/env-var/schema.js";
 import {
   agentSession,
   agentSessionEvent,
@@ -66,22 +73,14 @@ import {
   repositoryBranch,
   repositoryCommit,
   workflowMutationCommand,
-  workflowArtifact,
-  workflowBranch,
-  workflowCommit,
-  workflowDecision,
-  workflowProject,
-  workflowRepository,
+  artifact,
+  branch,
+  commit,
+  decision,
+  project,
+  repository,
   workflowSchema,
-} from "./ops/workflow/schema.js";
-import { pkm as canonicalPkm } from "./pkm.js";
-import {
-  document,
-  documentBlock,
-  documentBlockKind,
-  documentPlacement,
-  documentSchema,
-} from "./pkm/document/schema.js";
+} from "./workflow/schema.js";
 
 function resolvedTypeId(typeDef: { values: { key: string } }): string {
   const values = typeDef.values as { key: string; id?: string };
@@ -154,7 +153,7 @@ describe("module entry surfaces", () => {
     );
   });
 
-  it("defines canonical core, pkm, and ops namespaces from module entrypoints", () => {
+  it("defines canonical core and workflow namespaces from module entrypoints", () => {
     expect(canonicalCore.node.values.key).toBe(node.values.key);
     expect(canonicalCore.string.values.key).toBe(stringTypeModule.type.values.key);
     expect(canonicalCore.color.values.key).toBe(colorTypeModule.type.values.key);
@@ -206,23 +205,23 @@ describe("module entry surfaces", () => {
     expect(String(canonicalCore.admissionPolicy.fields.signupPolicy.range)).toBe(
       resolvedTypeId(admissionSignupPolicy),
     );
-    expect(canonicalPkm.document.values.key).toBe(document.values.key);
-    expect(canonicalPkm.documentBlock.values.key).toBe(documentBlock.values.key);
-    expect(canonicalPkm.documentBlockKind.values.key).toBe(documentBlockKind.values.key);
-    expect(canonicalPkm.documentPlacement.values.key).toBe(documentPlacement.values.key);
-    expect(canonicalOps.envVar.values.key).toBe(envVar.values.key);
-    expect(canonicalOps.workflowProject.values.key).toBe(workflowProject.values.key);
-    expect(canonicalOps.workflowRepository.values.key).toBe(workflowRepository.values.key);
-    expect(canonicalOps.workflowBranch.values.key).toBe(workflowBranch.values.key);
-    expect(canonicalOps.workflowCommit.values.key).toBe(workflowCommit.values.key);
-    expect(canonicalOps.repositoryBranch.values.key).toBe(repositoryBranch.values.key);
-    expect(canonicalOps.repositoryCommit.values.key).toBe(repositoryCommit.values.key);
-    expect(canonicalOps.agentSession.values.key).toBe(agentSession.values.key);
-    expect(canonicalOps.agentSessionEvent.values.key).toBe(agentSessionEvent.values.key);
-    expect(canonicalOps.workflowArtifact.values.key).toBe(workflowArtifact.values.key);
-    expect(canonicalOps.workflowDecision.values.key).toBe(workflowDecision.values.key);
-    expect(canonicalOps.contextBundle.values.key).toBe(contextBundle.values.key);
-    expect(canonicalOps.contextBundleEntry.values.key).toBe(contextBundleEntry.values.key);
+    expect(canonicalWorkflow.document.values.key).toBe(document.values.key);
+    expect(canonicalWorkflow.documentBlock.values.key).toBe(documentBlock.values.key);
+    expect(canonicalWorkflow.documentBlockKind.values.key).toBe(documentBlockKind.values.key);
+    expect(canonicalWorkflow.documentPlacement.values.key).toBe(documentPlacement.values.key);
+    expect(canonicalWorkflow.envVar.values.key).toBe(envVar.values.key);
+    expect(canonicalWorkflow.project.values.key).toBe(project.values.key);
+    expect(canonicalWorkflow.repository.values.key).toBe(repository.values.key);
+    expect(canonicalWorkflow.branch.values.key).toBe(branch.values.key);
+    expect(canonicalWorkflow.commit.values.key).toBe(commit.values.key);
+    expect(canonicalWorkflow.repositoryBranch.values.key).toBe(repositoryBranch.values.key);
+    expect(canonicalWorkflow.repositoryCommit.values.key).toBe(repositoryCommit.values.key);
+    expect(canonicalWorkflow.agentSession.values.key).toBe(agentSession.values.key);
+    expect(canonicalWorkflow.agentSessionEvent.values.key).toBe(agentSessionEvent.values.key);
+    expect(canonicalWorkflow.artifact.values.key).toBe(artifact.values.key);
+    expect(canonicalWorkflow.decision.values.key).toBe(decision.values.key);
+    expect(canonicalWorkflow.contextBundle.values.key).toBe(contextBundle.values.key);
+    expect(canonicalWorkflow.contextBundleEntry.values.key).toBe(contextBundleEntry.values.key);
   });
 
   it("freezes the shared secret-handle contract on the canonical core namespace", () => {
@@ -254,7 +253,7 @@ describe("module entry surfaces", () => {
     );
   });
 
-  it("exports the env-var slice from the canonical ops module tree", () => {
+  it("exports the env-var slice from the canonical workflow module tree", () => {
     expect(envVarSchema).toEqual({
       envVar,
     });
@@ -291,7 +290,7 @@ describe("module entry surfaces", () => {
     });
   });
 
-  it("exports the document slice from the canonical pkm module tree", () => {
+  it("exports the document slice from the canonical workflow module tree", () => {
     expect(documentSchema).toEqual({
       document,
       documentBlockKind,
@@ -313,54 +312,50 @@ describe("module entry surfaces", () => {
     });
   });
 
-  it("exports the workflow slice from the canonical ops module tree", () => {
+  it("exports the workflow slice from the canonical workflow module tree", () => {
     expect(workflowSchema).toEqual({
-      workflowProject,
-      workflowRepository,
-      workflowBranchState: canonicalOps.workflowBranchState,
-      workflowBranch,
-      workflowCommitState: canonicalOps.workflowCommitState,
-      workflowCommit,
-      repositoryCommitState: canonicalOps.repositoryCommitState,
-      repositoryCommitLeaseState: canonicalOps.repositoryCommitLeaseState,
+      project,
+      repository,
+      branchState: canonicalWorkflow.branchState,
+      branch,
+      commitState: canonicalWorkflow.commitState,
+      commit,
+      repositoryCommitState: canonicalWorkflow.repositoryCommitState,
+      repositoryCommitLeaseState: canonicalWorkflow.repositoryCommitLeaseState,
       repositoryBranch,
       repositoryCommit,
-      agentSessionSubjectKind: canonicalOps.agentSessionSubjectKind,
-      agentSessionKind: canonicalOps.agentSessionKind,
-      agentSessionRuntimeState: canonicalOps.agentSessionRuntimeState,
+      agentSessionSubjectKind: canonicalWorkflow.agentSessionSubjectKind,
+      agentSessionKind: canonicalWorkflow.agentSessionKind,
+      agentSessionRuntimeState: canonicalWorkflow.agentSessionRuntimeState,
       agentSession,
-      agentSessionEventType: canonicalOps.agentSessionEventType,
-      agentSessionEventPhase: canonicalOps.agentSessionEventPhase,
-      agentSessionStatusCode: canonicalOps.agentSessionStatusCode,
-      agentSessionStatusFormat: canonicalOps.agentSessionStatusFormat,
-      agentSessionStream: canonicalOps.agentSessionStream,
-      agentSessionRawLineEncoding: canonicalOps.agentSessionRawLineEncoding,
+      agentSessionEventType: canonicalWorkflow.agentSessionEventType,
+      agentSessionEventPhase: canonicalWorkflow.agentSessionEventPhase,
+      agentSessionStatusCode: canonicalWorkflow.agentSessionStatusCode,
+      agentSessionStatusFormat: canonicalWorkflow.agentSessionStatusFormat,
+      agentSessionStream: canonicalWorkflow.agentSessionStream,
+      agentSessionRawLineEncoding: canonicalWorkflow.agentSessionRawLineEncoding,
       agentSessionEvent,
-      workflowArtifactKind: canonicalOps.workflowArtifactKind,
-      workflowArtifact,
-      workflowDecisionKind: canonicalOps.workflowDecisionKind,
-      workflowDecision,
+      artifactKind: canonicalWorkflow.artifactKind,
+      artifact,
+      decisionKind: canonicalWorkflow.decisionKind,
+      decision,
       contextBundle,
-      contextBundleEntrySource: canonicalOps.contextBundleEntrySource,
+      contextBundleEntrySource: canonicalWorkflow.contextBundleEntrySource,
       contextBundleEntry,
     });
-    expect(String(workflowRepository.fields.project.range)).toBe(resolvedTypeId(workflowProject));
-    expect(String(workflowBranch.fields.project.range)).toBe(resolvedTypeId(workflowProject));
-    expect(String(workflowCommit.fields.branch.range)).toBe(resolvedTypeId(workflowBranch));
-    expect(String(repositoryBranch.fields.repository.range)).toBe(
-      resolvedTypeId(workflowRepository),
-    );
-    expect(String(repositoryCommit.fields.workflowCommit.range)).toBe(
-      resolvedTypeId(workflowCommit),
-    );
-    expect(String(agentSession.fields.branch.range)).toBe(resolvedTypeId(workflowBranch));
+    expect(String(repository.fields.project.range)).toBe(resolvedTypeId(project));
+    expect(String(branch.fields.project.range)).toBe(resolvedTypeId(project));
+    expect(String(commit.fields.branch.range)).toBe(resolvedTypeId(branch));
+    expect(String(repositoryBranch.fields.repository.range)).toBe(resolvedTypeId(repository));
+    expect(String(repositoryCommit.fields.commit.range)).toBe(resolvedTypeId(commit));
+    expect(String(agentSession.fields.branch.range)).toBe(resolvedTypeId(branch));
     expect(String(agentSession.fields.contextBundle.range)).toBe(resolvedTypeId(contextBundle));
     expect(String(agentSessionEvent.fields.session.range)).toBe(resolvedTypeId(agentSession));
-    expect(String(workflowArtifact.fields.session.range)).toBe(resolvedTypeId(agentSession));
-    expect(String(workflowDecision.fields.session.range)).toBe(resolvedTypeId(agentSession));
+    expect(String(artifact.fields.session.range)).toBe(resolvedTypeId(agentSession));
+    expect(String(decision.fields.session.range)).toBe(resolvedTypeId(agentSession));
     expect(String(contextBundleEntry.fields.bundle.range)).toBe(resolvedTypeId(contextBundle));
     expect(workflowMutationCommand).toMatchObject({
-      key: "ops:workflow:mutation",
+      key: "workflow:mutation",
       execution: "serverOnly",
     });
   });
@@ -368,8 +363,7 @@ describe("module entry surfaces", () => {
   it("exposes canonical namespaces and representative built-ins from the module root", () => {
     expectNamedExports(moduleExports, [
       "core",
-      "ops",
-      "pkm",
+      "workflow",
       "document",
       "documentBlock",
       "documentBlockKind",
@@ -378,16 +372,16 @@ describe("module entry surfaces", () => {
       "icon",
       "iconReferenceField",
       "envVar",
-      "workflowProject",
-      "workflowRepository",
-      "workflowBranch",
-      "workflowCommit",
+      "project",
+      "repository",
+      "branch",
+      "commit",
       "repositoryBranch",
       "repositoryCommit",
       "agentSession",
       "agentSessionEvent",
-      "workflowArtifact",
-      "workflowDecision",
+      "artifact",
+      "decision",
       "contextBundle",
       "contextBundleEntry",
       "workflowMutationCommand",
@@ -401,8 +395,7 @@ describe("module entry surfaces", () => {
     ]);
 
     expect(moduleExports.core).toBe(canonicalCore);
-    expect(moduleExports.ops).toBe(canonicalOps);
-    expect(moduleExports.pkm).toBe(canonicalPkm);
+    expect(moduleExports.workflow).toBe(canonicalWorkflow);
     expect(canonicalCore.node.values.key).toBe(node.values.key);
     expect(canonicalCore.icon.values.key).toBe(icon.values.key);
     expect(canonicalCore.tag.values.key).toBe(tag.values.key);
@@ -410,47 +403,45 @@ describe("module entry surfaces", () => {
     expect(canonicalCore.principal.values.key).toBe(principal.values.key);
     expect(canonicalCore.authSubjectProjection.values.key).toBe(authSubjectProjection.values.key);
     expect(canonicalCore.principalRoleBinding.values.key).toBe(principalRoleBinding.values.key);
-    expect(canonicalOps.envVar.values.key).toBe(envVar.values.key);
-    expect(canonicalOps.workflowProject.values.key).toBe(workflowProject.values.key);
-    expect(canonicalOps.workflowRepository.values.key).toBe(workflowRepository.values.key);
-    expect(canonicalOps.workflowBranch.values.key).toBe(workflowBranch.values.key);
-    expect(canonicalOps.workflowCommit.values.key).toBe(workflowCommit.values.key);
-    expect(canonicalOps.repositoryBranch.values.key).toBe(repositoryBranch.values.key);
-    expect(canonicalOps.repositoryCommit.values.key).toBe(repositoryCommit.values.key);
-    expect(canonicalOps.agentSession.values.key).toBe(agentSession.values.key);
-    expect(canonicalOps.agentSessionEvent.values.key).toBe(agentSessionEvent.values.key);
-    expect(canonicalOps.workflowArtifact.values.key).toBe(workflowArtifact.values.key);
-    expect(canonicalOps.workflowDecision.values.key).toBe(workflowDecision.values.key);
-    expect(canonicalOps.contextBundle.values.key).toBe(contextBundle.values.key);
-    expect(canonicalOps.contextBundleEntry.values.key).toBe(contextBundleEntry.values.key);
+    expect(canonicalWorkflow.envVar.values.key).toBe(envVar.values.key);
+    expect(canonicalWorkflow.project.values.key).toBe(project.values.key);
+    expect(canonicalWorkflow.repository.values.key).toBe(repository.values.key);
+    expect(canonicalWorkflow.branch.values.key).toBe(branch.values.key);
+    expect(canonicalWorkflow.commit.values.key).toBe(commit.values.key);
+    expect(canonicalWorkflow.repositoryBranch.values.key).toBe(repositoryBranch.values.key);
+    expect(canonicalWorkflow.repositoryCommit.values.key).toBe(repositoryCommit.values.key);
+    expect(canonicalWorkflow.agentSession.values.key).toBe(agentSession.values.key);
+    expect(canonicalWorkflow.agentSessionEvent.values.key).toBe(agentSessionEvent.values.key);
+    expect(canonicalWorkflow.artifact.values.key).toBe(artifact.values.key);
+    expect(canonicalWorkflow.decision.values.key).toBe(decision.values.key);
+    expect(canonicalWorkflow.contextBundle.values.key).toBe(contextBundle.values.key);
+    expect(canonicalWorkflow.contextBundleEntry.values.key).toBe(contextBundleEntry.values.key);
     expect(moduleExports.workflowMutationCommand).toBe(workflowMutationCommand);
-    expect(canonicalPkm.document.values.key).toBe(document.values.key);
-    expect(canonicalPkm.documentBlock.values.key).toBe(documentBlock.values.key);
-    expect(canonicalPkm.documentBlockKind.values.key).toBe(documentBlockKind.values.key);
-    expect(canonicalPkm.documentPlacement.values.key).toBe(documentPlacement.values.key);
+    expect(canonicalWorkflow.document.values.key).toBe(document.values.key);
+    expect(canonicalWorkflow.documentBlock.values.key).toBe(documentBlock.values.key);
+    expect(canonicalWorkflow.documentBlockKind.values.key).toBe(documentBlockKind.values.key);
+    expect(canonicalWorkflow.documentPlacement.values.key).toBe(documentPlacement.values.key);
     expect(String(canonicalCore.type.fields.icon.range)).toBe(resolvedTypeId(icon));
     expect(String(canonicalCore.predicate.fields.icon.range)).toBe(resolvedTypeId(icon));
     expect(typeof moduleExports.core.node.values.id).toBe("string");
     expect(typeof moduleExports.core.principal.values.id).toBe("string");
-    expect(typeof moduleExports.ops.envVar.values.id).toBe("string");
-    expect(typeof moduleExports.ops.workflowProject.values.id).toBe("string");
-    expect(typeof moduleExports.ops.agentSession.values.id).toBe("string");
-    expect(typeof moduleExports.pkm.document.values.id).toBe("string");
+    expect(typeof moduleExports.workflow.envVar.values.id).toBe("string");
+    expect(typeof moduleExports.workflow.project.values.id).toBe("string");
+    expect(typeof moduleExports.workflow.agentSession.values.id).toBe("string");
+    expect(typeof moduleExports.workflow.document.values.id).toBe("string");
     expect(moduleExports.node.values.key).toBe(canonicalCore.node.values.key);
     expect(moduleExports.icon.values.key).toBe(canonicalCore.icon.values.key);
     expect(moduleExports.iconReferenceField).toBe(iconReferenceField);
-    expect(moduleExports.envVar.values.key).toBe(canonicalOps.envVar.values.key);
-    expect(moduleExports.workflowProject.values.key).toBe(canonicalOps.workflowProject.values.key);
-    expect(moduleExports.workflowRepository.values.key).toBe(
-      canonicalOps.workflowRepository.values.key,
-    );
-    expect(moduleExports.workflowBranch.values.key).toBe(canonicalOps.workflowBranch.values.key);
-    expect(moduleExports.workflowCommit.values.key).toBe(canonicalOps.workflowCommit.values.key);
+    expect(moduleExports.envVar.values.key).toBe(canonicalWorkflow.envVar.values.key);
+    expect(moduleExports.project.values.key).toBe(canonicalWorkflow.project.values.key);
+    expect(moduleExports.repository.values.key).toBe(canonicalWorkflow.repository.values.key);
+    expect(moduleExports.branch.values.key).toBe(canonicalWorkflow.branch.values.key);
+    expect(moduleExports.commit.values.key).toBe(canonicalWorkflow.commit.values.key);
     expect(moduleExports.repositoryBranch.values.key).toBe(
-      canonicalOps.repositoryBranch.values.key,
+      canonicalWorkflow.repositoryBranch.values.key,
     );
     expect(moduleExports.repositoryCommit.values.key).toBe(
-      canonicalOps.repositoryCommit.values.key,
+      canonicalWorkflow.repositoryCommit.values.key,
     );
     expect(moduleExports.secretHandle.values.key).toBe(canonicalCore.secretHandle.values.key);
     expect(moduleExports.principal.values.key).toBe(canonicalCore.principal.values.key);
@@ -460,13 +451,13 @@ describe("module entry surfaces", () => {
     expect(moduleExports.principalRoleBinding.values.key).toBe(
       canonicalCore.principalRoleBinding.values.key,
     );
-    expect(moduleExports.document.values.key).toBe(canonicalPkm.document.values.key);
-    expect(moduleExports.documentBlock.values.key).toBe(canonicalPkm.documentBlock.values.key);
+    expect(moduleExports.document.values.key).toBe(canonicalWorkflow.document.values.key);
+    expect(moduleExports.documentBlock.values.key).toBe(canonicalWorkflow.documentBlock.values.key);
     expect(moduleExports.documentBlockKind.values.key).toBe(
-      canonicalPkm.documentBlockKind.values.key,
+      canonicalWorkflow.documentBlockKind.values.key,
     );
     expect(moduleExports.documentPlacement.values.key).toBe(
-      canonicalPkm.documentPlacement.values.key,
+      canonicalWorkflow.documentPlacement.values.key,
     );
     expect(moduleExports.jsonTypeModule).toBe(jsonTypeModule);
     expect(moduleExports.markdownTypeModule).toBe(markdownTypeModule);

@@ -1,7 +1,7 @@
+import { performValidatedMutation, usePredicateField } from "@io/graph-react";
 import { Input } from "@io/web/input";
 import { useEffect, useState } from "react";
 
-import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
   clearOrRejectRequiredValue,
   normalizeNumberValue,

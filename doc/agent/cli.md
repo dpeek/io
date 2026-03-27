@@ -45,7 +45,7 @@ The first workflow TUI startup contract is intentionally small:
 - graph source is one HTTP base URL resolved from `--graph-url`, then
   `io.ts -> tui.graph.url`, then the default `http://io.localhost:1355/`
 - sync scope is fixed to the workflow review module scope
-  `ops/workflow / scope:ops/workflow:review`
+  `workflow / scope:workflow:review`
 - initial project resolves from `--project`, then
   `io.ts -> tui.initialScope.project`, then by inferring the one visible
   `WorkflowProject` in the synced scope

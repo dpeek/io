@@ -97,10 +97,10 @@ because that package already owns:
 This is where `ComputedRef<T>`, dependency collection, invalidation, memoized
 evaluation, and `entity.computed.*` attachment belong.
 
-### React helpers belong on `@io/core/graph/runtime/react`
+### React helpers belong on `@io/graph-react`
 
 Host-neutral React helpers such as `useComputedValue(...)` should live beside
-the existing predicate and entity hooks on `@io/core/graph/runtime/react`.
+the existing predicate and entity hooks on `@io/graph-react`.
 
 That keeps React concerns out of `@io/graph-client` while still exposing one
 small host-neutral hook layer above the computed runtime.
@@ -547,7 +547,7 @@ subscriptions are already modeled today.
 
 ### React layer
 
-The React helper layer should live under `../../src/graph/runtime/react/`.
+The React helper layer should live under `../../lib/graph-react/src/`.
 
 That layer should own:
 

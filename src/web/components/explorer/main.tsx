@@ -1,5 +1,5 @@
 import { typeId } from "@io/core/graph";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { Input } from "@io/web/input";
 import { ScrollArea } from "@io/web/scroll-area";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
@@ -63,7 +63,9 @@ export function Explorer({
 
   const initialSearchParams = readExplorerSearchParams();
   const defaultTypeId =
-    typeEntryById.get(typeId(pkm.document))?.id ?? typeEntries[0]?.id ?? typeId(pkm.document);
+    typeEntryById.get(typeId(workflow.document))?.id ??
+    typeEntries[0]?.id ??
+    typeId(workflow.document);
 
   function normalizeSelection(nextSelection: ExplorerSelection): ExplorerSelection {
     const nextTypeId = typeEntryById.get(nextSelection.typeId)?.id ?? defaultTypeId;

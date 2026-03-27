@@ -424,11 +424,11 @@ Contract rules:
 
 Current coded proof:
 
-- `ops/workflow` review registrations compile to one conservative dependency
+- `workflow` review registrations compile to one conservative dependency
   set:
-  `scope:ops/workflow:review`,
-  `projection:ops/workflow:project-branch-board`, and
-  `projection:ops/workflow:branch-commit-queue`
+  `scope:workflow:review`,
+  `projection:workflow:project-branch-board`, and
+  `projection:workflow:branch-commit-queue`
 - accepted writes that touch the current workflow review types publish one
   `cursor-advanced` invalidation over that same dependency set
 - callers drain those invalidations from the current ephemeral router state,
@@ -774,7 +774,7 @@ Dropped or late invalidation events
 - what it proves: a client can bootstrap and refresh one non-graph scope with
   explicit completeness
 - current shipped proof:
-  `ops/workflow` review scope over `/api/sync`, with delivered
+  `workflow` review scope over `/api/sync`, with delivered
   `definitionHash`, `policyFilterVersion`, and scoped cursor identity
 - recovery contract: scoped incremental fallback is explicit
   (`scope-changed` or `policy-changed`) and recovery stays a new total sync,
@@ -791,7 +791,7 @@ Dropped or late invalidation events
 
 Current shipped workflow proof:
 
-- `ops/workflow` now proves one projection-backed read surface through
+- `workflow` now proves one projection-backed read surface through
   `ProjectBranchScope` and `CommitQueueScope`
 - each workflow read rebuilds from authoritative workflow, repository, and
   session state, reports `projectedAt` plus `projectionCursor`, and keeps

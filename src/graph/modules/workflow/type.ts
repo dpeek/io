@@ -1,14 +1,14 @@
 import { defineEnum, defineType } from "@io/core/graph/def";
 
-import { existingEntityReferenceField } from "../../../reference-policy.js";
-import { core } from "../../core.js";
-import { booleanTypeModule } from "../../core/boolean/index.js";
-import { dateTypeModule } from "../../core/date/index.js";
-import { defineDefaultEnumTypeModule } from "../../core/enum-module.js";
-import { jsonTypeModule } from "../../core/json/index.js";
-import { numberTypeModule } from "../../core/number/index.js";
-import { stringTypeModule } from "../../core/string/index.js";
-import { pkm } from "../../pkm.js";
+import { existingEntityReferenceField } from "../../reference-policy.js";
+import { core } from "../core.js";
+import { booleanTypeModule } from "../core/boolean/index.js";
+import { dateTypeModule } from "../core/date/index.js";
+import { defineDefaultEnumTypeModule } from "../core/enum-module.js";
+import { jsonTypeModule } from "../core/json/index.js";
+import { numberTypeModule } from "../core/number/index.js";
+import { stringTypeModule } from "../core/string/index.js";
+import { document } from "./document/schema.js";
 
 function resolvedEnumValue(value: { key: string; id?: string }): string {
   return value.id ?? value.key;
@@ -158,15 +158,15 @@ function titleNodeFields(label: string) {
   };
 }
 
-export const workflowProjectKeyPattern = buildWorkflowKeyPattern("project");
-export const workflowRepositoryKeyPattern = buildWorkflowKeyPattern("repo");
-export const workflowBranchKeyPattern = buildWorkflowKeyPattern("branch");
-export const workflowCommitKeyPattern = buildWorkflowKeyPattern("commit");
+export const projectKeyPattern = buildWorkflowKeyPattern("project");
+export const repositoryKeyPattern = buildWorkflowKeyPattern("repo");
+export const branchKeyPattern = buildWorkflowKeyPattern("branch");
+export const commitKeyPattern = buildWorkflowKeyPattern("commit");
 export const agentSessionKeyPattern = buildWorkflowKeyPattern("session");
 export const contextBundleKeyPattern = buildWorkflowKeyPattern("bundle");
 
-export const workflowProject = defineType({
-  values: { key: "ops:workflowProject", name: "Workflow Project" },
+export const project = defineType({
+  values: { key: "workflow:project", name: "Project" },
   fields: {
     ...titleNodeFields("Project title"),
     projectKey: workflowKeyField(
@@ -187,11 +187,11 @@ export const workflowProject = defineType({
   },
 });
 
-export const workflowRepository = defineType({
-  values: { key: "ops:workflowRepository", name: "Workflow Repository" },
+export const repository = defineType({
+  values: { key: "workflow:repository", name: "Repository" },
   fields: {
     ...titleNodeFields("Repository title"),
-    project: existingEntityReferenceField(workflowProject, {
+    project: existingEntityReferenceField(project, {
       cardinality: "one",
       label: "Project",
     }),
@@ -208,8 +208,8 @@ export const workflowRepository = defineType({
   },
 });
 
-export const workflowBranchState = defineEnum({
-  values: { key: "ops:workflowBranchState", name: "Workflow Branch State" },
+export const branchState = defineEnum({
+  values: { key: "workflow:branchState", name: "Branch State" },
   options: {
     backlog: {
       name: "Backlog",
@@ -232,22 +232,21 @@ export const workflowBranchState = defineEnum({
   },
 });
 
-export const workflowBranchStateTypeModule = defineDefaultEnumTypeModule(workflowBranchState);
+export const branchStateTypeModule = defineDefaultEnumTypeModule(branchState);
 
-export const workflowBranch = defineType({
-  values: { key: "ops:workflowBranch", name: "Workflow Branch" },
+export const branch = defineType({
+  values: { key: "workflow:branch", name: "Branch" },
   fields: {
     ...titleNodeFields("Branch title"),
-    project: existingEntityReferenceField(workflowProject, {
+    project: existingEntityReferenceField(project, {
       cardinality: "one",
       label: "Project",
     }),
     branchKey: workflowKeyField("Branch key", "branch"),
     state: {
-      ...workflowBranchStateTypeModule.field({
+      ...branchStateTypeModule.field({
         cardinality: "one",
-        onCreate: ({ incoming }) =>
-          incoming ?? resolvedEnumValue(workflowBranchState.values.backlog),
+        onCreate: ({ incoming }) => incoming ?? resolvedEnumValue(branchState.values.backlog),
         meta: {
           label: "State",
           display: {
@@ -267,23 +266,23 @@ export const workflowBranch = defineType({
         label: "Queue rank",
       },
     }),
-    goalDocument: existingEntityReferenceField(pkm.document, {
+    goalDocument: existingEntityReferenceField(document, {
       cardinality: "one?",
       label: "Goal document",
     }),
-    contextDocument: existingEntityReferenceField(pkm.document, {
+    contextDocument: existingEntityReferenceField(document, {
       cardinality: "one?",
       label: "Context document",
     }),
-    activeCommit: existingEntityReferenceField("ops:workflowCommit", {
+    activeCommit: existingEntityReferenceField("workflow:commit", {
       cardinality: "one?",
       label: "Active commit",
     }),
   },
 });
 
-export const workflowCommitState = defineEnum({
-  values: { key: "ops:workflowCommitState", name: "Workflow Commit State" },
+export const commitState = defineEnum({
+  values: { key: "workflow:commitState", name: "Commit State" },
   options: {
     planned: {
       name: "Planned",
@@ -306,22 +305,21 @@ export const workflowCommitState = defineEnum({
   },
 });
 
-export const workflowCommitStateTypeModule = defineDefaultEnumTypeModule(workflowCommitState);
+export const commitStateTypeModule = defineDefaultEnumTypeModule(commitState);
 
-export const workflowCommit = defineType({
-  values: { key: "ops:workflowCommit", name: "Workflow Commit" },
+export const commit = defineType({
+  values: { key: "workflow:commit", name: "Commit" },
   fields: {
     ...titleNodeFields("Commit title"),
-    branch: existingEntityReferenceField(workflowBranch, {
+    branch: existingEntityReferenceField(branch, {
       cardinality: "one",
       label: "Branch",
     }),
     commitKey: workflowKeyField("Commit key", "commit"),
     state: {
-      ...workflowCommitStateTypeModule.field({
+      ...commitStateTypeModule.field({
         cardinality: "one",
-        onCreate: ({ incoming }) =>
-          incoming ?? resolvedEnumValue(workflowCommitState.values.planned),
+        onCreate: ({ incoming }) => incoming ?? resolvedEnumValue(commitState.values.planned),
         meta: {
           label: "State",
           display: {
@@ -342,12 +340,12 @@ export const workflowCommit = defineType({
         label: "Order",
       },
     }),
-    parentCommit: existingEntityReferenceField("ops:workflowCommit", {
+    parentCommit: existingEntityReferenceField("workflow:commit", {
       cardinality: "one?",
       excludeSubject: true,
       label: "Parent commit",
     }),
-    contextDocument: existingEntityReferenceField(pkm.document, {
+    contextDocument: existingEntityReferenceField(document, {
       cardinality: "one?",
       label: "Context document",
     }),
@@ -355,7 +353,7 @@ export const workflowCommit = defineType({
 });
 
 export const repositoryCommitState = defineEnum({
-  values: { key: "ops:repositoryCommitState", name: "Repository Commit State" },
+  values: { key: "workflow:repositoryCommitState", name: "Repository Commit State" },
   options: {
     planned: {
       name: "Planned",
@@ -379,7 +377,7 @@ export const repositoryCommitStateTypeModule = defineDefaultEnumTypeModule(repos
 
 export const repositoryCommitLeaseState = defineEnum({
   values: {
-    key: "ops:repositoryCommitLeaseState",
+    key: "workflow:repositoryCommitLeaseState",
     name: "Repository Commit Lease State",
   },
   options: {
@@ -403,18 +401,18 @@ export const repositoryCommitLeaseStateTypeModule = defineDefaultEnumTypeModule(
 );
 
 export const repositoryBranch = defineType({
-  values: { key: "ops:repositoryBranch", name: "Repository Branch" },
+  values: { key: "workflow:repositoryBranch", name: "Repository Branch" },
   fields: {
     ...titleNodeFields("Repository branch title"),
-    project: existingEntityReferenceField(workflowProject, {
+    project: existingEntityReferenceField(project, {
       cardinality: "one",
       label: "Project",
     }),
-    repository: existingEntityReferenceField(workflowRepository, {
+    repository: existingEntityReferenceField(repository, {
       cardinality: "one",
       label: "Repository",
     }),
-    workflowBranch: existingEntityReferenceField(workflowBranch, {
+    branch: existingEntityReferenceField(branch, {
       cardinality: "one?",
       label: "Workflow branch",
     }),
@@ -455,10 +453,10 @@ export const repositoryBranch = defineType({
 });
 
 export const repositoryCommit = defineType({
-  values: { key: "ops:repositoryCommit", name: "Repository Commit" },
+  values: { key: "workflow:repositoryCommit", name: "Repository Commit" },
   fields: {
     ...titleNodeFields("Repository commit title"),
-    repository: existingEntityReferenceField(workflowRepository, {
+    repository: existingEntityReferenceField(repository, {
       cardinality: "one",
       label: "Repository",
     }),
@@ -466,7 +464,7 @@ export const repositoryCommit = defineType({
       cardinality: "one?",
       label: "Repository branch",
     }),
-    workflowCommit: existingEntityReferenceField(workflowCommit, {
+    commit: existingEntityReferenceField(commit, {
       cardinality: "one?",
       label: "Workflow commit",
     }),
@@ -534,7 +532,7 @@ export const repositoryCommit = defineType({
 
 export const agentSessionSubjectKind = defineEnum({
   values: {
-    key: "ops:agentSessionSubjectKind",
+    key: "workflow:agentSessionSubjectKind",
     name: "Agent Session Subject Kind",
   },
   options: {
@@ -551,7 +549,7 @@ export const agentSessionSubjectKindTypeModule =
   defineDefaultEnumTypeModule(agentSessionSubjectKind);
 
 export const agentSessionKind = defineEnum({
-  values: { key: "ops:agentSessionKind", name: "Agent Session Kind" },
+  values: { key: "workflow:agentSessionKind", name: "Agent Session Kind" },
   options: {
     planning: {
       name: "Planning",
@@ -569,7 +567,7 @@ export const agentSessionKindTypeModule = defineDefaultEnumTypeModule(agentSessi
 
 export const agentSessionRuntimeState = defineEnum({
   values: {
-    key: "ops:agentSessionRuntimeState",
+    key: "workflow:agentSessionRuntimeState",
     name: "Agent Session Runtime State",
   },
   options: {
@@ -598,14 +596,14 @@ export const agentSessionRuntimeStateTypeModule =
   defineDefaultEnumTypeModule(agentSessionRuntimeState);
 
 export const agentSession = defineType({
-  values: { key: "ops:agentSession", name: "Agent Session" },
+  values: { key: "workflow:agentSession", name: "Agent Session" },
   fields: {
     ...titleNodeFields("Session title"),
-    project: existingEntityReferenceField(workflowProject, {
+    project: existingEntityReferenceField(project, {
       cardinality: "one",
       label: "Project",
     }),
-    repository: existingEntityReferenceField(workflowRepository, {
+    repository: existingEntityReferenceField(repository, {
       cardinality: "one?",
       label: "Repository",
     }),
@@ -622,11 +620,11 @@ export const agentSession = defineType({
         defaultOperator: "is",
       },
     }),
-    branch: existingEntityReferenceField(workflowBranch, {
+    branch: existingEntityReferenceField(branch, {
       cardinality: "one",
       label: "Branch",
     }),
-    commit: existingEntityReferenceField(workflowCommit, {
+    commit: existingEntityReferenceField(commit, {
       cardinality: "one?",
       label: "Commit",
     }),
@@ -669,7 +667,7 @@ export const agentSession = defineType({
       }),
       createOptional: true as const,
     },
-    contextBundle: existingEntityReferenceField("ops:contextBundle", {
+    contextBundle: existingEntityReferenceField("workflow:contextBundle", {
       cardinality: "one?",
       label: "Context bundle",
     }),
@@ -693,7 +691,7 @@ export const agentSession = defineType({
 });
 
 export const agentSessionEventType = defineEnum({
-  values: { key: "ops:agentSessionEventType", name: "Agent Session Event Type" },
+  values: { key: "workflow:agentSessionEventType", name: "Agent Session Event Type" },
   options: {
     session: {
       name: "Session",
@@ -714,7 +712,7 @@ export const agentSessionEventTypeTypeModule = defineDefaultEnumTypeModule(agent
 
 export const agentSessionEventPhase = defineEnum({
   values: {
-    key: "ops:agentSessionEventPhase",
+    key: "workflow:agentSessionEventPhase",
     name: "Agent Session Event Phase",
   },
   options: {
@@ -739,7 +737,7 @@ export const agentSessionEventPhase = defineEnum({
 export const agentSessionEventPhaseTypeModule = defineDefaultEnumTypeModule(agentSessionEventPhase);
 
 export const agentSessionStatusCode = defineEnum({
-  values: { key: "ops:agentSessionStatusCode", name: "Agent Session Status Code" },
+  values: { key: "workflow:agentSessionStatusCode", name: "Agent Session Status Code" },
   options: {
     ready: {
       name: "Ready",
@@ -829,7 +827,7 @@ export const agentSessionStatusCodeTypeModule = defineDefaultEnumTypeModule(agen
 
 export const agentSessionStatusFormat = defineEnum({
   values: {
-    key: "ops:agentSessionStatusFormat",
+    key: "workflow:agentSessionStatusFormat",
     name: "Agent Session Status Format",
   },
   options: {
@@ -849,7 +847,7 @@ export const agentSessionStatusFormatTypeModule =
   defineDefaultEnumTypeModule(agentSessionStatusFormat);
 
 export const agentSessionStream = defineEnum({
-  values: { key: "ops:agentSessionStream", name: "Agent Session Stream" },
+  values: { key: "workflow:agentSessionStream", name: "Agent Session Stream" },
   options: {
     stdout: {
       name: "Stdout",
@@ -864,7 +862,7 @@ export const agentSessionStreamTypeModule = defineDefaultEnumTypeModule(agentSes
 
 export const agentSessionRawLineEncoding = defineEnum({
   values: {
-    key: "ops:agentSessionRawLineEncoding",
+    key: "workflow:agentSessionRawLineEncoding",
     name: "Agent Session Raw Line Encoding",
   },
   options: {
@@ -882,7 +880,7 @@ export const agentSessionRawLineEncodingTypeModule = defineDefaultEnumTypeModule
 );
 
 export const agentSessionEvent = defineType({
-  values: { key: "ops:agentSessionEvent", name: "Agent Session Event" },
+  values: { key: "workflow:agentSessionEvent", name: "Agent Session Event" },
   fields: {
     ...titleNodeFields("Event title"),
     session: existingEntityReferenceField(agentSession, {
@@ -1011,8 +1009,8 @@ export const agentSessionEvent = defineType({
   },
 });
 
-export const workflowArtifactKind = defineEnum({
-  values: { key: "ops:workflowArtifactKind", name: "Workflow Artifact Kind" },
+export const artifactKind = defineEnum({
+  values: { key: "workflow:artifactKind", name: "Artifact Kind" },
   options: {
     "branch-plan": {
       name: "Branch plan",
@@ -1044,25 +1042,25 @@ export const workflowArtifactKind = defineEnum({
   },
 });
 
-export const workflowArtifactKindTypeModule = defineDefaultEnumTypeModule(workflowArtifactKind);
+export const artifactKindTypeModule = defineDefaultEnumTypeModule(artifactKind);
 
-export const workflowArtifact = defineType({
-  values: { key: "ops:workflowArtifact", name: "Workflow Artifact" },
+export const artifact = defineType({
+  values: { key: "workflow:artifact", name: "Artifact" },
   fields: {
     ...titleNodeFields("Artifact title"),
-    project: existingEntityReferenceField(workflowProject, {
+    project: existingEntityReferenceField(project, {
       cardinality: "one",
       label: "Project",
     }),
-    repository: existingEntityReferenceField(workflowRepository, {
+    repository: existingEntityReferenceField(repository, {
       cardinality: "one?",
       label: "Repository",
     }),
-    branch: existingEntityReferenceField(workflowBranch, {
+    branch: existingEntityReferenceField(branch, {
       cardinality: "one",
       label: "Branch",
     }),
-    commit: existingEntityReferenceField(workflowCommit, {
+    commit: existingEntityReferenceField(commit, {
       cardinality: "one?",
       label: "Commit",
     }),
@@ -1070,7 +1068,7 @@ export const workflowArtifact = defineType({
       cardinality: "one",
       label: "Session",
     }),
-    kind: workflowArtifactKindTypeModule.field({
+    kind: artifactKindTypeModule.field({
       cardinality: "one",
       meta: {
         label: "Kind",
@@ -1093,8 +1091,8 @@ export const workflowArtifact = defineType({
   },
 });
 
-export const workflowDecisionKind = defineEnum({
-  values: { key: "ops:workflowDecisionKind", name: "Workflow Decision Kind" },
+export const decisionKind = defineEnum({
+  values: { key: "workflow:decisionKind", name: "Decision Kind" },
   options: {
     plan: {
       name: "Plan",
@@ -1114,25 +1112,25 @@ export const workflowDecisionKind = defineEnum({
   },
 });
 
-export const workflowDecisionKindTypeModule = defineDefaultEnumTypeModule(workflowDecisionKind);
+export const decisionKindTypeModule = defineDefaultEnumTypeModule(decisionKind);
 
-export const workflowDecision = defineType({
-  values: { key: "ops:workflowDecision", name: "Workflow Decision" },
+export const decision = defineType({
+  values: { key: "workflow:decision", name: "Decision" },
   fields: {
     ...titleNodeFields("Decision summary"),
-    project: existingEntityReferenceField(workflowProject, {
+    project: existingEntityReferenceField(project, {
       cardinality: "one",
       label: "Project",
     }),
-    repository: existingEntityReferenceField(workflowRepository, {
+    repository: existingEntityReferenceField(repository, {
       cardinality: "one?",
       label: "Repository",
     }),
-    branch: existingEntityReferenceField(workflowBranch, {
+    branch: existingEntityReferenceField(branch, {
       cardinality: "one",
       label: "Branch",
     }),
-    commit: existingEntityReferenceField(workflowCommit, {
+    commit: existingEntityReferenceField(commit, {
       cardinality: "one?",
       label: "Commit",
     }),
@@ -1140,7 +1138,7 @@ export const workflowDecision = defineType({
       cardinality: "one",
       label: "Session",
     }),
-    kind: workflowDecisionKindTypeModule.field({
+    kind: decisionKindTypeModule.field({
       cardinality: "one",
       meta: {
         label: "Kind",
@@ -1162,7 +1160,7 @@ export const workflowDecision = defineType({
 });
 
 export const contextBundle = defineType({
-  values: { key: "ops:contextBundle", name: "Context Bundle" },
+  values: { key: "workflow:contextBundle", name: "Context Bundle" },
   fields: {
     ...titleNodeFields("Context bundle title"),
     session: existingEntityReferenceField(agentSession, {
@@ -1182,11 +1180,11 @@ export const contextBundle = defineType({
         defaultOperator: "is",
       },
     }),
-    branch: existingEntityReferenceField(workflowBranch, {
+    branch: existingEntityReferenceField(branch, {
       cardinality: "one",
       label: "Branch",
     }),
-    commit: existingEntityReferenceField(workflowCommit, {
+    commit: existingEntityReferenceField(commit, {
       cardinality: "one?",
       label: "Commit",
     }),
@@ -1206,7 +1204,7 @@ export const contextBundle = defineType({
 
 export const contextBundleEntrySource = defineEnum({
   values: {
-    key: "ops:contextBundleEntrySource",
+    key: "workflow:contextBundleEntrySource",
     name: "Context Bundle Entry Source",
   },
   options: {
@@ -1244,7 +1242,7 @@ export const contextBundleEntrySourceTypeModule =
   defineDefaultEnumTypeModule(contextBundleEntrySource);
 
 export const contextBundleEntry = defineType({
-  values: { key: "ops:contextBundleEntry", name: "Context Bundle Entry" },
+  values: { key: "workflow:contextBundleEntry", name: "Context Bundle Entry" },
   fields: {
     ...titleNodeFields("Context entry title"),
     bundle: existingEntityReferenceField(contextBundle, {

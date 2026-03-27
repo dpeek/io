@@ -17,10 +17,10 @@ package.
 - keep graph source resolution, startup hydration sequencing, initial
   project-or-branch selection, and startup failure presentation in
   `../../src/tui/server.ts` and `../../src/tui/startup.ts`
-- keep reusable graph-aware OpenTUI bindings in
-  `../../src/graph/adapters/react-opentui/*`
+- keep reusable host-neutral graph React bindings in
+  `../../lib/graph-react/src/*`
 - keep reusable workflow projection contracts, sync-scope descriptors, and
-  read helpers in `../../src/graph/modules/ops/workflow/*` and
+  read helpers in `../../src/graph/modules/workflow/*` and
   `../../src/graph/runtime/*`
 - keep the retained Linear/session monitor in `../../src/agent/tui/*` until
   workflow views replace it
@@ -136,7 +136,7 @@ transport wiring lands.
   `--graph-url`, then `io.ts -> tui.graph.url`, then
   `http://io.localhost:1355/`
 - sync scope is fixed to the workflow review module scope
-  `ops/workflow / scope:ops/workflow:review`; callers do not choose arbitrary
+  `workflow / scope:workflow:review`; callers do not choose arbitrary
   graph or projection scopes in the first contract
 - initial project resolution is:
   `--project`, then `io.ts -> tui.initialScope.project`, then infer the one

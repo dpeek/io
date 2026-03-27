@@ -1,11 +1,11 @@
 import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
 import { edgeId } from "@io/core/graph";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { GraphValidationError } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
 
-import { createWorkflowProjectionIndex } from "../../graph/modules/ops/workflow/query.js";
+import { createWorkflowProjectionIndex } from "../../graph/modules/workflow/query.js";
 import { createExampleRuntime } from "./example-runtime.js";
 
 setDefaultTimeout(20_000);
@@ -20,7 +20,7 @@ function createDocumentNameWriteTransaction(
     edgeId?: string;
   } = {},
 ): GraphWriteTransaction {
-  const retractOps = store.facts(documentId, edgeId(pkm.document.fields.name)).map((edge) => ({
+  const retractOps = store.facts(documentId, edgeId(workflow.document.fields.name)).map((edge) => ({
     op: "retract" as const,
     edgeId: edge.id,
   }));
@@ -29,7 +29,7 @@ function createDocumentNameWriteTransaction(
     edge: {
       id: options.edgeId ?? store.newId(),
       s: documentId,
-      p: edgeId(pkm.document.fields.name),
+      p: edgeId(workflow.document.fields.name),
       o: name,
     },
   };
@@ -46,23 +46,19 @@ describe("example runtime sync integration", () => {
     const projection = createWorkflowProjectionIndex(runtime.graph);
 
     const branchBoard = projection.readProjectBranchScope({
-      projectId: runtime.ids.workflowProject,
+      projectId: runtime.ids.project,
       filter: {
         showUnmanagedRepositoryBranches: true,
       },
     });
     const commitQueue = projection.readCommitQueueScope({
-      branchId: runtime.ids.workflowBranch,
+      branchId: runtime.ids.branch,
     });
 
-    expect(branchBoard.project.id).toBe(runtime.ids.workflowProject);
-    expect(branchBoard.repository?.id).toBe(runtime.ids.workflowRepository);
-    expect(branchBoard.rows.map((row) => row.workflowBranch.id)).toEqual([
-      runtime.ids.workflowBranch,
-    ]);
-    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
-      runtime.ids.workflowCommit,
-    ]);
+    expect(branchBoard.project.id).toBe(runtime.ids.project);
+    expect(branchBoard.repository?.id).toBe(runtime.ids.repository);
+    expect(branchBoard.rows.map((row) => row.branch.id)).toEqual([runtime.ids.branch]);
+    expect(commitQueue.rows.map((row) => row.commit.id)).toEqual([runtime.ids.commit]);
     expect(commitQueue.branch.latestSession?.id).toBe(runtime.ids.agentSession);
   });
 

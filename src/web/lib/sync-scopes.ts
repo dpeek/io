@@ -1,7 +1,7 @@
 import {
   workflowReviewModuleReadScope,
   workflowReviewSyncScopeRequest,
-} from "@io/core/graph/modules/ops/workflow";
+} from "@io/core/graph/modules/workflow";
 import { matchesModuleReadScopeRequest } from "@io/graph-projection";
 import { graphSyncScope, type SyncScope, type SyncScopeRequest } from "@io/graph-sync";
 
@@ -19,7 +19,7 @@ export const webSyncProofScopeOptions = [
   {
     key: "workflow-review",
     label: "Workflow review scope",
-    description: "Bootstrap and refresh the first named ops/workflow review scope.",
+    description: "Bootstrap and refresh the first named workflow review scope.",
     requestedScope: workflowReviewSyncScopeRequest,
   },
 ] as const satisfies readonly {

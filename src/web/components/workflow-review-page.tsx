@@ -23,7 +23,7 @@ import type {
   CommitQueueScopeResult,
   ProjectBranchScopeRepositoryObservation,
   ProjectBranchScopeResult,
-} from "../../graph/modules/ops/workflow/query.js";
+} from "../../graph/modules/workflow/query.js";
 import {
   createWorkflowReviewStartupContract,
   resolveCanonicalWorkflowRouteSearch,
@@ -138,12 +138,9 @@ function resolveSelectedCommitRow(commitQueue: CommitQueueScopeResult | undefine
   }
 
   const activeCommitId =
-    commitQueue.branch.activeCommit?.workflowCommit.id ??
-    commitQueue.branch.workflowBranch.activeCommitId;
+    commitQueue.branch.activeCommit?.commit.id ?? commitQueue.branch.branch.activeCommitId;
 
-  return (
-    commitQueue.rows.find((row) => row.workflowCommit.id === activeCommitId) ?? commitQueue.rows[0]
-  );
+  return commitQueue.rows.find((row) => row.commit.id === activeCommitId) ?? commitQueue.rows[0];
 }
 
 function isLaunchFailure(result: CodexSessionLaunchResult): result is CodexSessionLaunchFailure {
@@ -179,7 +176,7 @@ export function createBranchSessionActionModel(input: {
   readonly commitQueue?: CommitQueueScopeResult;
   readonly lookupState: SessionLookupState;
   readonly runtime: BrowserAgentRuntimeProbe;
-  readonly selectedBranchState?: ProjectBranchScopeResult["rows"][number]["workflowBranch"]["state"];
+  readonly selectedBranchState?: ProjectBranchScopeResult["rows"][number]["branch"]["state"];
 }): SessionActionModel {
   const description = "Start a branch-scoped planning session from the selected workflow branch.";
 
@@ -276,7 +273,7 @@ export function createCommitSessionActionModel(input: {
   readonly commitQueue?: CommitQueueScopeResult;
   readonly lookupState: SessionLookupState;
   readonly runtime: BrowserAgentRuntimeProbe;
-  readonly selectedBranchState?: ProjectBranchScopeResult["rows"][number]["workflowBranch"]["state"];
+  readonly selectedBranchState?: ProjectBranchScopeResult["rows"][number]["branch"]["state"];
 }): SessionActionModel {
   const description = "Start a commit-scoped execution session from the selected workflow commit.";
   const selectedCommit = resolveSelectedCommitRow(input.commitQueue);
@@ -339,13 +336,13 @@ export function createCommitSessionActionModel(input: {
   const hasRunningSession =
     latestSession?.runtimeState === "running" &&
     latestSession.subject.kind === "commit" &&
-    latestSession.subject.commitId === selectedCommit.workflowCommit.id;
+    latestSession.subject.commitId === selectedCommit.commit.id;
   const runningBranchSession =
     latestSession?.runtimeState === "running" && latestSession.subject.kind === "branch";
   const runningOtherCommitSession =
     latestSession?.runtimeState === "running" &&
     latestSession.subject.kind === "commit" &&
-    latestSession.subject.commitId !== selectedCommit.workflowCommit.id;
+    latestSession.subject.commitId !== selectedCommit.commit.id;
   const selectedBranchState = input.selectedBranchState;
   let reason: string | undefined;
 
@@ -356,15 +353,15 @@ export function createCommitSessionActionModel(input: {
   ) {
     reason = "The selected branch is not in a launchable state for commit execution.";
   } else if (
-    input.commitQueue.branch.workflowBranch.activeCommitId &&
-    input.commitQueue.branch.workflowBranch.activeCommitId !== selectedCommit.workflowCommit.id
+    input.commitQueue.branch.branch.activeCommitId &&
+    input.commitQueue.branch.branch.activeCommitId !== selectedCommit.commit.id
   ) {
     reason = "Select the branch active commit to launch commit execution.";
-  } else if (selectedCommit.workflowCommit.state === "planned") {
+  } else if (selectedCommit.commit.state === "planned") {
     reason = "Planned commits must be promoted before execution can launch.";
   } else if (
-    selectedCommit.workflowCommit.state === "committed" ||
-    selectedCommit.workflowCommit.state === "dropped"
+    selectedCommit.commit.state === "committed" ||
+    selectedCommit.commit.state === "dropped"
   ) {
     reason = "Committed and dropped commits do not accept execution sessions.";
   } else if (runningBranchSession) {
@@ -440,8 +437,8 @@ function PageHeader({
           <div className="space-y-1">
             <CardTitle>Workflow review</CardTitle>
             <CardDescription>
-              `/workflow` now resolves the shipped `ops/workflow` review scope into a workflow
-              branch board, branch detail, and commit queue layout.
+              `/workflow` now resolves the shipped `workflow` review scope into a workflow branch
+              board, branch detail, and commit queue layout.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -634,7 +631,7 @@ function BranchBoardPanel({
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
         {branchBoard.rows.map((row) => {
-          const selected = row.workflowBranch.id === activeBranchId;
+          const selected = row.branch.id === activeBranchId;
           return (
             <a
               aria-current={selected ? "page" : undefined}
@@ -645,21 +642,19 @@ function BranchBoardPanel({
               }`}
               href={buildWorkflowHref({
                 ...(projectId ? { project: projectId } : {}),
-                branch: row.workflowBranch.id,
+                branch: row.branch.id,
               })}
-              key={row.workflowBranch.id}
+              key={row.branch.id}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="font-medium">{row.workflowBranch.title}</div>
-                  <div className="text-muted-foreground mt-1 text-xs">
-                    {row.workflowBranch.branchKey}
-                  </div>
+                  <div className="font-medium">{row.branch.title}</div>
+                  <div className="text-muted-foreground mt-1 text-xs">{row.branch.branchKey}</div>
                 </div>
-                <Badge variant={selected ? "default" : "outline"}>{row.workflowBranch.state}</Badge>
+                <Badge variant={selected ? "default" : "outline"}>{row.branch.state}</Badge>
               </div>
               <div className="text-muted-foreground mt-3 space-y-1 text-xs">
-                <div>Queue rank: {row.workflowBranch.queueRank ?? "unranked"}</div>
+                <div>Queue rank: {row.branch.queueRank ?? "unranked"}</div>
                 <div>Repository: {formatRepositoryObservation(row.repositoryBranch)}</div>
               </div>
             </a>
@@ -700,9 +695,9 @@ function BranchDetailPanel({
   readonly startupState: WorkflowReviewStartupState;
 }) {
   const selectedBranchId =
-    commitQueue?.branch.workflowBranch.id ??
+    commitQueue?.branch.branch.id ??
     (startupState.kind === "ready" ? startupState.selectedBranch?.id : undefined);
-  const selectedRow = branchBoard?.rows.find((row) => row.workflowBranch.id === selectedBranchId);
+  const selectedRow = branchBoard?.rows.find((row) => row.branch.id === selectedBranchId);
 
   if (!selectedRow) {
     return (
@@ -717,17 +712,17 @@ function BranchDetailPanel({
     <div className="flex h-full min-h-0 flex-col gap-4 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-lg font-semibold">{selectedRow.workflowBranch.title}</div>
+          <div className="text-lg font-semibold">{selectedRow.branch.title}</div>
           <div className="text-muted-foreground mt-1 font-mono text-xs">
-            {selectedRow.workflowBranch.branchKey}
+            {selectedRow.branch.branchKey}
           </div>
         </div>
-        <Badge>{selectedRow.workflowBranch.state}</Badge>
+        <Badge>{selectedRow.branch.state}</Badge>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <DetailField
           label="Queue rank"
-          value={String(selectedRow.workflowBranch.queueRank ?? "unranked")}
+          value={String(selectedRow.branch.queueRank ?? "unranked")}
         />
         <DetailField
           label="Repository branch"
@@ -736,12 +731,12 @@ function BranchDetailPanel({
         <DetailField label="Latest session" value={formatLatestSession(commitQueue)} />
         <DetailField
           label="Active commit"
-          value={commitQueue?.branch.activeCommit?.workflowCommit.title ?? "None selected"}
+          value={commitQueue?.branch.activeCommit?.commit.title ?? "None selected"}
         />
       </div>
       <DetailField
         label="Goal"
-        value={selectedRow.workflowBranch.goalSummary ?? "No goal summary recorded."}
+        value={selectedRow.branch.goalSummary ?? "No goal summary recorded."}
       />
       {branchBoard?.repository ? (
         <DetailField
@@ -981,7 +976,7 @@ function CommitQueuePanel({
       <div className="flex h-full min-h-0 flex-col gap-4">
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary">0 logical commits</Badge>
-          <Badge variant="outline">{commitQueue.branch.workflowBranch.state}</Badge>
+          <Badge variant="outline">{commitQueue.branch.branch.state}</Badge>
         </div>
         <EmptyPanelBody
           detail="The selected branch does not currently have any logical commits queued for execution."
@@ -995,36 +990,34 @@ function CommitQueuePanel({
     <div className="flex h-full min-h-0 flex-col gap-4 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="font-medium">{commitQueue.branch.workflowBranch.title}</div>
+          <div className="font-medium">{commitQueue.branch.branch.title}</div>
           <div className="text-muted-foreground mt-1 text-xs">
-            Active commit: {commitQueue.branch.activeCommit?.workflowCommit.title ?? "None"}
+            Active commit: {commitQueue.branch.activeCommit?.commit.title ?? "None"}
           </div>
         </div>
         <Badge variant="secondary">{commitQueue.rows.length} commits</Badge>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
         {commitQueue.rows.map((row) => {
-          const selected = row.workflowCommit.id === selectedCommit?.workflowCommit.id;
-          const active = row.workflowCommit.id === commitQueue.branch.workflowBranch.activeCommitId;
+          const selected = row.commit.id === selectedCommit?.commit.id;
+          const active = row.commit.id === commitQueue.branch.branch.activeCommitId;
           return (
             <div
               className={`rounded-lg border px-3 py-3 ${
                 selected ? "border-foreground/40 bg-muted/60" : "border-border/70"
               }`}
-              key={row.workflowCommit.id}
+              key={row.commit.id}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="font-medium">
-                    {row.workflowCommit.order}. {row.workflowCommit.title}
+                    {row.commit.order}. {row.commit.title}
                   </div>
-                  <div className="text-muted-foreground mt-1 text-xs">
-                    {row.workflowCommit.commitKey}
-                  </div>
+                  <div className="text-muted-foreground mt-1 text-xs">{row.commit.commitKey}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {active ? <Badge variant="default">active</Badge> : null}
-                  <Badge variant="outline">{row.workflowCommit.state}</Badge>
+                  <Badge variant="outline">{row.commit.state}</Badge>
                 </div>
               </div>
               <div className="text-muted-foreground mt-3 space-y-1 text-xs">
@@ -1037,8 +1030,8 @@ function CommitQueuePanel({
       {selectedCommit ? (
         <div className="border-border/70 grid gap-3 rounded-lg border border-dashed px-3 py-3">
           <div className="font-medium">Selected commit detail</div>
-          <DetailField label="Commit" value={selectedCommit.workflowCommit.title} />
-          <DetailField label="State" value={selectedCommit.workflowCommit.state} />
+          <DetailField label="Commit" value={selectedCommit.commit.title} />
+          <DetailField label="State" value={selectedCommit.commit.state} />
           <DetailField
             label="Repository commit"
             value={formatRepositoryCommitSummary(selectedCommit)}
@@ -1085,7 +1078,7 @@ export function WorkflowReviewSurface({
 }) {
   const selectedBranchId =
     readState.status === "ready"
-      ? (readState.commitQueue?.branch.workflowBranch.id ??
+      ? (readState.commitQueue?.branch.branch.id ??
         (startupState.kind === "ready" ? startupState.selectedBranch?.id : undefined))
       : startupState.kind === "ready"
         ? startupState.selectedBranch?.id
@@ -1192,7 +1185,7 @@ export function WorkflowReviewPage({
   const [refreshVersion, setRefreshVersion] = useState(0);
   const visibleProjects = useMemo(
     () =>
-      runtime.graph.workflowProject
+      runtime.graph.project
         .list()
         .map((project) => ({
           id: project.id,
@@ -1205,7 +1198,7 @@ export function WorkflowReviewPage({
   );
   const visibleBranches = useMemo(
     () =>
-      runtime.graph.workflowBranch.list().map((branch) => ({
+      runtime.graph.branch.list().map((branch) => ({
         id: branch.id,
         projectId: branch.project,
         queueRank: branch.queueRank,
@@ -1241,15 +1234,14 @@ export function WorkflowReviewPage({
   );
   const selectedBranchId =
     readState.status === "ready"
-      ? (readState.commitQueue?.branch.workflowBranch.id ??
+      ? (readState.commitQueue?.branch.branch.id ??
         (startupState.kind === "ready" ? startupState.selectedBranch?.id : undefined))
       : startupState.kind === "ready"
         ? startupState.selectedBranch?.id
         : undefined;
   const selectedBranchState =
     readState.status === "ready"
-      ? readState.branchBoard.rows.find((row) => row.workflowBranch.id === selectedBranchId)
-          ?.workflowBranch.state
+      ? readState.branchBoard.rows.find((row) => row.branch.id === selectedBranchId)?.branch.state
       : undefined;
   const branchAction = useMemo(
     () =>
@@ -1265,7 +1257,7 @@ export function WorkflowReviewPage({
   const branchActionState = selectedBranchId ? branchActionStates[selectedBranchId] : undefined;
   const selectedCommit =
     readState.status === "ready" ? resolveSelectedCommitRow(readState.commitQueue) : undefined;
-  const selectedCommitId = selectedCommit?.workflowCommit.id;
+  const selectedCommitId = selectedCommit?.commit.id;
   const commitAction = useMemo(
     () =>
       createCommitSessionActionModel({
@@ -1383,8 +1375,8 @@ export function WorkflowReviewPage({
       projectId: readState.branchBoard.project.id,
       subject: {
         kind: "commit",
-        branchId: commitQueue.branch.workflowBranch.id,
-        commitId: selectedCommit.workflowCommit.id,
+        branchId: commitQueue.branch.branch.id,
+        commitId: selectedCommit.commit.id,
       },
     })
       .then((result) => {
@@ -1468,7 +1460,7 @@ export function WorkflowReviewPage({
         );
 
         const selectedBranchId =
-          startupState.selectedBranch?.id ?? branchBoard.result.rows[0]?.workflowBranch.id;
+          startupState.selectedBranch?.id ?? branchBoard.result.rows[0]?.branch.id;
 
         if (!selectedBranchId) {
           setReadState({
@@ -1615,8 +1607,8 @@ export function WorkflowReviewPage({
       return;
     }
 
-    const branchId = commitQueue.branch.workflowBranch.id;
-    const commitId = selectedCommit.workflowCommit.id;
+    const branchId = commitQueue.branch.branch.id;
+    const commitId = selectedCommit.commit.id;
     updateCommitActionState(commitId, {
       message: `${commitAction.label} requested for ${commitId}.`,
       status: "pending",

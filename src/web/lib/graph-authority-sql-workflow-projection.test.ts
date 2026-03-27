@@ -1,12 +1,12 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 
-import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/ops/workflow";
-import { workflowProjectionMetadata } from "@io/core/graph/modules/ops/workflow";
+import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/workflow";
+import { projectionMetadata } from "@io/core/graph/modules/workflow";
 import type {
   CommitQueueScopeCommitRow,
   WorkflowBranchSummary,
-} from "@io/core/graph/modules/ops/workflow";
+} from "@io/core/graph/modules/workflow";
 
 import type { DurableObjectSqlStorageLike } from "./graph-authority-sql-startup.js";
 import {
@@ -48,15 +48,15 @@ function createWorkflowProjectionState(): RetainedWorkflowProjectionState {
   return {
     checkpoints: [
       {
-        projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-        definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+        projectionId: projectionMetadata.branchCommitQueue.projectionId,
+        definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
         sourceCursor: "web-authority:1:9",
         projectionCursor: "workflow:branch-commit-queue:9",
         projectedAt: "2026-03-26T00:00:00.000Z",
       },
       {
-        projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-        definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+        projectionId: projectionMetadata.projectBranchBoard.projectionId,
+        definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
         sourceCursor: "web-authority:1:9",
         projectionCursor: "workflow:project-branch-board:9",
         projectedAt: "2026-03-26T00:00:00.000Z",
@@ -64,13 +64,13 @@ function createWorkflowProjectionState(): RetainedWorkflowProjectionState {
     ],
     rows: [
       {
-        projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-        definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+        projectionId: projectionMetadata.branchCommitQueue.projectionId,
+        definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
         rowKind: "commit-row",
         rowKey: "commit:1",
         sortKey: "0002",
         value: {
-          workflowCommit: {
+          commit: {
             id: "commit:1",
             branchId: "branch:1",
             commitKey: "commit:first",
@@ -83,8 +83,8 @@ function createWorkflowProjectionState(): RetainedWorkflowProjectionState {
         } as CommitQueueScopeCommitRow,
       },
       {
-        projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-        definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+        projectionId: projectionMetadata.projectBranchBoard.projectionId,
+        definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
         rowKind: "branch",
         rowKey: "branch:1",
         sortKey: "0001",
@@ -118,8 +118,8 @@ describe("graph-authority-sql-workflow-projection", () => {
         "SELECT projection_id FROM io_workflow_projection_checkpoint ORDER BY projection_id",
       ),
     ).toEqual([
-      { projection_id: "ops/workflow:branch-commit-queue" },
-      { projection_id: "ops/workflow:project-branch-board" },
+      { projection_id: "workflow:branch-commit-queue" },
+      { projection_id: "workflow:project-branch-board" },
     ]);
   });
 

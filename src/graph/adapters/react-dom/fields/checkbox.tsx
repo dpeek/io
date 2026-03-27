@@ -1,6 +1,6 @@
+import { performValidatedMutation, usePredicateField } from "@io/graph-react";
 import { Checkbox } from "@io/web/checkbox";
 
-import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
   setPredicateValue,
   useFieldMutationCallbacks,

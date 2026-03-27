@@ -1,15 +1,16 @@
 import { describe, expect, it } from "bun:test";
 
+import { createIdMap, createStore, applyIdMap } from "@io/core/graph";
+import { defineType } from "@io/core/graph/def";
+import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, GraphValidationError } from "@io/graph-client";
 
-import { createIdMap, createStore, applyIdMap, defineType } from "../../index.js";
-import { core, coreGraphBootstrapOptions } from "../../modules/index.js";
 import {
-  createWebFieldResolver,
-  createWebFilterResolver,
-  defaultWebFieldResolver,
-  defaultWebFilterResolver,
+  createGraphFieldResolver,
+  createGraphFilterResolver,
+  defaultGraphFieldResolver,
+  defaultGraphFilterResolver,
   performValidatedMutation,
 } from "./index.js";
 
@@ -32,16 +33,16 @@ function createNameRef() {
   return { itemId, nameRef: graph.item.ref(itemId).fields.name };
 }
 
-describe("@io/core/graph/runtime/react", () => {
+describe("@io/graph-react", () => {
   it("keeps the default resolver host-neutral until a host provides capabilities", () => {
     const { nameRef } = createNameRef();
 
-    expect(defaultWebFieldResolver.resolveView(nameRef)).toEqual({
+    expect(defaultGraphFieldResolver.resolveView(nameRef)).toEqual({
       status: "unsupported",
       reason: "unsupported-display-kind",
       kind: "text",
     });
-    expect(defaultWebFieldResolver.resolveEditor(nameRef)).toEqual({
+    expect(defaultGraphFieldResolver.resolveEditor(nameRef)).toEqual({
       status: "unsupported",
       reason: "unsupported-editor-kind",
       kind: "text",
@@ -50,7 +51,7 @@ describe("@io/core/graph/runtime/react", () => {
 
   it("resolves field capabilities once a host supplies them", () => {
     const { nameRef } = createNameRef();
-    const resolver = createWebFieldResolver({
+    const resolver = createGraphFieldResolver({
       view: [{ kind: "text", Component: () => null }],
       editor: [{ kind: "text", Component: () => null }],
     });
@@ -63,7 +64,7 @@ describe("@io/core/graph/runtime/react", () => {
   });
 
   it("keeps the default filter resolver host-neutral until a host provides operand editors", () => {
-    const resolution = defaultWebFilterResolver.resolveField(core.node.fields.name, core);
+    const resolution = defaultGraphFilterResolver.resolveField(core.node.fields.name, core);
 
     expect(resolution.status).toBe("resolved");
     if (resolution.status !== "resolved") return;
@@ -76,7 +77,7 @@ describe("@io/core/graph/runtime/react", () => {
   });
 
   it("resolves filter operand editors once a host supplies them", () => {
-    const resolution = createWebFilterResolver({
+    const resolution = createGraphFilterResolver({
       operandEditors: [{ kind: "string", Component: () => null }],
     }).resolveField(core.node.fields.name, core);
 

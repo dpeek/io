@@ -1,9 +1,8 @@
 import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { workflowReviewSyncScopeRequest } from "@io/core/graph/modules/ops/workflow";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
+import { workflowReviewSyncScopeRequest } from "@io/core/graph/modules/workflow";
 import type { AuthorizationContext } from "@io/graph-authority";
 import { createHttpGraphClient, type FetchImpl } from "@io/graph-client";
 import type { GraphWriteTransaction } from "@io/graph-kernel";
@@ -20,7 +19,7 @@ import { webWorkflowLivePath, type WorkflowLiveRequest } from "./workflow-live-t
 import { createWorkflowReviewLiveSync } from "./workflow-review-live-sync.js";
 
 const baseUrl = "https://web.local/";
-const graphSchema = { ...pkm, ...ops } as const;
+const graphSchema = { ...workflow } as const;
 const graphDefinitions = { ...core, ...graphSchema } as const;
 const principalId = "principal:test";
 const sessionId = "session:test";
@@ -158,16 +157,14 @@ describe("workflow review live sync", () => {
       status: "ready",
     });
     expectScopedCursor(client.sync.getState().cursor, created.cursor);
-    expect(client.graph.workflowCommit.get(created.summary.id).name).toBe(
-      "Workflow live scoped refresh",
-    );
+    expect(client.graph.commit.get(created.summary.id).name).toBe("Workflow live scoped refresh");
     expect(harness.liveRequests.map((request) => request.kind)).toEqual([
       "workflow-review-register",
       "workflow-review-pull",
     ]);
     expect(harness.syncRequests).toEqual([
-      "https://web.local/api/sync?scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
-      `https://web.local/api/sync?after=${encodeURIComponent(initialCursor)}&scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview`,
+      "https://web.local/api/sync?scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
+      `https://web.local/api/sync?after=${encodeURIComponent(initialCursor)}&scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview`,
     ]);
   });
 
@@ -240,17 +237,15 @@ describe("workflow review live sync", () => {
       status: "ready",
     });
     expectScopedCursor(client.sync.getState().cursor, created.cursor);
-    expect(client.graph.workflowCommit.get(created.summary.id).name).toBe(
-      "Workflow live expiry recovery",
-    );
+    expect(client.graph.commit.get(created.summary.id).name).toBe("Workflow live expiry recovery");
     expect(harness.liveRequests.map((request) => request.kind)).toEqual([
       "workflow-review-register",
       "workflow-review-pull",
       "workflow-review-register",
     ]);
     expect(harness.syncRequests).toEqual([
-      "https://web.local/api/sync?scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
-      `https://web.local/api/sync?after=${encodeURIComponent(initialCursor)}&scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview`,
+      "https://web.local/api/sync?scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
+      `https://web.local/api/sync?after=${encodeURIComponent(initialCursor)}&scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview`,
     ]);
   });
 
@@ -314,7 +309,7 @@ describe("workflow review live sync", () => {
       },
     });
     expectScopedCursor(polled.syncResult?.cursor, created.cursor);
-    expect(client.graph.workflowCommit.get(created.summary.id).name).toBe(
+    expect(client.graph.commit.get(created.summary.id).name).toBe(
       "Workflow live router-loss recovery",
     );
     expect(harness.liveRequests.map((request) => request.kind)).toEqual([
@@ -323,8 +318,8 @@ describe("workflow review live sync", () => {
       "workflow-review-register",
     ]);
     expect(harness.syncRequests).toEqual([
-      "https://web.local/api/sync?scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
-      `https://web.local/api/sync?after=${encodeURIComponent(initialCursor)}&scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview`,
+      "https://web.local/api/sync?scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
+      `https://web.local/api/sync?after=${encodeURIComponent(initialCursor)}&scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview`,
     ]);
   });
 });

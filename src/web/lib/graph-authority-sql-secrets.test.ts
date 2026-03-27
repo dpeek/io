@@ -4,7 +4,7 @@ import { describe, expect, it } from "bun:test";
 import type { GraphStoreSnapshot } from "@io/core/graph";
 import { edgeId } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
+import { workflow } from "@io/core/graph/modules/workflow";
 
 import {
   bootstrapSecretValueTable,
@@ -45,7 +45,7 @@ function queryAll<T extends Record<string, unknown>>(
 }
 
 const typePredicateId = edgeId(core.node.fields.type);
-const envVarSecretPredicateId = edgeId(ops.envVar.fields.secret);
+const envVarSecretPredicateId = edgeId(workflow.envVar.fields.secret);
 
 describe("graph-authority-sql-secrets", () => {
   it("reads secret inventory and hydrates filtered plaintext rows", () => {

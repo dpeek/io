@@ -1,10 +1,10 @@
 import { edgeId, type GraphStore } from "@io/core/graph";
-import { ops } from "@io/core/graph/modules/ops";
+import { workflow } from "@io/core/graph/modules/workflow";
 import {
-  workflowBranchStateValues,
+  branchStateValues,
   type WorkflowMutationAction,
   type WorkflowMutationResult,
-} from "@io/core/graph/modules/ops/workflow";
+} from "@io/core/graph/modules/workflow";
 
 import {
   findManagedRepositoryBranchForBranch,
@@ -34,7 +34,7 @@ import {
   requireAllowedValue,
   requireString,
   trimOptionalString,
-  workflowBranchStateIds,
+  branchStateIds,
 } from "./workflow-mutation-helpers.js";
 
 type ProjectCreateMutation = Extract<WorkflowMutationAction, { action: "createProject" }>;
@@ -58,7 +58,7 @@ function createWorkflowProject(
   const inferred = input.inferred ?? true;
   if (inferred) requireSingleInferredProject(graph);
   requireUniqueProjectKey(graph, projectKey);
-  const projectId = graph.workflowProject.create({
+  const projectId = graph.project.create({
     name: title,
     projectKey,
     inferred,
@@ -66,7 +66,7 @@ function createWorkflowProject(
   return {
     action: input.action,
     created: true,
-    summary: buildProjectSummary(graph.workflowProject.get(projectId)),
+    summary: buildProjectSummary(graph.project.get(projectId)),
   };
 }
 
@@ -88,12 +88,12 @@ function updateWorkflowProject(
     patch.inferred = input.inferred;
   }
   if (Object.keys(patch).length > 0) {
-    graph.workflowProject.update(project.id, patch);
+    graph.project.update(project.id, patch);
   }
   return {
     action: input.action,
     created: false,
-    summary: buildProjectSummary(graph.workflowProject.get(project.id)),
+    summary: buildProjectSummary(graph.project.get(project.id)),
   };
 }
 
@@ -106,7 +106,7 @@ function createWorkflowRepository(
   requireSingleAttachedRepository(graph);
   const repositoryKey = requireString(input.repositoryKey, "Repository key");
   requireUniqueRepositoryKey(graph, repositoryKey);
-  const repositoryId = graph.workflowRepository.create({
+  const repositoryId = graph.repository.create({
     name: requireString(input.title, "Repository title"),
     project: project.id,
     repositoryKey,
@@ -117,7 +117,7 @@ function createWorkflowRepository(
   return {
     action: input.action,
     created: true,
-    summary: buildRepositorySummary(graph.workflowRepository.get(repositoryId)),
+    summary: buildRepositorySummary(graph.repository.get(repositoryId)),
   };
 }
 
@@ -145,18 +145,18 @@ function updateWorkflowRepository(
   }
   if (input.mainRemoteName !== undefined) {
     if (input.mainRemoteName === null) {
-      clearSingleValue(store, repository.id, edgeId(ops.workflowRepository.fields.mainRemoteName));
+      clearSingleValue(store, repository.id, edgeId(workflow.repository.fields.mainRemoteName));
     } else {
       patch.mainRemoteName = requireString(input.mainRemoteName, "Main remote name");
     }
   }
   if (Object.keys(patch).length > 0) {
-    graph.workflowRepository.update(repository.id, patch);
+    graph.repository.update(repository.id, patch);
   }
   return {
     action: input.action,
     created: false,
-    summary: buildRepositorySummary(graph.workflowRepository.get(repository.id)),
+    summary: buildRepositorySummary(graph.repository.get(repository.id)),
   };
 }
 
@@ -172,11 +172,11 @@ function createWorkflowBranch(
     input.state === undefined
       ? "backlog"
       : requireAllowedValue(input.state, ["backlog", "ready"] as const, "Workflow branch state");
-  const branchId = graph.workflowBranch.create({
+  const branchId = graph.branch.create({
     name: requireString(input.title, "Branch title"),
     project: project.id,
     branchKey,
-    state: workflowBranchStateIds[requestedState],
+    state: branchStateIds[requestedState],
     ...(input.goalDocumentId !== undefined && input.goalDocumentId !== null
       ? {
           goalDocument: requireDocument(
@@ -202,7 +202,7 @@ function createWorkflowBranch(
   return {
     action: input.action,
     created: true,
-    summary: buildBranchSummary(graph, graph.workflowBranch.get(branchId)),
+    summary: buildBranchSummary(graph, graph.branch.get(branchId)),
   };
 }
 
@@ -221,7 +221,7 @@ function updateWorkflowBranch(
   }
   if (input.goalDocumentId !== undefined) {
     if (input.goalDocumentId === null) {
-      clearSingleValue(store, branch.id, edgeId(ops.workflowBranch.fields.goalDocument));
+      clearSingleValue(store, branch.id, edgeId(workflow.branch.fields.goalDocument));
     } else {
       patch.goalDocument = requireDocument(
         graph,
@@ -232,7 +232,7 @@ function updateWorkflowBranch(
   }
   if (input.contextDocumentId !== undefined) {
     if (input.contextDocumentId === null) {
-      clearSingleValue(store, branch.id, edgeId(ops.workflowBranch.fields.contextDocument));
+      clearSingleValue(store, branch.id, edgeId(workflow.branch.fields.contextDocument));
     } else {
       patch.contextDocument = requireDocument(
         graph,
@@ -243,18 +243,18 @@ function updateWorkflowBranch(
   }
   if (input.queueRank !== undefined) {
     if (input.queueRank === null) {
-      clearSingleValue(store, branch.id, edgeId(ops.workflowBranch.fields.queueRank));
+      clearSingleValue(store, branch.id, edgeId(workflow.branch.fields.queueRank));
     } else {
       patch.queueRank = input.queueRank;
     }
   }
   if (Object.keys(patch).length > 0) {
-    graph.workflowBranch.update(branch.id, patch);
+    graph.branch.update(branch.id, patch);
   }
   return {
     action: input.action,
     created: false,
-    summary: buildBranchSummary(graph, graph.workflowBranch.get(branch.id)),
+    summary: buildBranchSummary(graph, graph.branch.get(branch.id)),
   };
 }
 
@@ -264,19 +264,15 @@ function setWorkflowBranchState(
   input: BranchStateMutation,
 ): WorkflowMutationResult {
   const branch = requireBranch(graph, store, requireString(input.branchId, "Branch id"));
-  const targetState = requireAllowedValue(
-    input.state,
-    workflowBranchStateValues,
-    "Workflow branch state",
-  );
+  const targetState = requireAllowedValue(input.state, branchStateValues, "Workflow branch state");
   validateWorkflowBranchStateTransition(graph, branch, targetState);
-  graph.workflowBranch.update(branch.id, {
-    state: workflowBranchStateIds[targetState],
+  graph.branch.update(branch.id, {
+    state: branchStateIds[targetState],
   });
   return {
     action: input.action,
     created: false,
-    summary: buildBranchSummary(graph, graph.workflowBranch.get(branch.id)),
+    summary: buildBranchSummary(graph, graph.branch.get(branch.id)),
   };
 }
 
@@ -315,13 +311,10 @@ function resolveBranchRepositoryTarget(
       "invalid-transition",
     );
   }
-  if (
-    selectedRepositoryBranch.workflowBranch &&
-    selectedRepositoryBranch.workflowBranch !== branch.id
-  ) {
+  if (selectedRepositoryBranch.branch && selectedRepositoryBranch.branch !== branch.id) {
     throw new WorkflowMutationError(
       409,
-      `Repository branch "${selectedRepositoryBranch.id}" is already managed by workflow branch "${selectedRepositoryBranch.workflowBranch}".`,
+      `Repository branch "${selectedRepositoryBranch.id}" is already managed by workflow branch "${selectedRepositoryBranch.branch}".`,
       "branch-lock-conflict",
     );
   }
@@ -346,7 +339,7 @@ function updateManagedBranchRepositoryTarget(
   const patch: Record<string, unknown> = {
     name: input.title ?? repositoryBranch.name ?? branch.name,
     managed: true,
-    workflowBranch: branch.id,
+    branch: branch.id,
     branchName: requireString(input.branchName, "Branch name"),
     baseBranchName: requireString(input.baseBranchName, "Base branch name"),
   };
@@ -355,7 +348,7 @@ function updateManagedBranchRepositoryTarget(
       clearSingleValue(
         store,
         repositoryBranch.id,
-        edgeId(ops.repositoryBranch.fields.upstreamName),
+        edgeId(workflow.repositoryBranch.fields.upstreamName),
       );
     } else {
       patch.upstreamName = requireString(input.upstreamName, "Upstream name");
@@ -363,7 +356,11 @@ function updateManagedBranchRepositoryTarget(
   }
   if (input.headSha !== undefined) {
     if (input.headSha === null) {
-      clearSingleValue(store, repositoryBranch.id, edgeId(ops.repositoryBranch.fields.headSha));
+      clearSingleValue(
+        store,
+        repositoryBranch.id,
+        edgeId(workflow.repositoryBranch.fields.headSha),
+      );
     } else {
       patch.headSha = requireString(input.headSha, "Head SHA");
     }
@@ -373,7 +370,7 @@ function updateManagedBranchRepositoryTarget(
       clearSingleValue(
         store,
         repositoryBranch.id,
-        edgeId(ops.repositoryBranch.fields.worktreePath),
+        edgeId(workflow.repositoryBranch.fields.worktreePath),
       );
     } else {
       patch.worktreePath = requireString(input.worktreePath, "Worktree path");
@@ -385,7 +382,7 @@ function updateManagedBranchRepositoryTarget(
       clearSingleValue(
         store,
         repositoryBranch.id,
-        edgeId(ops.repositoryBranch.fields.latestReconciledAt),
+        edgeId(workflow.repositoryBranch.fields.latestReconciledAt),
       );
     } else if (latestReconciledAt) {
       patch.latestReconciledAt = latestReconciledAt;
@@ -410,7 +407,7 @@ function createManagedBranchRepositoryTarget(
     name: trimOptionalString(input.title) ?? branch.name,
     project: branch.project,
     repository: repositoryId,
-    workflowBranch: branch.id,
+    branch: branch.id,
     managed: true,
     branchName: requireString(input.branchName, "Branch name"),
     baseBranchName: requireString(input.baseBranchName, "Base branch name"),

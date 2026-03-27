@@ -1,4 +1,4 @@
-import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/ops/workflow";
+import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/workflow";
 import {
   type PersistedAuthoritativeGraphStorageCommitInput as DurableAuthorityCommitInput,
   type PersistedAuthoritativeGraphStoragePersistInput as DurableAuthorityPersistInput,
@@ -279,7 +279,7 @@ function pruneRetainedTransactionRows(
 function rewritePersistedState(
   sql: DurableObjectSqlStorageLike,
   input: DurableAuthorityPersistInput,
-  workflowProjection?: RetainedWorkflowProjectionState,
+  projection?: RetainedWorkflowProjectionState,
 ): void {
   const now = new Date().toISOString();
   const existingMeta = readGraphMetaRow(sql, defaultRetainedHistoryPolicy);
@@ -289,7 +289,7 @@ function rewritePersistedState(
   sql.exec("DELETE FROM io_graph_edge");
   insertTransactionHistoryRows(sql, input.writeHistory, now);
   insertSnapshotEdges(sql, input.snapshot, input.writeHistory);
-  replaceWorkflowProjectionRows(sql, workflowProjection);
+  replaceWorkflowProjectionRows(sql, projection);
   pruneOrphanedSecretValues(sql, input.snapshot);
   writeGraphMetaRow(sql, {
     cursorPrefix: input.writeHistory.cursorPrefix,
@@ -306,7 +306,7 @@ function applyCommittedTransaction(
   sql: DurableObjectSqlStorageLike,
   input: DurableAuthorityCommitInput,
   secretWrite?: WebAppAuthoritySecretWrite,
-  workflowProjection?: RetainedWorkflowProjectionState,
+  projection?: RetainedWorkflowProjectionState,
 ): void {
   if (input.result.replayed) return;
 
@@ -380,7 +380,7 @@ function applyCommittedTransaction(
   if (secretWrite) {
     upsertSecretValue(sql, secretWrite, now);
   }
-  replaceWorkflowProjectionRows(sql, workflowProjection);
+  replaceWorkflowProjectionRows(sql, projection);
   pruneOrphanedSecretValues(sql, input.snapshot);
   if ((existingMeta?.historyRetainedFromSeq ?? 0) < input.writeHistory.baseSequence) {
     pruneRetainedTransactionRows(sql, input.writeHistory.baseSequence);
@@ -427,10 +427,10 @@ export function createSqliteDurableObjectAuthorityStorage(
       return readWorkflowProjectionFromSql(state.storage.sql, meta.headCursor);
     },
     async replaceWorkflowProjection(
-      workflowProjection: RetainedWorkflowProjectionState | null,
+      projection: RetainedWorkflowProjectionState | null,
     ): Promise<void> {
       await runStorageTransaction(state.storage, () => {
-        replaceWorkflowProjectionRows(state.storage.sql, workflowProjection ?? undefined);
+        replaceWorkflowProjectionRows(state.storage.sql, projection ?? undefined);
       });
     },
     async inspectSecrets(): Promise<Record<string, WebAppAuthoritySecretInventoryRecord>> {
@@ -452,13 +452,13 @@ export function createSqliteDurableObjectAuthorityStorage(
           state.storage.sql,
           input,
           options?.secretWrite,
-          options?.workflowProjection,
+          options?.projection,
         );
       });
     },
     async persist(input, options): Promise<void> {
       await runStorageTransaction(state.storage, () => {
-        rewritePersistedState(state.storage.sql, input, options?.workflowProjection);
+        rewritePersistedState(state.storage.sql, input, options?.projection);
       });
     },
   };

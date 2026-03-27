@@ -132,27 +132,27 @@ const webPrincipalBootstrapPayload = {
   principal: webPrincipalSummary,
 } satisfies WebPrincipalBootstrapPayload;
 
-const readTopicPermission = {
-  key: "pkm.topic.read.summary",
+const readDocumentPermission = {
+  key: "workflow.document.read.summary",
   kind: "predicate-read",
-  predicateIds: ["pkm:topic.name", "pkm:topic.content"],
-  reason: "Read topic summary data during install-planned views.",
+  predicateIds: ["workflow:document.name", "workflow:document.description"],
+  reason: "Read document summary data during install-planned views.",
   required: true,
 } satisfies ModulePermissionRequest;
 
-const saveTopicPermission = {
-  key: "pkm.topic.command.save",
+const saveDocumentPermission = {
+  key: "workflow.document.command.save",
   kind: "command-execute",
-  commandKeys: ["pkm:topic:save"],
-  touchesPredicates: ["pkm:topic.name", "pkm:topic.content"],
-  reason: "Execute the topic save command from a module workflow.",
+  commandKeys: ["workflow:document:save"],
+  touchesPredicates: ["workflow:document.name", "workflow:document.description"],
+  reason: "Execute the document save command from a module workflow.",
   required: true,
 } satisfies ModulePermissionRequest;
 
 const approvedModulePermissionRecord = {
-  moduleId: "pkm.topic",
-  permissionKey: readTopicPermission.key,
-  request: readTopicPermission,
+  moduleId: "workflow.document",
+  permissionKey: readDocumentPermission.key,
+  request: readDocumentPermission,
   status: "approved",
   decidedAt: "2026-03-24T00:00:00.000Z",
   decidedByPrincipalId: "principal:operator",
@@ -163,7 +163,7 @@ const approvedModulePermissionRecord = {
         id: "grant-module-1",
         resource: {
           kind: "module-permission",
-          permissionKey: readTopicPermission.key,
+          permissionKey: readDocumentPermission.key,
         },
         target: {
           kind: "principal",
@@ -198,6 +198,6 @@ void authenticatedSession;
 void webPrincipalSession;
 void webPrincipalSummary;
 void webPrincipalBootstrapPayload;
-void readTopicPermission;
-void saveTopicPermission;
+void readDocumentPermission;
+void saveDocumentPermission;
 void approvedModulePermissionRecord;

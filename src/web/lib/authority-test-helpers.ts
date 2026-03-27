@@ -1,7 +1,7 @@
 import type {
   WorkflowMutationAction,
   WorkflowMutationResult,
-} from "@io/core/graph/modules/ops/workflow";
+} from "@io/core/graph/modules/workflow";
 import { type AuthorizationContext } from "@io/graph-authority";
 
 import {

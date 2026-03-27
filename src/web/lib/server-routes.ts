@@ -1,14 +1,14 @@
 import {
   projectBranchScopeOrderDirectionValues,
   projectBranchScopeOrderFieldValues,
-  workflowBranchStateValues,
+  branchStateValues,
   workflowReviewModuleReadScope,
   type CommitQueueScopeQuery,
   type ProjectBranchScopeFilters,
   type ProjectBranchScopeOrderClause,
   type ProjectBranchScopeQuery,
   type WorkflowBranchStateValue,
-} from "@io/core/graph/modules/ops/workflow";
+} from "@io/core/graph/modules/workflow";
 import { type AuthorizationContext } from "@io/graph-authority";
 import {
   GraphValidationError,
@@ -299,13 +299,8 @@ function parseWorkflowReadLimit(value: unknown, label: string): number | undefin
 }
 
 function parseWorkflowBranchState(value: unknown, label: string): WorkflowBranchStateValue {
-  if (
-    typeof value !== "string" ||
-    !workflowBranchStateValues.includes(value as WorkflowBranchStateValue)
-  ) {
-    throw new RequestWorkflowReadError(
-      `${label} must be one of: ${workflowBranchStateValues.join(", ")}.`,
-    );
+  if (typeof value !== "string" || !branchStateValues.includes(value as WorkflowBranchStateValue)) {
+    throw new RequestWorkflowReadError(`${label} must be one of: ${branchStateValues.join(", ")}.`);
   }
 
   return value as WorkflowBranchStateValue;

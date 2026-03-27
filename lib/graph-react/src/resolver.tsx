@@ -38,7 +38,7 @@ export type UnsupportedFieldReason =
   | "unsupported-display-kind"
   | "unsupported-editor-kind";
 
-export type WebFieldViewResolution<
+export type GraphFieldViewResolution<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
 > =
@@ -52,7 +52,7 @@ export type WebFieldViewResolution<
       kind?: string;
     };
 
-export type WebFieldEditorResolution<
+export type GraphFieldEditorResolution<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
 > =
@@ -66,13 +66,13 @@ export type WebFieldEditorResolution<
       kind?: string;
     };
 
-export type WebFieldResolver = {
+export type GraphFieldResolver = {
   resolveView<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
     predicate: PredicateRef<T, Defs>,
-  ): WebFieldViewResolution<T, Defs>;
+  ): GraphFieldViewResolution<T, Defs>;
   resolveEditor<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
     predicate: PredicateRef<T, Defs>,
-  ): WebFieldEditorResolution<T, Defs>;
+  ): GraphFieldEditorResolution<T, Defs>;
 };
 
 export type UnsupportedFieldFallbackProps = {
@@ -84,7 +84,7 @@ export type PredicateFieldViewProps<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
 > = PredicateFieldProps<T, Defs> & {
-  resolver?: WebFieldResolver;
+  resolver?: GraphFieldResolver;
   fallback?: ComponentType<UnsupportedFieldFallbackProps>;
 };
 
@@ -92,7 +92,7 @@ export type PredicateFieldEditorProps<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
 > = PredicateFieldProps<T, Defs> & {
-  resolver?: WebFieldResolver;
+  resolver?: GraphFieldResolver;
   fallback?: ComponentType<UnsupportedFieldFallbackProps>;
 };
 
@@ -102,17 +102,21 @@ function toCapabilityMap<T extends { kind: string }>(
   return new Map(capabilities.map((capability) => [capability.kind, capability]));
 }
 
-export function createWebFieldResolver(input?: {
+/**
+ * Builds a host-neutral field resolver from host-supplied view and editor
+ * capabilities.
+ */
+export function createGraphFieldResolver(input?: {
   view?: readonly AnyViewCapability[];
   editor?: readonly AnyEditorCapability[];
-}): WebFieldResolver {
+}): GraphFieldResolver {
   const viewByKind = toCapabilityMap(input?.view ?? []);
   const editorByKind = toCapabilityMap(input?.editor ?? []);
 
   return {
     resolveView<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
       predicate: PredicateRef<T, Defs>,
-    ): WebFieldViewResolution<T, Defs> {
+    ): GraphFieldViewResolution<T, Defs> {
       const kind = getPredicateDisplayKind(predicate.field);
       if (!kind) return { status: "unsupported", reason: "missing-display-kind" };
       const capability = viewByKind.get(kind);
@@ -124,7 +128,7 @@ export function createWebFieldResolver(input?: {
     },
     resolveEditor<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
       predicate: PredicateRef<T, Defs>,
-    ): WebFieldEditorResolution<T, Defs> {
+    ): GraphFieldEditorResolution<T, Defs> {
       const kind = getPredicateEditorKind(predicate.field);
       if (!kind) return { status: "unsupported", reason: "missing-editor-kind" };
       const capability = editorByKind.get(kind);
@@ -137,7 +141,7 @@ export function createWebFieldResolver(input?: {
   };
 }
 
-export const defaultWebFieldResolver = createWebFieldResolver();
+export const defaultGraphFieldResolver = createGraphFieldResolver();
 
 function UnsupportedField({ kind, reason }: UnsupportedFieldFallbackProps): ReactNode {
   return kind ? `${reason}:${kind}` : reason;
@@ -146,7 +150,7 @@ function UnsupportedField({ kind, reason }: UnsupportedFieldFallbackProps): Reac
 export function PredicateFieldView<
   T extends EdgeOutput,
   Defs extends Record<string, AnyTypeOutput>,
->({ fallback, predicate, resolver = defaultWebFieldResolver }: PredicateFieldViewProps<T, Defs>) {
+>({ fallback, predicate, resolver = defaultGraphFieldResolver }: PredicateFieldViewProps<T, Defs>) {
   const resolution = resolver.resolveView(predicate);
   if (resolution.status === "unsupported") {
     const Fallback = fallback ?? UnsupportedField;
@@ -164,7 +168,7 @@ export function PredicateFieldEditor<
   onMutationError,
   onMutationSuccess,
   predicate,
-  resolver = defaultWebFieldResolver,
+  resolver = defaultGraphFieldResolver,
 }: PredicateFieldEditorProps<T, Defs>) {
   const resolution = resolver.resolveEditor(predicate);
   if (resolution.status === "unsupported") {

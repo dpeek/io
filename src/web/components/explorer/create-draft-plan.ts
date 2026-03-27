@@ -117,7 +117,7 @@ export function buildCreateDefaults(
     Object.assign(defaults, setDraftValue(defaults, field.path, field.fieldName, optionId));
   }
 
-  if (entry.key === "pkm:documentBlock" || entry.key === "pkm:documentPlacement") {
+  if (entry.key === "workflow:documentBlock" || entry.key === "workflow:documentPlacement") {
     return setDraftValue(defaults, [], "order", entry.count);
   }
 

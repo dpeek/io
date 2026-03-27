@@ -3,7 +3,6 @@ import {
   type GraphMutationValidationResult,
   type PredicateRef,
 } from "@io/graph-client";
-
 import {
   formatPredicateValue,
   performValidatedMutation,
@@ -13,7 +12,7 @@ import {
   type MutationValidation,
   type PredicateFieldProps,
   type PredicateFieldViewCapability,
-} from "../../../runtime/react/index.js";
+} from "@io/graph-react";
 
 export type AnyPredicate = PredicateRef<any, any>;
 export type AnyFieldProps = PredicateFieldProps<any, any>;

@@ -11,16 +11,15 @@ import {
   type GraphStoreSnapshot,
 } from "@io/core/graph";
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
+import { workflow } from "@io/core/graph/modules/workflow";
 import {
   type RetainedWorkflowProjectionState,
   workflowBuiltInQuerySurfaceIds,
-  workflowProjectionMetadata,
+  projectionMetadata,
   workflowReviewDependencyKeys,
   workflowReviewModuleReadScope,
   workflowReviewSyncScopeRequest,
-} from "@io/core/graph/modules/ops/workflow";
-import { pkm } from "@io/core/graph/modules/pkm";
+} from "@io/core/graph/modules/workflow";
 import { type AuthSubjectRef, type AuthorizationContext } from "@io/graph-authority";
 import {
   createSyncedGraphClient,
@@ -61,10 +60,10 @@ import {
   handleTransactionRequest,
 } from "./server-routes.js";
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
-const browserGraph = { ...pkm, ...ops } as const;
-const envVarDescriptionPredicateId = edgeId(ops.envVar.fields.description);
-const envVarSecretPredicateId = edgeId(ops.envVar.fields.secret);
+const productGraph = { ...core, ...workflow } as const;
+const browserGraph = { ...workflow } as const;
+const envVarDescriptionPredicateId = edgeId(workflow.envVar.fields.description);
+const envVarSecretPredicateId = edgeId(workflow.envVar.fields.secret);
 const principalHomeGraphIdPredicateId = edgeId(core.principal.fields.homeGraphId);
 const secretHandleVersionPredicateId = edgeId(core.secretHandle.fields.version);
 const secretNote = defineType({
@@ -428,7 +427,7 @@ async function seedWorkflowProjectionReadFixture(
     action: "createRepositoryCommit",
     repositoryId: fixture.repositoryId,
     repositoryBranchId: fixture.repositoryBranchId,
-    workflowCommitId: commit1.summary.id,
+    commitId: commit1.summary.id,
     title: "Define branch board scope",
     state: "attached",
     worktree: {
@@ -442,7 +441,7 @@ async function seedWorkflowProjectionReadFixture(
     action: "attachCommitResult",
     repositoryCommitId: repositoryCommit1.summary.id,
     repositoryBranchId: fixture.repositoryBranchId,
-    workflowCommitId: commit1.summary.id,
+    commitId: commit1.summary.id,
     sha: "abcdef1234567",
     committedAt: "2026-01-02T12:00:00.000Z",
   });
@@ -457,7 +456,7 @@ async function seedWorkflowProjectionReadFixture(
     action: "createRepositoryCommit",
     repositoryId: fixture.repositoryId,
     repositoryBranchId: fixture.repositoryBranchId,
-    workflowCommitId: commit2.summary.id,
+    commitId: commit2.summary.id,
     title: "Document commit queue scope",
     state: "attached",
     worktree: {
@@ -490,13 +489,13 @@ async function seedWorkflowProjectionReadFixture(
     name: "Execute workflow authority read",
     project: fixture.projectId,
     repository: fixture.repositoryId,
-    subjectKind: ops.agentSessionSubjectKind.values.commit.id,
+    subjectKind: workflow.agentSessionSubjectKind.values.commit.id,
     branch: fixture.branchId,
     commit: commit2.summary.id,
     sessionKey: "session:workflow-authority-execution-01",
-    kind: ops.agentSessionKind.values.execution.id,
+    kind: workflow.agentSessionKind.values.execution.id,
     workerId: "worker-1",
-    runtimeState: ops.agentSessionRuntimeState.values.running.id,
+    runtimeState: workflow.agentSessionRuntimeState.values.running.id,
     startedAt: date("2026-01-05T12:30:00.000Z"),
     createdAt: date("2026-01-05T12:30:00.000Z"),
     updatedAt: date("2026-01-05T12:30:00.000Z"),
@@ -1016,8 +1015,8 @@ describe("web authority", () => {
       loadWorkflowProjection() {
         return backingStorage.storage.loadWorkflowProjection();
       },
-      replaceWorkflowProjection(workflowProjection) {
-        return backingStorage.storage.replaceWorkflowProjection(workflowProjection);
+      replaceWorkflowProjection(projection) {
+        return backingStorage.storage.replaceWorkflowProjection(projection);
       },
       inspectSecrets() {
         return backingStorage.storage.inspectSecrets();
@@ -1243,8 +1242,8 @@ describe("web authority", () => {
       loadWorkflowProjection() {
         return backingStorage.storage.loadWorkflowProjection();
       },
-      replaceWorkflowProjection(workflowProjection) {
-        return backingStorage.storage.replaceWorkflowProjection(workflowProjection);
+      replaceWorkflowProjection(projection) {
+        return backingStorage.storage.replaceWorkflowProjection(projection);
       },
       inspectSecrets() {
         return backingStorage.storage.inspectSecrets();
@@ -2003,7 +2002,7 @@ describe("web authority", () => {
       action: "createRepositoryCommit",
       repositoryId: fixture.repositoryId,
       repositoryBranchId: fixture.repositoryBranchId,
-      workflowCommitId: commit.summary.id,
+      commitId: commit.summary.id,
       title: "Finalize me",
       state: "attached",
       worktree: {
@@ -2025,24 +2024,24 @@ describe("web authority", () => {
         id: repositoryCommit.summary.id,
         sha: "abc1234",
         state: "committed",
-        workflowCommitId: commit.summary.id,
+        commitId: commit.summary.id,
       },
     });
     const persistedGraph = readProductGraph(authority, authorization);
 
-    expect(persistedGraph.workflowCommit.get(commit.summary.id).state).toBe(
-      ops.workflowCommitState.values.committed.id,
+    expect(persistedGraph.commit.get(commit.summary.id).state).toBe(
+      workflow.commitState.values.committed.id,
     );
-    expect(persistedGraph.workflowBranch.get(fixture.branchId).state).toBe(
-      ops.workflowBranchState.values.done.id,
+    expect(persistedGraph.branch.get(fixture.branchId).state).toBe(
+      workflow.branchState.values.done.id,
     );
-    expect(persistedGraph.workflowBranch.get(fixture.branchId).activeCommit).toBeUndefined();
+    expect(persistedGraph.branch.get(fixture.branchId).activeCommit).toBeUndefined();
     expect(persistedGraph.repositoryCommit.get(repositoryCommit.summary.id).state).toBe(
-      ops.repositoryCommitState.values.committed.id,
+      workflow.repositoryCommitState.values.committed.id,
     );
     expect(
       persistedGraph.repositoryCommit.get(repositoryCommit.summary.id).worktree.leaseState,
-    ).toBe(ops.repositoryCommitLeaseState.values.released.id);
+    ).toBe(workflow.repositoryCommitLeaseState.values.released.id);
   });
 
   it("reads workflow branch board and commit queue scopes from authoritative graph state", async () => {
@@ -2071,7 +2070,7 @@ describe("web authority", () => {
 
     expect(branchBoard.project.projectKey).toBe("project:io");
     expect(branchBoard.repository?.repositoryKey).toBe("repo:io");
-    expect(branchBoard.rows.map((row) => row.workflowBranch.id)).toEqual([
+    expect(branchBoard.rows.map((row) => row.branch.id)).toEqual([
       fixture.branchId,
       seeded.backlogBranchId,
     ]);
@@ -2106,9 +2105,7 @@ describe("web authority", () => {
       { authorization },
     );
 
-    expect(secondBranchPage.rows.map((row) => row.workflowBranch.id)).toEqual([
-      seeded.noRankBranchId,
-    ]);
+    expect(secondBranchPage.rows.map((row) => row.branch.id)).toEqual([seeded.noRankBranchId]);
     expectIsoTimestamp(secondBranchPage.freshness.projectedAt);
     expect(secondBranchPage.freshness.projectionCursor).toBe(branchProjectionCursor);
     expect(secondBranchPage.nextCursor).toBeUndefined();
@@ -2127,9 +2124,9 @@ describe("web authority", () => {
       repositoryFreshness: "fresh",
       repositoryReconciledAt: "2026-01-06T00:00:00.000Z",
     });
-    expect(commitQueue.branch.workflowBranch.activeCommitId).toBe(seeded.commit2Id);
+    expect(commitQueue.branch.branch.activeCommitId).toBe(seeded.commit2Id);
     expect(commitQueue.branch.activeCommit).toMatchObject({
-      workflowCommit: {
+      commit: {
         id: seeded.commit2Id,
         commitKey: "commit:document-commit-queue-scope",
       },
@@ -2153,7 +2150,7 @@ describe("web authority", () => {
         commitId: seeded.commit2Id,
       },
     });
-    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
+    expect(commitQueue.rows.map((row) => row.commit.id)).toEqual([
       seeded.commit1Id,
       seeded.commit2Id,
     ]);
@@ -2177,7 +2174,7 @@ describe("web authority", () => {
       { authorization },
     );
 
-    expect(secondCommitPage.rows.map((row) => row.workflowCommit.id)).toEqual([seeded.commit3Id]);
+    expect(secondCommitPage.rows.map((row) => row.commit.id)).toEqual([seeded.commit3Id]);
     expectIsoTimestamp(secondCommitPage.freshness.projectedAt);
     expect(secondCommitPage.freshness.projectionCursor).toBe(branchProjectionCursor);
     expect(secondCommitPage.rows[0]?.repositoryCommit).toBeUndefined();
@@ -2690,9 +2687,7 @@ describe("web authority", () => {
       { authorization },
     );
 
-    expect(
-      refreshed.rows.some((row) => row.workflowBranch.branchKey === "branch:fresh-branch"),
-    ).toBe(true);
+    expect(refreshed.rows.some((row) => row.branch.branchKey === "branch:fresh-branch")).toBe(true);
   });
 
   it("keeps retained workflow projection pagination stable across restart when retained state is present", async () => {
@@ -2722,9 +2717,7 @@ describe("web authority", () => {
       { authorization },
     );
 
-    expect(secondPage.rows.map((row) => row.workflowBranch.branchKey)).toEqual([
-      "branch:backlog-docs",
-    ]);
+    expect(secondPage.rows.map((row) => row.branch.branchKey)).toEqual(["branch:backlog-docs"]);
   });
 
   it("rebuilds workflow projection reads from authoritative graph state when retained state is missing on restart", async () => {
@@ -2737,7 +2730,7 @@ describe("web authority", () => {
     if (!persisted) {
       throw new Error("Expected persisted authority state for restart recovery test.");
     }
-    const expectedWorkflowProjection = persisted.workflowProjection;
+    const expectedWorkflowProjection = persisted.projection;
     if (!expectedWorkflowProjection) {
       throw new Error("Expected retained workflow projection state before restart recovery.");
     }
@@ -2767,7 +2760,7 @@ describe("web authority", () => {
       { authorization },
     );
 
-    expect(branchBoard.rows.map((row) => row.workflowBranch.id)).toEqual([
+    expect(branchBoard.rows.map((row) => row.branch.id)).toEqual([
       fixture.branchId,
       seeded.backlogBranchId,
       seeded.noRankBranchId,
@@ -2775,16 +2768,13 @@ describe("web authority", () => {
     expect(branchBoard.unmanagedRepositoryBranches.map((row) => row.repositoryBranch.id)).toEqual([
       seeded.unmanagedRepositoryBranchId,
     ]);
-    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
+    expect(commitQueue.rows.map((row) => row.commit.id)).toEqual([
       seeded.commit1Id,
       seeded.commit2Id,
       seeded.commit3Id,
     ]);
     expect(commitQueue.branch.latestSession?.id).toBe(seeded.sessionId);
-    expectRecoveredWorkflowProjection(
-      storage.read()?.workflowProjection,
-      expectedWorkflowProjection,
-    );
+    expectRecoveredWorkflowProjection(storage.read()?.projection, expectedWorkflowProjection);
   });
 
   it("rebuilds retained workflow projection rows after retained row loss on restart", async () => {
@@ -2794,17 +2784,17 @@ describe("web authority", () => {
 
     const seeded = await seedWorkflowProjectionReadFixture(authority, authorization, fixture);
     const persisted = storage.read();
-    const workflowProjection = persisted?.workflowProjection;
-    if (!persisted || !workflowProjection) {
+    const projection = persisted?.projection;
+    if (!persisted || !projection) {
       throw new Error("Expected retained workflow projection state for row-loss recovery test.");
     }
 
     const droppedBranchId = seeded.noRankBranchId;
     const corruptedStorage = createInMemoryTestWebAppAuthorityStorage({
       ...persisted,
-      workflowProjection: {
-        ...workflowProjection,
-        rows: workflowProjection.rows.filter(
+      projection: {
+        ...projection,
+        rows: projection.rows.filter(
           (row) => !(row.rowKind === "branch" && row.rowKey === droppedBranchId),
         ),
       },
@@ -2819,15 +2809,12 @@ describe("web authority", () => {
       { authorization },
     );
 
-    expect(branchBoard.rows.map((row) => row.workflowBranch.id)).toEqual([
+    expect(branchBoard.rows.map((row) => row.branch.id)).toEqual([
       fixture.branchId,
       seeded.backlogBranchId,
       seeded.noRankBranchId,
     ]);
-    expectRecoveredWorkflowProjection(
-      corruptedStorage.read()?.workflowProjection,
-      workflowProjection,
-    );
+    expectRecoveredWorkflowProjection(corruptedStorage.read()?.projection, projection);
   });
 
   it("rebuilds workflow projection reads from authoritative graph state when retained state is incompatible on restart", async () => {
@@ -2837,8 +2824,8 @@ describe("web authority", () => {
 
     const seeded = await seedWorkflowProjectionReadFixture(authority, authorization, fixture);
     const persisted = storage.read();
-    const workflowProjection = persisted?.workflowProjection;
-    if (!workflowProjection) {
+    const projection = persisted?.projection;
+    if (!projection) {
       throw new Error("Expected retained workflow projection state for compatibility test.");
     }
 
@@ -2846,12 +2833,12 @@ describe("web authority", () => {
       ...storage.storage,
       async loadWorkflowProjection() {
         return {
-          ...workflowProjection,
-          checkpoints: workflowProjection.checkpoints.map((checkpoint) =>
-            checkpoint.projectionId === workflowProjectionMetadata.branchCommitQueue.projectionId
+          ...projection,
+          checkpoints: projection.checkpoints.map((checkpoint) =>
+            checkpoint.projectionId === projectionMetadata.branchCommitQueue.projectionId
               ? {
                   ...checkpoint,
-                  definitionHash: "projection-def:ops/workflow:branch-commit-queue:v999",
+                  definitionHash: "projection-def:workflow:branch-commit-queue:v999",
                 }
               : checkpoint,
           ),
@@ -2867,14 +2854,14 @@ describe("web authority", () => {
       { authorization },
     );
 
-    expect(commitQueue.rows.map((row) => row.workflowCommit.id)).toEqual([
+    expect(commitQueue.rows.map((row) => row.commit.id)).toEqual([
       seeded.commit1Id,
       seeded.commit2Id,
       seeded.commit3Id,
     ]);
-    expect(commitQueue.branch.activeCommit?.workflowCommit.id).toBe(seeded.commit2Id);
+    expect(commitQueue.branch.activeCommit?.commit.id).toBe(seeded.commit2Id);
     expect(commitQueue.branch.latestSession?.id).toBe(seeded.sessionId);
-    expectRecoveredWorkflowProjection(storage.read()?.workflowProjection, workflowProjection);
+    expectRecoveredWorkflowProjection(storage.read()?.projection, projection);
   });
 
   it("surfaces stable workflow read failure codes", async () => {
@@ -2949,7 +2936,7 @@ describe("web authority", () => {
       completeness: "complete",
       freshness: "current",
     });
-    expect(total.cursor).toContain("moduleId=ops%2Fworkflow");
+    expect(total.cursor).toContain("moduleId=workflow");
     expect(total.snapshot.edges.some((edge) => edge.s === fixture.branchId)).toBe(true);
     expect(total.snapshot.edges.some((edge) => edge.s === envVarId)).toBe(false);
 
@@ -2972,7 +2959,7 @@ describe("web authority", () => {
     }
     expect(incremental.scope).toEqual(total.scope);
     expect(incremental.transactions).toHaveLength(1);
-    expect(incremental.transactions[0]?.cursor).toContain("moduleId=ops%2Fworkflow");
+    expect(incremental.transactions[0]?.cursor).toContain("moduleId=workflow");
     expect(incremental.transactions[0]?.cursor).toBe(incremental.cursor);
     expect(
       incremental.transactions[0]?.transaction.ops.some(
@@ -2997,7 +2984,7 @@ describe("web authority", () => {
       scope: workflowModuleScope,
     });
     const scopeChangedCursor = updateScopedCursor(total.cursor, {
-      scopeId: "scope:ops/workflow:backlog",
+      scopeId: "scope:workflow:backlog",
     });
     const policyChangedCursor = updateScopedCursor(total.cursor, {
       policyFilterVersion: "policy:999",
@@ -3077,10 +3064,7 @@ describe("web authority", () => {
         graphId: "graph:global",
         sourceCursor: expect.stringContaining("web-authority:"),
         dependencyKeys: workflowReviewDependencyKeys,
-        affectedProjectionIds: [
-          "ops/workflow:project-branch-board",
-          "ops/workflow:branch-commit-queue",
-        ],
+        affectedProjectionIds: ["workflow:project-branch-board", "workflow:branch-commit-queue"],
         affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
         delivery: { kind: "cursor-advanced" },
       },
@@ -3105,7 +3089,7 @@ describe("web authority", () => {
     );
     const before = mutationStore.snapshot();
 
-    mutationGraph.workflowBranch.update(fixture.branchId, {
+    mutationGraph.branch.update(fixture.branchId, {
       name: "Workflow live invalidation transaction",
     });
 
@@ -3124,10 +3108,7 @@ describe("web authority", () => {
         graphId: "graph:global",
         sourceCursor: result.cursor,
         dependencyKeys: workflowReviewDependencyKeys,
-        affectedProjectionIds: [
-          "ops/workflow:project-branch-board",
-          "ops/workflow:branch-commit-queue",
-        ],
+        affectedProjectionIds: ["workflow:project-branch-board", "workflow:branch-commit-queue"],
         affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
         delivery: { kind: "cursor-advanced" },
       },
@@ -4929,7 +4910,7 @@ describe("web authority", () => {
 
     const response = handleSyncRequest(
       new Request(
-        "http://web.local/api/sync?scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
+        "http://web.local/api/sync?scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
       ),
       authority,
       authorization,
@@ -4978,7 +4959,7 @@ describe("web authority", () => {
     } as unknown as WebAppAuthority;
 
     const response = handleSyncRequest(
-      new Request("http://web.local/api/sync?scopeKind=module&moduleId=ops%2Fworkflow"),
+      new Request("http://web.local/api/sync?scopeKind=module&moduleId=workflow"),
       authority,
       authorization,
     );

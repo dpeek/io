@@ -41,7 +41,7 @@ import {
 
 import { core } from "../modules/core.js";
 import { coreGraphBootstrapOptions } from "../modules/index.js";
-import { pkm } from "../modules/pkm.js";
+import { workflow } from "../modules/workflow.js";
 
 const item = defineType({
   values: { key: "test:item", name: "Item" },
@@ -299,8 +299,8 @@ describe("createHttpGraphClient", () => {
     const authority = createAuthority();
     const requestedScope = {
       kind: "module" as const,
-      moduleId: "ops/workflow",
-      scopeId: "scope:ops/workflow:review",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
     };
     const deliveredScope = createModuleSyncScope({
       moduleId: requestedScope.moduleId,
@@ -361,8 +361,8 @@ describe("createHttpGraphClient", () => {
       status: "ready",
     });
     expect(requestedUrls).toEqual([
-      "http://io.localhost:1355/api/sync?scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
-      "http://io.localhost:1355/api/sync?after=module%3A1&scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
+      "http://io.localhost:1355/api/sync?scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
+      "http://io.localhost:1355/api/sync?after=module%3A1&scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
     ]);
   });
 
@@ -370,8 +370,8 @@ describe("createHttpGraphClient", () => {
     const authority = createAuthority();
     const requestedScope = {
       kind: "module" as const,
-      moduleId: "ops/workflow",
-      scopeId: "scope:ops/workflow:review",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
     };
     const deliveredScope = createModuleSyncScope({
       moduleId: requestedScope.moduleId,
@@ -456,8 +456,8 @@ describe("createHttpGraphClient", () => {
       status: "ready",
     });
     expect(requestedUrls).toEqual([
-      "http://io.localhost:1355/api/sync?scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
-      "http://io.localhost:1355/api/sync?after=module%3A1&scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
+      "http://io.localhost:1355/api/sync?scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
+      "http://io.localhost:1355/api/sync?after=module%3A1&scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
       "http://io.localhost:1355/api/sync?scopeKind=graph",
     ]);
   });
@@ -745,9 +745,9 @@ describe("createHttpGraphClient", () => {
   it("does not resurrect bootstrapped retracted facts during total sync", async () => {
     const authorityStore = createStore();
     bootstrap(authorityStore, core, coreGraphBootstrapOptions);
-    bootstrap(authorityStore, pkm, coreGraphBootstrapOptions);
+    bootstrap(authorityStore, workflow, coreGraphBootstrapOptions);
 
-    const documentTypeId = typeId(pkm.document);
+    const documentTypeId = typeId(workflow.document);
     const documentNamePredicateId = edgeId(core.node.fields.name);
     const currentNameEdge = authorityStore.facts(documentTypeId, documentNamePredicateId)[0];
     if (!currentNameEdge) throw new Error("Expected bootstrapped document name edge.");
@@ -757,15 +757,15 @@ describe("createHttpGraphClient", () => {
       authorityStore.assert(documentTypeId, documentNamePredicateId, "Documents");
     });
 
-    const payload = createAuthoritativeTotalSyncPayload(authorityStore, pkm, {
+    const payload = createAuthoritativeTotalSyncPayload(authorityStore, workflow, {
       cursor: "server:1",
-      definitions: { ...core, ...pkm },
+      definitions: { ...core, ...workflow },
     });
 
-    const client = createSyncedGraphClient(pkm, {
+    const client = createSyncedGraphClient(workflow, {
       bootstrap: coreGraphBootstrapOptions,
       createTxId: () => "cli:1",
-      definitions: { ...core, ...pkm },
+      definitions: { ...core, ...workflow },
       pull: async () => payload,
     });
 

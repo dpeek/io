@@ -1,6 +1,6 @@
+import { useGraphQuery, type GraphRuntime } from "@io/graph-react";
 import { useMemo } from "react";
 
-import { useGraphQuery, type GraphRuntime } from "../graph/adapters/react-opentui/index.js";
 import {
   createWorkflowProjectionIndex,
   type CommitQueueScopeQuery,
@@ -9,10 +9,10 @@ import {
   type ProjectBranchScopeResult,
   type WorkflowProjectionIndex,
   type WorkflowProjectionIndexOptions,
-  workflowProjectionSchema,
-} from "../graph/modules/ops/workflow/schema.js";
+  projectionSchema,
+} from "../graph/modules/workflow/schema.js";
 
-type WorkflowProjectionSchema = typeof workflowProjectionSchema;
+type WorkflowProjectionSchema = typeof projectionSchema;
 
 export interface WorkflowProjectionQueryOptions {
   readonly options?: WorkflowProjectionIndexOptions;

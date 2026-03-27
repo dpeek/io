@@ -17,8 +17,8 @@ describe("total sync sessions", () => {
     server.assert("n:1", "p:type", "t:task");
     const requestedScope = {
       kind: "module" as const,
-      moduleId: "ops/workflow",
-      scopeId: "scope:ops/workflow:review",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
     };
     const session = createTotalSyncSession(createGraphStore(), {
       requestedScope,
@@ -126,7 +126,7 @@ describe("total sync sessions", () => {
             after: "server:1",
             cursor: "server:2",
             scope: createModuleSyncScope({
-              moduleId: "ops/workflow",
+              moduleId: "workflow",
               scopeId: "scope:review",
               definitionHash: "scope-def:v1",
               policyFilterVersion: "policy:v1",

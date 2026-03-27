@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import type {
   CommitQueueScopeResult,
   ProjectBranchScopeResult,
-} from "@io/core/graph/modules/ops/workflow";
+} from "@io/core/graph/modules/workflow";
 
 import {
   requestWorkflowRead,
@@ -39,7 +39,7 @@ function createProjectBranchScopeResult(): ProjectBranchScopeResult {
     },
     rows: [
       {
-        workflowBranch: {
+        branch: {
           entity: "branch",
           id: "branch:workflow-authority",
           title: "Workflow authority",
@@ -64,7 +64,7 @@ function createProjectBranchScopeResult(): ProjectBranchScopeResult {
 function createCommitQueueScopeResult(): CommitQueueScopeResult {
   return {
     branch: {
-      workflowBranch: {
+      branch: {
         entity: "branch",
         id: "branch:workflow-authority",
         title: "Workflow authority",
@@ -77,7 +77,7 @@ function createCommitQueueScopeResult(): CommitQueueScopeResult {
         updatedAt: isoNow,
       },
       activeCommit: {
-        workflowCommit: {
+        commit: {
           entity: "commit",
           id: "commit:workflow-read",
           title: "Expose workflow reads",
@@ -92,7 +92,7 @@ function createCommitQueueScopeResult(): CommitQueueScopeResult {
     },
     rows: [
       {
-        workflowCommit: {
+        commit: {
           entity: "commit",
           id: "commit:workflow-read",
           title: "Expose workflow reads",

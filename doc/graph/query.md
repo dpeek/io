@@ -550,12 +550,12 @@ This catalog is the contract the web query editor uses instead of hard-coded
 per-surface UI logic.
 
 The first built-in authority-owned surfaces are now explicit in
-`../../src/graph/modules/ops/workflow/projection.ts` instead of being only
+`../../src/graph/modules/workflow/projection.ts` instead of being only
 route-local knowledge:
 
-- `ops/workflow:project-branch-board`: projection-backed `collection`
-- `ops/workflow:branch-commit-queue`: projection-backed `collection`
-- `scope:ops/workflow:review`: scope-backed `scope`
+- `workflow:project-branch-board`: projection-backed `collection`
+- `workflow:branch-commit-queue`: projection-backed `collection`
+- `scope:workflow:review`: scope-backed `scope`
 
 The current authority planner supports:
 

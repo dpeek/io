@@ -112,7 +112,7 @@ function titleNodeFields(label: string, descriptionLabel = "Description") {
 }
 
 export const document = defineType({
-  values: { key: "pkm:document", name: "Document" },
+  values: { key: "workflow:document", name: "Document" },
   fields: {
     ...titleNodeFields("Document title"),
     isArchived: {
@@ -142,7 +142,7 @@ export const document = defineType({
 });
 
 export const documentBlockKindType = defineEnum({
-  values: { key: "pkm:documentBlockKind", name: "Document Block Kind" },
+  values: { key: "workflow:documentBlockKind", name: "Document Block Kind" },
   options: {
     markdown: {
       name: "Markdown",
@@ -164,7 +164,7 @@ export const documentBlockKindTypeModule = defineDefaultEnumTypeModule(documentB
 export const documentBlockKind = documentBlockKindTypeModule.type;
 
 export const documentBlock = defineType({
-  values: { key: "pkm:documentBlock", name: "Document Block" },
+  values: { key: "workflow:documentBlock", name: "Document Block" },
   fields: {
     ...titleNodeFields("Block title"),
     document: existingEntityReferenceField(document, {
@@ -217,7 +217,7 @@ export const documentBlock = defineType({
 });
 
 export const documentPlacement = defineType({
-  values: { key: "pkm:documentPlacement", name: "Document Placement" },
+  values: { key: "workflow:documentPlacement", name: "Document Placement" },
   fields: {
     ...titleNodeFields("Placement title"),
     document: existingEntityReferenceField(document, {
@@ -225,7 +225,7 @@ export const documentPlacement = defineType({
       label: "Document",
     }),
     treeKey: requiredStringField("Tree key"),
-    parentPlacement: existingEntityReferenceField("pkm:documentPlacement", {
+    parentPlacement: existingEntityReferenceField("workflow:documentPlacement", {
       cardinality: "one?",
       excludeSubject: true,
       label: "Parent placement",

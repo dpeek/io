@@ -38,7 +38,7 @@ The shipped plaintext write path is still consumer-owned:
 - durable side storage: `io_secret_value` in
   `../../src/web/lib/graph-authority-do.ts`
 
-That proof works for any secret-backed predicate. `ops:envVar` is one consumer
+That proof works for any secret-backed predicate. `workflow:envVar` is one consumer
 of it.
 
 ## Explicitly Provisional
@@ -51,9 +51,9 @@ of it.
 
 ## Relevant Files
 
-- `../../src/runtime/schema.ts`
-- `../../src/runtime/type-module.ts`
-- `../../src/modules/core/secret/type.ts`
-- `../../src/modules/ops/env-var/type.ts`
+- `../../src/graph/index.ts`
+- `../../src/graph/type-module.ts`
+- `../../src/graph/modules/core/secret/type.ts`
+- `../../src/graph/modules/workflow/env-var/type.ts`
 - `../branch/01-graph-kernel-and-authority.md`
 - `../graph/env-vars.md`

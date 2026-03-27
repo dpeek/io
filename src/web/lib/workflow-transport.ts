@@ -3,7 +3,7 @@ import type {
   CommitQueueScopeResult,
   ProjectBranchScopeQuery,
   ProjectBranchScopeResult,
-} from "@io/core/graph/modules/ops/workflow";
+} from "@io/core/graph/modules/workflow";
 
 export const webWorkflowReadPath = "/api/workflow-read";
 

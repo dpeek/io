@@ -10,8 +10,8 @@ import {
   type InvalidationEvent,
 } from "@io/graph-projection";
 
-import opsIds from "../../ops.json";
-import { pkm } from "../../pkm.js";
+import workflowIds from "../workflow.json";
+import { document } from "./document/schema.js";
 import {
   agentSession,
   agentSessionEvent,
@@ -19,26 +19,26 @@ import {
   contextBundleEntry,
   repositoryBranch,
   repositoryCommit,
-  workflowArtifact,
-  workflowBranch,
-  workflowCommit,
-  workflowDecision,
-  workflowProject,
-  workflowRepository,
+  artifact,
+  branch,
+  commit,
+  decision,
+  project,
+  repository,
 } from "./type.js";
 
-const opsTypeIds = opsIds.keys as Record<string, string>;
+const workflowTypeIds = workflowIds.keys as Record<string, string>;
 
-export const workflowModuleId = "ops/workflow";
-const workflowProjectBranchBoardProjectionId = "ops/workflow:project-branch-board";
-const workflowBranchCommitQueueProjectionId = "ops/workflow:branch-commit-queue";
+export const workflowModuleId = "workflow";
+const projectBranchBoardProjectionId = "workflow:project-branch-board";
+const branchCommitQueueProjectionId = "workflow:branch-commit-queue";
 const emptyDependencyKeys = Object.freeze([]) as readonly DependencyKey[];
 
 function typeIdentityKeys(typeDef: {
   readonly values: { readonly id?: string; readonly key: string };
 }): readonly string[] {
   const keys = [typeDef.values.key];
-  const resolvedId = opsTypeIds[typeDef.values.key];
+  const resolvedId = workflowTypeIds[typeDef.values.key];
   if (typeof resolvedId === "string" && !keys.includes(resolvedId)) {
     keys.push(resolvedId);
   }
@@ -51,8 +51,8 @@ function typeIdentityKeys(typeDef: {
 export const workflowReviewModuleReadScope = defineModuleReadScopeDefinition({
   kind: "module",
   moduleId: workflowModuleId,
-  scopeId: "scope:ops/workflow:review",
-  definitionHash: "scope-def:ops/workflow:review:v1",
+  scopeId: "scope:workflow:review",
+  definitionHash: "scope-def:workflow:review:v1",
 });
 
 export const workflowReviewSyncScopeRequest = createModuleReadScopeRequest(
@@ -63,43 +63,37 @@ export const workflowReviewScopeDependencyKey = createScopeDependencyKey(
   workflowReviewModuleReadScope.scopeId,
 );
 
-export const workflowProjectBranchBoardProjectionDependencyKey = createProjectionDependencyKey(
-  workflowProjectBranchBoardProjectionId,
+export const projectBranchBoardProjectionDependencyKey = createProjectionDependencyKey(
+  projectBranchBoardProjectionId,
 );
 
-export const workflowBranchCommitQueueProjectionDependencyKey = createProjectionDependencyKey(
-  workflowBranchCommitQueueProjectionId,
+export const branchCommitQueueProjectionDependencyKey = createProjectionDependencyKey(
+  branchCommitQueueProjectionId,
 );
 
-export const workflowProjectBranchBoardProjection = defineProjectionSpec({
-  projectionId: workflowProjectBranchBoardProjectionId,
+export const projectBranchBoardProjection = defineProjectionSpec({
+  projectionId: projectBranchBoardProjectionId,
   kind: "collection-index",
-  definitionHash: "projection-def:ops/workflow:project-branch-board:v1",
+  definitionHash: "projection-def:workflow:project-branch-board:v1",
   sourceScopeKinds: ["module"],
-  dependencyKeys: [
-    workflowProjectBranchBoardProjectionDependencyKey,
-    workflowReviewScopeDependencyKey,
-  ],
+  dependencyKeys: [projectBranchBoardProjectionDependencyKey, workflowReviewScopeDependencyKey],
   rebuildStrategy: "full",
   visibilityMode: "policy-filtered",
 });
 
-export const workflowBranchCommitQueueProjection = defineProjectionSpec({
-  projectionId: workflowBranchCommitQueueProjectionId,
+export const branchCommitQueueProjection = defineProjectionSpec({
+  projectionId: branchCommitQueueProjectionId,
   kind: "collection-index",
-  definitionHash: "projection-def:ops/workflow:branch-commit-queue:v1",
+  definitionHash: "projection-def:workflow:branch-commit-queue:v1",
   sourceScopeKinds: ["module"],
-  dependencyKeys: [
-    workflowBranchCommitQueueProjectionDependencyKey,
-    workflowReviewScopeDependencyKey,
-  ],
+  dependencyKeys: [branchCommitQueueProjectionDependencyKey, workflowReviewScopeDependencyKey],
   rebuildStrategy: "full",
   visibilityMode: "policy-filtered",
 });
 
 const workflowReviewInvalidationProjectionIds = Object.freeze([
-  workflowProjectBranchBoardProjection.projectionId,
-  workflowBranchCommitQueueProjection.projectionId,
+  projectBranchBoardProjection.projectionId,
+  branchCommitQueueProjection.projectionId,
 ] as const);
 
 const workflowReviewAffectedScopeIds = Object.freeze([
@@ -108,26 +102,26 @@ const workflowReviewAffectedScopeIds = Object.freeze([
 
 const workflowReviewInvalidationTypeIds = new Set(
   [
-    workflowProject,
-    workflowRepository,
-    workflowBranch,
-    workflowCommit,
+    project,
+    repository,
+    branch,
+    commit,
     repositoryBranch,
     repositoryCommit,
     agentSession,
     agentSessionEvent,
-    workflowArtifact,
-    workflowDecision,
+    artifact,
+    decision,
     contextBundle,
     contextBundleEntry,
-    pkm.document,
+    document,
   ].flatMap((typeDef) => typeIdentityKeys(typeDef)),
 );
 
 export const workflowReviewDependencyKeys = Object.freeze([
   workflowReviewScopeDependencyKey,
-  workflowProjectBranchBoardProjectionDependencyKey,
-  workflowBranchCommitQueueProjectionDependencyKey,
+  projectBranchBoardProjectionDependencyKey,
+  branchCommitQueueProjectionDependencyKey,
 ] as const);
 
 export function compileWorkflowReviewScopeDependencyKeys(): readonly DependencyKey[] {
@@ -170,25 +164,25 @@ export function createWorkflowReviewInvalidationEvent(input: {
   });
 }
 
-export const workflowProjectionCatalog = defineProjectionCatalog([
-  workflowProjectBranchBoardProjection,
-  workflowBranchCommitQueueProjection,
+export const projectionCatalog = defineProjectionCatalog([
+  projectBranchBoardProjection,
+  branchCommitQueueProjection,
 ] as const);
 
-export const workflowProjectionMetadata = Object.freeze({
-  projectBranchBoard: workflowProjectBranchBoardProjection,
-  branchCommitQueue: workflowBranchCommitQueueProjection,
+export const projectionMetadata = Object.freeze({
+  projectBranchBoard: projectBranchBoardProjection,
+  branchCommitQueue: branchCommitQueueProjection,
 });
 
-export const workflowProjectionIds = Object.freeze({
-  projectBranchBoard: workflowProjectBranchBoardProjection.projectionId,
-  branchCommitQueue: workflowBranchCommitQueueProjection.projectionId,
+export const projectionIds = Object.freeze({
+  projectBranchBoard: projectBranchBoardProjection.projectionId,
+  branchCommitQueue: branchCommitQueueProjection.projectionId,
 });
 
-export const workflowProjectionDefinitionHashes = Object.freeze({
+export const projectionDefinitionHashes = Object.freeze({
   reviewScope: workflowReviewModuleReadScope.definitionHash,
-  projectBranchBoard: workflowProjectBranchBoardProjection.definitionHash,
-  branchCommitQueue: workflowBranchCommitQueueProjection.definitionHash,
+  projectBranchBoard: projectBranchBoardProjection.definitionHash,
+  branchCommitQueue: branchCommitQueueProjection.definitionHash,
 });
 
 export type WorkflowBuiltInQuerySurfaceSpec = {
@@ -201,16 +195,16 @@ export type WorkflowBuiltInQuerySurfaceSpec = {
 
 export const workflowBuiltInQuerySurfaces = Object.freeze({
   projectBranchBoard: {
-    surfaceId: workflowProjectBranchBoardProjection.projectionId,
+    surfaceId: projectBranchBoardProjection.projectionId,
     queryKind: "collection",
     sourceKind: "projection",
-    projectionId: workflowProjectBranchBoardProjection.projectionId,
+    projectionId: projectBranchBoardProjection.projectionId,
   } satisfies WorkflowBuiltInQuerySurfaceSpec,
   branchCommitQueue: {
-    surfaceId: workflowBranchCommitQueueProjection.projectionId,
+    surfaceId: branchCommitQueueProjection.projectionId,
     queryKind: "collection",
     sourceKind: "projection",
-    projectionId: workflowBranchCommitQueueProjection.projectionId,
+    projectionId: branchCommitQueueProjection.projectionId,
   } satisfies WorkflowBuiltInQuerySurfaceSpec,
   reviewScope: {
     surfaceId: workflowReviewModuleReadScope.scopeId,

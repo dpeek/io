@@ -65,13 +65,11 @@ What the root engine entry does not ship:
 
 ## React And Adapter Split
 
-React package subpaths split between the canonical host-neutral surface at
-`@io/core/graph/runtime/react` and the host-specific entries
-`@io/core/graph/adapters/react-dom` and
-`@io/core/graph/adapters/react-opentui`.
+React package boundaries split between the canonical host-neutral surface at
+`@io/graph-react` and the host-specific browser entry
+`@io/core/graph/adapters/react-dom`.
 
-`@io/core/graph/runtime/react` ships the host-neutral layer from
-`../../src/graph/runtime/react/`:
+`@io/graph-react` ships the host-neutral layer from `../../lib/graph-react/src/`:
 
 - predicate hooks and field metadata helpers
 - entity-level traversal helpers such as
@@ -82,6 +80,7 @@ React package subpaths split between the canonical host-neutral surface at
 - reference-policy readers such as `getPredicateEntityReferencePolicy(...)`
 - field and filter resolver primitives that still require host-supplied
   capabilities
+- generic synced-runtime provider, sync-state, and query hooks
 
 `@io/core/graph/adapters/react-dom` ships DOM defaults from
 `../../src/graph/adapters/react-dom/`:
@@ -92,17 +91,16 @@ React package subpaths split between the canonical host-neutral surface at
 - browser fallback rendering around `PredicateFieldView` and
   `PredicateFieldEditor`
 
-`@io/core/graph/adapters/react-opentui` maps to
-`../../src/graph/adapters/react-opentui/index.ts`. It is the terminal adapter
-package root and now exports the OpenTUI graph runtime provider, sync-state
-subscriptions, and reusable graph query hooks. Workflow projection hooks used
-by the workflow TUI live in `../../src/tui/projection.ts`.
+There is no dedicated `react-opentui` adapter anymore. The workflow TUI reads
+the same host-neutral runtime provider and query hooks directly from
+`@io/graph-react`, while workflow projection hooks still live in
+`../../src/tui/projection.ts`.
 
 ## Boundary Rules
 
 - `ObjectViewSpec`, `WorkflowSpec`, and `GraphCommandSpec` stay on the root
   `@io/core/graph` surface as pure data contracts
-- `@io/core/graph/runtime/react` may read those root-safe contracts and
+- `@io/graph-react` may read those root-safe contracts and
   type-module metadata, but it should not introduce DOM tags, route
   registration, or authoritative command execution
 - `@io/core/graph/adapters/react-dom` may provide HTML widgets, browser
@@ -122,7 +120,7 @@ The current reference-policy helpers are intentionally small:
   whether the current subject should be excluded from its own picker,
   collection semantics, and an explicit editor kind when needed
 
-`@io/core/graph/runtime/react` reads that policy through
+`@io/graph-react` reads that policy through
 `getPredicateEntityReferencePolicy(...)` and uses it to infer the default
 entity-reference display and editor kinds.
 `@io/core/graph/adapters/react-dom` then supplies the default list view plus a

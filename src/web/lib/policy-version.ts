@@ -1,6 +1,5 @@
 import { core } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { shareSurfaceContractVersion, type PolicyVersion } from "@io/graph-authority";
 import {
   type GraphFieldAuthority,
@@ -43,8 +42,8 @@ type WebAppPolicyContractSnapshot = {
   readonly evaluatorVersion: number;
 };
 
-const webAppPolicyGraph = { ...core, ...pkm, ...ops } as const;
-const webAppPolicyVersionBaselineHash = 201724496;
+const webAppPolicyGraph = { ...core, ...workflow } as const;
+const webAppPolicyVersionBaselineHash = 1914297737;
 
 function isPolicyFieldDefinition(value: unknown): value is PolicyFieldDefinition {
   if (!value || typeof value !== "object") return false;

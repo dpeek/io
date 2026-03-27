@@ -9,7 +9,7 @@ import {
   formatPredicateValue,
   usePersistedMutationCallbacks,
   usePredicateField,
-} from "@io/core/graph/runtime/react";
+} from "@io/graph-react";
 import { cn } from "@io/web/utils";
 import { useContext, useEffect, useState, type ReactNode } from "react";
 

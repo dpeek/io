@@ -39,11 +39,11 @@ The current web authority now plans one concrete module scope on the authority
 side:
 
 - request:
-  `{ kind: "module", moduleId: "ops/workflow", scopeId: "scope:ops/workflow:review" }`
+  `{ kind: "module", moduleId: "workflow", scopeId: "scope:workflow:review" }`
 - delivered scope:
   `{ kind: "module", moduleId, scopeId, definitionHash, policyFilterVersion }`
 - current materialization:
-  the `ops/workflow` entity family only, using the authority-resolved policy
+  the `workflow` entity family only, using the authority-resolved policy
   version as the planned `policyFilterVersion`
 - current proof note:
   that `policyFilterVersion` is sourced from the authority-resolved
@@ -58,7 +58,7 @@ That first scoped proof is now defined from one shared graph-owned seam:
   `@io/graph-projection`, exports the public Branch 3
   `ModuleReadScopeDefinition`, `ProjectionSpec`, `DependencyKey`,
   `InvalidationEvent`, and retained projection compatibility helpers
-- `../../src/graph/modules/ops/workflow/projection.ts` owns the canonical
+- `../../src/graph/modules/workflow/projection.ts` owns the canonical
   `workflowReviewModuleReadScope`, `workflowReviewSyncScopeRequest`, and the
   first workflow projection descriptors plus the explicit
   `compileWorkflowReviewScopeDependencyKeys(...)`,
@@ -68,11 +68,11 @@ That first scoped proof is now defined from one shared graph-owned seam:
 
 The first live invalidation proof is intentionally conservative:
 
-- active registrations for `scope:ops/workflow:review` subscribe to
-  `scope:ops/workflow:review`,
-  `projection:ops/workflow:project-branch-board`, and
-  `projection:ops/workflow:branch-commit-queue`
-- any accepted write that touches an `ops/workflow` entity republishes that
+- active registrations for `scope:workflow:review` subscribe to
+  `scope:workflow:review`,
+  `projection:workflow:project-branch-board`, and
+  `projection:workflow:branch-commit-queue`
+- any accepted write that touches an `workflow` entity republishes that
   full dependency-key set as one `cursor-advanced` invalidation event with the
   workflow review scope id plus both workflow projection ids attached
 - callers drain those queued events with
@@ -140,7 +140,7 @@ Stable delivery rules:
 The current end-to-end proof is intentionally narrow and explicit:
 
 1. the browser requests
-   `scopeKind=module&moduleId=ops/workflow&scopeId=scope:ops/workflow:review`
+   `scopeKind=module&moduleId=workflow&scopeId=scope:workflow:review`
 2. the web authority returns a scoped total payload with explicit
    `completeness`, `freshness`, `definitionHash`, `policyFilterVersion`, and
    an opaque scoped cursor
@@ -264,7 +264,7 @@ authoritative sync events:
 - The current web transport proof uses one shared HTTP sync-request shape on
   `GET /api/sync`: optional `after`, plus an explicit scope request via either
   `scopeKind=graph` or
-  `scopeKind=module&moduleId=ops/workflow&scopeId=scope:ops/workflow:review`.
+  `scopeKind=module&moduleId=workflow&scopeId=scope:workflow:review`.
 - `@io/graph-client` also owns `createHttpGraphClient(..., { requestedScope })`, which forwards that same
   explicit graph-or-module request on both bootstrap and incremental refreshes,
   so whole-graph recovery stays available without relying on an implicit

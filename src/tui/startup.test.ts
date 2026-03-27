@@ -41,8 +41,8 @@ test("resolveWorkflowTuiStartupContract keeps the first startup defaults small",
       url: "http://io.localhost:1355/",
       requestedScope: {
         kind: "module",
-        moduleId: "ops/workflow",
-        scopeId: "scope:ops/workflow:review",
+        moduleId: "workflow",
+        scopeId: "scope:workflow:review",
       },
     },
     initialScope: {

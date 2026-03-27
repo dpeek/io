@@ -1,3 +1,9 @@
+import {
+  getPredicateEditorPlaceholder,
+  performValidatedMutation,
+  usePredicateField,
+  type PredicateFieldViewCapability,
+} from "@io/graph-react";
 import { MarkdownRenderer } from "@io/web/markdown";
 import { MonacoSourceEditor, sourcePreviewMonacoOptions } from "@io/web/monaco";
 import {
@@ -7,12 +13,6 @@ import {
 } from "@io/web/source-preview";
 import { useDeferredValue, useEffect, useState } from "react";
 
-import {
-  getPredicateEditorPlaceholder,
-  performValidatedMutation,
-  usePredicateField,
-  type PredicateFieldViewCapability,
-} from "../../../runtime/react/index.js";
 import {
   normalizeTextValue,
   setPredicateValue,

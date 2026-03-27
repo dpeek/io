@@ -1,3 +1,4 @@
+import { performValidatedMutation, usePredicateField } from "@io/graph-react";
 import { InputGroup, InputGroupInput } from "@io/web/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@io/web/select";
 import { useEffect, useState } from "react";
@@ -10,7 +11,6 @@ import {
   formatDurationAmount,
   type DurationUnitKey,
 } from "../../../modules/core/duration/index.js";
-import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
   createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,

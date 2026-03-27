@@ -1,5 +1,5 @@
 import { typeId } from "@io/core/graph";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 
 import type { ExplorerSelection } from "./model.js";
 import { newTarget, schemaTarget } from "./model.js";
@@ -20,7 +20,7 @@ export function readExplorerSearchParams(): URLSearchParams {
 export function readExplorerSelectionFromSearchParams(
   searchParams: URLSearchParams,
 ): ExplorerSelection {
-  const defaultTypeId = typeId(pkm.document);
+  const defaultTypeId = typeId(workflow.document);
   return {
     target: searchParams.get("target") ?? schemaTarget,
     typeId: searchParams.get("type") ?? defaultTypeId,

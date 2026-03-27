@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 
 import { core } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
+import { workflow } from "@io/core/graph/modules/workflow";
 import type { AuthorizationContext, WebPrincipalSummary } from "@io/graph-authority";
 import { createGraphClient } from "@io/graph-client";
 import { createGraphStore as createStore, type GraphStoreSnapshot } from "@io/graph-kernel";
@@ -932,7 +932,7 @@ describe("web worker route forwarding", () => {
         body: JSON.stringify({
           kind: "workflow-review-register",
           cursor:
-            "scope:kind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview&definitionHash=scope-def%3Aops%2Fworkflow%3Areview%3Av1&policyFilterVersion=policy%3A0&cursor=web-authority%3A1",
+            "scope:kind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview&definitionHash=scope-def%3Aworkflow%3Areview%3Av1&policyFilterVersion=policy%3A0&cursor=web-authority%3A1",
         }),
       }),
       env,
@@ -1588,7 +1588,7 @@ describe("web worker admission flows", () => {
   it("accepts graph-member updates after session access activation", async () => {
     const { durableObject, env } = createEndToEndWorkerEnv();
     const authority = await getDurableAuthority(durableObject);
-    const workerGraph = { ...core, ...ops } as const;
+    const workerGraph = { ...core, ...workflow } as const;
 
     await authority.executeCommand(
       {

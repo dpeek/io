@@ -35,7 +35,7 @@ describe("query workbench component", () => {
       parameterDefinitions: [],
       request: {
         query: {
-          indexId: "ops/workflow:missing-surface",
+          indexId: "workflow:missing-surface",
           kind: "collection",
           window: {
             limit: 25,
@@ -43,7 +43,7 @@ describe("query workbench component", () => {
         },
         version: serializedQueryVersion,
       },
-      surfaceId: "ops/workflow:missing-surface",
+      surfaceId: "workflow:missing-surface",
     });
 
     const html = renderToStaticMarkup(
@@ -82,7 +82,7 @@ describe("query workbench component", () => {
               name: "owner",
             },
           },
-          indexId: "ops/workflow:project-branch-board",
+          indexId: "workflow:project-branch-board",
           kind: "collection",
           window: {
             limit: 25,
@@ -90,7 +90,7 @@ describe("query workbench component", () => {
         },
         version: serializedQueryVersion,
       },
-      surfaceId: "ops/workflow:project-branch-board",
+      surfaceId: "workflow:project-branch-board",
     });
 
     const html = renderToStaticMarkup(
@@ -121,7 +121,7 @@ describe("query workbench component", () => {
       parameterDefinitions: [],
       request: {
         query: {
-          indexId: "ops/workflow:project-branch-board",
+          indexId: "workflow:project-branch-board",
           kind: "collection",
           window: {
             limit: 1,
@@ -129,7 +129,7 @@ describe("query workbench component", () => {
         },
         version: serializedQueryVersion,
       },
-      surfaceId: "ops/workflow:project-branch-board",
+      surfaceId: "workflow:project-branch-board",
     });
     store.saveView({
       id: "saved-view:owner-board",
@@ -152,7 +152,7 @@ describe("query workbench component", () => {
           rendererId: "core:card-grid",
         },
       },
-      surfaceId: "ops/workflow:project-branch-board",
+      surfaceId: "workflow:project-branch-board",
     });
 
     const html = renderToStaticMarkup(

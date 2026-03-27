@@ -1,7 +1,7 @@
 import type {
   CommitQueueScopeResult,
   ProjectBranchScopeRepositoryObservation,
-} from "../graph/modules/ops/workflow/query.js";
+} from "../graph/modules/workflow/query.js";
 import type {
   WorkflowTuiActionModel,
   WorkflowTuiActionRequestStateModel,
@@ -44,12 +44,12 @@ function formatTimestamp(value: string | undefined) {
 
 function getSelectedCommitQueue(model: WorkflowTuiWorkflowSurfaceModel) {
   return model.commitQueues.find(
-    (commitQueue) => commitQueue.branch.workflowBranch.id === model.selectedBranchId,
+    (commitQueue) => commitQueue.branch.branch.id === model.selectedBranchId,
   );
 }
 
 function getSelectedBranchRow(model: WorkflowTuiWorkflowSurfaceModel) {
-  return model.branchBoard.rows.find((row) => row.workflowBranch.id === model.selectedBranchId);
+  return model.branchBoard.rows.find((row) => row.branch.id === model.selectedBranchId);
 }
 
 function getSelectedCommitRow(model: WorkflowTuiWorkflowSurfaceModel) {
@@ -57,7 +57,7 @@ function getSelectedCommitRow(model: WorkflowTuiWorkflowSurfaceModel) {
   if (!commitQueue) {
     return undefined;
   }
-  return commitQueue.rows.find((row) => row.workflowCommit.id === model.selectedCommitId);
+  return commitQueue.rows.find((row) => row.commit.id === model.selectedCommitId);
 }
 
 function renderRepositoryObservation(
@@ -82,11 +82,11 @@ function renderBranchBoardBody(model: WorkflowTuiWorkflowSurfaceModel) {
     lines.push("No workflow branches are currently available in scope.");
   } else {
     for (const row of model.branchBoard.rows) {
-      const selected = row.workflowBranch.id === model.selectedBranchId ? ">" : " ";
+      const selected = row.branch.id === model.selectedBranchId ? ">" : " ";
       lines.push(
-        `${selected} [${row.workflowBranch.state}] ${row.workflowBranch.title}${row.workflowBranch.queueRank !== undefined ? ` (#${row.workflowBranch.queueRank})` : ""}`,
+        `${selected} [${row.branch.state}] ${row.branch.title}${row.branch.queueRank !== undefined ? ` (#${row.branch.queueRank})` : ""}`,
       );
-      lines.push(`  key: ${row.workflowBranch.branchKey}`);
+      lines.push(`  key: ${row.branch.branchKey}`);
       lines.push(`  repo: ${renderRepositoryObservation(row.repositoryBranch)}`);
     }
   }
@@ -161,11 +161,11 @@ function renderBranchDetailBody(model: WorkflowTuiWorkflowSurfaceModel) {
   }
 
   const lines = [
-    `Title: ${selectedRow.workflowBranch.title}`,
-    `State: ${selectedRow.workflowBranch.state}`,
-    `Key: ${selectedRow.workflowBranch.branchKey}`,
-    `Queue rank: ${selectedRow.workflowBranch.queueRank ?? "unranked"}`,
-    `Goal: ${selectedRow.workflowBranch.goalSummary ?? "Not recorded"}`,
+    `Title: ${selectedRow.branch.title}`,
+    `State: ${selectedRow.branch.state}`,
+    `Key: ${selectedRow.branch.branchKey}`,
+    `Queue rank: ${selectedRow.branch.queueRank ?? "unranked"}`,
+    `Goal: ${selectedRow.branch.goalSummary ?? "Not recorded"}`,
     `Repository branch: ${renderRepositoryObservation(selectedRow.repositoryBranch)}`,
     `Latest session: ${renderLatestSession(selectedQueue)}`,
     `Projected at: ${formatTimestamp(model.branchBoard.freshness.projectedAt)}`,
@@ -192,7 +192,7 @@ function renderBranchDetailBody(model: WorkflowTuiWorkflowSurfaceModel) {
 
 function renderRepositoryCommitSummary(commitQueue: CommitQueueScopeResult, commitId: string) {
   const repositoryCommit = commitQueue.rows.find(
-    (row) => row.workflowCommit.id === commitId,
+    (row) => row.commit.id === commitId,
   )?.repositoryCommit;
   if (!repositoryCommit) {
     return "No repository commit attached.";
@@ -219,8 +219,8 @@ function renderCommitQueueBody(model: WorkflowTuiWorkflowSurfaceModel) {
   }
 
   const lines = [
-    `Branch: ${selectedQueue.branch.workflowBranch.title}`,
-    `Active commit: ${selectedQueue.branch.activeCommit?.workflowCommit.title ?? "None"}`,
+    `Branch: ${selectedQueue.branch.branch.title}`,
+    `Active commit: ${selectedQueue.branch.activeCommit?.commit.title ?? "None"}`,
     "",
   ];
 
@@ -230,14 +230,13 @@ function renderCommitQueueBody(model: WorkflowTuiWorkflowSurfaceModel) {
   }
 
   for (const row of selectedQueue.rows) {
-    const selected = row.workflowCommit.id === model.selectedCommitId ? ">" : " ";
-    const active =
-      row.workflowCommit.id === selectedQueue.branch.workflowBranch.activeCommitId ? "*" : " ";
+    const selected = row.commit.id === model.selectedCommitId ? ">" : " ";
+    const active = row.commit.id === selectedQueue.branch.branch.activeCommitId ? "*" : " ";
     lines.push(
-      `${selected}${active} ${row.workflowCommit.order}. [${row.workflowCommit.state}] ${row.workflowCommit.title}`,
+      `${selected}${active} ${row.commit.order}. [${row.commit.state}] ${row.commit.title}`,
     );
-    lines.push(`   key: ${row.workflowCommit.commitKey}`);
-    lines.push(`   repo: ${renderRepositoryCommitSummary(selectedQueue, row.workflowCommit.id)}`);
+    lines.push(`   key: ${row.commit.commitKey}`);
+    lines.push(`   repo: ${renderRepositoryCommitSummary(selectedQueue, row.commit.id)}`);
   }
 
   if (selectedQueue.nextCursor) {
@@ -281,7 +280,7 @@ function buildWorkflowSummaryLines(model: WorkflowTuiWorkflowSurfaceModel) {
   return [
     "IO Workflow TUI",
     `Project: ${model.branchBoard.project.title} (${model.branchBoard.project.projectKey})${repository ? ` | Repository: ${repository.title} -> ${repository.defaultBaseBranch}` : ""} | Focus: ${formatFocusLabel(model.focus)}`,
-    `Selected branch: ${selectedRow ? `${selectedRow.workflowBranch.title} [${selectedRow.workflowBranch.state}]` : "none"}${selectedCommit ? ` | Selected commit: ${selectedCommit.workflowCommit.title} [${selectedCommit.workflowCommit.state}]` : ""}`,
+    `Selected branch: ${selectedRow ? `${selectedRow.branch.title} [${selectedRow.branch.state}]` : "none"}${selectedCommit ? ` | Selected commit: ${selectedCommit.commit.title} [${selectedCommit.commit.state}]` : ""}`,
   ];
 }
 

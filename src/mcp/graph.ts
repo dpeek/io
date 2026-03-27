@@ -12,8 +12,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import * as z from "zod/v4";
 
 import { core, coreGraphBootstrapOptions } from "../graph/modules/index.js";
-import { ops } from "../graph/modules/ops.js";
-import { pkm } from "../graph/modules/pkm.js";
+import { workflow } from "../graph/modules/workflow.js";
 import {
   GraphMcpToolError,
   buildSelectionFromPaths,
@@ -142,7 +141,7 @@ export type GraphMcpSession = {
   sync(): Promise<void>;
 };
 
-const graphNamespace = { ...pkm, ...ops } as const;
+const graphNamespace = { ...workflow } as const;
 const graphDefinitions = { ...core, ...graphNamespace } as const;
 
 function getGraphMcpSessionMetadata(namespace: GraphMcpNamespace): GraphMcpSessionMetadata {

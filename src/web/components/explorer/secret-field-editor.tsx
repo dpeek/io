@@ -1,4 +1,4 @@
-import { usePredicateField } from "@io/core/graph/runtime/react";
+import { usePredicateField } from "@io/graph-react";
 import { Button } from "@io/web/button";
 import { Input } from "@io/web/input";
 import { useEffect, useState } from "react";

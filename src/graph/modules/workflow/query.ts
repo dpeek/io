@@ -6,9 +6,8 @@ import {
   type RetainedProjectionRowRecord,
 } from "@io/graph-projection";
 
-import { core } from "../../core.js";
-import opsIds from "../../ops.json";
-import { pkm } from "../../pkm.js";
+import { core } from "../core.js";
+import workflowIds from "../workflow.json";
 import type {
   RepositoryBranchSummary,
   RepositoryCommitSummary,
@@ -21,10 +20,11 @@ import type {
 import {
   repositoryCommitLeaseStateValues,
   repositoryCommitStateValues,
-  workflowBranchStateValues,
-  workflowCommitStateValues,
+  branchStateValues,
+  commitStateValues,
 } from "./command.js";
-import { workflowProjectionMetadata } from "./projection.js";
+import { documentSchema } from "./document/schema.js";
+import { projectionMetadata } from "./projection.js";
 import {
   agentSession,
   agentSessionEvent,
@@ -41,16 +41,16 @@ import {
   repositoryCommit,
   repositoryCommitLeaseState,
   repositoryCommitState,
-  workflowArtifact,
-  workflowArtifactKind,
-  workflowBranch,
-  workflowBranchState,
-  workflowCommit,
-  workflowCommitState,
-  workflowDecision,
-  workflowDecisionKind,
-  workflowProject,
-  workflowRepository,
+  artifact,
+  artifactKind,
+  branch,
+  branchState,
+  commit,
+  commitState,
+  decision,
+  decisionKind,
+  project,
+  repository,
   contextBundle,
   contextBundleEntry,
   contextBundleEntrySource,
@@ -116,7 +116,7 @@ export interface ProjectBranchScopeRepositoryObservation {
 
 export interface ProjectBranchScopeManagedRow {
   readonly repositoryBranch?: ProjectBranchScopeRepositoryObservation;
-  readonly workflowBranch: WorkflowBranchSummary;
+  readonly branch: WorkflowBranchSummary;
 }
 
 export interface ProjectBranchScopeFreshness {
@@ -166,7 +166,7 @@ export type CommitQueueScopeRepositoryObservation = ProjectBranchScopeRepository
 
 export interface CommitQueueScopeCommitRow {
   readonly repositoryCommit?: RepositoryCommitSummary;
-  readonly workflowCommit: WorkflowCommitSummary;
+  readonly commit: WorkflowCommitSummary;
 }
 
 export interface CommitQueueScopeSessionSummary {
@@ -183,7 +183,7 @@ export interface CommitQueueScopeBranchDetail {
   readonly activeCommit?: CommitQueueScopeCommitRow;
   readonly latestSession?: CommitQueueScopeSessionSummary;
   readonly repositoryBranch?: CommitQueueScopeRepositoryObservation;
-  readonly workflowBranch: WorkflowBranchSummary;
+  readonly branch: WorkflowBranchSummary;
 }
 
 export type CommitQueueScopeFreshness = ProjectBranchScopeFreshness;
@@ -195,13 +195,13 @@ export interface CommitQueueScopeResult {
   readonly rows: readonly CommitQueueScopeCommitRow[];
 }
 
-const workflowProjectionWorkflowSchema = applyIdMap(opsIds, {
-  workflowProject,
-  workflowRepository,
-  workflowBranchState,
-  workflowBranch,
-  workflowCommitState,
-  workflowCommit,
+const projectionWorkflowSchema = applyIdMap(workflowIds, {
+  project,
+  repository,
+  branchState,
+  branch,
+  commitState,
+  commit,
   repositoryBranch,
   repositoryCommitState,
   repositoryCommitLeaseState,
@@ -217,26 +217,26 @@ const workflowProjectionWorkflowSchema = applyIdMap(opsIds, {
   agentSessionStream,
   agentSessionRawLineEncoding,
   agentSessionEvent,
-  workflowArtifactKind,
-  workflowArtifact,
-  workflowDecisionKind,
-  workflowDecision,
+  artifactKind,
+  artifact,
+  decisionKind,
+  decision,
   contextBundle,
   contextBundleEntrySource,
   contextBundleEntry,
 });
 
-export const workflowProjectionSchema = {
+export const projectionSchema = {
   ...core,
-  ...pkm,
-  ...workflowProjectionWorkflowSchema,
+  ...documentSchema,
+  ...projectionWorkflowSchema,
 } as const;
 
-type WorkflowProjectionClient = GraphClient<typeof workflowProjectionSchema>;
-type WorkflowProjectEntity = ReturnType<WorkflowProjectionClient["workflowProject"]["get"]>;
-type WorkflowRepositoryEntity = ReturnType<WorkflowProjectionClient["workflowRepository"]["get"]>;
-type WorkflowBranchEntity = ReturnType<WorkflowProjectionClient["workflowBranch"]["get"]>;
-type WorkflowCommitEntity = ReturnType<WorkflowProjectionClient["workflowCommit"]["get"]>;
+type WorkflowProjectionClient = GraphClient<typeof projectionSchema>;
+type WorkflowProjectEntity = ReturnType<WorkflowProjectionClient["project"]["get"]>;
+type WorkflowRepositoryEntity = ReturnType<WorkflowProjectionClient["repository"]["get"]>;
+type WorkflowBranchEntity = ReturnType<WorkflowProjectionClient["branch"]["get"]>;
+type WorkflowCommitEntity = ReturnType<WorkflowProjectionClient["commit"]["get"]>;
 type RepositoryBranchEntity = ReturnType<WorkflowProjectionClient["repositoryBranch"]["get"]>;
 type RepositoryCommitEntity = ReturnType<WorkflowProjectionClient["repositoryCommit"]["get"]>;
 type AgentSessionEntity = ReturnType<WorkflowProjectionClient["agentSession"]["get"]>;
@@ -246,16 +246,16 @@ export interface WorkflowProjectionGraphClient {
   readonly document: {
     get(id: string): DocumentEntity;
   };
-  readonly workflowProject: {
+  readonly project: {
     list(): WorkflowProjectEntity[];
   };
-  readonly workflowRepository: {
+  readonly repository: {
     list(): WorkflowRepositoryEntity[];
   };
-  readonly workflowBranch: {
+  readonly branch: {
     list(): WorkflowBranchEntity[];
   };
-  readonly workflowCommit: {
+  readonly commit: {
     list(): WorkflowCommitEntity[];
   };
   readonly repositoryBranch: {
@@ -310,21 +310,15 @@ const agentSessionRuntimeStateValues = [
   "cancelled",
 ] as const;
 const agentSessionSubjectKindValues = ["branch", "commit"] as const;
-const workflowProjectionCursorPrefix = "workflow-projection:";
+const projectionCursorPrefix = "workflow-projection:";
 
-const workflowBranchStateIds = Object.fromEntries(
-  workflowBranchStateValues.map((value) => [
-    value,
-    resolvedEnumValue(workflowBranchState.values[value]),
-  ]),
+const branchStateIds = Object.fromEntries(
+  branchStateValues.map((value) => [value, resolvedEnumValue(branchState.values[value])]),
 ) as Record<WorkflowBranchStateValue, string>;
 
-const workflowCommitStateIds = Object.fromEntries(
-  workflowCommitStateValues.map((value) => [
-    value,
-    resolvedEnumValue(workflowCommitState.values[value]),
-  ]),
-) as Record<(typeof workflowCommitStateValues)[number], string>;
+const commitStateIds = Object.fromEntries(
+  commitStateValues.map((value) => [value, resolvedEnumValue(commitState.values[value])]),
+) as Record<(typeof commitStateValues)[number], string>;
 
 const repositoryCommitStateIds = Object.fromEntries(
   repositoryCommitStateValues.map((value) => [
@@ -358,16 +352,14 @@ const agentSessionSubjectKindIds = Object.fromEntries(
   ]),
 ) as Record<(typeof agentSessionSubjectKindValues)[number], string>;
 
-const workflowBranchStateKeysById = invertRecord(workflowBranchStateIds);
-const workflowCommitStateKeysById = invertRecord(workflowCommitStateIds);
+const branchStateKeysById = invertRecord(branchStateIds);
+const commitStateKeysById = invertRecord(commitStateIds);
 const repositoryCommitStateKeysById = invertRecord(repositoryCommitStateIds);
 const repositoryCommitLeaseStateKeysById = invertRecord(repositoryCommitLeaseStateIds);
 const agentSessionKindKeysById = invertRecord(agentSessionKindIds);
 const agentSessionRuntimeStateKeysById = invertRecord(agentSessionRuntimeStateIds);
 const agentSessionSubjectKindKeysById = invertRecord(agentSessionSubjectKindIds);
-const workflowBranchStateOrder = new Map(
-  workflowBranchStateValues.map((value, index) => [value, index] as const),
-);
+const branchStateOrder = new Map(branchStateValues.map((value, index) => [value, index] as const));
 
 export class WorkflowProjectionQueryError extends Error {
   readonly code: WorkflowProjectionErrorCode;
@@ -385,7 +377,7 @@ export interface WorkflowProjectionIndexOptions {
 }
 
 export interface WorkflowProjectionIndex {
-  readonly projections: typeof workflowProjectionMetadata;
+  readonly projections: typeof projectionMetadata;
   readonly projectedAt: string;
   readonly projectionCursor: string;
   readCommitQueueScope(query: CommitQueueScopeQuery): CommitQueueScopeResult;
@@ -398,76 +390,76 @@ type RetainedProjectBranchBoardRow =
   | RetainedProjectionRowRecord<
       "branch",
       WorkflowBranchSummary,
-      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
-      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+      typeof projectionMetadata.projectBranchBoard.projectionId,
+      typeof projectionMetadata.projectBranchBoard.definitionHash
     >
   | RetainedProjectionRowRecord<
       "managed-repository-branch",
       ProjectBranchScopeRepositoryObservation,
-      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
-      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+      typeof projectionMetadata.projectBranchBoard.projectionId,
+      typeof projectionMetadata.projectBranchBoard.definitionHash
     >
   | RetainedProjectionRowRecord<
       "project",
       WorkflowProjectSummary,
-      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
-      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+      typeof projectionMetadata.projectBranchBoard.projectionId,
+      typeof projectionMetadata.projectBranchBoard.definitionHash
     >
   | RetainedProjectionRowRecord<
       "project-freshness",
       WorkflowProjectionFreshnessEntry,
-      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
-      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+      typeof projectionMetadata.projectBranchBoard.projectionId,
+      typeof projectionMetadata.projectBranchBoard.definitionHash
     >
   | RetainedProjectionRowRecord<
       "repository",
       WorkflowRepositorySummary,
-      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
-      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+      typeof projectionMetadata.projectBranchBoard.projectionId,
+      typeof projectionMetadata.projectBranchBoard.definitionHash
     >
   | RetainedProjectionRowRecord<
       "unmanaged-repository-branch",
       ProjectBranchScopeRepositoryObservation,
-      typeof workflowProjectionMetadata.projectBranchBoard.projectionId,
-      typeof workflowProjectionMetadata.projectBranchBoard.definitionHash
+      typeof projectionMetadata.projectBranchBoard.projectionId,
+      typeof projectionMetadata.projectBranchBoard.definitionHash
     >;
 
 type RetainedBranchCommitQueueRow =
   | RetainedProjectionRowRecord<
       "active-commit",
       CommitQueueScopeCommitRow,
-      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
-      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+      typeof projectionMetadata.branchCommitQueue.projectionId,
+      typeof projectionMetadata.branchCommitQueue.definitionHash
     >
   | RetainedProjectionRowRecord<
       "branch",
       WorkflowBranchSummary,
-      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
-      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+      typeof projectionMetadata.branchCommitQueue.projectionId,
+      typeof projectionMetadata.branchCommitQueue.definitionHash
     >
   | RetainedProjectionRowRecord<
       "commit-row",
       CommitQueueScopeCommitRow,
-      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
-      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+      typeof projectionMetadata.branchCommitQueue.projectionId,
+      typeof projectionMetadata.branchCommitQueue.definitionHash
     >
   | RetainedProjectionRowRecord<
       "latest-session",
       CommitQueueScopeSessionSummary,
-      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
-      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+      typeof projectionMetadata.branchCommitQueue.projectionId,
+      typeof projectionMetadata.branchCommitQueue.definitionHash
     >
   | RetainedProjectionRowRecord<
       "managed-repository-branch",
       ProjectBranchScopeRepositoryObservation,
-      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
-      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+      typeof projectionMetadata.branchCommitQueue.projectionId,
+      typeof projectionMetadata.branchCommitQueue.definitionHash
     >
   | RetainedProjectionRowRecord<
       "project-freshness",
       WorkflowProjectionFreshnessEntry,
-      typeof workflowProjectionMetadata.branchCommitQueue.projectionId,
-      typeof workflowProjectionMetadata.branchCommitQueue.definitionHash
+      typeof projectionMetadata.branchCommitQueue.projectionId,
+      typeof projectionMetadata.branchCommitQueue.definitionHash
     >;
 
 export type RetainedWorkflowProjectionRow =
@@ -506,8 +498,8 @@ export function createRetainedWorkflowProjectionState(
 
   for (const project of state.projectById.values()) {
     rows.push({
-      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      projectionId: projectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
       rowKind: "project",
       rowKey: project.id,
       sortKey: project.id,
@@ -516,8 +508,8 @@ export function createRetainedWorkflowProjectionState(
   }
   for (const repository of state.repositoryByProjectId.values()) {
     rows.push({
-      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      projectionId: projectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
       rowKind: "repository",
       rowKey: repository.projectId,
       sortKey: repository.projectId,
@@ -526,16 +518,16 @@ export function createRetainedWorkflowProjectionState(
   }
   for (const [projectId, freshness] of state.projectFreshnessById.entries()) {
     rows.push({
-      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      projectionId: projectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
       rowKind: "project-freshness",
       rowKey: projectId,
       sortKey: projectId,
       value: freshness,
     });
     rows.push({
-      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      projectionId: projectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
       rowKind: "project-freshness",
       rowKey: projectId,
       sortKey: projectId,
@@ -544,16 +536,16 @@ export function createRetainedWorkflowProjectionState(
   }
   for (const branch of state.branchById.values()) {
     rows.push({
-      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      projectionId: projectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
       rowKind: "branch",
       rowKey: branch.id,
       sortKey: `${branch.projectId}\u0000${branch.id}`,
       value: branch,
     });
     rows.push({
-      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      projectionId: projectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
       rowKind: "branch",
       rowKey: branch.id,
       sortKey: branch.id,
@@ -562,16 +554,16 @@ export function createRetainedWorkflowProjectionState(
   }
   for (const [branchId, observation] of state.managedRepositoryBranchByBranchId.entries()) {
     rows.push({
-      projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-      definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+      projectionId: projectionMetadata.projectBranchBoard.projectionId,
+      definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
       rowKind: "managed-repository-branch",
       rowKey: branchId,
       sortKey: branchId,
       value: observation,
     });
     rows.push({
-      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      projectionId: projectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
       rowKind: "managed-repository-branch",
       rowKey: branchId,
       sortKey: branchId,
@@ -581,8 +573,8 @@ export function createRetainedWorkflowProjectionState(
   for (const [projectId, observations] of state.unmanagedRepositoryBranchesByProjectId.entries()) {
     observations.forEach((observation) => {
       rows.push({
-        projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-        definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+        projectionId: projectionMetadata.projectBranchBoard.projectionId,
+        definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
         rowKind: "unmanaged-repository-branch",
         rowKey: observation.repositoryBranch.id,
         sortKey: `${projectId}\u0000${observation.repositoryBranch.branchName}\u0000${observation.repositoryBranch.id}`,
@@ -592,8 +584,8 @@ export function createRetainedWorkflowProjectionState(
   }
   for (const [branchId, row] of state.activeCommitByBranchId.entries()) {
     rows.push({
-      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      projectionId: projectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
       rowKind: "active-commit",
       rowKey: branchId,
       sortKey: branchId,
@@ -603,19 +595,19 @@ export function createRetainedWorkflowProjectionState(
   for (const [branchId, rowsForBranch] of state.commitRowsByBranchId.entries()) {
     rowsForBranch.forEach((row, index) => {
       rows.push({
-        projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-        definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+        projectionId: projectionMetadata.branchCommitQueue.projectionId,
+        definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
         rowKind: "commit-row",
-        rowKey: row.workflowCommit.id,
-        sortKey: `${branchId}\u0000${index.toString().padStart(8, "0")}\u0000${row.workflowCommit.id}`,
+        rowKey: row.commit.id,
+        sortKey: `${branchId}\u0000${index.toString().padStart(8, "0")}\u0000${row.commit.id}`,
         value: row,
       });
     });
   }
   for (const [branchId, session] of state.latestSessionByBranchId.entries()) {
     rows.push({
-      projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-      definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+      projectionId: projectionMetadata.branchCommitQueue.projectionId,
+      definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
       rowKind: "latest-session",
       rowKey: branchId,
       sortKey: branchId,
@@ -626,15 +618,15 @@ export function createRetainedWorkflowProjectionState(
   return {
     checkpoints: [
       {
-        projectionId: workflowProjectionMetadata.projectBranchBoard.projectionId,
-        definitionHash: workflowProjectionMetadata.projectBranchBoard.definitionHash,
+        projectionId: projectionMetadata.projectBranchBoard.projectionId,
+        definitionHash: projectionMetadata.projectBranchBoard.definitionHash,
         projectedAt,
         projectionCursor,
         sourceCursor: options.sourceCursor,
       },
       {
-        projectionId: workflowProjectionMetadata.branchCommitQueue.projectionId,
-        definitionHash: workflowProjectionMetadata.branchCommitQueue.definitionHash,
+        projectionId: projectionMetadata.branchCommitQueue.projectionId,
+        definitionHash: projectionMetadata.branchCommitQueue.definitionHash,
         projectedAt,
         projectionCursor,
         sourceCursor: options.sourceCursor,
@@ -649,13 +641,13 @@ export function createWorkflowProjectionIndexFromRetainedState(
 ): WorkflowProjectionIndex {
   const projectBranchBoardCheckpoint = requireRetainedWorkflowProjectionCheckpoint(
     retained,
-    workflowProjectionMetadata.projectBranchBoard.projectionId,
-    workflowProjectionMetadata.projectBranchBoard.definitionHash,
+    projectionMetadata.projectBranchBoard.projectionId,
+    projectionMetadata.projectBranchBoard.definitionHash,
   );
   const branchCommitQueueCheckpoint = requireRetainedWorkflowProjectionCheckpoint(
     retained,
-    workflowProjectionMetadata.branchCommitQueue.projectionId,
-    workflowProjectionMetadata.branchCommitQueue.definitionHash,
+    projectionMetadata.branchCommitQueue.projectionId,
+    projectionMetadata.branchCommitQueue.definitionHash,
   );
 
   if (
@@ -709,7 +701,7 @@ export function createWorkflowProjectionIndexFromRetainedState(
         activeCommitByBranchId.set(row.rowKey, row.value);
         break;
       case "commit-row": {
-        const branchId = row.value.workflowCommit.branchId;
+        const branchId = row.value.commit.branchId;
         const existing = commitRowsByBranchId.get(branchId) ?? [];
         existing.push(row.value);
         commitRowsByBranchId.set(branchId, existing);
@@ -794,11 +786,11 @@ function createWorkflowProjectionIndexFromState(
     return {
       project,
       ...(repository ? { repository } : {}),
-      rows: page.items.map((workflowBranch) => ({
-        workflowBranch,
-        ...(state.managedRepositoryBranchByBranchId.get(workflowBranch.id)
+      rows: page.items.map((branch) => ({
+        branch,
+        ...(state.managedRepositoryBranchByBranchId.get(branch.id)
           ? {
-              repositoryBranch: state.managedRepositoryBranchByBranchId.get(workflowBranch.id),
+              repositoryBranch: state.managedRepositoryBranchByBranchId.get(branch.id),
             }
           : {}),
       })),
@@ -811,8 +803,8 @@ function createWorkflowProjectionIndexFromState(
   }
 
   function readCommitQueueScope(query: CommitQueueScopeQuery): CommitQueueScopeResult {
-    const workflowBranch = state.branchById.get(query.branchId);
-    if (!workflowBranch) {
+    const branch = state.branchById.get(query.branchId);
+    if (!branch) {
       throw new WorkflowProjectionQueryError(
         "branch-not-found",
         `Workflow branch "${query.branchId}" was not found in the current projection.`,
@@ -831,7 +823,7 @@ function createWorkflowProjectionIndexFromState(
 
     return {
       branch: {
-        workflowBranch,
+        branch,
         ...(state.managedRepositoryBranchByBranchId.get(query.branchId)
           ? {
               repositoryBranch: state.managedRepositoryBranchByBranchId.get(query.branchId),
@@ -848,14 +840,14 @@ function createWorkflowProjectionIndexFromState(
       freshness: createScopeFreshness(
         projectedAt,
         projectionCursor,
-        state.projectFreshnessById.get(workflowBranch.projectId),
+        state.projectFreshnessById.get(branch.projectId),
       ),
       ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
     };
   }
 
   return {
-    projections: workflowProjectionMetadata,
+    projections: projectionMetadata,
     projectedAt,
     projectionCursor,
     readProjectBranchScope,
@@ -891,10 +883,10 @@ function buildWorkflowProjectionIndexState(
   graph: WorkflowProjectionGraphClient,
 ): WorkflowProjectionIndexState {
   const projectById = new Map(
-    graph.workflowProject.list().map((project) => [project.id, buildProjectSummary(project)]),
+    graph.project.list().map((project) => [project.id, buildProjectSummary(project)]),
   );
   const repositoriesByProjectId = groupBy(
-    graph.workflowRepository.list().map(buildRepositorySummary),
+    graph.repository.list().map(buildRepositorySummary),
     (repository) => repository.projectId,
   );
   const repositoryByProjectId = new Map<string, WorkflowRepositorySummary>();
@@ -905,7 +897,7 @@ function buildWorkflowProjectionIndexState(
 
   const branchById = new Map<string, WorkflowBranchSummary>();
   const branchesByProjectId = groupBy(
-    graph.workflowBranch.list().map((branch) => {
+    graph.branch.list().map((branch) => {
       const summary = buildBranchSummary(graph, branch);
       branchById.set(summary.id, summary);
       return summary;
@@ -916,30 +908,27 @@ function buildWorkflowProjectionIndexState(
   const repositoryCommitByWorkflowCommitId = new Map<string, RepositoryCommitSummary>();
   const repositoryCommitsByWorkflowCommitId = groupBy(
     graph.repositoryCommit.list().map(buildRepositoryCommitSummary),
-    (repositoryCommit) => repositoryCommit.workflowCommitId,
+    (repositoryCommit) => repositoryCommit.commitId,
   );
-  for (const [
-    workflowCommitId,
-    repositoryCommits,
-  ] of repositoryCommitsByWorkflowCommitId.entries()) {
-    if (!workflowCommitId) continue;
+  for (const [commitId, repositoryCommits] of repositoryCommitsByWorkflowCommitId.entries()) {
+    if (!commitId) continue;
     const sorted = [...repositoryCommits].sort(compareRepositoryCommitSummaries);
-    if (sorted[0]) repositoryCommitByWorkflowCommitId.set(workflowCommitId, sorted[0]);
+    if (sorted[0]) repositoryCommitByWorkflowCommitId.set(commitId, sorted[0]);
   }
 
   const commitRowsByBranchId = groupBy(
-    graph.workflowCommit.list().map((commit) => {
-      const workflowCommitSummary = buildCommitSummary(commit);
+    graph.commit.list().map((commit) => {
+      const commitSummary = buildCommitSummary(commit);
       return {
-        workflowCommit: workflowCommitSummary,
-        ...(repositoryCommitByWorkflowCommitId.get(workflowCommitSummary.id)
+        commit: commitSummary,
+        ...(repositoryCommitByWorkflowCommitId.get(commitSummary.id)
           ? {
-              repositoryCommit: repositoryCommitByWorkflowCommitId.get(workflowCommitSummary.id),
+              repositoryCommit: repositoryCommitByWorkflowCommitId.get(commitSummary.id),
             }
           : {}),
       } satisfies CommitQueueScopeCommitRow;
     }),
-    (row) => row.workflowCommit.branchId,
+    (row) => row.commit.branchId,
   );
   for (const [branchId, rows] of commitRowsByBranchId.entries()) {
     commitRowsByBranchId.set(branchId, [...rows].sort(compareCommitQueueRows));
@@ -961,7 +950,7 @@ function buildWorkflowProjectionIndexState(
     const unmanaged = repositoryBranches
       .filter(
         (repositoryBranchSummary) =>
-          !repositoryBranchSummary.managed || !repositoryBranchSummary.workflowBranchId,
+          !repositoryBranchSummary.managed || !repositoryBranchSummary.branchId,
       )
       .map((repositoryBranchSummary) => ({
         freshness: resolveRepositoryObservationFreshness(repositoryBranchSummary),
@@ -973,9 +962,9 @@ function buildWorkflowProjectionIndexState(
     const managedByBranchId = groupBy(
       repositoryBranches.filter(
         (repositoryBranchSummary) =>
-          repositoryBranchSummary.managed && Boolean(repositoryBranchSummary.workflowBranchId),
+          repositoryBranchSummary.managed && Boolean(repositoryBranchSummary.branchId),
       ),
-      (repositoryBranchSummary) => repositoryBranchSummary.workflowBranchId,
+      (repositoryBranchSummary) => repositoryBranchSummary.branchId,
     );
     for (const [branchId, managedRepositoryBranches] of managedByBranchId.entries()) {
       if (!branchId) continue;
@@ -992,7 +981,7 @@ function buildWorkflowProjectionIndexState(
   for (const branch of branchById.values()) {
     if (!branch.activeCommitId) continue;
     const row = (commitRowsByBranchId.get(branch.id) ?? []).find(
-      (commitRow) => commitRow.workflowCommit.id === branch.activeCommitId,
+      (commitRow) => commitRow.commit.id === branch.activeCommitId,
     );
     if (row) activeCommitByBranchId.set(branch.id, row);
   }
@@ -1085,7 +1074,7 @@ function buildProjectionCursor(state: WorkflowProjectionIndexState): string {
   const latestUpdatedAt = collectProjectionTimestamps(state).sort(compareAscending).at(-1);
 
   return [
-    workflowProjectionCursorPrefix,
+    projectionCursorPrefix,
     latestUpdatedAt ?? "empty",
     state.projectById.size,
     state.repositoryByProjectId.size,
@@ -1145,7 +1134,7 @@ function paginateWorkflowProjectionRows<TItem>(input: {
 }
 
 function encodeWorkflowProjectionCursor(cursor: WorkflowProjectionCursor): string {
-  return `${workflowProjectionCursorPrefix}${Buffer.from(JSON.stringify(cursor), "utf8").toString(
+  return `${projectionCursorPrefix}${Buffer.from(JSON.stringify(cursor), "utf8").toString(
     "base64url",
   )}`;
 }
@@ -1156,8 +1145,8 @@ function decodeWorkflowProjectionCursor(
   projectionCursor: string,
   anchorId: string,
 ): WorkflowProjectionCursor {
-  const encoded = cursor.startsWith(workflowProjectionCursorPrefix)
-    ? cursor.slice(workflowProjectionCursorPrefix.length)
+  const encoded = cursor.startsWith(projectionCursorPrefix)
+    ? cursor.slice(projectionCursorPrefix.length)
     : "";
   if (!encoded) {
     throw new WorkflowProjectionQueryError(
@@ -1228,8 +1217,8 @@ function compareWorkflowBranchesByField(
       return compareAscending(left.title, right.title);
     case "state":
       return compareOptionalNumber(
-        workflowBranchStateOrder.get(left.state),
-        workflowBranchStateOrder.get(right.state),
+        branchStateOrder.get(left.state),
+        branchStateOrder.get(right.state),
       );
   }
 }
@@ -1250,10 +1239,10 @@ function compareCommitQueueRows(
   right: CommitQueueScopeCommitRow,
 ): number {
   return (
-    compareOptionalNumber(left.workflowCommit.order, right.workflowCommit.order) ||
-    compareAscending(left.workflowCommit.createdAt, right.workflowCommit.createdAt) ||
-    compareAscending(left.workflowCommit.updatedAt, right.workflowCommit.updatedAt) ||
-    compareAscending(left.workflowCommit.id, right.workflowCommit.id)
+    compareOptionalNumber(left.commit.order, right.commit.order) ||
+    compareAscending(left.commit.createdAt, right.commit.createdAt) ||
+    compareAscending(left.commit.updatedAt, right.commit.updatedAt) ||
+    compareAscending(left.commit.id, right.commit.id)
   );
 }
 
@@ -1349,7 +1338,7 @@ function collectProjectionTimestamps(state: WorkflowProjectionIndexState): strin
     ...Array.from(state.commitRowsByBranchId.values()).flatMap((rows) =>
       rows.flatMap((row) =>
         [
-          row.workflowCommit.updatedAt,
+          row.commit.updatedAt,
           row.repositoryCommit?.updatedAt,
           row.repositoryCommit?.committedAt,
         ].filter((value): value is string => Boolean(value)),
@@ -1460,7 +1449,7 @@ function buildRepositoryBranchSummary(entity: RepositoryBranchEntity): Repositor
     title: entity.name,
     projectId: entity.project,
     repositoryId: entity.repository,
-    ...(entity.workflowBranch ? { workflowBranchId: entity.workflowBranch } : {}),
+    ...(entity.branch ? { branchId: entity.branch } : {}),
     managed: entity.managed,
     branchName: entity.branchName,
     baseBranchName: entity.baseBranchName,
@@ -1482,7 +1471,7 @@ function buildRepositoryCommitSummary(entity: RepositoryCommitEntity): Repositor
     title: entity.name,
     repositoryId: entity.repository,
     ...(entity.repositoryBranch ? { repositoryBranchId: entity.repositoryBranch } : {}),
-    ...(entity.workflowCommit ? { workflowCommitId: entity.workflowCommit } : {}),
+    ...(entity.commit ? { commitId: entity.commit } : {}),
     state: decodeRepositoryCommitState(entity.state),
     worktree: {
       ...(entity.worktree.path ? { path: entity.worktree.path } : {}),
@@ -1528,7 +1517,7 @@ function buildCommitQueueScopeSessionSummary(entity: AgentSessionEntity):
 }
 
 function resolvedEnumValue(value: { key: string; id?: string }): string {
-  return value.id ?? opsIds.keys[value.key as keyof typeof opsIds.keys] ?? value.key;
+  return value.id ?? workflowIds.keys[value.key as keyof typeof workflowIds.keys] ?? value.key;
 }
 
 function invertRecord<TValue extends string>(
@@ -1541,7 +1530,7 @@ function invertRecord<TValue extends string>(
 }
 
 function decodeWorkflowBranchState(value: string): WorkflowBranchStateValue {
-  const state = workflowBranchStateKeysById[value];
+  const state = branchStateKeysById[value];
   if (!state) {
     throw new Error(`Unknown workflow branch state id "${value}".`);
   }
@@ -1549,7 +1538,7 @@ function decodeWorkflowBranchState(value: string): WorkflowBranchStateValue {
 }
 
 function decodeWorkflowCommitState(value: string): WorkflowCommitSummary["state"] {
-  const state = workflowCommitStateKeysById[value];
+  const state = commitStateKeysById[value];
   if (!state) {
     throw new Error(`Unknown workflow commit state id "${value}".`);
   }

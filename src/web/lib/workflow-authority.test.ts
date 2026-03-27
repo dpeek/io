@@ -2,8 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { createStore } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { type AuthorizationContext } from "@io/graph-authority";
 import { createGraphClient } from "@io/graph-client";
 
@@ -16,7 +15,7 @@ import {
 import { type WebAppAuthority } from "./authority.js";
 
 const workflowAuthorityTimeout = 20_000;
-const productGraph = { ...core, ...pkm, ...ops } as const;
+const productGraph = { ...core, ...workflow } as const;
 
 function createTestAuthorizationContext(
   overrides: Partial<AuthorizationContext> = {},
@@ -127,7 +126,7 @@ describe("workflow authority", () => {
           managed: true,
           projectId: project.summary.id,
           repositoryId: repository.summary.id,
-          workflowBranchId: branch.summary.id,
+          branchId: branch.summary.id,
           branchName: "workflow-authority",
           baseBranchName: "main",
           upstreamName: "origin/workflow-authority",
@@ -162,13 +161,13 @@ describe("workflow authority", () => {
           id: created.summary.id,
           title: "Workflow authority repo branch v2",
           managed: true,
-          workflowBranchId: branch.summary.id,
+          branchId: branch.summary.id,
           branchName: "workflow-authority-v2",
           baseBranchName: "develop",
         },
       });
       expect(persisted.managed).toBe(true);
-      expect(persisted.workflowBranch).toBe(branch.summary.id);
+      expect(persisted.branch).toBe(branch.summary.id);
       expect(persisted.branchName).toBe("workflow-authority-v2");
       expect(persisted.baseBranchName).toBe("develop");
       expect(persisted.upstreamName).toBeUndefined();
@@ -241,9 +240,9 @@ describe("workflow authority", () => {
         message: `Workflow branch "${fixture.branchId}" cannot be marked done while it still has open commits.`,
         status: 409,
       });
-      expect(
-        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId).state,
-      ).toBe(ops.workflowBranchState.values.active.id);
+      expect(readProductGraph(authority, authorization).branch.get(fixture.branchId).state).toBe(
+        workflow.branchState.values.active.id,
+      );
     },
     workflowAuthorityTimeout,
   );
@@ -278,12 +277,11 @@ describe("workflow authority", () => {
           state: "active",
         },
       });
+      expect(readProductGraph(authority, authorization).branch.get(fixture.branchId).state).toBe(
+        workflow.branchState.values.active.id,
+      );
       expect(
-        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId).state,
-      ).toBe(ops.workflowBranchState.values.active.id);
-      expect(
-        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId)
-          .activeCommit,
+        readProductGraph(authority, authorization).branch.get(fixture.branchId).activeCommit,
       ).toBe(commit.summary.id);
 
       const blocked = await executeWorkflowMutation(authority, authorization, {
@@ -297,12 +295,11 @@ describe("workflow authority", () => {
         id: commit.summary.id,
         state: "blocked",
       });
+      expect(readProductGraph(authority, authorization).branch.get(fixture.branchId).state).toBe(
+        workflow.branchState.values.blocked.id,
+      );
       expect(
-        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId).state,
-      ).toBe(ops.workflowBranchState.values.blocked.id);
-      expect(
-        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId)
-          .activeCommit,
+        readProductGraph(authority, authorization).branch.get(fixture.branchId).activeCommit,
       ).toBeUndefined();
 
       const ready = await executeWorkflowMutation(authority, authorization, {
@@ -316,12 +313,11 @@ describe("workflow authority", () => {
         id: commit.summary.id,
         state: "ready",
       });
+      expect(readProductGraph(authority, authorization).branch.get(fixture.branchId).state).toBe(
+        workflow.branchState.values.ready.id,
+      );
       expect(
-        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId).state,
-      ).toBe(ops.workflowBranchState.values.ready.id);
-      expect(
-        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId)
-          .activeCommit,
+        readProductGraph(authority, authorization).branch.get(fixture.branchId).activeCommit,
       ).toBeUndefined();
     },
     workflowAuthorityTimeout,
@@ -351,7 +347,7 @@ describe("workflow authority", () => {
         action: "createRepositoryCommit",
         repositoryId: fixture.repositoryId,
         repositoryBranchId: fixture.repositoryBranchId,
-        workflowCommitId: commit.summary.id,
+        commitId: commit.summary.id,
         title: "Awaiting finalization",
         state: "attached",
         worktree: {
@@ -398,7 +394,7 @@ describe("workflow authority", () => {
       const repositoryCommit = await executeWorkflowMutation(authority, authorization, {
         action: "createRepositoryCommit",
         repositoryId: fixture.repositoryId,
-        workflowCommitId: commit.summary.id,
+        commitId: commit.summary.id,
         title: "Finalized commit",
         state: "attached",
         worktree: {
@@ -420,18 +416,17 @@ describe("workflow authority", () => {
           entity: "repository-commit",
           id: repositoryCommit.summary.id,
           state: "committed",
-          workflowCommitId: commit.summary.id,
+          commitId: commit.summary.id,
         },
       });
+      expect(readProductGraph(authority, authorization).commit.get(commit.summary.id).state).toBe(
+        workflow.commitState.values.committed.id,
+      );
+      expect(readProductGraph(authority, authorization).branch.get(fixture.branchId).state).toBe(
+        workflow.branchState.values.done.id,
+      );
       expect(
-        readProductGraph(authority, authorization).workflowCommit.get(commit.summary.id).state,
-      ).toBe(ops.workflowCommitState.values.committed.id);
-      expect(
-        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId).state,
-      ).toBe(ops.workflowBranchState.values.done.id);
-      expect(
-        readProductGraph(authority, authorization).workflowBranch.get(fixture.branchId)
-          .activeCommit,
+        readProductGraph(authority, authorization).branch.get(fixture.branchId).activeCommit,
       ).toBeUndefined();
     },
     workflowAuthorityTimeout,

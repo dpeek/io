@@ -4,19 +4,19 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 
 import { bootstrap } from "@io/graph-bootstrap";
 import { createSyncedGraphClient, createGraphClient } from "@io/graph-client";
-import { createTotalSyncPayload } from "@io/graph-sync";
-import { createTestRenderer } from "@opentui/core/testing";
-import { createRoot, flushSync } from "@opentui/react";
-import { act } from "react";
-
 import {
   GraphRuntimeProvider,
   useGraphQuery,
   useGraphRuntime,
   useGraphSyncState,
-} from "../graph/adapters/react-opentui/index.js";
+} from "@io/graph-react";
+import { createTotalSyncPayload } from "@io/graph-sync";
+import { createTestRenderer } from "@opentui/core/testing";
+import { createRoot, flushSync } from "@opentui/react";
+import { act } from "react";
+
 import { createStore } from "../graph/index.js";
-import { core, coreGraphBootstrapOptions, ops, pkm } from "../graph/modules/index.js";
+import { core, coreGraphBootstrapOptions, workflow } from "../graph/modules/index.js";
 import { useCommitQueueScope, useProjectBranchScope, useWorkflowProjectionIndex } from "./index.js";
 
 (
@@ -25,7 +25,7 @@ import { useCommitQueueScope, useProjectBranchScope, useWorkflowProjectionIndex 
 
 setDefaultTimeout(10_000);
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
+const productGraph = { ...core, ...workflow } as const;
 
 function date(value: string): Date {
   return new Date(value);
@@ -36,7 +36,7 @@ function createWorkflowRuntimeFixture() {
   bootstrap(store, productGraph, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
 
-  const projectId = graph.workflowProject.create({
+  const projectId = graph.project.create({
     name: "IO",
     projectKey: "project:io",
     createdAt: date("2026-01-01T00:00:00.000Z"),
@@ -48,27 +48,27 @@ function createWorkflowRuntimeFixture() {
     createdAt: date("2026-01-02T00:00:00.000Z"),
     updatedAt: date("2026-01-05T00:00:00.000Z"),
   });
-  const branchId = graph.workflowBranch.create({
+  const branchId = graph.branch.create({
     name: "Workflow runtime contract",
     project: projectId,
     branchKey: "branch:workflow-runtime-contract",
-    state: ops.workflowBranchState.values.active.id,
+    state: workflow.branchState.values.active.id,
     queueRank: 1,
     goalDocument: goalDocumentId,
     createdAt: date("2026-01-02T00:00:00.000Z"),
     updatedAt: date("2026-01-05T00:00:00.000Z"),
   });
-  const commitId = graph.workflowCommit.create({
+  const commitId = graph.commit.create({
     name: "Define branch board scope",
     branch: branchId,
     commitKey: "commit:define-branch-board-scope",
-    state: ops.workflowCommitState.values.active.id,
+    state: workflow.commitState.values.active.id,
     order: 1,
     createdAt: date("2026-01-03T00:00:00.000Z"),
     updatedAt: date("2026-01-05T00:00:00.000Z"),
   });
 
-  graph.workflowBranch.update(branchId, {
+  graph.branch.update(branchId, {
     activeCommit: commitId,
     updatedAt: date("2026-01-05T01:00:00.000Z"),
   });
@@ -92,23 +92,19 @@ function WorkflowProjectionProbe({ branchId, projectId }: { branchId: string; pr
   const branchScope = useProjectBranchScope({ projectId });
   const commitQueue = useCommitQueueScope({ branchId });
   const projectCount = useGraphQuery(
-    (resolvedRuntime: typeof runtime) => resolvedRuntime.graph.workflowProject.list().length,
+    (resolvedRuntime: typeof runtime) => resolvedRuntime.graph.project.list().length,
   );
 
   return (
     <box flexDirection="column">
       <text content={`projects:${projectCount}`} />
-      <text content={`runtime:${runtime.graph.workflowBranch.list().length}`} />
+      <text content={`runtime:${runtime.graph.branch.list().length}`} />
       <text content={`pending:${syncState.pendingCount}`} />
       <text
         content={`projection:${projection.readProjectBranchScope({ projectId }).rows.length}`}
       />
-      <text
-        content={`branches:${branchScope.rows.map((row) => row.workflowBranch.title).join(" | ")}`}
-      />
-      <text
-        content={`commits:${commitQueue.rows.map((row) => row.workflowCommit.title).join(" | ")}`}
-      />
+      <text content={`branches:${branchScope.rows.map((row) => row.branch.title).join(" | ")}`} />
+      <text content={`commits:${commitQueue.rows.map((row) => row.commit.title).join(" | ")}`} />
     </box>
   );
 }
@@ -144,11 +140,11 @@ test("workflow-owned projection hooks read synced workflow scopes", async () => 
     expect(frame).toContain("Define branch board scope");
 
     await act(async () => {
-      graph.workflowCommit.create({
+      graph.commit.create({
         name: "Bind workflow queries",
         branch: ids.branchId,
         commitKey: "commit:bind-workflow-queries",
-        state: ops.workflowCommitState.values.ready.id,
+        state: workflow.commitState.values.ready.id,
         order: 2,
         createdAt: date("2026-01-06T00:00:00.000Z"),
         updatedAt: date("2026-01-06T00:00:00.000Z"),

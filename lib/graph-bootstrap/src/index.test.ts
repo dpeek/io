@@ -9,7 +9,7 @@ import {
   core,
   coreGraphBootstrapOptions,
   graphIconSeeds,
-  pkm,
+  workflow,
 } from "../../../src/graph/modules/index.js";
 import * as graphBootstrap from "./index.js";
 
@@ -92,7 +92,7 @@ describe("graph-bootstrap contract", () => {
   it("seeds domain-owned icons and reuses them across additive bootstrap passes", () => {
     const store = createGraphStore();
     graphBootstrap.bootstrap(store, core, coreGraphBootstrapOptions);
-    graphBootstrap.bootstrap(store, pkm, coreGraphBootstrapOptions);
+    graphBootstrap.bootstrap(store, workflow, coreGraphBootstrapOptions);
 
     const iconTypePredicateId = edgeId(core.node.fields.type);
     const iconSvgPredicateId = edgeId(core.icon.fields.svg);

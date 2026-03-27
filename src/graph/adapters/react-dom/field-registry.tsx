@@ -3,7 +3,8 @@ import {
   usePredicateField,
   type PredicateFieldProps,
   type PredicateFieldViewCapability,
-} from "../../runtime/react/index.js";
+} from "@io/graph-react";
+
 import { colorFieldViewCapability } from "./fields/color.js";
 import { durationFieldViewCapability } from "./fields/duration.js";
 import { markdownFieldViewCapability } from "./fields/markdown.js";

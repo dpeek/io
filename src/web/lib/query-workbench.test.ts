@@ -36,7 +36,7 @@ describe("query workbench route state", () => {
   it("round-trips draft preview requests through route state", () => {
     const request = {
       query: {
-        indexId: "ops/workflow:project-branch-board",
+        indexId: "workflow:project-branch-board",
         kind: "collection",
         window: { limit: 25 },
       },
@@ -105,7 +105,7 @@ describe("query workbench preview execution", () => {
             name: "owner",
           },
         },
-        indexId: "ops/workflow:project-branch-board",
+        indexId: "workflow:project-branch-board",
         kind: "collection",
         order: [{ direction: "desc", fieldId: "updatedAt" }],
         window: {
@@ -163,7 +163,7 @@ describe("query workbench saves", () => {
         queryKind: "collection",
         resultKind: "collection",
         sourceKinds: ["saved", "inline"],
-        surfaceId: "ops/workflow:project-branch-board",
+        surfaceId: "workflow:project-branch-board",
       },
       viewName: "Branch board view",
     });
@@ -214,7 +214,7 @@ describe("query workbench saves", () => {
         queryKind: "collection",
         resultKind: "collection",
         sourceKinds: ["saved", "inline"],
-        surfaceId: "ops/workflow:project-branch-board",
+        surfaceId: "workflow:project-branch-board",
       },
       viewName: "Branch board view",
     });
@@ -251,7 +251,7 @@ describe("query workbench saves", () => {
         queryKind: "collection",
         resultKind: "collection",
         sourceKinds: ["saved", "inline"],
-        surfaceId: "ops/workflow:project-branch-board",
+        surfaceId: "workflow:project-branch-board",
       },
       viewId: savedView.view.id,
       viewName: "Branch board view final",
@@ -294,7 +294,7 @@ describe("query workbench saves", () => {
           queryKind: "collection",
           resultKind: "collection",
           sourceKinds: ["saved", "inline"],
-          surfaceId: "ops/workflow:project-branch-board",
+          surfaceId: "workflow:project-branch-board",
         },
         viewName: "Invalid board view",
       }),
@@ -378,7 +378,7 @@ describe("query workbench saves", () => {
         queryKind: "collection",
         resultKind: "collection",
         sourceKinds: ["saved", "inline"],
-        surfaceId: "ops/workflow:project-branch-board",
+        surfaceId: "workflow:project-branch-board",
       },
       viewName: "Owner board view",
     });
@@ -455,7 +455,7 @@ describe("query workbench draft hydration", () => {
                   name: "owner",
                 },
               },
-              indexId: "ops/workflow:project-branch-board",
+              indexId: "workflow:project-branch-board",
               kind: "collection",
               order: [{ direction: "desc", fieldId: "updatedAt" }],
               window: {
@@ -464,13 +464,13 @@ describe("query workbench draft hydration", () => {
             },
             version: serializedQueryVersion,
           },
-          surfaceId: "ops/workflow:project-branch-board",
+          surfaceId: "workflow:project-branch-board",
           updatedAt: "2026-03-26T00:00:00.000Z",
         },
       },
     });
 
-    expect(draft?.draft.surfaceId).toBe("ops/workflow:project-branch-board");
+    expect(draft?.draft.surfaceId).toBe("workflow:project-branch-board");
     expect(draft?.draft.filters).toEqual([
       {
         fieldId: "ownerId",
@@ -502,7 +502,7 @@ describe("query workbench draft hydration", () => {
           parameterDefinitions: [],
           request: {
             query: {
-              indexId: "ops/workflow:missing-surface",
+              indexId: "workflow:missing-surface",
               kind: "collection",
               window: {
                 limit: 25,
@@ -510,7 +510,7 @@ describe("query workbench draft hydration", () => {
             },
             version: serializedQueryVersion,
           },
-          surfaceId: "ops/workflow:missing-surface",
+          surfaceId: "workflow:missing-surface",
           updatedAt: "2026-03-26T00:00:00.000Z",
         },
       ],
@@ -543,7 +543,7 @@ describe("query workbench draft hydration", () => {
         kind: "draft",
         request: {
           query: {
-            indexId: "ops/workflow:missing-surface",
+            indexId: "workflow:missing-surface",
             kind: "collection",
             window: {
               limit: 25,
@@ -573,7 +573,7 @@ describe("query workbench browser store", () => {
       parameterDefinitions: [],
       request: {
         query: {
-          indexId: "ops/workflow:project-branch-board",
+          indexId: "workflow:project-branch-board",
           kind: "collection",
           window: {
             limit: 25,
@@ -581,7 +581,7 @@ describe("query workbench browser store", () => {
         },
         version: serializedQueryVersion,
       },
-      surfaceId: "ops/workflow:project-branch-board",
+      surfaceId: "workflow:project-branch-board",
     });
     first.saveView({
       id: "saved-view:1",
@@ -604,7 +604,7 @@ describe("query workbench browser store", () => {
           rendererId: "core:list",
         },
       },
-      surfaceId: "ops/workflow:project-branch-board",
+      surfaceId: "workflow:project-branch-board",
     });
 
     const second = createQueryWorkbenchBrowserStore({ key: "test-store", storage });

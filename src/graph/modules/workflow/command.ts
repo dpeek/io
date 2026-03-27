@@ -1,9 +1,9 @@
 import { edgeId } from "@io/core/graph";
 import type { GraphCommandSpec } from "@io/core/graph/def";
 
-import { workflowBranch, workflowCommit, workflowProject, workflowRepository } from "./type.js";
+import { branch, commit, project, repository } from "./type.js";
 
-export const workflowBranchStateValues = [
+export const branchStateValues = [
   "backlog",
   "ready",
   "active",
@@ -12,9 +12,9 @@ export const workflowBranchStateValues = [
   "archived",
 ] as const;
 
-export type WorkflowBranchStateValue = (typeof workflowBranchStateValues)[number];
+export type WorkflowBranchStateValue = (typeof branchStateValues)[number];
 
-export const workflowCommitStateValues = [
+export const commitStateValues = [
   "planned",
   "ready",
   "active",
@@ -23,7 +23,7 @@ export const workflowCommitStateValues = [
   "dropped",
 ] as const;
 
-export type WorkflowCommitStateValue = (typeof workflowCommitStateValues)[number];
+export type WorkflowCommitStateValue = (typeof commitStateValues)[number];
 
 export const repositoryCommitStateValues = [
   "planned",
@@ -108,7 +108,7 @@ export type RepositoryBranchSummary = WorkflowSummaryBase & {
   readonly projectId: string;
   readonly repositoryId: string;
   readonly upstreamName?: string;
-  readonly workflowBranchId?: string;
+  readonly branchId?: string;
   readonly worktreePath?: string;
 };
 
@@ -119,7 +119,7 @@ export type RepositoryCommitSummary = WorkflowSummaryBase & {
   readonly repositoryId: string;
   readonly sha?: string;
   readonly state: RepositoryCommitStateValue;
-  readonly workflowCommitId?: string;
+  readonly commitId?: string;
   readonly worktree: {
     readonly branchName?: string;
     readonly leaseState: RepositoryCommitLeaseStateValue;
@@ -240,7 +240,7 @@ export type WorkflowMutationAction =
       readonly repositoryId: string;
       readonly state?: Exclude<RepositoryCommitStateValue, "committed">;
       readonly title?: string | null;
-      readonly workflowCommitId?: string;
+      readonly commitId?: string;
       readonly worktree?: WorkflowRepositoryWorktreeInput;
     }
   | {
@@ -250,7 +250,7 @@ export type WorkflowMutationAction =
       readonly repositoryCommitId: string;
       readonly sha: string;
       readonly title?: string | null;
-      readonly workflowCommitId?: string;
+      readonly commitId?: string;
       readonly worktree?: WorkflowRepositoryWorktreeInput;
     };
 
@@ -263,21 +263,21 @@ export type WorkflowMutationResult = {
 };
 
 export const workflowMutationCommand = {
-  key: "ops:workflow:mutation",
+  key: "workflow:mutation",
   label: "Mutate workflow state",
   execution: "serverOnly",
   input: undefined as unknown as WorkflowMutationAction,
   output: undefined as unknown as WorkflowMutationResult,
   policy: {
     touchesPredicates: [
-      { predicateId: edgeId(workflowProject.fields.projectKey) },
-      { predicateId: edgeId(workflowRepository.fields.repositoryKey) },
-      { predicateId: edgeId(workflowBranch.fields.state) },
-      { predicateId: edgeId(workflowBranch.fields.goalDocument) },
-      { predicateId: edgeId(workflowBranch.fields.contextDocument) },
-      { predicateId: edgeId(workflowBranch.fields.activeCommit) },
-      { predicateId: edgeId(workflowCommit.fields.contextDocument) },
-      { predicateId: edgeId(workflowCommit.fields.state) },
+      { predicateId: edgeId(project.fields.projectKey) },
+      { predicateId: edgeId(repository.fields.repositoryKey) },
+      { predicateId: edgeId(branch.fields.state) },
+      { predicateId: edgeId(branch.fields.goalDocument) },
+      { predicateId: edgeId(branch.fields.contextDocument) },
+      { predicateId: edgeId(branch.fields.activeCommit) },
+      { predicateId: edgeId(commit.fields.contextDocument) },
+      { predicateId: edgeId(commit.fields.state) },
     ],
   },
 } satisfies GraphCommandSpec<WorkflowMutationAction, WorkflowMutationResult>;

@@ -1,7 +1,6 @@
 import { edgeId, type AnyTypeOutput, type Cardinality, typeId } from "@io/core/graph";
 import { core } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import {
   type EntityRef,
   type GraphMutationValidationResult,
@@ -12,7 +11,7 @@ import {
 import type { WriteSecretFieldInput, WriteSecretFieldResult } from "../../lib/secret-fields.js";
 import type { GraphRuntime } from "../graph-runtime-bootstrap.js";
 
-export const explorerNamespace = { ...core, ...pkm, ...ops } as const;
+export const explorerNamespace = { ...core, ...workflow } as const;
 
 export type ExplorerNamespace = typeof explorerNamespace;
 export type ExplorerClient = GraphClient<ExplorerNamespace>;

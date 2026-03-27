@@ -34,7 +34,7 @@ describe("serialized query request validation", () => {
         },
         query: {
           kind: "collection",
-          indexId: "ops/workflow:commit-queue",
+          indexId: "workflow:commit-queue",
           filter: {
             op: "and",
             clauses: [
@@ -67,7 +67,7 @@ describe("serialized query request validation", () => {
       },
       query: {
         kind: "collection",
-        indexId: "ops/workflow:commit-queue",
+        indexId: "workflow:commit-queue",
         filter: {
           op: "and",
           clauses: [
@@ -98,7 +98,7 @@ describe("serialized query request validation", () => {
         version: 2,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:commit-queue",
+          indexId: "workflow:commit-queue",
         },
       }),
     ).toThrowError(
@@ -130,7 +130,7 @@ describe("serialized query request validation", () => {
           },
           query: {
             kind: "collection",
-            indexId: "ops/workflow:commit-queue",
+            indexId: "workflow:commit-queue",
             filter: {
               op: "eq",
               fieldId: "branchId",
@@ -157,7 +157,7 @@ describe("serialized query request validation", () => {
           },
           query: {
             kind: "collection",
-            indexId: "ops/workflow:commit-queue",
+            indexId: "workflow:commit-queue",
           },
         },
         { parameterDefinitions },
@@ -178,7 +178,7 @@ describe("serialized query request validation", () => {
           },
           query: {
             kind: "collection",
-            indexId: "ops/workflow:commit-queue",
+            indexId: "workflow:commit-queue",
           },
         },
         { parameterDefinitions },
@@ -197,7 +197,7 @@ describe("serialized query request validation", () => {
         version: 1,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:commit-queue",
+          indexId: "workflow:commit-queue",
           filter: {
             op: "and",
             clauses: [],
@@ -216,7 +216,7 @@ describe("serialized query request validation", () => {
         version: 1,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:commit-queue",
+          indexId: "workflow:commit-queue",
           filter: {
             op: "in",
             fieldId: "state",
@@ -238,7 +238,7 @@ describe("serialized query request validation", () => {
         version: 1,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:commit-queue",
+          indexId: "workflow:commit-queue",
           order: [
             { fieldId: "updatedAt", direction: "desc" },
             { fieldId: "updatedAt", direction: "asc" },
@@ -257,7 +257,7 @@ describe("serialized query request validation", () => {
         version: 1,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:commit-queue",
+          indexId: "workflow:commit-queue",
           window: {
             limit: 0,
           },
@@ -279,7 +279,7 @@ describe("serialized query normalization", () => {
         version: 1,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:commit-queue",
+          indexId: "workflow:commit-queue",
           filter: {
             op: "and",
             clauses: [
@@ -321,7 +321,7 @@ describe("serialized query normalization", () => {
         version: 1,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:commit-queue",
+          indexId: "workflow:commit-queue",
           filter: {
             op: "and",
             clauses: [
@@ -361,7 +361,7 @@ describe("serialized query normalization", () => {
 
     expect(left.query).toEqual({
       kind: "collection",
-      indexId: "ops/workflow:commit-queue",
+      indexId: "workflow:commit-queue",
       filter: {
         op: "and",
         clauses: [
@@ -410,7 +410,7 @@ describe("serialized query normalization", () => {
           version: 1,
           query: {
             kind: "collection",
-            indexId: "ops/workflow:commit-queue",
+            indexId: "workflow:commit-queue",
             filter: {
               op: "eq",
               fieldId: "branchId",
@@ -443,7 +443,7 @@ describe("serialized query normalization", () => {
         kind: "scope",
         definition: {
           kind: "module",
-          moduleIds: ["ops/workflow", "core"],
+          moduleIds: ["workflow", "core"],
           scopeId: "scope:workflow-review",
         },
         window: {
@@ -470,7 +470,7 @@ describe("serialized query normalization", () => {
       kind: "scope",
       definition: {
         kind: "module",
-        moduleIds: ["core", "ops/workflow"],
+        moduleIds: ["core", "workflow"],
         scopeId: "scope:workflow-review",
       },
       window: {

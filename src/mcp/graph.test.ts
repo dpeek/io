@@ -18,12 +18,11 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import { core, coreGraphBootstrapOptions } from "../graph/modules/index.js";
-import { ops } from "../graph/modules/ops.js";
-import { pkm } from "../graph/modules/pkm.js";
+import { workflow } from "../graph/modules/workflow.js";
 import { kitchenSink } from "../graph/testing/kitchen-sink.js";
 import { createGraphMcpServer, createGraphMcpSession } from "./graph.js";
 
-const productGraph = { ...pkm, ...ops } as const;
+const productGraph = { ...workflow } as const;
 
 type GraphNamespace = Record<string, AnyTypeOutput>;
 type MockAuthority = {
@@ -248,16 +247,16 @@ describe("createGraphMcpSession", () => {
     expect(status.lastSyncedAt).toBeDefined();
     expect(status.entityTypeCounts).toEqual(
       expect.arrayContaining([
-        { count: 1, name: "document", type: "pkm:document" },
-        { count: 0, name: "documentBlock", type: "pkm:documentBlock" },
-        { count: 0, name: "documentPlacement", type: "pkm:documentPlacement" },
-        { count: 1, name: "envVar", type: "ops:envVar" },
-        { count: 0, name: "workflowProject", type: "ops:workflowProject" },
-        { count: 0, name: "workflowRepository", type: "ops:workflowRepository" },
-        { count: 0, name: "workflowBranch", type: "ops:workflowBranch" },
-        { count: 0, name: "workflowCommit", type: "ops:workflowCommit" },
-        { count: 0, name: "repositoryBranch", type: "ops:repositoryBranch" },
-        { count: 0, name: "repositoryCommit", type: "ops:repositoryCommit" },
+        { count: 1, name: "document", type: "workflow:document" },
+        { count: 0, name: "documentBlock", type: "workflow:documentBlock" },
+        { count: 0, name: "documentPlacement", type: "workflow:documentPlacement" },
+        { count: 1, name: "envVar", type: "workflow:envVar" },
+        { count: 0, name: "project", type: "workflow:project" },
+        { count: 0, name: "repository", type: "workflow:repository" },
+        { count: 0, name: "branch", type: "workflow:branch" },
+        { count: 0, name: "commit", type: "workflow:commit" },
+        { count: 0, name: "repositoryBranch", type: "workflow:repositoryBranch" },
+        { count: 0, name: "repositoryCommit", type: "workflow:repositoryCommit" },
       ]),
     );
     expect(status.entityTypeCounts).toHaveLength(16);
@@ -335,7 +334,7 @@ describe("createGraphMcpServer", () => {
     }
   });
 
-  it("returns schema summaries and compact entity previews for the pkm namespace", async () => {
+  it("returns schema summaries and compact entity previews for the workflow namespace", async () => {
     const authority = createProductAuthority();
     const session = await createGraphMcpSession({
       fetch: createMockFetch(authority),
@@ -357,17 +356,17 @@ describe("createGraphMcpServer", () => {
       expect(types).toContainEqual(
         expect.objectContaining({
           kind: "entity",
-          type: "pkm:document",
+          type: "workflow:document",
         }),
       );
       expect(types).toContainEqual(
         expect.objectContaining({
           kind: "enum",
-          type: "pkm:documentBlockKind",
+          type: "workflow:documentBlockKind",
         }),
       );
 
-      const documentType = types.find((type) => type.type === "pkm:document");
+      const documentType = types.find((type) => type.type === "workflow:document");
       expect(documentType?.fields).toContainEqual(
         expect.objectContaining({
           path: "description",
@@ -377,7 +376,7 @@ describe("createGraphMcpServer", () => {
       );
 
       const entitiesResult = await callTool(client, "graph.listEntities", {
-        type: "pkm:document",
+        type: "workflow:document",
       });
       expect(entitiesResult.isError).toBe(false);
 
@@ -386,7 +385,7 @@ describe("createGraphMcpServer", () => {
         totalCount: number;
         type: string;
       };
-      expect(entities.type).toBe("pkm:document");
+      expect(entities.type).toBe("workflow:document");
       expect(entities.totalCount).toBe(1);
       expect(entities.entities).toHaveLength(1);
       expect(entities.entities[0]?.preview).toMatchObject({
@@ -558,7 +557,7 @@ describe("createGraphMcpServer", () => {
 
     try {
       const created = await callTool(client, "graph.createEntity", {
-        type: "pkm:document",
+        type: "workflow:document",
         values: {
           description: "Created through MCP",
           isArchived: false,
@@ -580,7 +579,7 @@ describe("createGraphMcpServer", () => {
           name: "Writable Document",
           slug: "writable-document",
         },
-        type: "pkm:document",
+        type: "workflow:document",
       });
       expect(typeof createdId).toBe("string");
 
@@ -590,7 +589,7 @@ describe("createGraphMcpServer", () => {
           description: "Updated through MCP",
           name: "Writable Document Updated",
         },
-        type: "pkm:document",
+        type: "workflow:document",
       });
       expect(updated.isError).toBe(false);
       expect(updated.structuredContent).toMatchObject({
@@ -599,23 +598,23 @@ describe("createGraphMcpServer", () => {
           id: createdId,
           name: "Writable Document Updated",
         },
-        type: "pkm:document",
+        type: "workflow:document",
       });
 
       const deleted = await callTool(client, "graph.deleteEntity", {
         id: createdId,
-        type: "pkm:document",
+        type: "workflow:document",
       });
       expect(deleted.isError).toBe(false);
       expect(deleted.structuredContent).toEqual({
         deleted: true,
         id: createdId,
-        type: "pkm:document",
+        type: "workflow:document",
       });
 
       const missing = await callTool(client, "graph.getEntity", {
         id: createdId,
-        type: "pkm:document",
+        type: "workflow:document",
       });
       expect(missing.isError).toBe(true);
       expect(missing.structuredContent).toMatchObject({
@@ -623,7 +622,7 @@ describe("createGraphMcpServer", () => {
           code: "graph.missingEntity",
           details: {
             id: createdId,
-            type: "pkm:document",
+            type: "workflow:document",
           },
         },
       });

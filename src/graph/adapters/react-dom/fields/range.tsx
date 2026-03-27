@@ -1,3 +1,4 @@
+import { performValidatedMutation, usePredicateField } from "@io/graph-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@io/web/select";
 import { useEffect, useState } from "react";
 
@@ -7,7 +8,6 @@ import {
   structuredValueKinds,
   type StructuredValueKind,
 } from "../../../modules/core/structured-value.js";
-import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
   createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,

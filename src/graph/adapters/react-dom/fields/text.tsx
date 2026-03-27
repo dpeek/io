@@ -1,14 +1,4 @@
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-  InputGroupTextarea,
-} from "@io/web/input-group";
-import { PlusIcon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
-
-import {
   formatPredicateEditorValue,
   getPredicateEditorAutocomplete,
   getPredicateEditorInputMode,
@@ -18,7 +8,17 @@ import {
   getPredicateEditorPlaceholder,
   performValidatedMutation,
   usePredicateField,
-} from "../../../runtime/react/index.js";
+} from "@io/graph-react";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  InputGroupTextarea,
+} from "@io/web/input-group";
+import { PlusIcon, XIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+
 import {
   clearOrRejectRequiredValue,
   getPredicateFieldLabel,

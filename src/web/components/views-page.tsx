@@ -14,13 +14,13 @@ import {
   defaultMoneyCurrencyKey,
   urlTypeModule,
 } from "@io/core/graph/modules";
+import { bootstrap } from "@io/graph-bootstrap";
+import { createGraphClient, serializedQueryVersion, type PredicateRef } from "@io/graph-client";
 import {
   getPredicateDisplayKind,
   getPredicateEditorKind,
   usePredicateField,
-} from "@io/core/graph/runtime/react";
-import { bootstrap } from "@io/graph-bootstrap";
-import { createGraphClient, serializedQueryVersion, type PredicateRef } from "@io/graph-client";
+} from "@io/graph-react";
 import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";

@@ -1,9 +1,10 @@
-import { isEnumType } from "../../../index.js";
 import {
   getPredicateEnumOptions,
   performValidatedMutation,
   usePredicateField,
-} from "../../../runtime/react/index.js";
+} from "@io/graph-react";
+
+import { isEnumType } from "../../../index.js";
 import { OptionComboboxEditor } from "./option-combobox.js";
 import {
   addPredicateItem,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { createTestGraph, testNamespace } from "../../test-graph.js";
+import { createTestGraph, testNamespace } from "../../../src/graph/test-graph.js";
 import { EntityPredicates, PredicateRelatedEntities } from "./index.js";
 
 function setupGraph() {

@@ -2,15 +2,15 @@ import { describe, expect, it } from "bun:test";
 
 import { createStore, sanitizeSvgMarkup, typeId } from "@io/core/graph";
 import { core, coreGraphBootstrapOptions, graphIconSeeds } from "@io/core/graph/modules";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, GraphValidationError } from "@io/graph-client";
 
 function createGraph() {
   const store = createStore();
   bootstrap(store, core, coreGraphBootstrapOptions);
-  bootstrap(store, pkm, coreGraphBootstrapOptions);
-  return createGraphClient(store, { ...core, ...pkm });
+  bootstrap(store, workflow, coreGraphBootstrapOptions);
+  return createGraphClient(store, { ...core, ...workflow });
 }
 
 describe("graph icons", () => {
@@ -109,7 +109,7 @@ describe("graph icons", () => {
       name: "Planning",
       svg: graphIconSeeds.string.svg,
     });
-    const documentTypeId = typeId(pkm.document);
+    const documentTypeId = typeId(workflow.document);
     graph.type.ref(documentTypeId).fields.icon.set(iconId);
 
     const blockedDelete = graph.icon.validateDelete(iconId);

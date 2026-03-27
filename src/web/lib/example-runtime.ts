@@ -1,7 +1,6 @@
 import { createIdMap, applyIdMap, defineType, createStore } from "@io/core/graph";
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { createAuthoritativeGraphWriteSession } from "@io/graph-authority";
 import { createBootstrappedSnapshot } from "@io/graph-bootstrap";
 import {
@@ -47,7 +46,7 @@ const hiddenCursorProbeNamespace = applyIdMap(createIdMap({ hiddenCursorProbe })
   hiddenCursorProbe,
 });
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
+const productGraph = { ...core, ...workflow } as const;
 const exampleGraph = { ...productGraph, ...hiddenCursorProbeNamespace } as const;
 type ExampleAuthorityBaseline = {
   readonly ids: ReturnType<typeof seedExampleGraph> & {
@@ -224,8 +223,7 @@ export function createExampleRuntime(
 
   const runtime = createClient();
   return Object.assign(runtime, {
-    pkm,
-    ops,
+    workflow,
     ids: authority.ids,
     createPeer,
     commitLocalMutation,

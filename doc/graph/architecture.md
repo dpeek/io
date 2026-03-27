@@ -37,7 +37,8 @@ This document is the high-level entry point for agents reasoning about the engin
 - `../../lib/graph-authority/src/persisted-authority.ts`: persisted authority orchestration and storage contracts
 - `../../lib/graph-authority/src/session.ts`: authoritative write sessions, retained history, and incremental delivery
 - `../../lib/graph-sync/src/`: shared sync contracts, payload validation, cursor helpers, and total sync sessions
-- `../../src/graph/runtime/react/`: host-neutral React hooks and resolver primitives
+- `../../lib/graph-react/src/`: host-neutral React hooks, resolver primitives,
+  and synced-runtime helpers
 - `../../src/graph/inspect.ts`: internal graph inspection helpers that are not part of the public package surface
 
 ## What Is Current
@@ -61,14 +62,13 @@ The initial namespace and schema-module ownership rules are concrete now:
   `core:boolean`, `core:date`, `core:url`, `core:email`, `core:slug`,
   `core:address`, `core:country`, `core:currency`, `core:language`, and
   `core:locale` stay in `core:` for now.
-- `pkm:` and `ops:` are the current product namespace buckets justified today.
-  `pkm:` carries the knowledge/workflow proof types such as topics, while
-  `ops:` owns environment configuration slices such as env vars.
+- `workflow:` is the current product namespace bucket justified today. It owns
+  the workflow, retained execution, document, context, and env-var slices used
+  by the app and reusable installs.
 - Do not pre-create extra namespace buckets such as `geo:`, `locale:`,
   `finance:`, or `collab:` before reusable code actually needs them.
 - Promotion into a more specific namespace should happen only as a concrete
-  refactor that updates imports, tests, and docs together, as the topic move to
-  `pkm:` and the env-var move to `ops:` did.
+  refactor that updates imports, tests, and docs together.
 
 The `graph` package owns canonical namespace keys and the long-term schema
 module layout for `core:` plus the current product namespaces. Consumer

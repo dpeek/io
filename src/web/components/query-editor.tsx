@@ -1016,7 +1016,7 @@ export function createQueryEditorDemoCatalog(): QueryEditorCatalog {
     label: "Workflow Branch Board",
     queryKind: "collection",
     sourceKind: "projection",
-    surfaceId: "ops/workflow:project-branch-board",
+    surfaceId: "workflow:project-branch-board",
   };
 
   const queueSurface: QueryEditorSurfaceSpec = {
@@ -1064,7 +1064,7 @@ export function createQueryEditorDemoCatalog(): QueryEditorCatalog {
     label: "Branch Commit Queue",
     queryKind: "collection",
     sourceKind: "projection",
-    surfaceId: "ops/workflow:branch-commit-queue",
+    surfaceId: "workflow:branch-commit-queue",
   };
 
   return {

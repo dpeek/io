@@ -5,8 +5,8 @@ import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 
 import type { Workflow } from "../agent/types.js";
-import { core, coreGraphBootstrapOptions, ops, pkm } from "../graph/modules/index.js";
-import { workflowProjectionSchema } from "../graph/modules/ops/workflow/schema.js";
+import { core, coreGraphBootstrapOptions, workflow } from "../graph/modules/index.js";
+import { projectionSchema } from "../graph/modules/workflow/schema.js";
 import {
   createWorkflowTuiStartupFailureModel,
   createWorkflowTuiStartupLoadingModel,
@@ -19,7 +19,7 @@ import {
 import { resolveWorkflowTuiStartupContract } from "./startup.js";
 import type { WorkflowTui, WorkflowTuiOptions } from "./tui.js";
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
+const productGraph = { ...core, ...workflow } as const;
 
 function date(value: string): Date {
   return new Date(value);
@@ -98,15 +98,14 @@ function createWorkflowGraphFixture(
   const projectCount = options.projectCount ?? 1;
   const store = createStore();
   bootstrap(store, core, coreGraphBootstrapOptions);
-  bootstrap(store, pkm, coreGraphBootstrapOptions);
-  bootstrap(store, ops, coreGraphBootstrapOptions);
+  bootstrap(store, workflow, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
   const projectIds: string[] = [];
   const branchIds: string[] = [];
 
   for (let projectIndex = 0; projectIndex < projectCount; projectIndex += 1) {
     const projectNumber = projectIndex + 1;
-    const projectId = graph.workflowProject.create({
+    const projectId = graph.project.create({
       name: `Project ${projectNumber}`,
       projectKey: `project:${projectNumber}`,
       createdAt: date(`2026-01-0${projectNumber}T00:00:00.000Z`),
@@ -114,7 +113,7 @@ function createWorkflowGraphFixture(
     });
     projectIds.push(projectId);
 
-    const repositoryId = graph.workflowRepository.create({
+    const repositoryId = graph.repository.create({
       name: `repo-${projectNumber}`,
       project: projectId,
       repositoryKey: `repo:${projectNumber}`,
@@ -130,22 +129,22 @@ function createWorkflowGraphFixture(
       branchIndex += 1
     ) {
       const branchNumber = branchIndex + 1;
-      const branchId = graph.workflowBranch.create({
+      const branchId = graph.branch.create({
         name: `Branch ${projectNumber}.${branchNumber}`,
         project: projectId,
         branchKey: `branch:project-${projectNumber}-branch-${branchNumber}`,
-        state: ops.workflowBranchState.values.backlog.id,
+        state: workflow.branchState.values.backlog.id,
         queueRank: branchNumber,
         createdAt: date(`2026-01-0${projectNumber}T00:00:00.000Z`),
         updatedAt: date(`2026-01-0${projectNumber}T00:00:00.000Z`),
       });
       branchIds.push(branchId);
 
-      graph.workflowCommit.create({
+      graph.commit.create({
         name: `Commit ${projectNumber}.${branchNumber}`,
         branch: branchId,
         commitKey: `commit:project-${projectNumber}-branch-${branchNumber}`,
-        state: ops.workflowCommitState.values.planned.id,
+        state: workflow.commitState.values.planned.id,
         order: 1,
         createdAt: date(`2026-01-0${projectNumber}T01:00:00.000Z`),
         updatedAt: date(`2026-01-0${projectNumber}T01:00:00.000Z`),
@@ -155,7 +154,7 @@ function createWorkflowGraphFixture(
         name: `repo-${projectNumber}/branch-${branchNumber}`,
         project: projectId,
         repository: repositoryId,
-        workflowBranch: branchId,
+        branch: branchId,
         managed: true,
         branchName: `repo-${projectNumber}/branch-${branchNumber}`,
         baseBranchName: "main",
@@ -253,19 +252,17 @@ test("runWorkflowTuiCli bootstraps the synced workflow runtime before creating t
     },
   });
   const startup = resolveWorkflowTuiStartupContract(workflow);
-  const createGraphClient = mock(
-    async (namespace: typeof workflowProjectionSchema, options: object) => {
-      expect(namespace).toBe(workflowProjectionSchema);
-      expect(options).toEqual({
-        requestedScope: startup.graph.requestedScope,
-        url: "https://graph.example/runtime",
-      });
+  const createGraphClient = mock(async (namespace: typeof projectionSchema, options: object) => {
+    expect(namespace).toBe(projectionSchema);
+    expect(options).toEqual({
+      requestedScope: startup.graph.requestedScope,
+      url: "https://graph.example/runtime",
+    });
 
-      return {
-        graph,
-      };
-    },
-  );
+    return {
+      graph,
+    };
+  });
   let createdTuiOptions: WorkflowTuiOptions | undefined;
   let surfaceModel: ReturnType<WorkflowTui["getSurfaceModel"]> | undefined;
   const start = mock(async () => {

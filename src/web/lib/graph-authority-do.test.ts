@@ -12,13 +12,12 @@ import {
   type GraphStoreSnapshot,
 } from "@io/core/graph";
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
+import { workflow } from "@io/core/graph/modules/workflow";
 import {
-  workflowProjectionMetadata,
+  projectionMetadata,
   workflowReviewModuleReadScope,
   workflowReviewSyncScopeRequest,
-} from "@io/core/graph/modules/ops/workflow";
-import { pkm } from "@io/core/graph/modules/pkm";
+} from "@io/core/graph/modules/workflow";
 import {
   createPersistedAuthoritativeGraph,
   type AuthSubjectRef,
@@ -62,8 +61,8 @@ import { webWorkflowReadPath, type WorkflowReadResponse } from "./workflow-trans
 
 setDefaultTimeout(20_000);
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
-const envVarSecretPredicateId = edgeId(ops.envVar.fields.secret);
+const productGraph = { ...core, ...workflow } as const;
+const envVarSecretPredicateId = edgeId(workflow.envVar.fields.secret);
 const workflowModuleScope = workflowReviewSyncScopeRequest;
 const hiddenCursorProbe = defineType({
   values: { key: "test:hiddenCursorProbe", name: "Hidden Cursor Probe" },
@@ -1755,7 +1754,7 @@ describe("web graph authority durable object", () => {
         },
         rows: [
           {
-            workflowBranch: {
+            branch: {
               id: fixture.branchId,
             },
             repositoryBranch: {
@@ -1804,13 +1803,13 @@ describe("web graph authority durable object", () => {
       kind: "commit-queue-scope",
       result: {
         branch: {
-          workflowBranch: {
+          branch: {
             id: fixture.branchId,
           },
         },
         rows: [
           {
-            workflowCommit: {
+            commit: {
               id: createdCommit.summary.id,
             },
           },
@@ -1865,15 +1864,15 @@ describe("web graph authority durable object", () => {
 
     expect(checkpoints).toEqual([
       {
-        projection_id: "ops/workflow:branch-commit-queue",
-        definition_hash: "projection-def:ops/workflow:branch-commit-queue:v1",
+        projection_id: "workflow:branch-commit-queue",
+        definition_hash: "projection-def:workflow:branch-commit-queue:v1",
         source_cursor: checkpoints[0]?.source_cursor ?? "",
         projection_cursor: checkpoints[0]?.projection_cursor ?? "",
         projected_at: checkpoints[0]?.projected_at ?? "",
       },
       {
-        projection_id: "ops/workflow:project-branch-board",
-        definition_hash: "projection-def:ops/workflow:project-branch-board:v1",
+        projection_id: "workflow:project-branch-board",
+        definition_hash: "projection-def:workflow:project-branch-board:v1",
         source_cursor: checkpoints[1]?.source_cursor ?? "",
         projection_cursor: checkpoints[1]?.projection_cursor ?? "",
         projected_at: checkpoints[1]?.projected_at ?? "",
@@ -1887,14 +1886,14 @@ describe("web graph authority durable object", () => {
     expect(rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          projection_id: "ops/workflow:project-branch-board",
-          definition_hash: "projection-def:ops/workflow:project-branch-board:v1",
+          projection_id: "workflow:project-branch-board",
+          definition_hash: "projection-def:workflow:project-branch-board:v1",
           row_kind: "project",
           row_key: fixture.projectId,
         }),
         expect.objectContaining({
-          projection_id: "ops/workflow:branch-commit-queue",
-          definition_hash: "projection-def:ops/workflow:branch-commit-queue:v1",
+          projection_id: "workflow:branch-commit-queue",
+          definition_hash: "projection-def:workflow:branch-commit-queue:v1",
           row_kind: "commit-row",
         }),
       ]),
@@ -1904,13 +1903,13 @@ describe("web graph authority durable object", () => {
       kind: "commit-queue-scope",
       result: {
         branch: {
-          workflowBranch: {
+          branch: {
             id: fixture.branchId,
           },
         },
         rows: [
           {
-            workflowCommit: {
+            commit: {
               commitKey: "commit:persist-retained-workflow-rows",
             },
           },
@@ -1972,9 +1971,9 @@ describe("web graph authority durable object", () => {
 
     db.exec(
       `UPDATE io_workflow_projection_checkpoint
-      SET definition_hash = 'projection-def:ops/workflow:branch-commit-queue:v999'
+      SET definition_hash = 'projection-def:workflow:branch-commit-queue:v999'
       WHERE projection_id = ?`,
-      [workflowProjectionMetadata.branchCommitQueue.projectionId],
+      [projectionMetadata.branchCommitQueue.projectionId],
     );
 
     const restarted = createTestDurableObject(state);
@@ -2023,7 +2022,7 @@ describe("web graph authority durable object", () => {
     if (!("kind" in refreshed.payload) || refreshed.payload.kind !== "commit-queue-scope") {
       throw new Error("Expected a workflow read result after durable restart recovery.");
     }
-    expect(refreshed.payload.result.rows.map((row) => row.workflowCommit.commitKey)).toContain(
+    expect(refreshed.payload.result.rows.map((row) => row.commit.commitKey)).toContain(
       "commit:retained-cursor-invalidated-after-rebuild",
     );
   });
@@ -2089,7 +2088,7 @@ describe("web graph authority durable object", () => {
       version: 1,
       query: {
         kind: "collection",
-        indexId: "ops/workflow:branch-commit-queue",
+        indexId: "workflow:branch-commit-queue",
         filter: {
           op: "eq",
           fieldId: "branchId",
@@ -2120,7 +2119,7 @@ describe("web graph authority durable object", () => {
       version: 1,
       query: {
         kind: "collection",
-        indexId: "ops/workflow:project-branch-board",
+        indexId: "workflow:project-branch-board",
         filter: {
           op: "eq",
           fieldId: "projectId",
@@ -2148,7 +2147,7 @@ describe("web graph authority durable object", () => {
         version: 1,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:branch-commit-queue",
+          indexId: "workflow:branch-commit-queue",
           filter: {
             op: "eq",
             fieldId: "branchId",
@@ -2174,9 +2173,9 @@ describe("web graph authority durable object", () => {
 
     db.exec(
       `UPDATE io_workflow_projection_checkpoint
-      SET definition_hash = 'projection-def:ops/workflow:branch-commit-queue:v999'
+      SET definition_hash = 'projection-def:workflow:branch-commit-queue:v999'
       WHERE projection_id = ?`,
-      [workflowProjectionMetadata.branchCommitQueue.projectionId],
+      [projectionMetadata.branchCommitQueue.projectionId],
     );
 
     const restarted = createTestDurableObject(state);
@@ -2202,7 +2201,7 @@ describe("web graph authority durable object", () => {
       version: 1,
       query: {
         kind: "collection",
-        indexId: "ops/workflow:branch-commit-queue",
+        indexId: "workflow:branch-commit-queue",
         filter: {
           op: "eq",
           fieldId: "branchId",
@@ -2229,7 +2228,7 @@ describe("web graph authority durable object", () => {
       version: 1,
       query: {
         kind: "collection",
-        indexId: "ops/workflow:branch-commit-queue",
+        indexId: "workflow:branch-commit-queue",
         filter: {
           op: "eq",
           fieldId: "branchId",
@@ -2339,9 +2338,9 @@ describe("web graph authority durable object", () => {
           {
             sourceCursor: firstCommit.cursor,
             dependencyKeys: [
-              "scope:ops/workflow:review",
-              "projection:ops/workflow:project-branch-board",
-              "projection:ops/workflow:branch-commit-queue",
+              "scope:workflow:review",
+              "projection:workflow:project-branch-board",
+              "projection:workflow:branch-commit-queue",
             ],
             affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
             delivery: { kind: "cursor-advanced" },
@@ -4531,8 +4530,8 @@ describe("web graph authority durable object", () => {
               loadWorkflowProjection() {
                 return storage.loadWorkflowProjection();
               },
-              replaceWorkflowProjection(workflowProjection) {
-                return storage.replaceWorkflowProjection(workflowProjection);
+              replaceWorkflowProjection(projection) {
+                return storage.replaceWorkflowProjection(projection);
               },
               inspectSecrets() {
                 return storage.inspectSecrets();

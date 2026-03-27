@@ -11,13 +11,13 @@ function createRegistrationTarget(
   return {
     sessionId: "session:review-1",
     principalId: "principal:reviewer-1",
-    scopeId: "scope:ops/workflow:review",
-    definitionHash: "scope-def:ops/workflow:review:v1",
+    scopeId: "scope:workflow:review",
+    definitionHash: "scope-def:workflow:review:v1",
     policyFilterVersion: "policy:0",
     dependencyKeys: [
-      "scope:ops/workflow:review",
-      "projection:ops/workflow:project-branch-board",
-      "projection:ops/workflow:branch-commit-queue",
+      "scope:workflow:review",
+      "projection:workflow:project-branch-board",
+      "projection:workflow:branch-commit-queue",
     ],
     ...overrides,
   };
@@ -28,8 +28,8 @@ function createWorkflowReviewInvalidation() {
     eventId: "workflow-review:cursor:1",
     graphId: "graph:test",
     sourceCursor: "web-authority:1",
-    dependencyKeys: ["scope:ops/workflow:review", "projection:ops/workflow:project-branch-board"],
-    affectedScopeIds: ["scope:ops/workflow:review"],
+    dependencyKeys: ["scope:workflow:review", "projection:workflow:project-branch-board"],
+    affectedScopeIds: ["scope:workflow:review"],
     delivery: { kind: "cursor-advanced" },
   });
 }
@@ -42,26 +42,24 @@ describe("workflow review live scope router", () => {
     const registration = router.register(createRegistrationTarget());
 
     expect(registration).toEqual({
-      registrationId: "workflow-review:session:review-1:scope:ops/workflow:review",
+      registrationId: "workflow-review:session:review-1:scope:workflow:review",
       sessionId: "session:review-1",
       principalId: "principal:reviewer-1",
-      scopeId: "scope:ops/workflow:review",
-      definitionHash: "scope-def:ops/workflow:review:v1",
+      scopeId: "scope:workflow:review",
+      definitionHash: "scope-def:workflow:review:v1",
       policyFilterVersion: "policy:0",
       dependencyKeys: [
-        "scope:ops/workflow:review",
-        "projection:ops/workflow:project-branch-board",
-        "projection:ops/workflow:branch-commit-queue",
+        "scope:workflow:review",
+        "projection:workflow:project-branch-board",
+        "projection:workflow:branch-commit-queue",
       ],
       expiresAt: "2026-03-24T00:01:00.000Z",
     });
     expect(router.registrationsForSession("session:review-1")).toEqual([registration]);
-    expect(router.registrationsForScope("scope:ops/workflow:review")).toEqual([registration]);
-    expect(router.registrationsForDependencyKey("scope:ops/workflow:review")).toEqual([
-      registration,
-    ]);
+    expect(router.registrationsForScope("scope:workflow:review")).toEqual([registration]);
+    expect(router.registrationsForDependencyKey("scope:workflow:review")).toEqual([registration]);
     expect(
-      router.registrationsForDependencyKey("projection:ops/workflow:project-branch-board"),
+      router.registrationsForDependencyKey("projection:workflow:project-branch-board"),
     ).toEqual([registration]);
   });
 
@@ -79,7 +77,7 @@ describe("workflow review live scope router", () => {
     expect(renewed.expiresAt).toBe("2026-03-24T00:01:30.000Z");
     expect(router.registrationsForSession("session:review-1")).toEqual([renewed]);
     expect(
-      router.registrationsForDependencyKey("projection:ops/workflow:project-branch-board"),
+      router.registrationsForDependencyKey("projection:workflow:project-branch-board"),
     ).toEqual([renewed]);
   });
 
@@ -94,23 +92,23 @@ describe("workflow review live scope router", () => {
     expect(
       router.pull({
         sessionId: "session:review-1",
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
       }),
     ).toEqual({
       active: true,
       invalidations: [invalidation],
-      scopeId: "scope:ops/workflow:review",
+      scopeId: "scope:workflow:review",
       sessionId: "session:review-1",
     });
     expect(
       router.pull({
         sessionId: "session:review-1",
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
       }),
     ).toEqual({
       active: true,
       invalidations: [],
-      scopeId: "scope:ops/workflow:review",
+      scopeId: "scope:workflow:review",
       sessionId: "session:review-1",
     });
   });
@@ -128,8 +126,8 @@ describe("workflow review live scope router", () => {
     );
     router.register(
       createRegistrationTarget({
-        scopeId: "scope:ops/workflow:backlog",
-        dependencyKeys: ["scope:ops/workflow:backlog"],
+        scopeId: "scope:workflow:backlog",
+        dependencyKeys: ["scope:workflow:backlog"],
       }),
     );
     const invalidation = createWorkflowReviewInvalidation();
@@ -160,12 +158,12 @@ describe("workflow review live scope router", () => {
     expect(
       router.pull({
         sessionId: "session:review-1",
-        scopeId: "scope:ops/workflow:backlog",
+        scopeId: "scope:workflow:backlog",
       }),
     ).toEqual({
       active: true,
       invalidations: [],
-      scopeId: "scope:ops/workflow:backlog",
+      scopeId: "scope:workflow:backlog",
       sessionId: "session:review-1",
     });
   });
@@ -182,17 +180,17 @@ describe("workflow review live scope router", () => {
 
     expect(router.expire()).toEqual([registration]);
     expect(router.registrationsForSession("session:review-1")).toEqual([]);
-    expect(router.registrationsForScope("scope:ops/workflow:review")).toEqual([]);
-    expect(router.registrationsForDependencyKey("scope:ops/workflow:review")).toEqual([]);
+    expect(router.registrationsForScope("scope:workflow:review")).toEqual([]);
+    expect(router.registrationsForDependencyKey("scope:workflow:review")).toEqual([]);
     expect(
       router.pull({
         sessionId: "session:review-1",
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
       }),
     ).toEqual({
       active: false,
       invalidations: [],
-      scopeId: "scope:ops/workflow:review",
+      scopeId: "scope:workflow:review",
       sessionId: "session:review-1",
     });
   });
@@ -206,13 +204,13 @@ describe("workflow review live scope router", () => {
     expect(
       router.remove({
         sessionId: "session:review-1",
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
       }),
     ).toBe(true);
     expect(
       router.remove({
         sessionId: "session:review-1",
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
       }),
     ).toBe(false);
     expect(router.registrationsForSession("session:review-1")).toEqual([]);
@@ -229,16 +227,16 @@ describe("workflow review live scope router", () => {
 
     expect(firstRouter.registrationsForSession("session:review-1")).toEqual([registration]);
     expect(restartedRouter.registrationsForSession("session:review-1")).toEqual([]);
-    expect(restartedRouter.registrationsForScope("scope:ops/workflow:review")).toEqual([]);
+    expect(restartedRouter.registrationsForScope("scope:workflow:review")).toEqual([]);
     expect(
       restartedRouter.pull({
         sessionId: "session:review-1",
-        scopeId: "scope:ops/workflow:review",
+        scopeId: "scope:workflow:review",
       }),
     ).toEqual({
       active: false,
       invalidations: [],
-      scopeId: "scope:ops/workflow:review",
+      scopeId: "scope:workflow:review",
       sessionId: "session:review-1",
     });
   });

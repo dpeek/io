@@ -13,8 +13,8 @@ describe("workflow review startup contract", () => {
 
     expect(contract.graph.requestedScope).toEqual({
       kind: "module",
-      moduleId: "ops/workflow",
-      scopeId: "scope:ops/workflow:review",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
     });
     expect(contract.initialSelection.project).toEqual({
       kind: "infer-singleton",

@@ -1,7 +1,3 @@
-import { ColorInput } from "@io/web/color";
-import { InputGroup, InputGroupAddon } from "@io/web/input-group";
-import { useEffect, useState } from "react";
-
 import {
   formatPredicateEditorValue,
   getPredicateEditorParser,
@@ -9,7 +5,11 @@ import {
   performValidatedMutation,
   usePredicateField,
   type PredicateFieldViewCapability,
-} from "../../../runtime/react/index.js";
+} from "@io/graph-react";
+import { ColorInput } from "@io/web/color";
+import { InputGroup, InputGroupAddon } from "@io/web/input-group";
+import { useEffect, useState } from "react";
+
 import {
   clearOrRejectRequiredValue,
   getPredicateFieldLabel,

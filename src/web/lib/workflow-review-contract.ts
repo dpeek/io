@@ -1,4 +1,4 @@
-import { workflowReviewSyncScopeRequest } from "@io/core/graph/modules/ops/workflow";
+import { workflowReviewSyncScopeRequest } from "@io/core/graph/modules/workflow";
 import { graphSyncScope } from "@io/graph-sync";
 
 import type { WorkflowReadRequest } from "./workflow-transport.js";
@@ -167,7 +167,7 @@ export function createWorkflowReviewStartupContract(
     }),
     loading: Object.freeze({
       bootstrapDescription:
-        "Boot the browser workflow review surface against the shipped ops/workflow review sync scope before reading branch-board and commit-queue projections.",
+        "Boot the browser workflow review surface against the shipped workflow review sync scope before reading branch-board and commit-queue projections.",
       bootstrapTitle: "Loading workflow review",
       reviewDescription:
         "Resolve the initial project, read the branch board, and then read the selected branch commit queue over the workflow review contract.",

@@ -1,9 +1,7 @@
 "use client";
 
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
-import { GraphMutationRuntimeProvider } from "@io/core/graph/runtime/react";
+import { workflow } from "@io/core/graph/modules/workflow";
 import {
   applyHttpSyncRequest,
   createHttpGraphClient,
@@ -11,22 +9,25 @@ import {
   defaultHttpGraphUrl,
   type SyncedGraphClient,
 } from "@io/graph-client";
+import {
+  GraphRuntimeProvider as SharedGraphRuntimeProvider,
+  useGraphRuntime as useSharedGraphRuntime,
+  useOptionalGraphRuntime as useSharedOptionalGraphRuntime,
+} from "@io/graph-react";
 import { graphSyncScope, type SyncScopeRequest } from "@io/graph-sync";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
 import { Skeleton } from "@io/web/skeleton";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 const syncUrl = "/api/sync";
 const transactionUrl = "/api/tx";
 
-const graphSchema = { ...core, ...pkm, ...ops } as const;
+const graphSchema = { ...core, ...workflow } as const;
 
 export type GraphRuntime = SyncedGraphClient<typeof graphSchema>;
 
 const runtimeCache = new Map<string, Promise<GraphRuntime>>();
-
-const GraphRuntimeContext = createContext<GraphRuntime | null>(null);
 
 function resolveWebGraphBaseUrl(): string {
   if (
@@ -99,15 +100,11 @@ export function resetSharedGraphRuntime(requestedScope?: SyncScopeRequest): void
 }
 
 export function useOptionalGraphRuntime(): GraphRuntime | null {
-  return useContext(GraphRuntimeContext);
+  return useSharedOptionalGraphRuntime<typeof graphSchema>();
 }
 
 export function useGraphRuntime(): GraphRuntime {
-  const runtime = useOptionalGraphRuntime();
-  if (!runtime) {
-    throw new Error("Graph runtime is not available outside the synced runtime provider.");
-  }
-  return runtime;
+  return useSharedGraphRuntime<typeof graphSchema>();
 }
 
 type GraphRuntimeBootstrapProps = {
@@ -188,11 +185,7 @@ export function GraphRuntimeProvider({
   children: ReactNode;
   runtime: GraphRuntime;
 }) {
-  return (
-    <GraphRuntimeContext.Provider value={runtime}>
-      <GraphMutationRuntimeProvider runtime={runtime}>{children}</GraphMutationRuntimeProvider>
-    </GraphRuntimeContext.Provider>
-  );
+  return <SharedGraphRuntimeProvider runtime={runtime}>{children}</SharedGraphRuntimeProvider>;
 }
 
 export function GraphRuntimeBootstrap({

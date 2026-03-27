@@ -6,8 +6,8 @@ import { createGraphClient } from "@io/graph-client";
 import { createTestRenderer } from "@opentui/core/testing";
 import { act } from "react";
 
-import { core, coreGraphBootstrapOptions, ops, pkm } from "../graph/modules/index.js";
-import { createWorkflowProjectionIndex } from "../graph/modules/ops/workflow/query.js";
+import { core, coreGraphBootstrapOptions, workflow } from "../graph/modules/index.js";
+import { createWorkflowProjectionIndex } from "../graph/modules/workflow/query.js";
 import { buildWorkflowTuiRootComponentModel } from "./layout.js";
 import {
   createWorkflowTuiStartupFailureModel,
@@ -23,7 +23,7 @@ import { createWorkflowTui } from "./tui.js";
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
+const productGraph = { ...core, ...workflow } as const;
 
 function date(value: string): Date {
   return new Date(value);
@@ -32,17 +32,16 @@ function date(value: string): Date {
 function createWorkflowProjectionFixture() {
   const store = createStore();
   bootstrap(store, core, coreGraphBootstrapOptions);
-  bootstrap(store, pkm, coreGraphBootstrapOptions);
-  bootstrap(store, ops, coreGraphBootstrapOptions);
+  bootstrap(store, workflow, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);
 
-  const projectId = graph.workflowProject.create({
+  const projectId = graph.project.create({
     name: "IO",
     projectKey: "project:io",
     createdAt: date("2026-01-01T00:00:00.000Z"),
     updatedAt: date("2026-01-01T00:00:00.000Z"),
   });
-  const repositoryId = graph.workflowRepository.create({
+  const repositoryId = graph.repository.create({
     name: "io",
     project: projectId,
     repositoryKey: "repo:io",
@@ -63,65 +62,65 @@ function createWorkflowProjectionFixture() {
     createdAt: date("2026-01-02T00:00:00.000Z"),
     updatedAt: date("2026-01-04T00:00:00.000Z"),
   });
-  const branch1Id = graph.workflowBranch.create({
+  const branch1Id = graph.branch.create({
     name: "Workflow runtime contract",
     project: projectId,
     branchKey: "branch:workflow-runtime-contract",
-    state: ops.workflowBranchState.values.active.id,
+    state: workflow.branchState.values.active.id,
     queueRank: 1,
     goalDocument: branch1GoalId,
     createdAt: date("2026-01-01T00:00:00.000Z"),
     updatedAt: date("2026-01-05T00:00:00.000Z"),
   });
-  const branch2Id = graph.workflowBranch.create({
+  const branch2Id = graph.branch.create({
     name: "Workflow shell polish",
     project: projectId,
     branchKey: "branch:workflow-shell-polish",
-    state: ops.workflowBranchState.values.ready.id,
+    state: workflow.branchState.values.ready.id,
     queueRank: 2,
     goalDocument: branch2GoalId,
     createdAt: date("2026-01-02T00:00:00.000Z"),
     updatedAt: date("2026-01-04T00:00:00.000Z"),
   });
 
-  const branch1Commit1Id = graph.workflowCommit.create({
+  const branch1Commit1Id = graph.commit.create({
     name: "Define branch board scope",
     branch: branch1Id,
     commitKey: "commit:define-branch-board-scope",
-    state: ops.workflowCommitState.values.committed.id,
+    state: workflow.commitState.values.committed.id,
     order: 1,
     createdAt: date("2026-01-01T00:00:00.000Z"),
     updatedAt: date("2026-01-02T00:00:00.000Z"),
   });
-  const branch1Commit2Id = graph.workflowCommit.create({
+  const branch1Commit2Id = graph.commit.create({
     name: "Document commit queue scope",
     branch: branch1Id,
     commitKey: "commit:document-commit-queue-scope",
-    state: ops.workflowCommitState.values.active.id,
+    state: workflow.commitState.values.active.id,
     order: 2,
     createdAt: date("2026-01-02T00:00:00.000Z"),
     updatedAt: date("2026-01-05T12:00:00.000Z"),
   });
-  const branch2Commit1Id = graph.workflowCommit.create({
+  const branch2Commit1Id = graph.commit.create({
     name: "Render first workflow screens",
     branch: branch2Id,
     commitKey: "commit:render-first-workflow-screens",
-    state: ops.workflowCommitState.values.ready.id,
+    state: workflow.commitState.values.ready.id,
     order: 1,
     createdAt: date("2026-01-03T00:00:00.000Z"),
     updatedAt: date("2026-01-04T12:00:00.000Z"),
   });
-  const branch2Commit2Id = graph.workflowCommit.create({
+  const branch2Commit2Id = graph.commit.create({
     name: "Queue selection rules",
     branch: branch2Id,
     commitKey: "commit:queue-selection-rules",
-    state: ops.workflowCommitState.values.planned.id,
+    state: workflow.commitState.values.planned.id,
     order: 2,
     createdAt: date("2026-01-04T00:00:00.000Z"),
     updatedAt: date("2026-01-05T00:00:00.000Z"),
   });
 
-  graph.workflowBranch.update(branch1Id, {
+  graph.branch.update(branch1Id, {
     activeCommit: branch1Commit2Id,
     updatedAt: date("2026-01-06T00:00:00.000Z"),
   });
@@ -130,7 +129,7 @@ function createWorkflowProjectionFixture() {
     name: "workflow/runtime-contract",
     project: projectId,
     repository: repositoryId,
-    workflowBranch: branch1Id,
+    branch: branch1Id,
     managed: true,
     branchName: "workflow/runtime-contract",
     baseBranchName: "main",
@@ -142,7 +141,7 @@ function createWorkflowProjectionFixture() {
     name: "workflow/shell-polish",
     project: projectId,
     repository: repositoryId,
-    workflowBranch: branch2Id,
+    branch: branch2Id,
     managed: true,
     branchName: "workflow/shell-polish",
     baseBranchName: "main",
@@ -166,12 +165,12 @@ function createWorkflowProjectionFixture() {
     name: "Define branch board scope",
     repository: repositoryId,
     repositoryBranch: branch1RepositoryBranchId,
-    workflowCommit: branch1Commit1Id,
-    state: ops.repositoryCommitState.values.committed.id,
+    commit: branch1Commit1Id,
+    state: workflow.repositoryCommitState.values.committed.id,
     sha: "abcdef1234567",
     committedAt: date("2026-01-02T12:00:00.000Z"),
     worktree: {
-      leaseState: ops.repositoryCommitLeaseState.values.released.id,
+      leaseState: workflow.repositoryCommitLeaseState.values.released.id,
     },
     createdAt: date("2026-01-01T00:00:00.000Z"),
     updatedAt: date("2026-01-02T12:00:00.000Z"),
@@ -180,12 +179,12 @@ function createWorkflowProjectionFixture() {
     name: "Document commit queue scope",
     repository: repositoryId,
     repositoryBranch: branch1RepositoryBranchId,
-    workflowCommit: branch1Commit2Id,
-    state: ops.repositoryCommitState.values.attached.id,
+    commit: branch1Commit2Id,
+    state: workflow.repositoryCommitState.values.attached.id,
     worktree: {
       path: "/tmp/io-worktree-runtime",
       branchName: "workflow/runtime-contract",
-      leaseState: ops.repositoryCommitLeaseState.values.attached.id,
+      leaseState: workflow.repositoryCommitLeaseState.values.attached.id,
     },
     createdAt: date("2026-01-02T00:00:00.000Z"),
     updatedAt: date("2026-01-05T12:00:00.000Z"),
@@ -194,12 +193,12 @@ function createWorkflowProjectionFixture() {
     name: "Render first workflow screens",
     repository: repositoryId,
     repositoryBranch: branch2RepositoryBranchId,
-    workflowCommit: branch2Commit1Id,
-    state: ops.repositoryCommitState.values.reserved.id,
+    commit: branch2Commit1Id,
+    state: workflow.repositoryCommitState.values.reserved.id,
     worktree: {
       path: "/tmp/io-worktree-shell",
       branchName: "workflow/shell-polish",
-      leaseState: ops.repositoryCommitLeaseState.values.reserved.id,
+      leaseState: workflow.repositoryCommitLeaseState.values.reserved.id,
     },
     createdAt: date("2026-01-03T00:00:00.000Z"),
     updatedAt: date("2026-01-04T12:00:00.000Z"),
@@ -209,12 +208,12 @@ function createWorkflowProjectionFixture() {
     name: "Plan workflow runtime contract",
     project: projectId,
     repository: repositoryId,
-    subjectKind: ops.agentSessionSubjectKind.values.branch.id,
+    subjectKind: workflow.agentSessionSubjectKind.values.branch.id,
     branch: branch1Id,
     sessionKey: "session:workflow-runtime-contract-plan-01",
-    kind: ops.agentSessionKind.values.planning.id,
+    kind: workflow.agentSessionKind.values.planning.id,
     workerId: "worker-1",
-    runtimeState: ops.agentSessionRuntimeState.values.completed.id,
+    runtimeState: workflow.agentSessionRuntimeState.values.completed.id,
     startedAt: date("2026-01-04T00:00:00.000Z"),
     endedAt: date("2026-01-04T01:00:00.000Z"),
     createdAt: date("2026-01-04T00:00:00.000Z"),
@@ -224,13 +223,13 @@ function createWorkflowProjectionFixture() {
     name: "Polish workflow shell",
     project: projectId,
     repository: repositoryId,
-    subjectKind: ops.agentSessionSubjectKind.values.commit.id,
+    subjectKind: workflow.agentSessionSubjectKind.values.commit.id,
     branch: branch2Id,
     commit: branch2Commit1Id,
     sessionKey: "session:workflow-shell-polish-execution-01",
-    kind: ops.agentSessionKind.values.execution.id,
+    kind: workflow.agentSessionKind.values.execution.id,
     workerId: "worker-2",
-    runtimeState: ops.agentSessionRuntimeState.values.running.id,
+    runtimeState: workflow.agentSessionRuntimeState.values.running.id,
     startedAt: date("2026-01-05T09:30:00.000Z"),
     createdAt: date("2026-01-05T09:30:00.000Z"),
     updatedAt: date("2026-01-05T09:30:00.000Z"),
@@ -272,7 +271,7 @@ test("buildWorkflowTuiRootComponentModel renders the startup loading shell", () 
     "Hydration reads the first project branch board and commit queues",
   );
   expect(layout.panels.find((panel) => panel.id === "boundaries")?.body).toContain(
-    "src/graph/adapters/react-opentui",
+    "lib/graph-react",
   );
   expect(layout.panels.find((panel) => panel.id === "boundaries")?.body).toContain(
     "does not launch sessions",

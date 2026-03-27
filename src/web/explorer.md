@@ -150,15 +150,15 @@ hand-picked entity catalog.
 That means the column includes ordinary product types and core support types
 such as:
 
-- `pkm:document`
-- `ops:envVar`
+- `workflow:document`
+- `workflow:envVar`
 - `core:tag`
 - `core:icon`
 - `core:type`
 - `core:predicate`
 - `core:secretHandle`
 - scalar and enum definitions such as `core:string`, `core:markdown`, and
-  `pkm:documentBlockKind`
+  `workflow:documentBlockKind`
 
 ### Column 2: Targets
 

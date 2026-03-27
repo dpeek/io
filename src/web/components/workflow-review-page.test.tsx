@@ -6,7 +6,7 @@ import type { BrowserAgentRuntimeProbe } from "../../browser-agent/transport.js"
 import type {
   CommitQueueScopeResult,
   ProjectBranchScopeResult,
-} from "../../graph/modules/ops/workflow/query.js";
+} from "../../graph/modules/workflow/query.js";
 import type { WorkflowReviewStartupState } from "../lib/workflow-review-contract.js";
 import {
   createBranchSessionActionModel,
@@ -60,11 +60,11 @@ function createBranchBoard(): ProjectBranchScopeResult {
             repositoryId: "repo-1",
             title: "workflow/runtime",
             updatedAt: "2026-03-26T09:58:00.000Z",
-            workflowBranchId: "branch-1",
+            branchId: "branch-1",
             worktreePath: "/tmp/worktree-1",
           },
         },
-        workflowBranch: {
+        branch: {
           branchKey: "branch:workflow-runtime",
           createdAt: "2026-03-26T09:00:00.000Z",
           entity: "branch",
@@ -78,7 +78,7 @@ function createBranchBoard(): ProjectBranchScopeResult {
         },
       },
       {
-        workflowBranch: {
+        branch: {
           branchKey: "branch:workflow-docs",
           createdAt: "2026-03-26T09:00:00.000Z",
           entity: "branch",
@@ -124,14 +124,14 @@ function createCommitQueue(): CommitQueueScopeResult {
           state: "attached",
           title: "Workflow review layout commit",
           updatedAt: "2026-03-26T09:16:00.000Z",
-          workflowCommitId: "commit-1",
+          commitId: "commit-1",
           worktree: {
             branchName: "workflow/runtime",
             leaseState: "attached",
             path: "/tmp/worktree-1",
           },
         },
-        workflowCommit: {
+        commit: {
           branchId: "branch-1",
           commitKey: "commit:review-layout",
           createdAt: "2026-03-26T09:10:00.000Z",
@@ -155,7 +155,7 @@ function createCommitQueue(): CommitQueueScopeResult {
         },
       },
       repositoryBranch: createBranchBoard().rows[0]?.repositoryBranch,
-      workflowBranch: {
+      branch: {
         activeCommitId: "commit-1",
         branchKey: "branch:workflow-runtime",
         createdAt: "2026-03-26T09:00:00.000Z",
@@ -186,14 +186,14 @@ function createCommitQueue(): CommitQueueScopeResult {
           state: "attached",
           title: "Workflow review layout commit",
           updatedAt: "2026-03-26T09:16:00.000Z",
-          workflowCommitId: "commit-1",
+          commitId: "commit-1",
           worktree: {
             branchName: "workflow/runtime",
             leaseState: "attached",
             path: "/tmp/worktree-1",
           },
         },
-        workflowCommit: {
+        commit: {
           branchId: "branch-1",
           commitKey: "commit:review-layout",
           createdAt: "2026-03-26T09:10:00.000Z",
@@ -206,7 +206,7 @@ function createCommitQueue(): CommitQueueScopeResult {
         },
       },
       {
-        workflowCommit: {
+        commit: {
           branchId: "branch-1",
           commitKey: "commit:polish-copy",
           createdAt: "2026-03-26T09:17:00.000Z",

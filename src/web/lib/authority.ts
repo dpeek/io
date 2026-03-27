@@ -1,5 +1,5 @@
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
+import { workflow } from "@io/core/graph/modules/workflow";
 import {
   agentSession,
   compileWorkflowReviewScopeDependencyKeys,
@@ -7,10 +7,10 @@ import {
   createWorkflowProjectionIndexFromRetainedState,
   repositoryBranch,
   repositoryCommit,
-  workflowBranch,
-  workflowCommit,
-  workflowProject,
-  workflowRepository,
+  branch,
+  commit,
+  project,
+  repository,
   createRetainedWorkflowProjectionState,
   type CommitQueueScopeFailureCode,
   type CommitQueueScopeQuery,
@@ -21,14 +21,13 @@ import {
   type ProjectBranchScopeResult,
   type RetainedWorkflowProjectionState,
   WorkflowProjectionQueryError,
-  workflowBranchStateValues,
+  branchStateValues,
   workflowBuiltInQuerySurfaces,
-  workflowProjectionSchema,
+  projectionSchema,
   workflowReviewModuleReadScope,
   type WorkflowMutationAction,
   type WorkflowMutationResult,
-} from "@io/core/graph/modules/ops/workflow";
-import { pkm } from "@io/core/graph/modules/pkm";
+} from "@io/core/graph/modules/workflow";
 import {
   defineAdmissionPolicy,
   type AdmissionPolicy,
@@ -120,7 +119,7 @@ import {
 import { runWorkflowMutationCommand } from "./workflow-authority.js";
 import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-transport.js";
 
-const webAppGraph = { ...core, ...pkm, ...ops } as const;
+const webAppGraph = { ...core, ...workflow } as const;
 
 type WebAppGraph = typeof webAppGraph;
 type PersistedWebAppAuthority = PersistedAuthoritativeGraph<WebAppGraph>;
@@ -312,9 +311,7 @@ type WebAuthorityMutationStageContext = {
 export interface WebAppAuthorityStorage {
   load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null>;
   loadWorkflowProjection(): Promise<RetainedWorkflowProjectionState | null>;
-  replaceWorkflowProjection(
-    workflowProjection: RetainedWorkflowProjectionState | null,
-  ): Promise<void>;
+  replaceWorkflowProjection(projection: RetainedWorkflowProjectionState | null): Promise<void>;
   inspectSecrets(): Promise<Record<string, WebAppAuthoritySecretInventoryRecord>>;
   /**
    * Load the currently live authority-only plaintext rows needed for the
@@ -328,13 +325,13 @@ export interface WebAppAuthorityStorage {
     input: PersistedAuthoritativeGraphStorageCommitInput,
     options?: {
       readonly secretWrite?: WebAppAuthoritySecretWrite;
-      readonly workflowProjection?: RetainedWorkflowProjectionState;
+      readonly projection?: RetainedWorkflowProjectionState;
     },
   ): Promise<void>;
   persist(
     input: PersistedAuthoritativeGraphStoragePersistInput,
     options?: {
-      readonly workflowProjection?: RetainedWorkflowProjectionState;
+      readonly projection?: RetainedWorkflowProjectionState;
     },
   ): Promise<void>;
 }
@@ -465,23 +462,23 @@ const writeSecretFieldCommandBasePredicateIds = [
 ] as const;
 const moduleScopeCursorPrefix = "scope:";
 const workflowModuleEntityTypeIds = new Set(
-  Object.values(workflowProjectionSchema)
+  Object.values(projectionSchema)
     .filter(isEntityType)
     .map((typeDef) => {
       const values = typeDef.values as { readonly id?: string; readonly key: string };
       return values.id ?? values.key;
     }),
 );
-const workflowProjectionReadEntityTypeIds = new Set(
+const projectionReadEntityTypeIds = new Set(
   [
-    workflowProject,
-    workflowRepository,
-    workflowBranch,
-    workflowCommit,
+    project,
+    repository,
+    branch,
+    commit,
     repositoryBranch,
     repositoryCommit,
     agentSession,
-    pkm.document,
+    workflow.document,
   ].map((typeDef) => {
     const values = typeDef.values as { readonly id?: string; readonly key: string };
     return values.id ?? values.key;
@@ -667,7 +664,7 @@ function buildRetainedWorkflowProjectionState(
 ): RetainedWorkflowProjectionState {
   const projectionStore = createStore(snapshot);
   return createRetainedWorkflowProjectionState(
-    createGraphClient(projectionStore, workflowProjectionSchema),
+    createGraphClient(projectionStore, projectionSchema),
     {
       sourceCursor,
     },
@@ -3029,7 +3026,7 @@ function filterReadableSnapshot(
 function listWorkflowProjectionSubjectIds(store: GraphStore): string[] {
   const subjectIds = new Set<string>();
   for (const edge of store.snapshot().edges) {
-    if (edge.p === typePredicateId && workflowProjectionReadEntityTypeIds.has(edge.o)) {
+    if (edge.p === typePredicateId && projectionReadEntityTypeIds.has(edge.o)) {
       subjectIds.add(edge.s);
     }
   }
@@ -3331,7 +3328,7 @@ function createAuthorityStorage(
       const secretWrite = pendingSecretWriteRef.current
         ? clonePersistedValue(pendingSecretWriteRef.current)
         : undefined;
-      const workflowProjection = buildRetainedWorkflowProjectionState(
+      const projection = buildRetainedWorkflowProjectionState(
         input.snapshot,
         headCursor(input.writeHistory),
       );
@@ -3339,22 +3336,22 @@ function createAuthorityStorage(
       try {
         await storage.commit(clonePersistedValue(input), {
           ...(secretWrite ? { secretWrite } : {}),
-          workflowProjection,
+          projection,
         });
-        retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
+        retainedWorkflowProjectionRef.current = clonePersistedValue(projection);
       } finally {
         pendingSecretWriteRef.current = null;
       }
     },
     async persist(input): Promise<void> {
-      const workflowProjection = buildRetainedWorkflowProjectionState(
+      const projection = buildRetainedWorkflowProjectionState(
         input.snapshot,
         headCursor(input.writeHistory),
       );
       await storage.persist(clonePersistedValue(input), {
-        workflowProjection,
+        projection,
       });
-      retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
+      retainedWorkflowProjectionRef.current = clonePersistedValue(projection);
     },
   };
 }
@@ -3448,18 +3445,18 @@ export async function createWebAppAuthority(
   await repairLegacyPrincipalHomeGraphIds(authority);
 
   async function replaceRetainedWorkflowProjection(
-    workflowProjection: RetainedWorkflowProjectionState,
+    projection: RetainedWorkflowProjectionState,
   ): Promise<void> {
-    await storage.replaceWorkflowProjection(clonePersistedValue(workflowProjection));
-    retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
+    await storage.replaceWorkflowProjection(clonePersistedValue(projection));
+    retainedWorkflowProjectionRef.current = clonePersistedValue(projection);
   }
 
   async function rebuildRetainedWorkflowProjection(): Promise<void> {
-    const workflowProjection = buildRetainedWorkflowProjectionState(
+    const projection = buildRetainedWorkflowProjectionState(
       authority.store.snapshot(),
       authority.createTotalSyncPayload().cursor,
     );
-    await replaceRetainedWorkflowProjection(workflowProjection);
+    await replaceRetainedWorkflowProjection(projection);
   }
 
   const recoveredWorkflowProjection = buildRetainedWorkflowProjectionState(
@@ -3708,7 +3705,7 @@ export async function createWebAppAuthority(
     pageCursor: string | undefined,
   ): ProjectBranchScopeQuery {
     let projectId: string | undefined;
-    const states = new Set<(typeof workflowBranchStateValues)[number]>();
+    const states = new Set<(typeof branchStateValues)[number]>();
     let hasActiveCommit: boolean | undefined;
     let showUnmanagedRepositoryBranches: boolean | undefined;
 
@@ -3729,14 +3726,12 @@ export async function createWebAppAuthority(
         }
         if (filter.fieldId === "state") {
           const state = requireStringQueryLiteral(filter.value, 'Collection filter "state"');
-          if (
-            !workflowBranchStateValues.includes(state as (typeof workflowBranchStateValues)[number])
-          ) {
+          if (!branchStateValues.includes(state as (typeof branchStateValues)[number])) {
             throw new UnsupportedSerializedQueryPlanError(
-              `Collection filter "state" must be one of: ${workflowBranchStateValues.join(", ")}.`,
+              `Collection filter "state" must be one of: ${branchStateValues.join(", ")}.`,
             );
           }
-          states.add(state as (typeof workflowBranchStateValues)[number]);
+          states.add(state as (typeof branchStateValues)[number]);
           return;
         }
         if (filter.fieldId === "hasActiveCommit") {
@@ -3757,14 +3752,12 @@ export async function createWebAppAuthority(
       if (filter.op === "in" && filter.fieldId === "state") {
         for (const value of filter.values) {
           const state = requireStringQueryLiteral(value, 'Collection filter "state"');
-          if (
-            !workflowBranchStateValues.includes(state as (typeof workflowBranchStateValues)[number])
-          ) {
+          if (!branchStateValues.includes(state as (typeof branchStateValues)[number])) {
             throw new UnsupportedSerializedQueryPlanError(
-              `Collection filter "state" must be one of: ${workflowBranchStateValues.join(", ")}.`,
+              `Collection filter "state" must be one of: ${branchStateValues.join(", ")}.`,
             );
           }
-          states.add(state as (typeof workflowBranchStateValues)[number]);
+          states.add(state as (typeof branchStateValues)[number]);
         }
         return;
       }
@@ -3874,8 +3867,8 @@ export async function createWebAppAuthority(
       kind: "collection",
       items: [
         ...result.rows.map((row) => ({
-          key: row.workflowBranch.id,
-          entityId: row.workflowBranch.id,
+          key: row.branch.id,
+          entityId: row.branch.id,
           payload: {
             kind: "workflow-project-branch-row",
             project: result.project,
@@ -3908,8 +3901,8 @@ export async function createWebAppAuthority(
     return {
       kind: "collection",
       items: result.rows.map((row) => ({
-        key: row.workflowCommit.id,
-        entityId: row.workflowCommit.id,
+        key: row.commit.id,
+        entityId: row.commit.id,
         payload: {
           kind: "workflow-commit-queue-row",
           branch: result.branch,
@@ -4104,13 +4097,13 @@ export async function createWebAppAuthority(
       }
     }
 
-    const workflowProjection = buildRetainedWorkflowProjectionState(
+    const projection = buildRetainedWorkflowProjectionState(
       authority.store.snapshot(),
       authority.createTotalSyncPayload().cursor,
     );
-    retainedWorkflowProjectionRef.current = clonePersistedValue(workflowProjection);
-    void replaceRetainedWorkflowProjection(workflowProjection).catch(() => {});
-    return createWorkflowProjectionIndexFromRetainedState(workflowProjection);
+    retainedWorkflowProjectionRef.current = clonePersistedValue(projection);
+    void replaceRetainedWorkflowProjection(projection).catch(() => {});
+    return createWorkflowProjectionIndexFromRetainedState(projection);
   }
 
   function readProjectBranchScope(

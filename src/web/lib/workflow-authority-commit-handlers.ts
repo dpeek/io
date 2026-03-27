@@ -1,13 +1,13 @@
 import { edgeId, type GraphStore } from "@io/core/graph";
-import { ops } from "@io/core/graph/modules/ops";
+import { workflow } from "@io/core/graph/modules/workflow";
 import {
   repositoryCommitLeaseStateValues,
   repositoryCommitStateValues,
-  workflowCommitStateValues,
+  commitStateValues,
   type WorkflowBranchStateValue,
   type WorkflowMutationAction,
   type WorkflowMutationResult,
-} from "@io/core/graph/modules/ops/workflow";
+} from "@io/core/graph/modules/workflow";
 
 import {
   requireBranch,
@@ -37,10 +37,10 @@ import {
   setSingleValue,
   trimOptionalString,
   type ProductGraphClient,
-  workflowBranchStateIds,
-  workflowBranchTransitions,
-  workflowCommitStateIds,
-  workflowCommitTransitions,
+  branchStateIds,
+  branchTransitions,
+  commitStateIds,
+  commitTransitions,
 } from "./workflow-mutation-helpers.js";
 
 type CommitCreateMutation = Extract<WorkflowMutationAction, { action: "createCommit" }>;
@@ -55,28 +55,24 @@ type CommitResultMutation = Extract<WorkflowMutationAction, { action: "attachCom
 export function findManagedRepositoryBranchForBranch(graph: ProductGraphClient, branchId: string) {
   return graph.repositoryBranch
     .list()
-    .find(
-      (repositoryBranch) =>
-        repositoryBranch.workflowBranch === branchId && repositoryBranch.managed,
-    );
+    .find((repositoryBranch) => repositoryBranch.branch === branchId && repositoryBranch.managed);
 }
 
 function findRepositoryCommitForWorkflowCommit(
   graph: ProductGraphClient,
-  workflowCommitId: string,
+  commitId: string,
   exceptRepositoryCommitId?: string,
 ) {
   return graph.repositoryCommit
     .list()
     .find(
       (repositoryCommit) =>
-        repositoryCommit.workflowCommit === workflowCommitId &&
-        repositoryCommit.id !== exceptRepositoryCommitId,
+        repositoryCommit.commit === commitId && repositoryCommit.id !== exceptRepositoryCommitId,
     );
 }
 
 function listBranchCommits(graph: ProductGraphClient, branchId: string) {
-  return graph.workflowCommit.list().filter((commit) => commit.branch === branchId);
+  return graph.commit.list().filter((commit) => commit.branch === branchId);
 }
 
 function deriveBranchStateAfterCommitLifecycle(
@@ -114,13 +110,13 @@ function reconcileBranchAfterCommitChange(
   branchId: string,
   commitId: string,
 ): void {
-  const branch = graph.workflowBranch.get(branchId);
+  const branch = graph.branch.get(branchId);
   if (branch.activeCommit === commitId) {
-    clearSingleValue(store, branchId, edgeId(ops.workflowBranch.fields.activeCommit));
+    clearSingleValue(store, branchId, edgeId(workflow.branch.fields.activeCommit));
   }
   const nextState = deriveBranchStateAfterCommitLifecycle(graph, branchId);
-  graph.workflowBranch.update(branchId, {
-    state: workflowBranchStateIds[nextState],
+  graph.branch.update(branchId, {
+    state: branchStateIds[nextState],
   });
 }
 
@@ -160,11 +156,11 @@ export function createWorkflowCommit(
     input.state === undefined
       ? "planned"
       : requireAllowedValue(input.state, ["planned", "ready"] as const, "Workflow commit state");
-  const commitId = graph.workflowCommit.create({
+  const commitId = graph.commit.create({
     name: requireString(input.title, "Commit title"),
     branch: branch.id,
     commitKey,
-    state: workflowCommitStateIds[requestedState],
+    state: commitStateIds[requestedState],
     order: input.order,
     ...(parentCommitId ? { parentCommit: parentCommitId } : {}),
     ...(input.contextDocumentId !== undefined && input.contextDocumentId !== null
@@ -180,7 +176,7 @@ export function createWorkflowCommit(
   return {
     action: input.action,
     created: true,
-    summary: buildCommitSummary(graph.workflowCommit.get(commitId)),
+    summary: buildCommitSummary(graph.commit.get(commitId)),
   };
 }
 
@@ -200,7 +196,7 @@ export function updateWorkflowCommit(
   if (input.order !== undefined) patch.order = input.order;
   if (input.parentCommitId !== undefined) {
     if (input.parentCommitId === null) {
-      clearSingleValue(store, commit.id, edgeId(ops.workflowCommit.fields.parentCommit));
+      clearSingleValue(store, commit.id, edgeId(workflow.commit.fields.parentCommit));
     } else {
       const parentCommit = requireCommit(
         graph,
@@ -226,7 +222,7 @@ export function updateWorkflowCommit(
   }
   if (input.contextDocumentId !== undefined) {
     if (input.contextDocumentId === null) {
-      clearSingleValue(store, commit.id, edgeId(ops.workflowCommit.fields.contextDocument));
+      clearSingleValue(store, commit.id, edgeId(workflow.commit.fields.contextDocument));
     } else {
       patch.contextDocument = requireDocument(
         graph,
@@ -236,12 +232,12 @@ export function updateWorkflowCommit(
     }
   }
   if (Object.keys(patch).length > 0) {
-    graph.workflowCommit.update(commit.id, patch);
+    graph.commit.update(commit.id, patch);
   }
   return {
     action: input.action,
     created: false,
-    summary: buildCommitSummary(graph.workflowCommit.get(commit.id)),
+    summary: buildCommitSummary(graph.commit.get(commit.id)),
   };
 }
 
@@ -253,24 +249,15 @@ export function setWorkflowCommitState(
   const commit = requireCommit(graph, store, requireString(input.commitId, "Commit id"));
   const branch = requireBranch(graph, store, commit.branch);
   const currentState = decodeWorkflowCommitState(commit.state);
-  const targetState = requireAllowedValue(
-    input.state,
-    workflowCommitStateValues,
-    "Workflow commit state",
-  );
+  const targetState = requireAllowedValue(input.state, commitStateValues, "Workflow commit state");
 
-  requireWorkflowTransition(
-    currentState,
-    targetState,
-    workflowCommitTransitions,
-    "Workflow commit",
-  );
+  requireWorkflowTransition(currentState, targetState, commitTransitions, "Workflow commit");
   if (targetState === "active") {
     requireBranchRepositoryTarget(graph, branch.id);
     requireWorkflowTransition(
       decodeWorkflowBranchState(branch.state),
       "active",
-      workflowBranchTransitions,
+      branchTransitions,
       "Workflow branch",
     );
     if (branch.activeCommit && branch.activeCommit !== commit.id) {
@@ -280,13 +267,13 @@ export function setWorkflowCommitState(
         "branch-lock-conflict",
       );
     }
-    graph.workflowCommit.update(commit.id, {
-      state: workflowCommitStateIds.active,
+    graph.commit.update(commit.id, {
+      state: commitStateIds.active,
     });
-    graph.workflowBranch.update(branch.id, {
-      state: workflowBranchStateIds.active,
+    graph.branch.update(branch.id, {
+      state: branchStateIds.active,
     });
-    setSingleValue(store, branch.id, edgeId(ops.workflowBranch.fields.activeCommit), commit.id);
+    setSingleValue(store, branch.id, edgeId(workflow.branch.fields.activeCommit), commit.id);
   } else {
     if (targetState === "committed") {
       const repositoryCommit = findRepositoryCommitForWorkflowCommit(graph, commit.id);
@@ -305,8 +292,8 @@ export function setWorkflowCommitState(
         );
       }
     }
-    graph.workflowCommit.update(commit.id, {
-      state: workflowCommitStateIds[targetState],
+    graph.commit.update(commit.id, {
+      state: commitStateIds[targetState],
     });
     if (
       branch.activeCommit === commit.id ||
@@ -324,7 +311,7 @@ export function setWorkflowCommitState(
   return {
     action: input.action,
     created: false,
-    summary: buildCommitSummary(graph.workflowCommit.get(commit.id)),
+    summary: buildCommitSummary(graph.commit.get(commit.id)),
   };
 }
 
@@ -338,21 +325,17 @@ export function createWorkflowRepositoryCommit(
     store,
     requireString(input.repositoryId, "Repository id"),
   );
-  let workflowCommitId: string | undefined;
+  let commitId: string | undefined;
   let repositoryBranchId: string | undefined;
   let defaultTitle = "Repository commit";
 
-  if (input.workflowCommitId) {
-    const workflowCommit = requireCommit(
-      graph,
-      store,
-      requireString(input.workflowCommitId, "Workflow commit id"),
-    );
-    const branch = requireBranch(graph, store, workflowCommit.branch);
+  if (input.commitId) {
+    const commit = requireCommit(graph, store, requireString(input.commitId, "Workflow commit id"));
+    const branch = requireBranch(graph, store, commit.branch);
     if (branch.project !== repository.project) {
       throw new WorkflowMutationError(
         409,
-        `Workflow commit "${workflowCommit.id}" does not belong to repository "${repository.id}".`,
+        `Workflow commit "${commit.id}" does not belong to repository "${repository.id}".`,
         "invalid-transition",
       );
     }
@@ -366,7 +349,7 @@ export function createWorkflowRepositoryCommit(
       if (selectedRepositoryBranch.id !== managedRepositoryBranch.id) {
         throw new WorkflowMutationError(
           409,
-          `Workflow commit "${workflowCommit.id}" requires managed repository branch "${managedRepositoryBranch.id}".`,
+          `Workflow commit "${commit.id}" requires managed repository branch "${managedRepositoryBranch.id}".`,
           "repository-missing",
         );
       }
@@ -374,19 +357,16 @@ export function createWorkflowRepositoryCommit(
     } else {
       repositoryBranchId = managedRepositoryBranch.id;
     }
-    const existingRepositoryCommit = findRepositoryCommitForWorkflowCommit(
-      graph,
-      workflowCommit.id,
-    );
+    const existingRepositoryCommit = findRepositoryCommitForWorkflowCommit(graph, commit.id);
     if (existingRepositoryCommit) {
       throw new WorkflowMutationError(
         409,
-        `Workflow commit "${workflowCommit.id}" is already attached to repository commit "${existingRepositoryCommit.id}".`,
+        `Workflow commit "${commit.id}" is already attached to repository commit "${existingRepositoryCommit.id}".`,
         "commit-lock-conflict",
       );
     }
-    workflowCommitId = workflowCommit.id;
-    defaultTitle = workflowCommit.name;
+    commitId = commit.id;
+    defaultTitle = commit.name;
   } else if (input.repositoryBranchId) {
     const repositoryBranch = requireRepositoryBranch(
       graph,
@@ -428,7 +408,7 @@ export function createWorkflowRepositoryCommit(
     name: trimOptionalString(input.title) ?? defaultTitle,
     repository: repository.id,
     ...(repositoryBranchId ? { repositoryBranch: repositoryBranchId } : {}),
-    ...(workflowCommitId ? { workflowCommit: workflowCommitId } : {}),
+    ...(commitId ? { commit: commitId } : {}),
     state: repositoryCommitStateIds[requestedState],
     worktree: {
       path: trimOptionalString(input.worktree?.path),
@@ -455,23 +435,19 @@ export function attachWorkflowCommitResult(
   );
   const repository = requireRepository(graph, store, repositoryCommit.repository);
 
-  let workflowCommitId = repositoryCommit.workflowCommit;
-  if (input.workflowCommitId) {
-    const workflowCommit = requireCommit(
-      graph,
-      store,
-      requireString(input.workflowCommitId, "Workflow commit id"),
-    );
-    if (workflowCommitId && workflowCommitId !== workflowCommit.id) {
+  let commitId = repositoryCommit.commit;
+  if (input.commitId) {
+    const commit = requireCommit(graph, store, requireString(input.commitId, "Workflow commit id"));
+    if (commitId && commitId !== commit.id) {
       throw new WorkflowMutationError(
         409,
-        `Repository commit "${repositoryCommit.id}" is already attached to workflow commit "${workflowCommitId}".`,
+        `Repository commit "${repositoryCommit.id}" is already attached to workflow commit "${commitId}".`,
         "commit-lock-conflict",
       );
     }
-    workflowCommitId = workflowCommit.id;
+    commitId = commit.id;
   }
-  if (!workflowCommitId) {
+  if (!commitId) {
     throw new WorkflowMutationError(
       409,
       `Repository commit "${repositoryCommit.id}" does not have a workflow commit attachment.`,
@@ -479,25 +455,25 @@ export function attachWorkflowCommitResult(
     );
   }
 
-  const workflowCommit = requireCommit(graph, store, workflowCommitId);
-  const branch = requireBranch(graph, store, workflowCommit.branch);
+  const commit = requireCommit(graph, store, commitId);
+  const branch = requireBranch(graph, store, commit.branch);
   if (branch.project !== repository.project) {
     throw new WorkflowMutationError(
       409,
-      `Workflow commit "${workflowCommit.id}" does not belong to repository "${repository.id}".`,
+      `Workflow commit "${commit.id}" does not belong to repository "${repository.id}".`,
       "invalid-transition",
     );
   }
 
   const existingRepositoryCommit = findRepositoryCommitForWorkflowCommit(
     graph,
-    workflowCommit.id,
+    commit.id,
     repositoryCommit.id,
   );
   if (existingRepositoryCommit) {
     throw new WorkflowMutationError(
       409,
-      `Workflow commit "${workflowCommit.id}" is already attached to repository commit "${existingRepositoryCommit.id}".`,
+      `Workflow commit "${commit.id}" is already attached to repository commit "${existingRepositoryCommit.id}".`,
       "commit-lock-conflict",
     );
   }
@@ -524,16 +500,16 @@ export function attachWorkflowCommitResult(
   if (selectedRepositoryBranch.id !== managedRepositoryBranch.id) {
     throw new WorkflowMutationError(
       409,
-      `Workflow commit "${workflowCommit.id}" requires managed repository branch "${managedRepositoryBranch.id}".`,
+      `Workflow commit "${commit.id}" requires managed repository branch "${managedRepositoryBranch.id}".`,
       "repository-missing",
     );
   }
 
   const committedAt = parseOptionalDate(input.committedAt, "Committed at");
   const patch: Record<string, unknown> = {
-    name: trimOptionalString(input.title) ?? repositoryCommit.name ?? workflowCommit.name,
+    name: trimOptionalString(input.title) ?? repositoryCommit.name ?? commit.name,
     repositoryBranch: selectedRepositoryBranch.id,
-    workflowCommit: workflowCommit.id,
+    commit: commit.id,
     state: repositoryCommitStateIds.committed,
     sha: requireString(input.sha, "Commit SHA"),
     committedAt: committedAt ?? new Date(),
@@ -555,7 +531,7 @@ export function attachWorkflowCommitResult(
       clearSingleValue(
         store,
         repositoryCommit.id,
-        edgeId(ops.repositoryCommit.fields.worktree.path),
+        edgeId(workflow.repositoryCommit.fields.worktree.path),
       );
     } else {
       patch.worktree = {
@@ -569,7 +545,7 @@ export function attachWorkflowCommitResult(
       clearSingleValue(
         store,
         repositoryCommit.id,
-        edgeId(ops.repositoryCommit.fields.worktree.branchName),
+        edgeId(workflow.repositoryCommit.fields.worktree.branchName),
       );
     } else {
       patch.worktree = {
@@ -580,10 +556,10 @@ export function attachWorkflowCommitResult(
   }
 
   graph.repositoryCommit.update(repositoryCommit.id, patch);
-  graph.workflowCommit.update(workflowCommit.id, {
-    state: workflowCommitStateIds.committed,
+  graph.commit.update(commit.id, {
+    state: commitStateIds.committed,
   });
-  reconcileBranchAfterCommitChange(graph, store, branch.id, workflowCommit.id);
+  reconcileBranchAfterCommitChange(graph, store, branch.id, commit.id);
 
   return {
     action: input.action,
@@ -594,16 +570,11 @@ export function attachWorkflowCommitResult(
 
 export function validateWorkflowBranchStateTransition(
   graph: ProductGraphClient,
-  branch: ReturnType<ProductGraphClient["workflowBranch"]["get"]>,
+  branch: ReturnType<ProductGraphClient["branch"]["get"]>,
   targetState: WorkflowBranchStateValue,
 ): void {
   const currentState = decodeWorkflowBranchState(branch.state);
-  requireWorkflowTransition(
-    currentState,
-    targetState,
-    workflowBranchTransitions,
-    "Workflow branch",
-  );
+  requireWorkflowTransition(currentState, targetState, branchTransitions, "Workflow branch");
   if (targetState === "active") {
     requireBranchRepositoryTarget(graph, branch.id);
   }

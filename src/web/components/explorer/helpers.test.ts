@@ -1,11 +1,11 @@
 import { describe, expect, it, mock } from "bun:test";
 
 import { edgeId } from "@io/core/graph";
-import { ops } from "@io/core/graph/modules/ops";
+import { workflow } from "@io/core/graph/modules/workflow";
 
 import { postSecretFieldMutation } from "./helpers.js";
 
-const envVarSecretPredicateId = edgeId(ops.envVar.fields.secret);
+const envVarSecretPredicateId = edgeId(workflow.envVar.fields.secret);
 
 describe("explorer helpers", () => {
   it("submits secret-field writes through the canonical command route", async () => {

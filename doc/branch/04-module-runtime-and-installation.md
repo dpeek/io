@@ -462,8 +462,8 @@ version, bundleDigest)` tuple
   declared key must resolve to a bundle export when activated
 - `installMode: "system"` marks modules that bootstrap the graph itself and may
   not be uninstalled; `core:` belongs in this class
-- `installMode: "optional"` marks feature modules such as `ops/env-var` or
-  `pkm/topic`
+- `installMode: "optional"` marks feature modules such as `workflow/env-var` or
+  `workflow/document`
 
 ## 4. Public Contract Surface
 
@@ -1017,12 +1017,12 @@ own fact storage itself.
   Export only the deliberate root-owned definition contracts from `def`, and
   keep the root graph surface curated instead of reintroducing a catch-all
   runtime barrel.
-- `src/graph/modules/ops/env-var/module.ts`
+- `src/graph/modules/workflow/env-var/module.ts`
   Wrap the existing env-var schema and secret-aware descriptors as the first
   optional built-in module bundle.
-- `src/graph/modules/pkm/topic/module.ts`
-  Wrap the existing topic slice as a second optional built-in bundle with one
-  real object-view and workflow registration.
+- `src/graph/modules/workflow/document/module.ts`
+  Wrap the existing document slice as a second optional built-in bundle with
+  one real object-view and workflow registration.
 - `src/web/lib/module-catalog.ts` and `src/web/lib/module-installer.ts`
   Add trusted builtin or local discovery plus authoritative planning and
   activation logic here.

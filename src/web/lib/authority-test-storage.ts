@@ -1,4 +1,4 @@
-import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/ops/workflow";
+import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/workflow";
 import {
   persistedAuthoritativeGraphStateVersion,
   type PersistedAuthoritativeGraphState,
@@ -18,7 +18,7 @@ import { collectLiveSecretIds } from "./authority.js";
 
 export type PersistedTestWebAppAuthorityState = PersistedAuthoritativeGraphState & {
   readonly secrets?: Record<string, WebAppAuthoritySecretRecord>;
-  readonly workflowProjection?: RetainedWorkflowProjectionState;
+  readonly projection?: RetainedWorkflowProjectionState;
 };
 
 function clonePersistedValue<T>(value: T): T {
@@ -97,8 +97,8 @@ export function createInMemoryTestWebAppAuthorityStorage(
       })
     : null;
   let persistedSecrets = createSecretRecordMap(initialState?.secrets);
-  let persistedWorkflowProjection = initialState?.workflowProjection
-    ? clonePersistedValue(initialState.workflowProjection)
+  let persistedWorkflowProjection = initialState?.projection
+    ? clonePersistedValue(initialState.projection)
     : null;
 
   function writeState(input: PersistedAuthoritativeGraphStoragePersistInput): void {
@@ -130,11 +130,9 @@ export function createInMemoryTestWebAppAuthorityStorage(
           : null;
       },
       async replaceWorkflowProjection(
-        workflowProjection: RetainedWorkflowProjectionState | null,
+        projection: RetainedWorkflowProjectionState | null,
       ): Promise<void> {
-        persistedWorkflowProjection = workflowProjection
-          ? clonePersistedValue(workflowProjection)
-          : null;
+        persistedWorkflowProjection = projection ? clonePersistedValue(projection) : null;
       },
       async inspectSecrets(): Promise<Record<string, WebAppAuthoritySecretInventoryRecord>> {
         return serializeSecretInventory(persistedSecrets);
@@ -149,8 +147,8 @@ export function createInMemoryTestWebAppAuthorityStorage(
       },
       async commit(input, options): Promise<void> {
         writeState(input);
-        persistedWorkflowProjection = options?.workflowProjection
-          ? clonePersistedValue(options.workflowProjection)
+        persistedWorkflowProjection = options?.projection
+          ? clonePersistedValue(options.projection)
           : null;
         if (options?.secretWrite) {
           persistedSecrets.set(options.secretWrite.secretId, toSecretRecord(options.secretWrite));
@@ -161,8 +159,8 @@ export function createInMemoryTestWebAppAuthorityStorage(
       },
       async persist(input, options): Promise<void> {
         writeState(input);
-        persistedWorkflowProjection = options?.workflowProjection
-          ? clonePersistedValue(options.workflowProjection)
+        persistedWorkflowProjection = options?.projection
+          ? clonePersistedValue(options.projection)
           : null;
         persistedSecrets = pruneSecretRecordMap(persistedSecrets, {
           liveSecretIds: collectLiveSecretIds(input.snapshot),
@@ -175,7 +173,7 @@ export function createInMemoryTestWebAppAuthorityStorage(
         ...persistedState,
         secrets: serializeSecretRecords(persistedSecrets),
         ...(persistedWorkflowProjection
-          ? { workflowProjection: clonePersistedValue(persistedWorkflowProjection) }
+          ? { projection: clonePersistedValue(persistedWorkflowProjection) }
           : {}),
       });
     },

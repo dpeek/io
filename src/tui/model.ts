@@ -1,14 +1,14 @@
 import type {
   WorkflowBranchStateValue,
   WorkflowCommitStateValue,
-} from "../graph/modules/ops/workflow/command.js";
+} from "../graph/modules/workflow/command.js";
 import type {
   CommitQueueScopeResult,
   CommitQueueScopeSessionSummary,
   ProjectBranchScopeQuery,
   ProjectBranchScopeResult,
   WorkflowProjectionIndex,
-} from "../graph/modules/ops/workflow/query.js";
+} from "../graph/modules/workflow/query.js";
 import {
   createDefaultWorkflowTuiStartupContract,
   type WorkflowTuiBranchResolution,
@@ -138,7 +138,7 @@ function isWorkflowFocus(value: string): value is WorkflowTuiFocus {
 }
 
 function getBranchIds(branchBoard: ProjectBranchScopeResult) {
-  return branchBoard.rows.map((row) => row.workflowBranch.id);
+  return branchBoard.rows.map((row) => row.branch.id);
 }
 
 function getCommitQueueForBranch(
@@ -148,7 +148,7 @@ function getCommitQueueForBranch(
   if (!branchId) {
     return undefined;
   }
-  return commitQueues.find((commitQueue) => commitQueue.branch.workflowBranch.id === branchId);
+  return commitQueues.find((commitQueue) => commitQueue.branch.branch.id === branchId);
 }
 
 function dedupeCommitQueues(
@@ -159,7 +159,7 @@ function dedupeCommitQueues(
   const seenBranchIds = new Set<string>();
 
   return commitQueues.filter((commitQueue) => {
-    const branchId = commitQueue.branch.workflowBranch.id;
+    const branchId = commitQueue.branch.branch.id;
     if (!branchIds.has(branchId) || seenBranchIds.has(branchId)) {
       return false;
     }
@@ -187,14 +187,13 @@ function resolveSelectedCommitId(
     return undefined;
   }
 
-  const commitIds = commitQueue.rows.map((row) => row.workflowCommit.id);
+  const commitIds = commitQueue.rows.map((row) => row.commit.id);
   if (selectedCommitId && commitIds.includes(selectedCommitId)) {
     return selectedCommitId;
   }
 
   const activeCommitId =
-    commitQueue.branch.activeCommit?.workflowCommit.id ??
-    commitQueue.branch.workflowBranch.activeCommitId;
+    commitQueue.branch.activeCommit?.commit.id ?? commitQueue.branch.branch.activeCommitId;
   if (activeCommitId && commitIds.includes(activeCommitId)) {
     return activeCommitId;
   }
@@ -210,7 +209,7 @@ function getSelectedCommitRow(
     return undefined;
   }
 
-  return commitQueue.rows.find((row) => row.workflowCommit.id === selectedCommitId);
+  return commitQueue.rows.find((row) => row.commit.id === selectedCommitId);
 }
 
 function getSelectedBranchSubjectState(
@@ -222,14 +221,14 @@ function getSelectedBranchSubjectState(
     return undefined;
   }
 
-  const selectedBranch = branchBoard.rows.find((row) => row.workflowBranch.id === selectedBranchId);
+  const selectedBranch = branchBoard.rows.find((row) => row.branch.id === selectedBranchId);
   if (!selectedBranch) {
     return undefined;
   }
 
   return {
     branchId: selectedBranchId,
-    branchState: selectedBranch.workflowBranch.state,
+    branchState: selectedBranch.branch.state,
     latestSession: commitQueue?.branch.latestSession,
   };
 }
@@ -247,17 +246,17 @@ function getSelectedCommitSubjectState(
   const selectedCommit = getSelectedCommitRow(commitQueue, selectedCommitId);
 
   return {
-    branchId: commitQueue.branch.workflowBranch.id,
+    branchId: commitQueue.branch.branch.id,
     branchState,
     ...(selectedCommitId ? { commitId: selectedCommitId } : {}),
-    ...(selectedCommit ? { commitState: selectedCommit.workflowCommit.state } : {}),
+    ...(selectedCommit ? { commitState: selectedCommit.commit.state } : {}),
     hasRunningSession:
       latestSession?.runtimeState === "running" &&
       latestSession.subject.kind === "commit" &&
       latestSession.subject.commitId === selectedCommitId,
     isActiveCommit:
       selectedCommitId !== undefined &&
-      commitQueue.branch.workflowBranch.activeCommitId === selectedCommitId,
+      commitQueue.branch.branch.activeCommitId === selectedCommitId,
     latestSession,
   };
 }
@@ -420,7 +419,7 @@ function isKnownActionSubject(
     return false;
   }
 
-  const branchExists = branchBoard.rows.some((row) => row.workflowBranch.id === subject.branchId);
+  const branchExists = branchBoard.rows.some((row) => row.branch.id === subject.branchId);
   if (!branchExists) {
     return false;
   }
@@ -435,7 +434,7 @@ function isKnownActionSubject(
 
   return (
     getCommitQueueForBranch(commitQueues, subject.branchId)?.rows.some(
-      (row) => row.workflowCommit.id === subject.commitId,
+      (row) => row.commit.id === subject.commitId,
     ) ?? false
   );
 }
@@ -584,7 +583,7 @@ function buildWorkflowTuiStartupModel(
         lines: loading
           ? [
               "src/tui owns terminal workflow UX and product-shell composition.",
-              "src/graph/adapters/react-opentui remains the shared graph/OpenTUI adapter landing root.",
+              "lib/graph-react owns the shared host-neutral React runtime hooks used by the TUI.",
               "The first contract does not launch sessions, reconcile git, or perform workflow writes.",
               "src/agent/tui stays in place as the legacy retained session monitor during migration.",
             ]
@@ -652,7 +651,7 @@ export function createWorkflowTuiWorkflowModelFromProjection(
   });
   const commitQueues = branchBoard.rows.map((row) =>
     options.projection.readCommitQueueScope({
-      branchId: row.workflowBranch.id,
+      branchId: row.branch.id,
       ...(options.commitQueueLimit ? { limit: options.commitQueueLimit } : {}),
     }),
   );
@@ -744,7 +743,7 @@ export function moveWorkflowTuiSelection(
     const selectedQueue = getCommitQueueForBranch(model.commitQueues, model.selectedBranchId);
     const nextCommitId = moveSelection(
       model.selectedCommitId,
-      selectedQueue?.rows.map((row) => row.workflowCommit.id) ?? [],
+      selectedQueue?.rows.map((row) => row.commit.id) ?? [],
       delta,
     );
     if (!nextCommitId || nextCommitId === model.selectedCommitId) {

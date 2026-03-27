@@ -11,7 +11,7 @@ contracts it described are now implemented.
 ## Current Repo State
 
 - `core:secretHandle` is the canonical secret-handle type
-- app types such as `ops:envVar` author secret-backed refs with
+- app types such as `workflow:envVar` author secret-backed refs with
   `defineSecretField(...)`
 - field authority metadata and write scopes are live:
   `client-tx`, `server-command`, and `authority-only`
@@ -32,7 +32,7 @@ contracts it described are now implemented.
 ## Relevant Code
 
 - [core secret type](../../src/graph/modules/core/secret/type.ts)
-- [env-var type](../../src/graph/modules/ops/env-var/type.ts)
+- [env-var type](../../src/graph/modules/workflow/env-var/type.ts)
 - [runtime schema](../../src/graph/runtime/schema.ts)
 - [type-module helpers](../../src/graph/runtime/type-module.ts)
 - [web authority](../../src/web/lib/authority.ts)

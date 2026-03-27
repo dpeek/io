@@ -146,7 +146,7 @@ export type ResolvedQueryWorkbenchState = {
 };
 
 const defaultPreviewDataset = Object.freeze({
-  "ops/workflow:project-branch-board": [
+  "workflow:project-branch-board": [
     {
       entityId: "workflow-branch:1",
       key: "row:branch-1",
@@ -187,7 +187,7 @@ const defaultPreviewDataset = Object.freeze({
       },
     },
   ],
-  "ops/workflow:branch-commit-queue": [
+  "workflow:branch-commit-queue": [
     {
       entityId: "queue-row:1",
       key: "row:queue-1",
@@ -321,7 +321,7 @@ export function resolveQueryWorkbenchRouteTarget(
     kind: "draft",
     request: {
       query: {
-        indexId: "ops/workflow:project-branch-board",
+        indexId: "workflow:project-branch-board",
         kind: "collection",
         window: {
           limit: 25,

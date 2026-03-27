@@ -13,7 +13,7 @@ export const envVarNameInvalidMessage =
   "Environment variable names must start with a letter and use only uppercase letters, numbers, and underscores.";
 
 export const envVar = defineType({
-  values: { key: "ops:envVar", name: "Environment Variable" },
+  values: { key: "workflow:envVar", name: "Environment Variable" },
   fields: {
     ...core.node.fields,
     name: stringTypeModule.field({

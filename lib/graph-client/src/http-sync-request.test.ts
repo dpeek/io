@@ -25,13 +25,13 @@ describe("http sync request transport", () => {
       after: "scope:1",
       scope: {
         kind: "module",
-        moduleId: "ops/workflow",
-        scopeId: "scope:ops/workflow:review",
+        moduleId: "workflow",
+        scopeId: "scope:workflow:review",
       },
     });
 
     expect(url.toString()).toBe(
-      "http://io.localhost:1355/api/sync?after=scope%3A1&scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
+      "http://io.localhost:1355/api/sync?after=scope%3A1&scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
     );
   });
 
@@ -47,14 +47,14 @@ describe("http sync request transport", () => {
   it("reads module scope requests", () => {
     expect(
       readHttpSyncRequest(
-        "http://io.localhost:1355/api/sync?after=scope%3A1&scopeKind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview",
+        "http://io.localhost:1355/api/sync?after=scope%3A1&scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview",
       ),
     ).toEqual({
       after: "scope:1",
       scope: {
         kind: "module",
-        moduleId: "ops/workflow",
-        scopeId: "scope:ops/workflow:review",
+        moduleId: "workflow",
+        scopeId: "scope:workflow:review",
       },
     });
   });

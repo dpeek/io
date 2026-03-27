@@ -1,4 +1,5 @@
-import type { PredicateFieldEditorCapability } from "../../../runtime/react/index.js";
+import type { PredicateFieldEditorCapability } from "@io/graph-react";
+
 import { CheckboxFieldEditor } from "./checkbox.js";
 import { ColorFieldEditor } from "./color.js";
 import { DateFieldEditor } from "./date.js";

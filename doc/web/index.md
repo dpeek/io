@@ -75,7 +75,7 @@ package. The terminal sibling surface lives in `../../src/tui/*`.
 
 - keep reusable browser UI and editor chrome in `../../lib/web/src/*`
 - keep graph-aware field resolver, predicate mutation, and typed preview logic
-  in `../../src/graph/runtime/react/*` and
+  in `../../lib/graph-react/src/*` and
   `../../src/graph/adapters/react-dom/*`
 - keep route/page composition, explorer state, and Worker
   authority wiring in `../../src/web/*`
@@ -204,7 +204,7 @@ Current editor interaction model:
   retained base cursor plus active retained-history policy so fallback causes
   stay legible to operators. It lets operators switch between explicit
   whole-graph recovery and the first named
-  `ops/workflow` review scope, inspect delivered scope metadata, and trigger
+  `workflow` review scope, inspect delivered scope metadata, and trigger
   scoped refreshes over the shared `/api/sync` transport contract
 - `../../src/web/components/app-shell.tsx`: shared shell and navigation
 - `../../lib/web/src/markdown.tsx`: shared markdown renderer with Bun-first and
@@ -305,7 +305,7 @@ The current Branch 3 browser model stays fail closed.
   into the shared read, write, and command authorizers, explicit
   `policyVersion` fail-closed checks for authority-owned read,
   `/api/sync`, `/api/tx`, and `/api/commands` paths, authority-planned
-  module-scoped sync for the first named `ops/workflow` review scope over
+  module-scoped sync for the first named `workflow` review scope over
   `/api/sync`, authority-planned workflow review live registrations over
   `/api/workflow-live` that stay scoped to the current review cursor and
   authenticated session identity, conservative `cursor-advanced` invalidation

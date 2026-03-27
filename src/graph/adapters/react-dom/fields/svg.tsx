@@ -1,13 +1,13 @@
-import { MonacoSourceEditor, sourcePreviewMonacoOptions } from "@io/web/monaco";
-import { SourcePreviewFieldEditor } from "@io/web/source-preview";
-import { useDeferredValue, useEffect, useState } from "react";
-
 import {
   getPredicateEditorPlaceholder,
   performValidatedMutation,
   usePredicateField,
   type PredicateFieldViewCapability,
-} from "../../../runtime/react/index.js";
+} from "@io/graph-react";
+import { MonacoSourceEditor, sourcePreviewMonacoOptions } from "@io/web/monaco";
+import { SourcePreviewFieldEditor } from "@io/web/source-preview";
+import { useDeferredValue, useEffect, useState } from "react";
+
 import {
   normalizeTextValue,
   setPredicateValue,

@@ -1,6 +1,5 @@
 import { type GraphStore } from "@io/core/graph";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 
 import {
   WorkflowMutationError,
@@ -8,13 +7,13 @@ import {
   type ProductGraphClient,
 } from "./workflow-mutation-helpers.js";
 
-const workflowProjectTypeId = ops.workflowProject.values.id as string;
-const workflowRepositoryTypeId = ops.workflowRepository.values.id as string;
-const workflowBranchTypeId = ops.workflowBranch.values.id as string;
-const workflowCommitTypeId = ops.workflowCommit.values.id as string;
-const repositoryBranchTypeId = ops.repositoryBranch.values.id as string;
-const repositoryCommitTypeId = ops.repositoryCommit.values.id as string;
-const documentTypeId = pkm.document.values.id as string;
+const projectTypeId = workflow.project.values.id as string;
+const repositoryTypeId = workflow.repository.values.id as string;
+const branchTypeId = workflow.branch.values.id as string;
+const commitTypeId = workflow.commit.values.id as string;
+const repositoryBranchTypeId = workflow.repositoryBranch.values.id as string;
+const repositoryCommitTypeId = workflow.repositoryCommit.values.id as string;
+const documentTypeId = workflow.document.values.id as string;
 
 const inferredProjectLimitMessage =
   "Branch 6 v1 supports exactly one inferred workflow project per graph.";
@@ -22,14 +21,14 @@ const attachedRepositoryLimitMessage =
   "Branch 6 v1 supports exactly one attached workflow repository per graph.";
 
 export function requireProject(graph: ProductGraphClient, store: GraphStore, projectId: string) {
-  if (!hasEntityOfType(store, projectId, workflowProjectTypeId)) {
+  if (!hasEntityOfType(store, projectId, projectTypeId)) {
     throw new WorkflowMutationError(
       404,
       `Workflow project "${projectId}" was not found.`,
       "subject-not-found",
     );
   }
-  return graph.workflowProject.get(projectId);
+  return graph.project.get(projectId);
 }
 
 export function requireRepository(
@@ -37,36 +36,36 @@ export function requireRepository(
   store: GraphStore,
   repositoryId: string,
 ) {
-  if (!hasEntityOfType(store, repositoryId, workflowRepositoryTypeId)) {
+  if (!hasEntityOfType(store, repositoryId, repositoryTypeId)) {
     throw new WorkflowMutationError(
       409,
       `Workflow repository "${repositoryId}" was not found.`,
       "repository-missing",
     );
   }
-  return graph.workflowRepository.get(repositoryId);
+  return graph.repository.get(repositoryId);
 }
 
 export function requireBranch(graph: ProductGraphClient, store: GraphStore, branchId: string) {
-  if (!hasEntityOfType(store, branchId, workflowBranchTypeId)) {
+  if (!hasEntityOfType(store, branchId, branchTypeId)) {
     throw new WorkflowMutationError(
       404,
       `Workflow branch "${branchId}" was not found.`,
       "subject-not-found",
     );
   }
-  return graph.workflowBranch.get(branchId);
+  return graph.branch.get(branchId);
 }
 
 export function requireCommit(graph: ProductGraphClient, store: GraphStore, commitId: string) {
-  if (!hasEntityOfType(store, commitId, workflowCommitTypeId)) {
+  if (!hasEntityOfType(store, commitId, commitTypeId)) {
     throw new WorkflowMutationError(
       404,
       `Workflow commit "${commitId}" was not found.`,
       "subject-not-found",
     );
   }
-  return graph.workflowCommit.get(commitId);
+  return graph.commit.get(commitId);
 }
 
 export function requireRepositoryBranch(
@@ -115,7 +114,7 @@ export function requireUniqueProjectKey(
   projectKey: string,
   exceptProjectId?: string,
 ): void {
-  const existing = graph.workflowProject
+  const existing = graph.project
     .list()
     .find((project) => project.projectKey === projectKey && project.id !== exceptProjectId);
   if (existing) {
@@ -132,7 +131,7 @@ export function requireUniqueRepositoryKey(
   repositoryKey: string,
   exceptRepositoryId?: string,
 ): void {
-  const existing = graph.workflowRepository
+  const existing = graph.repository
     .list()
     .find(
       (repository) =>
@@ -152,7 +151,7 @@ export function requireUniqueBranchKey(
   branchKey: string,
   exceptBranchId?: string,
 ): void {
-  const existing = graph.workflowBranch
+  const existing = graph.branch
     .list()
     .find((branch) => branch.branchKey === branchKey && branch.id !== exceptBranchId);
   if (existing) {
@@ -169,7 +168,7 @@ export function requireUniqueCommitKey(
   commitKey: string,
   exceptCommitId?: string,
 ): void {
-  const existing = graph.workflowCommit
+  const existing = graph.commit
     .list()
     .find((commit) => commit.commitKey === commitKey && commit.id !== exceptCommitId);
   if (existing) {
@@ -185,7 +184,7 @@ export function requireSingleInferredProject(
   graph: ProductGraphClient,
   exceptProjectId?: string,
 ): void {
-  const inferredProject = graph.workflowProject
+  const inferredProject = graph.project
     .list()
     .find((project) => project.inferred && project.id !== exceptProjectId);
   if (inferredProject) {
@@ -197,7 +196,7 @@ export function requireSingleAttachedRepository(
   graph: ProductGraphClient,
   exceptRepositoryId?: string,
 ): void {
-  const attachedRepository = graph.workflowRepository
+  const attachedRepository = graph.repository
     .list()
     .find((repository) => repository.id !== exceptRepositoryId);
   if (attachedRepository) {

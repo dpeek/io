@@ -2,8 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { createStore, typeId } from "@io/core/graph";
 import { core, coreGraphBootstrapOptions } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -11,34 +10,33 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { EntityTypeBrowserSurface } from "./entity-type-browser.js";
 import { GraphRuntimeProvider, type GraphRuntime } from "./graph-runtime-bootstrap.js";
 
-const productGraph = { ...core, ...pkm, ...ops } as const;
+const productGraph = { ...core, ...workflow } as const;
 
 function createWorkflowPageRuntime() {
   const store = createStore();
   bootstrap(store, core, coreGraphBootstrapOptions);
-  bootstrap(store, pkm, coreGraphBootstrapOptions);
-  bootstrap(store, ops, coreGraphBootstrapOptions);
+  bootstrap(store, workflow, coreGraphBootstrapOptions);
 
   const graph = createGraphClient(store, productGraph);
-  const projectId = graph.workflowProject.create({
+  const projectId = graph.project.create({
     inferred: true,
     name: "IO",
     projectKey: "project:io",
   });
 
-  graph.workflowBranch.create({
+  graph.branch.create({
     branchKey: "branch:workflow-shell",
     name: "Workflow shell",
     project: projectId,
     queueRank: 1,
-    state: ops.workflowBranchState.values.active.id,
+    state: workflow.branchState.values.active.id,
   });
-  graph.workflowBranch.create({
+  graph.branch.create({
     branchKey: "branch:workflow-backlog",
     name: "Workflow backlog",
     project: projectId,
     queueRank: 2,
-    state: ops.workflowBranchState.values.ready.id,
+    state: workflow.branchState.values.ready.id,
   });
 
   const sync = {
@@ -66,16 +64,16 @@ describe("entity type browser", () => {
         <EntityTypeBrowserSurface
           runtime={runtime}
           title="Branches"
-          typeId={typeId(ops.workflowBranch)}
+          typeId={typeId(workflow.branch)}
         />
       </GraphRuntimeProvider>,
     );
 
-    expect(html).toContain("Create Workflow Branch");
+    expect(html).toContain("Create Branch");
     expect(html).toContain("Branches");
     expect(html).toContain("Workflow shell");
     expect(html).toContain("Workflow backlog");
-    expect(html).toContain("Workflow Branch");
+    expect(html).toContain("Branch");
     expect(html).toContain("Branch key");
     expect(html).toContain('data-entity-type-list-scroll="');
     expect(html).toContain("-mx-4");

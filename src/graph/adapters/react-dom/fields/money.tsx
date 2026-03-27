@@ -1,3 +1,4 @@
+import { performValidatedMutation, usePredicateField } from "@io/graph-react";
 import { InputGroup, InputGroupInput } from "@io/web/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@io/web/select";
 import { useEffect, useState } from "react";
@@ -8,7 +9,6 @@ import {
   type MoneyCurrencyKey,
   type MoneyValue,
 } from "../../../modules/core/money/index.js";
-import { performValidatedMutation, usePredicateField } from "../../../runtime/react/index.js";
 import {
   createFormattedFieldViewCapability,
   clearOrRejectRequiredValue,

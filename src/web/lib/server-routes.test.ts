@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { workflowReviewModuleReadScope } from "@io/core/graph/modules/ops/workflow";
+import { workflowReviewModuleReadScope } from "@io/core/graph/modules/workflow";
 import { type AuthorizationContext } from "@io/graph-authority";
 import { type QueryResultPage, type SerializedQueryResponse } from "@io/graph-client";
 import { defineInvalidationEvent } from "@io/graph-projection";
@@ -250,7 +250,7 @@ describe("serialized query server routes", () => {
           version: 1,
           query: {
             kind: "collection",
-            indexId: "ops/workflow:branch-commit-queue",
+            indexId: "workflow:branch-commit-queue",
             window: {
               after: "projection:stale",
               limit: 1,
@@ -348,7 +348,7 @@ describe("workflow live server routes", () => {
         body: JSON.stringify({
           kind: "workflow-review-register",
           cursor:
-            "scope:kind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview&definitionHash=scope-def%3Aops%2Fworkflow%3Areview%3Av1&policyFilterVersion=policy%3A0&cursor=web-authority%3A1",
+            "scope:kind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview&definitionHash=scope-def%3Aworkflow%3Areview%3Av1&policyFilterVersion=policy%3A0&cursor=web-authority%3A1",
         }),
       }),
       createWorkflowReadAuthority({
@@ -359,10 +359,7 @@ describe("workflow live server routes", () => {
             scopeId: workflowReviewModuleReadScope.scopeId,
             definitionHash: workflowReviewModuleReadScope.definitionHash,
             policyFilterVersion: "policy:0",
-            dependencyKeys: [
-              "scope:ops/workflow:review",
-              "projection:ops/workflow:project-branch-board",
-            ],
+            dependencyKeys: ["scope:workflow:review", "projection:workflow:project-branch-board"],
           } satisfies WorkflowReviewLiveRegistrationTarget;
         },
       }),
@@ -374,16 +371,13 @@ describe("workflow live server routes", () => {
     expect(await response.json()).toEqual({
       kind: "workflow-review-register",
       result: {
-        registrationId: "workflow-review:session:test:scope:ops/workflow:review",
+        registrationId: "workflow-review:session:test:scope:workflow:review",
         sessionId: "session:test",
         principalId: "principal:test",
         scopeId: workflowReviewModuleReadScope.scopeId,
         definitionHash: workflowReviewModuleReadScope.definitionHash,
         policyFilterVersion: "policy:0",
-        dependencyKeys: [
-          "scope:ops/workflow:review",
-          "projection:ops/workflow:project-branch-board",
-        ],
+        dependencyKeys: ["scope:workflow:review", "projection:workflow:project-branch-board"],
         expiresAt: "2026-03-24T00:01:00.000Z",
       },
     });
@@ -400,13 +394,13 @@ describe("workflow live server routes", () => {
       scopeId: workflowReviewModuleReadScope.scopeId,
       definitionHash: workflowReviewModuleReadScope.definitionHash,
       policyFilterVersion: "policy:0",
-      dependencyKeys: ["scope:ops/workflow:review", "projection:ops/workflow:project-branch-board"],
+      dependencyKeys: ["scope:workflow:review", "projection:workflow:project-branch-board"],
     });
     const invalidation = defineInvalidationEvent({
       eventId: "workflow-review:cursor:2",
       graphId: "graph:test",
       sourceCursor: "web-authority:2",
-      dependencyKeys: ["scope:ops/workflow:review", "projection:ops/workflow:project-branch-board"],
+      dependencyKeys: ["scope:workflow:review", "projection:workflow:project-branch-board"],
       affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
       delivery: { kind: "cursor-advanced" },
     });
@@ -452,7 +446,7 @@ describe("workflow live server routes", () => {
       scopeId: workflowReviewModuleReadScope.scopeId,
       definitionHash: workflowReviewModuleReadScope.definitionHash,
       policyFilterVersion: "policy:0",
-      dependencyKeys: ["scope:ops/workflow:review", "projection:ops/workflow:project-branch-board"],
+      dependencyKeys: ["scope:workflow:review", "projection:workflow:project-branch-board"],
     });
 
     now = new Date("2026-03-24T00:00:01.000Z");
@@ -461,10 +455,7 @@ describe("workflow live server routes", () => {
         eventId: "workflow-review:cursor:3",
         graphId: "graph:test",
         sourceCursor: "web-authority:3",
-        dependencyKeys: [
-          "scope:ops/workflow:review",
-          "projection:ops/workflow:project-branch-board",
-        ],
+        dependencyKeys: ["scope:workflow:review", "projection:workflow:project-branch-board"],
         affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
         delivery: { kind: "cursor-advanced" },
       }),
@@ -508,7 +499,7 @@ describe("workflow live server routes", () => {
         body: JSON.stringify({
           kind: "workflow-review-register",
           cursor:
-            "scope:kind=module&moduleId=ops%2Fworkflow&scopeId=scope%3Aops%2Fworkflow%3Areview&definitionHash=scope-def%3Aops%2Fworkflow%3Areview%3Av1&policyFilterVersion=policy%3A999&cursor=web-authority%3A1",
+            "scope:kind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Areview&definitionHash=scope-def%3Aworkflow%3Areview%3Av1&policyFilterVersion=policy%3A999&cursor=web-authority%3A1",
         }),
       }),
       createWorkflowReadAuthority({

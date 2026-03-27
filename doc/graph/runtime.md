@@ -75,14 +75,17 @@ Key source files:
 
 ### React Runtime
 
-The remaining `runtime/` directory is intentionally about host-neutral React
-behavior:
+The host-neutral React layer now lives in the extracted `@io/graph-react`
+package:
 
-- `@io/core/graph/runtime/react` publishes the React hooks and resolver layer
-- `../../src/graph/runtime/react/` contains those implementation files
+- `@io/graph-react` publishes predicate hooks, entity traversal helpers,
+  resolver contracts, persisted-mutation helpers, and synced-runtime React
+  hooks
+- `../../lib/graph-react/src/` contains those implementation files
 
-It is no longer the source of truth for ids, store, schema, authority, or
-definition contracts.
+The root package no longer exports `@io/core/graph/runtime/react`, and the old
+`react-opentui` adapter was removed because its runtime provider and query
+hooks were host-neutral.
 
 ### Internal Inspection Helpers
 

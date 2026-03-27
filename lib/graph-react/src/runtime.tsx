@@ -11,7 +11,6 @@ import {
   sameSyncScopeRequest,
 } from "@io/graph-sync";
 import {
-  createElement,
   createContext,
   useContext,
   useMemo,
@@ -20,7 +19,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { GraphMutationRuntimeProvider } from "../../runtime/react/persisted-mutation.js";
+import { GraphMutationRuntimeProvider } from "./persisted-mutation.js";
 
 type GraphSchema = Record<string, AnyTypeOutput>;
 type AnyGraphRuntime = SyncedGraphClient<GraphSchema, GraphSchema>;
@@ -88,7 +87,7 @@ function useResolvedGraphRuntime<TNamespace extends GraphSchema, TDefs extends G
   const contextRuntime = useOptionalGraphRuntime<TNamespace, TDefs>();
   const resolvedRuntime = runtime ?? contextRuntime;
   if (!resolvedRuntime) {
-    throw new Error("Graph runtime is not available outside the OpenTUI graph runtime provider.");
+    throw new Error("Graph runtime is not available outside the graph runtime provider.");
   }
   return resolvedRuntime;
 }
@@ -110,16 +109,21 @@ function useStableSyncState(sync: GraphClientSyncController): GraphClientSyncSta
   return useSyncExternalStore(sync.subscribe, readSnapshot, readSnapshot);
 }
 
+/**
+ * Shares one synced graph runtime through React context for host-neutral hooks.
+ */
 export function GraphRuntimeProvider<TNamespace extends GraphSchema, TDefs extends GraphSchema>({
   children,
   runtime,
 }: GraphRuntimeProviderProps<TNamespace, TDefs>) {
   const sharedRuntime = runtime as AnyGraphRuntime | null;
 
-  return createElement(
-    GraphRuntimeContext.Provider,
-    { value: sharedRuntime },
-    createElement(GraphMutationRuntimeProvider, { children, runtime: sharedRuntime }),
+  return (
+    <GraphRuntimeContext.Provider value={sharedRuntime}>
+      <GraphMutationRuntimeProvider runtime={sharedRuntime}>
+        {children}
+      </GraphMutationRuntimeProvider>
+    </GraphRuntimeContext.Provider>
   );
 }
 

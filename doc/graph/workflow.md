@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Describe the canonical `ops/workflow` schema slice for graph-native workflow
+Describe the canonical `workflow` schema slice for graph-native workflow
 planning and repository-backed execution state.
 
 This slice is the first Branch 6 schema surface. It establishes the stable type
@@ -12,11 +12,11 @@ commit records that map that logical work onto git reality.
 ## Graph Shape
 
 The canonical workflow slice lives alongside this doc under
-`../../src/graph/modules/ops/workflow/`.
+`../../src/graph/modules/workflow/`.
 
 The exported surface is:
 
-- `schema.ts`: backs `@io/core/graph/modules/ops/workflow` and re-exports the
+- `schema.ts`: backs `@io/core/graph/modules/workflow` and re-exports the
   workflow entity, enum, mutation, and read-contract definitions
 - `type.ts`: owns the entity families, state enums, reference wiring, key
   validators, and default lifecycle values
@@ -136,7 +136,7 @@ The canonical request shape is:
 The canonical result shape is:
 
 - `project` and optional `repository` summaries for the current workflow root
-- `rows[]`, where each row nests `workflowBranch` and an optional
+- `rows[]`, where each row nests `branch` and an optional
   `repositoryBranch` observation instead of flattening repository state onto
   workflow identity
 - `unmanagedRepositoryBranches[]`, returned separately from `rows`
@@ -178,9 +178,9 @@ The same module export now owns the first live invalidation proof for workflow
 review:
 
 - review-scope registrations compile to
-  `scope:ops/workflow:review`,
-  `projection:ops/workflow:project-branch-board`, and
-  `projection:ops/workflow:branch-commit-queue`
+  `scope:workflow:review`,
+  `projection:workflow:project-branch-board`, and
+  `projection:workflow:branch-commit-queue`
 - any accepted write that touches a workflow entity type conservatively emits
   that full dependency-key set, even when only one workflow projection may have
   changed
@@ -275,7 +275,7 @@ The branch-detail view paired with the TUI commit queue uses
 
 It defines one branch-scoped detail surface with:
 
-- `branch.workflowBranch`: the canonical `WorkflowBranchSummary`, including the
+- `branch.branch`: the canonical `WorkflowBranchSummary`, including the
   derived branch goal summary and `activeCommitId`
 - `branch.repositoryBranch?`: the attached repository-branch observation when
   one exists, reusing the same freshness envelope as the branch board
@@ -296,9 +296,9 @@ The canonical request shape is:
 
 The canonical result shape is:
 
-- `branch`, with nested `workflowBranch`, optional `repositoryBranch`,
+- `branch`, with nested `branch`, optional `repositoryBranch`,
   optional `activeCommit`, and optional `latestSession`
-- `rows[]`, where each row nests `workflowCommit` and an optional
+- `rows[]`, where each row nests `commit` and an optional
   `repositoryCommit` realization summary
 - `freshness`, reusing `projectedAt`, optional `projectionCursor`, repository
   freshness state, and the last successful repository reconcile time
@@ -306,10 +306,10 @@ The canonical result shape is:
 
 Contract rules:
 
-- `branch.workflowBranch.goalSummary` is derived from
-  `branch.workflowBranch.goalDocumentId` when that document has a non-empty
+- `branch.branch.goalSummary` is derived from
+  `branch.branch.goalDocumentId` when that document has a non-empty
   `description`; the query does not duplicate that summary elsewhere
-- `rows` are ordered by `workflowCommit.order asc`; projections may add
+- `rows` are ordered by `commit.order asc`; projections may add
   deterministic tie-breakers but cannot change queue-order semantics
 - `branch.activeCommit` may duplicate one row from `rows` so the active commit
   remains available even when pagination excludes it
@@ -346,7 +346,7 @@ The stable failure codes exposed by the query contract are:
 - retained workflow projection rows, restart-stable checkpoints, and other
   durable projection state remain deferred to `OPE-418`
 - workflow lineage remains authoritative when repository observations are not
-  current. `rows[]`, `branch.workflowBranch`, `branch.activeCommit`, and
+  current. `rows[]`, `branch.branch`, `branch.activeCommit`, and
   `branch.latestSession` still return from retained workflow state even when
   repository freshness is `stale` or `missing`.
 - `ProjectBranchScopeRepositoryObservation.freshness` is per observed

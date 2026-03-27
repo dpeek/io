@@ -113,6 +113,7 @@ artifacts in the graph after restart.
 - `doc/03-target-platform-architecture.md`
 - `doc/05-recommended-architecture.md`
 - `doc/06-migration-plan.md`
+- `doc/graph/retained-records.md`
 - `doc/10-vision-product-model.md`
 - `doc/11-vision-execution-model.md`
 
@@ -208,7 +209,7 @@ Stability target for this branch:
 ### Canonical module boundary
 
 Inference: the first built-in schema slice for this branch should still ship as
-one `ops/workflow` module. The taxonomy changes, but the install boundary does
+one `workflow` module. The taxonomy changes, but the install boundary does
 not. Workflow stays a platform capability rather than a repo-local convention.
 
 ### Design choice: no separate `Run` in the first milestone
@@ -462,7 +463,7 @@ interface RepositoryBranch {
   id: string;
   projectId: string;
   repositoryId: string;
-  workflowBranchId?: string;
+  branchId?: string;
   managed: boolean;
   branchName: string;
   baseBranchName: string;
@@ -480,7 +481,7 @@ interface RepositoryCommit {
   id: string;
   repositoryId: string;
   repositoryBranchId?: string;
-  workflowCommitId?: string;
+  commitId?: string;
   state: RepositoryCommitState;
   worktree?: {
     path?: string;
@@ -740,7 +741,7 @@ Context bundles:
 
 | Name                      | Purpose                                                                                                 | Caller                                                    | Callee                                             | Inputs                                                               | Outputs                                                          | Failure shape                                                | Stability                                               |
 | ------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------- |
-| `WorkflowGraphSchema`     | Defines canonical graph types and predicates for project, repository, branch, commit, and session state | Branch 4 module installer, Branch 1 bootstrap, web, agent | built-in `ops/workflow` module                     | schema package and migrations                                        | stable type and predicate ids                                    | schema conflict, incompatible migration                      | `stable`                                                |
+| `WorkflowGraphSchema`     | Defines canonical graph types and predicates for project, repository, branch, commit, and session state | Branch 4 module installer, Branch 1 bootstrap, web, agent | built-in `workflow` module                         | schema package and migrations                                        | stable type and predicate ids                                    | schema conflict, incompatible migration                      | `stable`                                                |
 | `ProjectBranchScope`      | Returns backlog, in-flight, and repository-observed branch rows for one project                         | TUI, Branch 7 operator UI, MCP                            | Branch 3 scope planner and projections             | project id, filters, ordering, cursor                                | managed branch rows, separate repository observations, freshness | `project-not-found`, `policy-denied`, `projection-stale`     | `stable` for shape, `provisional` for ranking           |
 | `CommitQueueScope`        | Returns the canonical branch-detail view and ordered commit queue for one selected branch               | TUI, session launcher                                     | Branch 3 scope planner and projections             | branch id, cursor                                                    | branch detail, ordered commit rows, freshness                    | `branch-not-found`, `policy-denied`, `projection-stale`      | `stable`                                                |
 | `ContextBundleRequest`    | Resolves the immutable branch-specific or commit-specific context bundle for one session                | agent runtime                                             | context retrieval engine plus Branch 3 scope reads | subject, session id, retrieval mode, budget                          | `ContextBundle` and ordered `ContextBundleEntry[]`               | missing inputs, policy denied, incomplete scope, over-budget | `stable`                                                |
@@ -785,7 +786,7 @@ interface ProjectBranchScopeRepositoryObservation {
 }
 
 interface ProjectBranchScopeManagedRow {
-  workflowBranch: WorkflowBranchSummary;
+  branch: WorkflowBranchSummary;
   repositoryBranch?: ProjectBranchScopeRepositoryObservation;
 }
 
@@ -852,7 +853,7 @@ interface CommitQueueScopeQuery {
 type CommitQueueScopeRepositoryObservation = ProjectBranchScopeRepositoryObservation;
 
 interface CommitQueueScopeCommitRow {
-  workflowCommit: WorkflowCommitSummary;
+  commit: WorkflowCommitSummary;
   repositoryCommit?: RepositoryCommitSummary;
 }
 
@@ -867,7 +868,7 @@ interface CommitQueueScopeSessionSummary {
 }
 
 interface CommitQueueScopeBranchDetail {
-  workflowBranch: WorkflowBranchSummary;
+  branch: WorkflowBranchSummary;
   repositoryBranch?: CommitQueueScopeRepositoryObservation;
   activeCommit?: CommitQueueScopeCommitRow;
   latestSession?: CommitQueueScopeSessionSummary;
@@ -884,10 +885,10 @@ interface CommitQueueScopeResult {
 ```
 
 - contract rules:
-  - `branch.workflowBranch.goalSummary` is derived from
-    `branch.workflowBranch.goalDocumentId` when that document has a non-empty
+  - `branch.branch.goalSummary` is derived from
+    `branch.branch.goalDocumentId` when that document has a non-empty
     `description`; the query does not duplicate that summary elsewhere
-  - `rows` are ordered by `workflowCommit.order asc`; projections may add
+  - `rows` are ordered by `commit.order asc`; projections may add
     deterministic tie-breakers but cannot change queue-order semantics
   - `branch.activeCommit` may duplicate one row from `rows` so the active
     commit remains available even when pagination excludes it
@@ -1292,6 +1293,12 @@ Authoritative persistence for Branch 6 records is provided by Branch 1's
 graph storage. Branch 6 owns the workflow entity families stored inside that
 graph.
 
+The current working proposal for preserving workspace-native graph documents,
+context, artifacts, and decisions without whole-graph snapshots lives in
+[`../graph/retained-records.md`](../graph/retained-records.md). Treat that
+proposal as the current design note for Branch 6 restore semantics on top of
+Branch 1 storage.
+
 ### Canonical records
 
 - current state records:
@@ -1680,7 +1687,7 @@ graph.
   - `io tui` keeps the existing `io.ts` plus `io.md` entrypoint loading path
   - graph bootstrap source is one HTTP base URL, with the synced graph request
     fixed to the workflow review module scope
-    `ops/workflow / scope:ops/workflow:review`
+    `workflow / scope:workflow:review`
   - initial project resolves from CLI override, then workflow config, then
     inferring the one visible `WorkflowProject` in the synced scope
   - initial branch resolves from CLI override, then workflow config, then the
@@ -1733,6 +1740,9 @@ First action-set rule for Slice 3:
 - Should the foundation `Document` contract own explicit revision snapshots, or
   is append-only graph history plus retained workflow artifacts sufficient in
   the first milestone?
+  Current design note: [`../graph/retained-records.md`](../graph/retained-records.md)
+  frames this as a Branch 6 workspace-retention problem built on Branch 1's
+  storage substrate rather than as a generic module-lifecycle concern.
 - How much git health data should be stored durably versus recomputed on every
   TUI attach?
 - When branch planning gets more sophisticated, should backlog ranking stay a
@@ -1740,7 +1750,7 @@ First action-set rule for Slice 3:
 
 ## 13. Recommended First Code Targets
 
-- `src/graph/modules/ops/workflow/`: add the first built-in graph-native
+- `src/graph/modules/workflow/`: add the first built-in graph-native
   workflow module for project, repository, branch, commit, repository-branch,
   repository-commit, session, artifact, decision, and context-bundle types
 - `src/tui/`: add the new graph-backed workflow TUI surface as a sibling to

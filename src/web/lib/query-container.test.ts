@@ -54,7 +54,7 @@ describe("query container validation", () => {
     queryKind: "collection",
     resultKind: "collection",
     sourceKinds: ["saved", "inline"],
-    surfaceId: "ops/workflow:project-branch-board",
+    surfaceId: "workflow:project-branch-board",
   } as const satisfies QuerySurfaceRendererCompatibility;
 
   const validSpec = {
@@ -69,7 +69,7 @@ describe("query container validation", () => {
         version: serializedQueryVersion,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:project-branch-board",
+          indexId: "workflow:project-branch-board",
         },
       },
     },
@@ -108,7 +108,7 @@ describe("query container validation", () => {
           version: 99,
           query: {
             kind: "collection",
-            indexId: "ops/workflow:project-branch-board",
+            indexId: "workflow:project-branch-board",
           },
         },
       },
@@ -208,7 +208,7 @@ describe("query renderer mount helpers", () => {
           version: serializedQueryVersion,
           query: {
             kind: "collection",
-            indexId: "ops/workflow:project-branch-board",
+            indexId: "workflow:project-branch-board",
           },
         },
         {
@@ -232,7 +232,7 @@ describe("query renderer mount helpers", () => {
           version: serializedQueryVersion,
           query: {
             kind: "collection",
-            indexId: "ops/workflow:project-branch-board",
+            indexId: "workflow:project-branch-board",
           },
         },
       },
@@ -342,7 +342,7 @@ describe("query container runtime", () => {
         version: serializedQueryVersion,
         query: {
           kind: "collection",
-          indexId: "ops/workflow:project-branch-board",
+          indexId: "workflow:project-branch-board",
         },
       },
     },
@@ -585,7 +585,7 @@ describe("query container runtime", () => {
                   value: owner,
                 },
               },
-              indexId: "ops/workflow:project-branch-board",
+              indexId: "workflow:project-branch-board",
               kind: "collection",
               window: {
                 limit: 2,

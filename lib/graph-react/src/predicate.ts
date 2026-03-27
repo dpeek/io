@@ -1,4 +1,10 @@
 import {
+  entityReferenceComboboxEditorKind,
+  entityReferenceListDisplayKind,
+  type EditorInputMode,
+  type ExistingEntityReferencePolicy,
+} from "@io/core/graph/def";
+import {
   type EntityRef,
   type PredicateRangeTypeOf,
   type PredicateRef,
@@ -6,13 +12,6 @@ import {
 } from "@io/graph-client";
 import { isEntityType, isEnumType, type AnyTypeOutput, type EdgeOutput } from "@io/graph-kernel";
 import { useMemo, useRef, useSyncExternalStore } from "react";
-
-import {
-  entityReferenceComboboxEditorKind,
-  entityReferenceListDisplayKind,
-  type ExistingEntityReferencePolicy,
-} from "../../reference-policy.js";
-import type { EditorInputMode } from "../../type-module.js";
 
 export type PredicateFieldMeta<T extends EdgeOutput> = T extends { meta: infer Meta }
   ? Meta
@@ -285,6 +284,10 @@ export function usePredicateValue<T extends EdgeOutput, Defs extends Record<stri
   return useSyncExternalStore(predicate.subscribe, readSnapshot, readSnapshot);
 }
 
+/**
+ * Resolves the current predicate value together with authored metadata that a
+ * host adapter can use to pick a view or editor capability.
+ */
 export function usePredicateField<T extends EdgeOutput, Defs extends Record<string, AnyTypeOutput>>(
   predicate: PredicateRef<T, Defs>,
 ): PredicateFieldBinding<T, Defs> {

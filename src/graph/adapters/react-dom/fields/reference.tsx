@@ -1,6 +1,4 @@
 import type { GraphMutationValidationResult } from "@io/graph-client";
-
-import { core } from "../../../modules/index.js";
 import {
   getPredicateEntityReferenceOptions,
   getPredicateEntityReferencePolicy,
@@ -9,7 +7,9 @@ import {
   useOptionalMutationRuntime,
   usePredicateField,
   type PredicateFieldViewCapability,
-} from "../../../runtime/react/index.js";
+} from "@io/graph-react";
+
+import { core } from "../../../modules/index.js";
 import { OptionComboboxEditor } from "./option-combobox.js";
 import {
   createTagKey,

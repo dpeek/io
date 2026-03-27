@@ -19,7 +19,7 @@ function createPollResult(
     live: {
       active: true,
       invalidations: [],
-      scopeId: "scope:ops/workflow:review",
+      scopeId: "scope:workflow:review",
       sessionId: "session:test",
     },
   };
@@ -32,8 +32,8 @@ function createRegistration(): WorkflowReviewLiveRegistration {
     expiresAt: "2026-03-26T10:05:00.000Z",
     policyFilterVersion: "policy:1",
     principalId: "principal:test",
-    registrationId: "workflow-review:session:test:scope:ops/workflow:review",
-    scopeId: "scope:ops/workflow:review",
+    registrationId: "workflow-review:session:test:scope:workflow:review",
+    scopeId: "scope:workflow:review",
     sessionId: "session:test",
   };
 }
@@ -68,7 +68,7 @@ function createLiveSync(
         calls.push("remove");
         return {
           removed: true,
-          scopeId: "scope:ops/workflow:review",
+          scopeId: "scope:workflow:review",
           sessionId: "session:test",
         };
       },
@@ -122,7 +122,7 @@ describe("workflow review refresh loop", () => {
         calls.push("remove");
         return {
           removed: true,
-          scopeId: "scope:ops/workflow:review",
+          scopeId: "scope:workflow:review",
           sessionId: "session:test",
         };
       },

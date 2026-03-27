@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Describe `ops:envVar` as one consumer of the shared Branch 1 secret-handle
+Describe `workflow:envVar` as one consumer of the shared Branch 1 secret-handle
 contract.
 
 The env-var slice does not define that contract. It uses the core-owned
@@ -10,10 +10,10 @@ The env-var slice does not define that contract. It uses the core-owned
 
 ## Current Graph Shape
 
-- `ops:envVar.name`: required uppercase env-var name
-- `ops:envVar.description`: optional safe description
-- `ops:envVar.createdAt` / `updatedAt`: inherited safe timestamps
-- `ops:envVar.secret`: optional `core:secretHandle` reference authored through
+- `workflow:envVar.name`: required uppercase env-var name
+- `workflow:envVar.description`: optional safe description
+- `workflow:envVar.createdAt` / `updatedAt`: inherited safe timestamps
+- `workflow:envVar.secret`: optional `core:secretHandle` reference authored through
   `defineSecretField(...)`
 
 The env-var secret field currently carries:
@@ -39,7 +39,7 @@ Behavior today:
 - changed plaintext increments `secretHandle.version` and updates
   `lastRotatedAt`
 - repeated plaintext keeps the existing version
-- retracting `ops:envVar.secret` removes the replicated reference; retained
+- retracting `workflow:envVar.secret` removes the replicated reference; retained
   authority-only rows are ignored during bootstrap unless the current graph
   still references that handle, and the Durable Object adapter prunes orphaned
   rows during cleanup

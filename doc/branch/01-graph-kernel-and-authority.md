@@ -199,7 +199,7 @@ not publish a generic graph-owned command envelope, registry, or dispatcher.
 `SchemaKey`
 
 - human-readable durable key such as `core:node`, `core:predicate`, or
-  `ops:envVar`
+  `workflow:envVar`
 - never used as the runtime identity once resolved; runtime contracts use ids
 
 `IdMap`
@@ -459,7 +459,7 @@ Secret-backed fields:
 - Name: `executeCommand({ kind: "write-secret-field", input })`,
   `writeSecretField(...)`, and canonical `POST /api/commands`
 - Purpose: current consumer-owned web proof for creating or rotating a
-  secret-backed field through an explicit authority command; `ops:envVar` is
+  secret-backed field through an explicit authority command; `workflow:envVar` is
   the primary shipped consumer, but the command is not env-var-specific
 - Caller: web operator surfaces
 - Callee: web authority runtime

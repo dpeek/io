@@ -1,8 +1,8 @@
+import { useOptionalMutationRuntime, usePredicateField } from "@io/graph-react";
 import { cn } from "@io/web/utils";
 import type { ReactNode } from "react";
 
 import { sanitizeSvgMarkup } from "../../icon.js";
-import { useOptionalMutationRuntime, usePredicateField } from "../../runtime/react/index.js";
 
 type GraphIconHandle = {
   fields: {

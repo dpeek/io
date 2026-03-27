@@ -8,8 +8,8 @@ import {
   WorkflowProjectionQueryError,
   type WorkflowProjectionGraphClient,
   type WorkflowProjectionIndex,
-} from "../graph/modules/ops/workflow/query.js";
-import { workflowProjectionSchema } from "../graph/modules/ops/workflow/schema.js";
+} from "../graph/modules/workflow/query.js";
+import { projectionSchema } from "../graph/modules/workflow/schema.js";
 import { createWorkflowTuiWorkflowModel, type WorkflowTuiWorkflowSurfaceModel } from "./model.js";
 import { resolveWorkflowTuiStartupContract, type WorkflowTuiStartupContract } from "./startup.js";
 import { createWorkflowTui, type WorkflowTui } from "./tui.js";
@@ -35,7 +35,7 @@ export interface WorkflowTuiRuntimeBootstrap {
 
 export interface WorkflowTuiRuntimeBootstrapDependencies {
   readonly createGraphClient?: (
-    namespace: typeof workflowProjectionSchema,
+    namespace: typeof projectionSchema,
     options: {
       readonly requestedScope: WorkflowTuiStartupContract["graph"]["requestedScope"];
       readonly url: string;
@@ -60,7 +60,7 @@ function printHelp() {
 Defaults:
   entrypointPath: ./io.ts + ./io.md
   graph source: workflow config tui.graph.url, else http://io.localhost:1355/
-  sync scope: ops/workflow / scope:ops/workflow:review
+  sync scope: workflow / scope:workflow:review
   project: CLI --project, workflow config tui.initialScope.project, else infer one visible WorkflowProject
   branch: CLI --branch, workflow config tui.initialScope.branch, else first branch-board row
   `);
@@ -139,7 +139,7 @@ function resolveInitialProjectId(
     return startup.initialScope.project.projectId;
   }
 
-  const visibleProjects = runtimeClient.graph.workflowProject.list();
+  const visibleProjects = runtimeClient.graph.project.list();
   if (visibleProjects.length === 1) {
     return visibleProjects[0]!.id;
   }
@@ -252,7 +252,7 @@ export async function createWorkflowTuiRuntimeBootstrap(
 
   let runtimeClient: WorkflowTuiRuntimeClient;
   try {
-    runtimeClient = await createGraphClient(workflowProjectionSchema, {
+    runtimeClient = await createGraphClient(projectionSchema, {
       requestedScope: startup.graph.requestedScope,
       url: startup.graph.url,
     });
@@ -263,7 +263,7 @@ export async function createWorkflowTuiRuntimeBootstrap(
   const projection = createProjection(runtimeClient.graph);
   const projectId = resolveInitialProjectId(runtimeClient, startup);
   const branchBoard = readInitialProjectBranchBoard(projection, projectId, startup);
-  const branchIds = branchBoard.rows.map((row) => row.workflowBranch.id);
+  const branchIds = branchBoard.rows.map((row) => row.branch.id);
   const selectedBranchId = resolveSelectedBranchId(
     projection,
     startup,

@@ -2713,8 +2713,8 @@ describe("authoritative graph writes", () => {
     const server = createServerGraph();
     const requestedScope = {
       kind: "module" as const,
-      moduleId: "ops/workflow",
-      scopeId: "scope:ops/workflow:review",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
     };
     const materializedScope = createModuleSyncScope({
       moduleId: requestedScope.moduleId,
@@ -2805,8 +2805,8 @@ describe("authoritative graph writes", () => {
     const server = createServerGraph();
     const requestedScope = {
       kind: "module" as const,
-      moduleId: "ops/workflow",
-      scopeId: "scope:ops/workflow:review",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
     };
     const activeScope = createModuleSyncScope({
       moduleId: requestedScope.moduleId,

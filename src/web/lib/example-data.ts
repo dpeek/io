@@ -1,9 +1,8 @@
 import { core } from "@io/core/graph/modules";
-import { ops } from "@io/core/graph/modules/ops";
-import { pkm } from "@io/core/graph/modules/pkm";
+import { workflow } from "@io/core/graph/modules/workflow";
 import { type GraphClient } from "@io/graph-client";
 
-const exampleGraph = { ...core, ...pkm, ...ops } as const;
+const exampleGraph = { ...core, ...workflow } as const;
 
 function resolvedEnumValue(value: { key: string; id?: string }): string {
   return value.id ?? value.key;
@@ -29,10 +28,10 @@ export type ExampleGraphIds = {
   readonly repositoryCommit: string;
   readonly runtimeSync: string;
   readonly secretRotation: string;
-  readonly workflowBranch: string;
-  readonly workflowCommit: string;
-  readonly workflowProject: string;
-  readonly workflowRepository: string;
+  readonly branch: string;
+  readonly commit: string;
+  readonly project: string;
+  readonly repository: string;
 };
 
 export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): ExampleGraphIds {
@@ -142,7 +141,7 @@ export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): Examp
       graph.documentBlock.create({
         content: "Shared explorer surface for the canonical product graph.",
         document: graphExplorer,
-        kind: resolvedEnumValue(pkm.documentBlockKind.values.markdown),
+        kind: resolvedEnumValue(workflow.documentBlockKind.values.markdown),
         name: "Overview",
         order: 0,
       }),
@@ -153,7 +152,7 @@ export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): Examp
       graph.documentBlock.create({
         content: "Total snapshots bootstrap clients before ordered incremental updates.",
         document: runtimeSync,
-        kind: resolvedEnumValue(pkm.documentBlockKind.values.markdown),
+        kind: resolvedEnumValue(workflow.documentBlockKind.values.markdown),
         name: "Overview",
         order: 0,
       }),
@@ -166,15 +165,15 @@ export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): Examp
       graph.documentBlock.create({
         content: "Rotate env-var secrets through authority-only commands.",
         document: secretRotation,
-        kind: resolvedEnumValue(pkm.documentBlockKind.values.markdown),
+        kind: resolvedEnumValue(workflow.documentBlockKind.values.markdown),
         name: "Overview",
         order: 0,
       }),
   );
-  const workflowProject = resolveEntityId(
-    graph.workflowProject.list().find((project) => project.projectKey === "project:io"),
+  const project = resolveEntityId(
+    graph.project.list().find((project) => project.projectKey === "project:io"),
     () =>
-      graph.workflowProject.create({
+      graph.project.create({
         name: "IO",
         projectKey: "project:io",
         inferred: true,
@@ -182,12 +181,12 @@ export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): Examp
         updatedAt: date("2026-01-06T00:00:00.000Z"),
       }),
   );
-  const workflowRepository = resolveEntityId(
-    graph.workflowRepository.list().find((repository) => repository.repositoryKey === "repo:io"),
+  const repository = resolveEntityId(
+    graph.repository.list().find((repository) => repository.repositoryKey === "repo:io"),
     () =>
-      graph.workflowRepository.create({
+      graph.repository.create({
         name: "io",
-        project: workflowProject,
+        project: project,
         repositoryKey: "repo:io",
         repoRoot: "/tmp/io",
         defaultBaseBranch: "main",
@@ -206,30 +205,28 @@ export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): Examp
         tags: [graphTag, docsTag],
       }),
   );
-  const workflowBranch = resolveEntityId(
-    graph.workflowBranch.list().find((branch) => branch.branchKey === "branch:workflow-shell"),
+  const branch = resolveEntityId(
+    graph.branch.list().find((branch) => branch.branchKey === "branch:workflow-shell"),
     () =>
-      graph.workflowBranch.create({
+      graph.branch.create({
         name: "Workflow shell",
-        project: workflowProject,
+        project: project,
         branchKey: "branch:workflow-shell",
-        state: ops.workflowBranchState.values.active.id,
+        state: workflow.branchState.values.active.id,
         queueRank: 1,
         goalDocument: workflowGoal,
         createdAt: date("2026-01-02T00:00:00.000Z"),
         updatedAt: date("2026-01-06T00:00:00.000Z"),
       }),
   );
-  const workflowCommit = resolveEntityId(
-    graph.workflowCommit
-      .list()
-      .find((commit) => commit.commitKey === "commit:hydrate-workflow-shell"),
+  const commit = resolveEntityId(
+    graph.commit.list().find((commit) => commit.commitKey === "commit:hydrate-workflow-shell"),
     () =>
-      graph.workflowCommit.create({
+      graph.commit.create({
         name: "Hydrate workflow shell",
-        branch: workflowBranch,
+        branch: branch,
         commitKey: "commit:hydrate-workflow-shell",
-        state: ops.workflowCommitState.values.active.id,
+        state: workflow.commitState.values.active.id,
         order: 1,
         createdAt: date("2026-01-03T00:00:00.000Z"),
         updatedAt: date("2026-01-06T00:00:00.000Z"),
@@ -240,9 +237,9 @@ export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): Examp
     () =>
       graph.repositoryBranch.create({
         name: "workflow/shell",
-        project: workflowProject,
-        repository: workflowRepository,
-        workflowBranch,
+        project: project,
+        repository: repository,
+        branch,
         managed: true,
         branchName: "workflow/shell",
         baseBranchName: "main",
@@ -256,14 +253,14 @@ export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): Examp
     () =>
       graph.repositoryCommit.create({
         name: "Hydrate workflow shell",
-        repository: workflowRepository,
+        repository: repository,
         repositoryBranch,
-        workflowCommit,
-        state: ops.repositoryCommitState.values.attached.id,
+        commit,
+        state: workflow.repositoryCommitState.values.attached.id,
         worktree: {
           path: "/tmp/io-worktree-shell",
           branchName: "workflow/shell",
-          leaseState: ops.repositoryCommitLeaseState.values.attached.id,
+          leaseState: workflow.repositoryCommitLeaseState.values.attached.id,
         },
         createdAt: date("2026-01-03T00:00:00.000Z"),
         updatedAt: date("2026-01-06T12:00:00.000Z"),
@@ -276,15 +273,15 @@ export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): Examp
     () =>
       graph.agentSession.create({
         name: "Hydrate workflow shell",
-        project: workflowProject,
-        repository: workflowRepository,
-        subjectKind: ops.agentSessionSubjectKind.values.commit.id,
-        branch: workflowBranch,
-        commit: workflowCommit,
+        project: project,
+        repository: repository,
+        subjectKind: workflow.agentSessionSubjectKind.values.commit.id,
+        branch: branch,
+        commit: commit,
         sessionKey: "session:hydrate-workflow-shell",
-        kind: ops.agentSessionKind.values.execution.id,
+        kind: workflow.agentSessionKind.values.execution.id,
         workerId: "worker-example",
-        runtimeState: ops.agentSessionRuntimeState.values.running.id,
+        runtimeState: workflow.agentSessionRuntimeState.values.running.id,
         startedAt: date("2026-01-06T09:30:00.000Z"),
         createdAt: date("2026-01-06T09:30:00.000Z"),
         updatedAt: date("2026-01-06T09:30:00.000Z"),
@@ -300,9 +297,9 @@ export function seedExampleGraph(graph: GraphClient<typeof exampleGraph>): Examp
     repositoryCommit,
     runtimeSync,
     secretRotation,
-    workflowBranch,
-    workflowCommit,
-    workflowProject,
-    workflowRepository,
+    branch,
+    commit,
+    project,
+    repository,
   };
 }

@@ -23,7 +23,7 @@ rather than generic browser chrome.
 - keep generic browser primitives in `@io/web`, including Monaco bootstrapping,
   source/preview shells, markdown rendering, and reusable controls
 - keep graph-aware, host-neutral React helpers in
-  `../../src/graph/runtime/react/`
+  `../../lib/graph-react/src/`
 - keep DOM capability registries and default browser composition in
   `../../src/graph/adapters/react-dom/`
 - keep validation, predicate mutation wiring, field metadata, typed
@@ -39,7 +39,7 @@ compose shared `@io/web` primitives rather than duplicate browser chrome.
 - [`storage.md`](./storage.md): SQLite-backed Durable Object authority storage
   and persistence boundaries
 - [`retained-records.md`](./retained-records.md): proposal for migration-stable
-  retained records above the live graph authority storage
+  workspace records above the live graph authority storage
 - [`modules.md`](./modules.md): built-in namespace ownership and module package
   subpaths
 - [`adapters.md`](./adapters.md): host-neutral React versus host-specific
@@ -76,19 +76,13 @@ The root `@io/core` package publishes these graph subpaths from
 
 - `@io/core/graph`: `../../src/graph/index.ts`; re-exports
   curated kernel aliases plus graph-owned icon and reference helpers
-- `@io/core/graph/runtime/react`: `../../src/graph/runtime/react/index.ts`;
-  host-neutral React hooks and resolver primitives
 - `@io/core/graph/def`: `../../src/graph/def.ts`; focused schema and
   type-module authoring exports plus root-owned definition contracts
 - `@io/core/graph/modules`: `../../src/graph/modules/index.ts`; canonical
   namespace root plus representative built-ins
-- `@io/core/graph/modules/core`, `@io/core/graph/modules/ops`,
-  `@io/core/graph/modules/pkm`: namespace assembly entrypoints
-- `@io/core/graph/modules/ops/env-var`,
-  `@io/core/graph/modules/ops/workflow`,
-  `@io/core/graph/modules/pkm/document`: exported slice entrypoints
-- `@io/core/graph/adapters/react-dom`,
-  `@io/core/graph/adapters/react-opentui`: host-specific adapter package roots
+- `@io/core/graph/modules/core`, `@io/core/graph/modules/workflow`:
+  namespace assembly entrypoints
+- `@io/core/graph/adapters/react-dom`: host-specific adapter package root
 
 The workspace also publishes:
 
@@ -104,6 +98,8 @@ The workspace also publishes:
 - `@io/graph-client`: `../../lib/graph-client/src/index.ts`; typed client
   construction, refs, local validation, synced-client composition, HTTP sync
   transport helpers, and serialized-query request/response contracts
+- `@io/graph-react`: `../../lib/graph-react/src/index.ts`; host-neutral React
+  graph runtime hooks and mutation helpers
 - `@io/graph-sync`: `../../lib/graph-sync/src/index.ts`; sync scopes,
   total/incremental payload contracts, cursor helpers, validation, and total
   sync sessions
@@ -140,27 +136,20 @@ dedicated root-package subpaths.
   helpers, validation, and total sync sessions
 - `../../lib/graph-projection/src/`: projection contracts, module read scopes,
   dependency keys, and retained projection compatibility helpers
-- `../../src/graph/runtime/react/`: host-neutral React helpers for entity and
-  predicate access, mutation validation, persisted mutation state, and resolver
-  primitives
 - `../../src/graph/modules/`: built-in namespace assembly and slice authoring;
-  `core.ts`, `ops.ts`, and `pkm.ts` assemble namespaces from `core.json`,
-  `ops.json`, and `pkm.json`
+  `core.ts` and `workflow.ts` assemble namespaces from `core.json` and
+  `workflow.json`
 - `../../src/graph/modules/core/`: built-in scalar, enum, and helper modules
-- `../../src/graph/modules/ops/env-var/schema.ts`,
-  `../../src/graph/modules/ops/workflow/schema.ts`,
-  `../../src/graph/modules/pkm/document/schema.ts`: slice entrypoints that back
-  the exported `ops/env-var`, `ops/workflow`, and `pkm/document` subpaths
+- `../../src/graph/modules/workflow/schema.ts`,
+  `../../src/graph/modules/workflow/env-var/schema.ts`, and
+  `../../src/graph/modules/workflow/document/schema.ts`: the workflow module
+  and its internal slice entrypoints
 - `../../src/graph/adapters/react-dom/`: DOM capability registries, default
   field views/editors, filter resolvers, icon rendering, and field-family
   modules
-- `../../src/graph/adapters/react-opentui/index.ts`: terminal adapter package
-  root with the OpenTUI graph runtime provider, sync-state hooks, and reusable
-  graph query helpers
 - `../../src/graph/icon.ts`: graph-owned icon helpers
 - `../../src/graph/testing/kitchen-sink/`: private test fixtures used by graph
   proof coverage
 - `../../src/graph/*.test.ts`,
   `../../src/graph/adapters/react-dom/*.test.tsx`,
-  `../../src/graph/runtime/react/*.test.ts`: focused package-surface proof
-  coverage
+  `../../lib/graph-react/src/*.test.tsx`: focused package-surface proof coverage
