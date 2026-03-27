@@ -1,8 +1,5 @@
-import type {
-  WorkflowMutationAction,
-  WorkflowMutationResult,
-} from "@io/core/graph/modules/workflow";
 import { type AuthorizationContext } from "@io/graph-authority";
+import type { WorkflowMutationAction, WorkflowMutationResult } from "@io/graph-module-workflow";
 
 import {
   createInMemoryTestWebAppAuthorityStorage,

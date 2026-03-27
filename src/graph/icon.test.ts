@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
 import { createStore, sanitizeSvgMarkup, typeId } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient, GraphValidationError } from "@io/graph-client";
 import {
@@ -11,6 +10,7 @@ import {
   resolveDefinitionIconId,
   stringTypeModule,
 } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
 
 function createGraph() {
   const store = createStore();

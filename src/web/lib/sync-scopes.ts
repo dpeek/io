@@ -1,7 +1,7 @@
 import {
   workflowReviewModuleReadScope,
   workflowReviewSyncScopeRequest,
-} from "@io/core/graph/modules/workflow";
+} from "@io/graph-module-workflow";
 import { matchesModuleReadScopeRequest } from "@io/graph-projection";
 import { graphSyncScope, type SyncScope, type SyncScopeRequest } from "@io/graph-sync";
 

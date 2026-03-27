@@ -20,7 +20,7 @@ package.
 - keep reusable host-neutral graph React bindings in
   `../../lib/graph-react/src/*`
 - keep reusable workflow projection contracts, sync-scope descriptors, and
-  read helpers in `../../src/graph/modules/workflow/*` and
+  read helpers in `../../lib/graph-module-workflow/src/*` and
   `../../src/graph/runtime/*`
 - keep the retained Linear/session monitor in `../../src/agent/tui/*` until
   workflow views replace it

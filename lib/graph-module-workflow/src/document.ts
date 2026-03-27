@@ -247,3 +247,10 @@ export const documentPlacement = defineType({
     }),
   },
 });
+
+export const documentSchema = {
+  document,
+  documentBlockKind,
+  documentBlock,
+  documentPlacement,
+} as const;

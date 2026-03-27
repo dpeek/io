@@ -550,7 +550,7 @@ This catalog is the contract the web query editor uses instead of hard-coded
 per-surface UI logic.
 
 The first built-in authority-owned surfaces are now explicit in
-`../../src/graph/modules/workflow/projection.ts` instead of being only
+`../../lib/graph-module-workflow/src/projection.ts` instead of being only
 route-local knowledge:
 
 - `workflow:project-branch-board`: projection-backed `collection`

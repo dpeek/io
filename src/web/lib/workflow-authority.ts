@@ -1,9 +1,9 @@
 import { type GraphStore } from "@io/core/graph";
+import { type AuthoritativeGraphWriteResult, type GraphWriteTransaction } from "@io/graph-kernel";
 import {
   type WorkflowMutationAction,
   type WorkflowMutationResult,
-} from "@io/core/graph/modules/workflow";
-import { type AuthoritativeGraphWriteResult, type GraphWriteTransaction } from "@io/graph-kernel";
+} from "@io/graph-module-workflow";
 
 import type {
   WebAppAuthorityCommandOptions,

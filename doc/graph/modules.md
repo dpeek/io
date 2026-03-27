@@ -5,8 +5,8 @@
 Built-in graph namespaces are now split by owner:
 
 - `../../lib/graph-module-core/src/` owns the built-in `core:` namespace
-- `../../src/graph/modules/workflow/` still owns the built-in `workflow:`
-  namespace pending extraction
+- `../../lib/graph-module-workflow/src/` owns the built-in `workflow:`
+  namespace
 
 This document is about concrete built-in graph modules. The extracted
 `@io/graph-module` package that owns type-module authoring helpers is covered
@@ -20,13 +20,14 @@ in [`type-modules.md`](./type-modules.md).
   `../../lib/graph-module-core/src/react-dom/index.ts`; core-owned browser
   defaults such as `GraphIcon`, structured-value editors, and tag-aware
   reference behavior; this replaces the former `@io/graph-react-dom` package
-- `@io/core/graph/modules/workflow`: `../../src/graph/modules/workflow.ts`;
-  canonical `workflow:` namespace assembly and workflow slice root
+- `@io/graph-module-workflow`: `../../lib/graph-module-workflow/src/index.ts`;
+  canonical `workflow:` namespace assembly plus the workflow, env-var, and
+  document slice exports
 
 `@io/graph-module-core` owns the canonical `core:` namespace object plus the
-curated slice symbols that callers use directly. The `workflow` entrypoint
-exports its namespace object plus the workflow, env-var, and document slice
-symbols.
+curated slice symbols that callers use directly.
+`@io/graph-module-workflow` owns the `workflow` namespace object plus the
+workflow, env-var, and document slice symbols.
 
 ## Source Layout
 
@@ -37,10 +38,10 @@ symbols.
 - `../../lib/graph-module-core/src/core/identity.ts`: Branch 2 identity anchors for
   `principal`, `authSubjectProjection`, and `principalRoleBinding` plus the
   enum vocabulary those graph-owned types depend on
-- `../../src/graph/modules/workflow/`: Branch 6 workflow root and the merged
+- `../../lib/graph-module-workflow/src/`: workflow package root and the merged
   workflow, env-var, and document slice implementation
-- `../../src/graph/modules/workflow/document/`: reusable markdown documents, ordered
-  document blocks, and external placement trees
+- `../../lib/graph-module-workflow/src/document/`: reusable markdown
+  documents, ordered document blocks, and external placement trees
 - `../../lib/graph-module-core/src/react-dom/`: core-owned browser defaults
   that depend on built-in `core:` value contracts or entity shapes
 - type-specific directories keep schema, metadata, filters, and helper enums

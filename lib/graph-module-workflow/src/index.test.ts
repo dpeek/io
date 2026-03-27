@@ -2,22 +2,22 @@ import { describe, expect, it } from "bun:test";
 
 import { core, secretHandle } from "@io/graph-module-core";
 
-import { workflow as canonicalWorkflow } from "./workflow.js";
-import * as workflowExports from "./workflow.js";
 import {
   document,
   documentBlock,
   documentBlockKind,
   documentPlacement,
   documentSchema,
-} from "./workflow/document/schema.js";
+} from "./document/schema.js";
 import {
   envVar,
   envVarNameBlankMessage,
   envVarNameInvalidMessage,
   envVarNamePattern,
   envVarSchema,
-} from "./workflow/env-var/schema.js";
+} from "./env-var/schema.js";
+import { workflow as canonicalWorkflow } from "./index.js";
+import * as workflowExports from "./index.js";
 import {
   agentSession,
   agentSessionEvent,
@@ -33,7 +33,7 @@ import {
   repositoryCommit,
   workflowMutationCommand,
   workflowSchema,
-} from "./workflow/schema.js";
+} from "./schema.js";
 
 const requiredEnvVarExports = [
   "buildSecretHandleName",

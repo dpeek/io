@@ -1,4 +1,4 @@
-import { workflowReviewSyncScopeRequest } from "@io/core/graph/modules/workflow";
+import { workflowReviewSyncScopeRequest } from "@io/graph-module-workflow";
 import { graphSyncScope } from "@io/graph-sync";
 
 import type { WorkflowReadRequest } from "./workflow-transport.js";

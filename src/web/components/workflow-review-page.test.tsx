@@ -1,12 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
+import type { CommitQueueScopeResult, ProjectBranchScopeResult } from "@io/graph-module-workflow";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { BrowserAgentRuntimeProbe } from "../../browser-agent/transport.js";
-import type {
-  CommitQueueScopeResult,
-  ProjectBranchScopeResult,
-} from "../../graph/modules/workflow/query.js";
 import type { WorkflowReviewStartupState } from "../lib/workflow-review-contract.js";
 import {
   createBranchSessionActionModel,

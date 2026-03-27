@@ -8,15 +8,6 @@ import {
   type AnyTypeOutput,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
-import {
-  type RetainedWorkflowProjectionState,
-  workflowBuiltInQuerySurfaceIds,
-  projectionMetadata,
-  workflowReviewDependencyKeys,
-  workflowReviewModuleReadScope,
-  workflowReviewSyncScopeRequest,
-} from "@io/core/graph/modules/workflow";
 import { type AuthSubjectRef, type AuthorizationContext } from "@io/graph-authority";
 import {
   createSyncedGraphClient,
@@ -26,6 +17,15 @@ import {
 import { type GraphWriteTransaction } from "@io/graph-kernel";
 import { defineSecretField, defineType } from "@io/graph-module";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
+import {
+  type RetainedWorkflowProjectionState,
+  workflowBuiltInQuerySurfaceIds,
+  projectionMetadata,
+  workflowReviewDependencyKeys,
+  workflowReviewModuleReadScope,
+  workflowReviewSyncScopeRequest,
+} from "@io/graph-module-workflow";
 import { type InvalidationEvent } from "@io/graph-projection";
 
 import {

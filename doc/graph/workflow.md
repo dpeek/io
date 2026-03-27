@@ -11,12 +11,12 @@ commit records that map that logical work onto git reality.
 
 ## Graph Shape
 
-The canonical workflow slice lives alongside this doc under
-`../../src/graph/modules/workflow/`.
+The canonical workflow slice now lives in
+`../../lib/graph-module-workflow/src/`.
 
 The exported surface is:
 
-- `schema.ts`: backs `@io/core/graph/modules/workflow` and re-exports the
+- `schema.ts`: backs `@io/graph-module-workflow` and re-exports the
   workflow entity, enum, mutation, and read-contract definitions
 - `type.ts`: owns the entity families, state enums, reference wiring, key
   validators, and default lifecycle values
@@ -32,8 +32,8 @@ The exported surface is:
   reads from workflow, repository, and session records
   consumed by projections and operator surfaces
 
-`workflow:` is still the remaining root-owned built-in module. The built-in
-`core:` namespace has already moved to `@io/graph-module-core`.
+`workflow:` is now package-owned in `@io/graph-module-workflow`. The built-in
+`core:` namespace remains owned by `@io/graph-module-core`.
 
 The first workflow slice currently defines:
 

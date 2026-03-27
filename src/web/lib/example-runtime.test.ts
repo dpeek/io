@@ -1,11 +1,11 @@
 import { describe, expect, it, setDefaultTimeout } from "bun:test";
 
 import { edgeId } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
 import { GraphValidationError } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
+import { workflow } from "@io/graph-module-workflow";
+import { createWorkflowProjectionIndex } from "@io/graph-module-workflow";
 
-import { createWorkflowProjectionIndex } from "../../graph/modules/workflow/query.js";
 import { createExampleRuntime } from "./example-runtime.js";
 
 setDefaultTimeout(20_000);

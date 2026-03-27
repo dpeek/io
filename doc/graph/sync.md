@@ -58,7 +58,7 @@ That first scoped proof is now defined from one shared graph-owned seam:
   `@io/graph-projection`, exports the public Branch 3
   `ModuleReadScopeDefinition`, `ProjectionSpec`, `DependencyKey`,
   `InvalidationEvent`, and retained projection compatibility helpers
-- `../../src/graph/modules/workflow/projection.ts` owns the canonical
+- `../../lib/graph-module-workflow/src/projection.ts` owns the canonical
   `workflowReviewModuleReadScope`, `workflowReviewSyncScopeRequest`, and the
   first workflow projection descriptors plus the explicit
   `compileWorkflowReviewScopeDependencyKeys(...)`,

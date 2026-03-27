@@ -1,12 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { createStore } from "@io/core/graph";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
-import { createGraphIdMap as createIdMap } from "@io/graph-kernel";
+import { createGraphIdMap as createIdMap, createGraphStore } from "@io/graph-kernel";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 
-import { workflow } from "../workflow.js";
+import { workflow } from "./index.js";
 import {
   agentSessionKeyPattern,
   commitQueueScopeFailureCodes,
@@ -594,7 +593,7 @@ describe("workflow schema", () => {
   });
 
   it("preserves retained execution provenance across sessions, artifacts, decisions, and bundles", () => {
-    const store = createStore();
+    const store = createGraphStore();
     bootstrap(store, core, coreGraphBootstrapOptions);
     bootstrap(store, workflow, coreGraphBootstrapOptions);
     const graph = createGraphClient(store, productGraph);

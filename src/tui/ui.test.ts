@@ -4,11 +4,11 @@ import { createStore } from "@io/core/graph";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
+import { createWorkflowProjectionIndex } from "@io/graph-module-workflow";
 import { createTestRenderer } from "@opentui/core/testing";
 import { act } from "react";
 
-import { workflow } from "../graph/modules/workflow.js";
-import { createWorkflowProjectionIndex } from "../graph/modules/workflow/query.js";
 import { buildWorkflowTuiRootComponentModel } from "./layout.js";
 import {
   createWorkflowTuiStartupFailureModel,

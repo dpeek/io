@@ -23,7 +23,7 @@
 
 - generic type-module authoring helpers from `@io/graph-module`
 - host-neutral React runtime contracts from `@io/graph-react`
-- the still-root-owned `workflow:` module tree
+- the extracted `workflow:` module tree in `@io/graph-module-workflow`
 - module installation, activation, or runtime registry logic
 
 ## Browser Defaults

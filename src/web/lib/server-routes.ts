@@ -1,14 +1,3 @@
-import {
-  projectBranchScopeOrderDirectionValues,
-  projectBranchScopeOrderFieldValues,
-  branchStateValues,
-  workflowReviewModuleReadScope,
-  type CommitQueueScopeQuery,
-  type ProjectBranchScopeFilters,
-  type ProjectBranchScopeOrderClause,
-  type ProjectBranchScopeQuery,
-  type WorkflowBranchStateValue,
-} from "@io/core/graph/modules/workflow";
 import { type AuthorizationContext } from "@io/graph-authority";
 import {
   GraphValidationError,
@@ -19,6 +8,17 @@ import {
   type SerializedQueryRequest,
 } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
+import {
+  projectBranchScopeOrderDirectionValues,
+  projectBranchScopeOrderFieldValues,
+  branchStateValues,
+  workflowReviewModuleReadScope,
+  type CommitQueueScopeQuery,
+  type ProjectBranchScopeFilters,
+  type ProjectBranchScopeOrderClause,
+  type ProjectBranchScopeQuery,
+  type WorkflowBranchStateValue,
+} from "@io/graph-module-workflow";
 
 import type {
   WebAppAuthority,

@@ -22,6 +22,7 @@
       "@io/graph-module": ["./lib/graph-module/src/index.ts"],
       "@io/graph-module-core": ["./lib/graph-module-core/src/index.ts"],
       "@io/graph-module-core/react-dom": ["./lib/graph-module-core/src/react-dom/index.ts"],
+      "@io/graph-module-workflow": ["./lib/graph-module-workflow/src/index.ts"],
       "@io/graph-projection": ["./lib/graph-projection/src/index.ts"],
       "@io/graph-react": ["./lib/graph-react/src/index.ts"],
       "@io/graph-sync": ["./lib/graph-sync/src/index.ts"],

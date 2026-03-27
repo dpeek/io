@@ -1,10 +1,10 @@
 import { edgeId, type GraphStore } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
+import { workflow } from "@io/graph-module-workflow";
 import {
   branchStateValues,
   type WorkflowMutationAction,
   type WorkflowMutationResult,
-} from "@io/core/graph/modules/workflow";
+} from "@io/graph-module-workflow";
 
 import {
   findManagedRepositoryBranchForBranch,

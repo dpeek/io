@@ -10,7 +10,7 @@ import {
   stringTypeModule,
 } from "@io/graph-module-core";
 
-import { document } from "./document/schema.js";
+import { document } from "./document.js";
 
 function resolvedEnumValue(value: { key: string; id?: string }): string {
   return value.id ?? value.key;

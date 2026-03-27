@@ -7,7 +7,6 @@ import {
   type RetainedProjectionRowRecord,
 } from "@io/graph-projection";
 
-import workflowIds from "../workflow.json";
 import type {
   RepositoryBranchSummary,
   RepositoryCommitSummary,
@@ -23,7 +22,7 @@ import {
   branchStateValues,
   commitStateValues,
 } from "./command.js";
-import { documentSchema } from "./document/schema.js";
+import { documentSchema } from "./document.js";
 import { projectionMetadata } from "./projection.js";
 import {
   agentSession,
@@ -55,6 +54,7 @@ import {
   contextBundleEntry,
   contextBundleEntrySource,
 } from "./type.js";
+import workflowIds from "./workflow.json";
 
 export const projectBranchScopeFailureCodes = [
   "project-not-found",

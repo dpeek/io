@@ -32,6 +32,7 @@ import {
   typeId,
 } from "@io/graph-kernel";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
 import {
   createIncrementalSyncFallback,
   createIncrementalSyncPayload,
@@ -39,8 +40,6 @@ import {
   createTotalSyncPayload,
   type SyncPayload,
 } from "@io/graph-sync";
-
-import { workflow } from "../modules/workflow.js";
 
 const item = defineType({
   values: { key: "test:item", name: "Item" },

@@ -1,5 +1,5 @@
 import { typeId } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
+import { workflow } from "@io/graph-module-workflow";
 
 import type { ExplorerSelection } from "./model.js";
 import { newTarget, schemaTarget } from "./model.js";

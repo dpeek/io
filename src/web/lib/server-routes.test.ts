@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import { workflowReviewModuleReadScope } from "@io/core/graph/modules/workflow";
 import { type AuthorizationContext } from "@io/graph-authority";
 import { type QueryResultPage, type SerializedQueryResponse } from "@io/graph-client";
+import { workflowReviewModuleReadScope } from "@io/graph-module-workflow";
 import { defineInvalidationEvent } from "@io/graph-projection";
 
 import {

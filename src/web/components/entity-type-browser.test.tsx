@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
 import { createStore, typeId } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { EntityTypeBrowserSurface } from "./entity-type-browser.js";

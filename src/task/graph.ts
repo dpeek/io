@@ -1,6 +1,6 @@
-import { workflow } from "@io/core/graph/modules/workflow";
 import { createHttpGraphClient } from "@io/graph-client";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
 
 export async function run() {
   const client = await createHttpGraphClient(workflow, {

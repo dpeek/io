@@ -10,8 +10,7 @@ import {
   type InvalidationEvent,
 } from "@io/graph-projection";
 
-import workflowIds from "../workflow.json";
-import { document } from "./document/schema.js";
+import { document } from "./document.js";
 import {
   agentSession,
   agentSessionEvent,
@@ -26,6 +25,7 @@ import {
   project,
   repository,
 } from "./type.js";
+import workflowIds from "./workflow.json";
 
 const workflowTypeIds = workflowIds.keys as Record<string, string>;
 

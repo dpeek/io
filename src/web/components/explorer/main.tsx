@@ -1,5 +1,5 @@
 import { typeId } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
+import { workflow } from "@io/graph-module-workflow";
 import { Input } from "@io/web/input";
 import { ScrollArea } from "@io/web/scroll-area";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";

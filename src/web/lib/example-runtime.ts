@@ -1,5 +1,4 @@
 import { createIdMap, applyIdMap, createStore } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
 import { createAuthoritativeGraphWriteSession } from "@io/graph-authority";
 import { createBootstrappedSnapshot } from "@io/graph-bootstrap";
 import {
@@ -15,6 +14,7 @@ import {
 } from "@io/graph-kernel";
 import { defineType } from "@io/graph-module";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
 import {
   createTotalSyncPayload,
   type IncrementalSyncResult,

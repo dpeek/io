@@ -3,8 +3,8 @@ import { describe, expect, it } from "bun:test";
 
 import type { GraphStoreSnapshot } from "@io/core/graph";
 import { edgeId } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
 import { core } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
 
 import {
   bootstrapSecretValueTable,

@@ -45,3 +45,11 @@ export const envVar = defineType({
     }),
   },
 });
+
+export const envVarSchema = {
+  envVar,
+} as const;
+
+export function buildSecretHandleName(envVarName: string): string {
+  return `${envVarName} secret`;
+}

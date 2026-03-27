@@ -1,5 +1,11 @@
 "use client";
 
+import type {
+  CommitQueueScopeCommitRow,
+  CommitQueueScopeResult,
+  ProjectBranchScopeRepositoryObservation,
+  ProjectBranchScopeResult,
+} from "@io/graph-module-workflow";
 import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
@@ -18,12 +24,6 @@ import {
   requestBrowserAgentActiveSessionLookup,
   requestBrowserAgentLaunch,
 } from "../../browser-agent/transport.js";
-import type {
-  CommitQueueScopeCommitRow,
-  CommitQueueScopeResult,
-  ProjectBranchScopeRepositoryObservation,
-  ProjectBranchScopeResult,
-} from "../../graph/modules/workflow/query.js";
 import {
   createWorkflowReviewStartupContract,
   resolveCanonicalWorkflowRouteSearch,

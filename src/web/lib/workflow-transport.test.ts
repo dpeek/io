@@ -1,9 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import type {
-  CommitQueueScopeResult,
-  ProjectBranchScopeResult,
-} from "@io/core/graph/modules/workflow";
+import type { CommitQueueScopeResult, ProjectBranchScopeResult } from "@io/graph-module-workflow";
 
 import {
   requestWorkflowRead,

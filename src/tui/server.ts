@@ -1,15 +1,15 @@
 import { handleExit } from "@io/core/lib";
 import { createHttpGraphClient } from "@io/graph-client";
 import { coreGraphBootstrapOptions } from "@io/graph-module-core";
-
-import { loadWorkflowFile } from "../agent/workflow.js";
 import {
   createWorkflowProjectionIndex,
   WorkflowProjectionQueryError,
   type WorkflowProjectionGraphClient,
   type WorkflowProjectionIndex,
-} from "../graph/modules/workflow/query.js";
-import { projectionSchema } from "../graph/modules/workflow/schema.js";
+} from "@io/graph-module-workflow";
+import { projectionSchema } from "@io/graph-module-workflow";
+
+import { loadWorkflowFile } from "../agent/workflow.js";
 import { createWorkflowTuiWorkflowModel, type WorkflowTuiWorkflowSurfaceModel } from "./model.js";
 import { resolveWorkflowTuiStartupContract, type WorkflowTuiStartupContract } from "./startup.js";
 import { createWorkflowTui, type WorkflowTui } from "./tui.js";

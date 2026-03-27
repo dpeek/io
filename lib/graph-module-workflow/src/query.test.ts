@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { createStore } from "@io/core/graph";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
+import { createGraphStore } from "@io/graph-kernel";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 
-import { workflow } from "../workflow.js";
+import { workflow } from "./index.js";
 import {
   createRetainedWorkflowProjectionState,
   createWorkflowProjectionIndex,
@@ -31,7 +31,7 @@ type WorkflowQueryFixtureOptions = {
 };
 
 function createWorkflowQueryFixture(options: WorkflowQueryFixtureOptions = {}) {
-  const store = createStore();
+  const store = createGraphStore();
   bootstrap(store, core, coreGraphBootstrapOptions);
   bootstrap(store, workflow, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, productGraph);

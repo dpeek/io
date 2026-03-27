@@ -1,12 +1,9 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 
-import type { RetainedWorkflowProjectionState } from "@io/core/graph/modules/workflow";
-import { projectionMetadata } from "@io/core/graph/modules/workflow";
-import type {
-  CommitQueueScopeCommitRow,
-  WorkflowBranchSummary,
-} from "@io/core/graph/modules/workflow";
+import type { RetainedWorkflowProjectionState } from "@io/graph-module-workflow";
+import { projectionMetadata } from "@io/graph-module-workflow";
+import type { CommitQueueScopeCommitRow, WorkflowBranchSummary } from "@io/graph-module-workflow";
 
 import type { DurableObjectSqlStorageLike } from "./graph-authority-sql-startup.js";
 import {

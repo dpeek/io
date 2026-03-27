@@ -1,5 +1,5 @@
 {
-  "name": "@io/graph-react",
+  "name": "@io/graph-module-workflow",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -20,13 +20,12 @@
     "@io/graph-client": "workspace:*",
     "@io/graph-kernel": "workspace:*",
     "@io/graph-module": "workspace:*",
-    "@io/graph-sync": "workspace:*",
-    "react": "^19.2.4"
+    "@io/graph-module-core": "workspace:*",
+    "@io/graph-projection": "workspace:*"
   },
   "devDependencies": {
-    "@io/graph-module-workflow": "workspace:*",
+    "@io/graph-bootstrap": "workspace:*",
     "@types/bun": "^1.3.9",
-    "@types/react": "^19.2.14",
     "@typescript/native-preview": "^7.0.0-dev.20260226.1"
   }
 }

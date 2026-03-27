@@ -1,6 +1,3 @@
-import { useGraphQuery, type GraphRuntime } from "@io/graph-react";
-import { useMemo } from "react";
-
 import {
   createWorkflowProjectionIndex,
   type CommitQueueScopeQuery,
@@ -10,7 +7,9 @@ import {
   type WorkflowProjectionIndex,
   type WorkflowProjectionIndexOptions,
   projectionSchema,
-} from "../graph/modules/workflow/schema.js";
+} from "@io/graph-module-workflow";
+import { useGraphQuery, type GraphRuntime } from "@io/graph-react";
+import { useMemo } from "react";
 
 type WorkflowProjectionSchema = typeof projectionSchema;
 

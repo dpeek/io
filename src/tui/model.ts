@@ -1,14 +1,12 @@
-import type {
-  WorkflowBranchStateValue,
-  WorkflowCommitStateValue,
-} from "../graph/modules/workflow/command.js";
+import type { WorkflowBranchStateValue, WorkflowCommitStateValue } from "@io/graph-module-workflow";
 import type {
   CommitQueueScopeResult,
   CommitQueueScopeSessionSummary,
   ProjectBranchScopeQuery,
   ProjectBranchScopeResult,
   WorkflowProjectionIndex,
-} from "../graph/modules/workflow/query.js";
+} from "@io/graph-module-workflow";
+
 import {
   createDefaultWorkflowTuiStartupContract,
   type WorkflowTuiBranchResolution,

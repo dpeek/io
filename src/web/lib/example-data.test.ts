@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 
 import { createStore } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
 
 import { seedExampleGraph } from "./example-data.js";
 

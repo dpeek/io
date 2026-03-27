@@ -9,12 +9,6 @@ import {
   type AnyTypeOutput,
   type GraphStoreSnapshot,
 } from "@io/core/graph";
-import { workflow } from "@io/core/graph/modules/workflow";
-import {
-  projectionMetadata,
-  workflowReviewModuleReadScope,
-  workflowReviewSyncScopeRequest,
-} from "@io/core/graph/modules/workflow";
 import {
   createPersistedAuthoritativeGraph,
   type AuthSubjectRef,
@@ -29,6 +23,12 @@ import {
 } from "@io/graph-kernel";
 import { defineSecretField, defineType } from "@io/graph-module";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
+import {
+  projectionMetadata,
+  workflowReviewModuleReadScope,
+  workflowReviewSyncScopeRequest,
+} from "@io/graph-module-workflow";
 
 import {
   createBearerShareAuthorizationContext,

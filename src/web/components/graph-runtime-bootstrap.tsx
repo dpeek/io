@@ -1,6 +1,5 @@
 "use client";
 
-import { workflow } from "@io/core/graph/modules/workflow";
 import {
   applyHttpSyncRequest,
   createHttpGraphClient,
@@ -9,6 +8,7 @@ import {
   type SyncedGraphClient,
 } from "@io/graph-client";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow } from "@io/graph-module-workflow";
 import {
   GraphRuntimeProvider as SharedGraphRuntimeProvider,
   useGraphRuntime as useSharedGraphRuntime,

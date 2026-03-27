@@ -169,11 +169,12 @@ from audit history.
 Built-in graph modules now live under their owning package trees:
 
 - `../../lib/graph-module-core/src/core/` for `core:` families
-- `../../src/graph/modules/workflow/` for public `workflow:` slices
+- `../../lib/graph-module-workflow/src/` for public `workflow:` slices
 - `../../lib/graph-module-core/src/core.ts` and
-  `../../src/graph/modules/workflow.ts`: namespace assembly entrypoints
-- `../../src/graph/modules/workflow/env-var/schema.ts` and
-  `../../src/graph/modules/workflow/document/schema.ts`: internal slice entrypoints
+  `../../lib/graph-module-workflow/src/index.ts`: namespace assembly entrypoints
+- `../../lib/graph-module-workflow/src/env-var/schema.ts` and
+  `../../lib/graph-module-workflow/src/document/schema.ts`: internal slice
+  entrypoints
 
 Examples:
 

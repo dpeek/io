@@ -1,7 +1,8 @@
 import type {
   CommitQueueScopeResult,
   ProjectBranchScopeRepositoryObservation,
-} from "../graph/modules/workflow/query.js";
+} from "@io/graph-module-workflow";
+
 import type {
   WorkflowTuiActionModel,
   WorkflowTuiActionRequestStateModel,

@@ -22,11 +22,12 @@ type GraphPackageJson = {
   exports: Record<string, string>;
 };
 
-const canonicalGraphSubpaths = ["./graph", "./graph/modules/workflow"] as const;
+const canonicalGraphSubpaths = ["./graph"] as const;
 
 const retiredGraphSubpaths = [
   "./graph/graph/*",
   "./graph/modules/*",
+  "./graph/modules/workflow",
   "./graph/adapters/*",
   "./graph/adapters/react-dom",
   "./graph/modules/app",
@@ -465,7 +466,7 @@ describe("@io/core/graph package entry surfaces", () => {
     const [coreModuleExports, coreReactDomExports, workflowExports] = await Promise.all([
       import("@io/graph-module-core"),
       import("@io/graph-module-core/react-dom"),
-      import("@io/core/graph/modules/workflow"),
+      import("@io/graph-module-workflow"),
     ]);
 
     expectNamedExports(coreModuleExports, requiredCoreModuleExports);
@@ -479,6 +480,8 @@ describe("@io/core/graph package entry surfaces", () => {
     await expect(import(retiredModulesSubpath)).rejects.toThrow();
     const retiredCoreModulesSubpath = "@io/core/graph/modules/core";
     await expect(import(retiredCoreModulesSubpath)).rejects.toThrow();
+    const retiredWorkflowSubpath = "@io/core/graph/modules/workflow";
+    await expect(import(retiredWorkflowSubpath)).rejects.toThrow();
     expectNamedExports(workflowExports, [
       "workflow",
       ...requiredWorkflowExports,

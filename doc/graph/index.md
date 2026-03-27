@@ -4,7 +4,8 @@
 
 The graph engine now spans the root `@io/core/graph` package plus the extracted
 `@io/graph-kernel`, `@io/graph-bootstrap`, `@io/graph-client`,
-`@io/graph-module`, `@io/graph-authority`, `@io/graph-sync`, and
+`@io/graph-module`, `@io/graph-module-core`,
+`@io/graph-module-workflow`, `@io/graph-authority`, `@io/graph-sync`, and
 `@io/graph-projection` workspace packages.
 
 The root `@io/core/graph` surface owns a small curated graph helper layer:
@@ -17,8 +18,7 @@ DOM/browser layer.
 
 Naming note: `@io/graph-module` is the extracted authoring package.
 `@io/graph-module-core` is the extracted built-in `core:` package.
-`workflow:` is still root-owned under `../../src/graph/modules/workflow/`
-pending its own extraction.
+`@io/graph-module-workflow` is the extracted built-in `workflow:` package.
 
 ## Browser Editor Boundary
 
@@ -81,8 +81,6 @@ The root `@io/core` package publishes these graph subpaths from
 
 - `@io/core/graph`: `../../src/graph/index.ts`; re-exports
   curated kernel aliases plus graph-owned icon helpers
-- `@io/core/graph/modules/workflow`: `../../src/graph/modules/workflow.ts`;
-  canonical `workflow:` namespace assembly and workflow slice root
 
 There is no longer a root `@io/core/graph/adapters/react-dom` export. Browser
 callers import `@io/graph-module-core/react-dom` directly.
@@ -99,6 +97,9 @@ The workspace also publishes:
   canonical `core:` namespace assembly, built-in core scalars/entities/enums,
   bootstrap inputs, colocated icon seeds, structured-value helpers,
   locale/currency datasets, and other core-owned contracts
+- `@io/graph-module-workflow`: `../../lib/graph-module-workflow/src/index.ts`;
+  canonical `workflow:` namespace assembly, built-in workflow/env-var/document
+  slices, and workflow-owned query/projection contracts
 - `@io/graph-bootstrap`: `../../lib/graph-bootstrap/src/index.ts`; additive
   schema bootstrap and convergent bootstrapped snapshots
 - `@io/graph-authority`: `../../lib/graph-authority/src/index.ts`; persisted
@@ -154,10 +155,10 @@ extracted too.
   helpers, validation, and total sync sessions
 - `../../lib/graph-projection/src/`: projection contracts, module read scopes,
   dependency keys, and retained projection compatibility helpers
-- `../../src/graph/modules/workflow/schema.ts`,
-  `../../src/graph/modules/workflow/env-var/schema.ts`, and
-  `../../src/graph/modules/workflow/document/schema.ts`: the workflow module
-  and its internal slice entrypoints
+- `../../lib/graph-module-workflow/src/schema.ts`,
+  `../../lib/graph-module-workflow/src/env-var/schema.ts`, and
+  `../../lib/graph-module-workflow/src/document/schema.ts`: the workflow
+  module package and its internal slice entrypoints
 - `../../lib/graph-react/src/`: host-neutral React runtime, resolver
   primitives, and predicate/entity hooks
 - `../../lib/graph-module-core/src/react-dom/`: the canonical DOM capability
