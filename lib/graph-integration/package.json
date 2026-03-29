@@ -3,18 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "imports": {
-    "#*": "./out/*"
-  },
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./out/index.js"
-    }
+    ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsgo",
-    "clean": "rm -rf out",
     "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.ts' && oxfmt && bun test ./src"
   },
   "dependencies": {
