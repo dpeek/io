@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 
 import type { AuthorizationContext, WebPrincipalSummary } from "@io/graph-authority";
 import { createGraphClient } from "@io/graph-client";
-import { createGraphStore as createStore, type GraphStoreSnapshot } from "@io/graph-kernel";
+import { createGraphStore, type GraphStoreSnapshot } from "@io/graph-kernel";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
 import { core } from "@io/graph-module-core";
 import { workflow } from "@io/graph-module-workflow";
@@ -143,7 +143,7 @@ function createSqliteDurableObjectState(): {
 }
 
 function createMutationStore(snapshot: GraphStoreSnapshot) {
-  const mutationStore = createStore(snapshot);
+  const mutationStore = createGraphStore(snapshot);
   return {
     mutationGraph: createGraphClient(mutationStore, core),
     mutationStore,
@@ -175,7 +175,7 @@ function buildGraphWriteTransaction(
 }
 
 function readCoreGraph(authority: WebAppAuthority, authorization = authorityAuthorization) {
-  return createGraphClient(createStore(authority.readSnapshot({ authorization })), core);
+  return createGraphClient(createGraphStore(authority.readSnapshot({ authorization })), core);
 }
 
 async function getDurableAuthority(
@@ -1602,7 +1602,7 @@ describe("web worker admission flows", () => {
       { authorization: authorityAuthorization },
     );
 
-    const seedStore = createStore(
+    const seedStore = createGraphStore(
       authority.readSnapshot({ authorization: authorityAuthorization }),
     );
     const seedGraph = createGraphClient(seedStore, workerGraph);
@@ -1640,7 +1640,7 @@ describe("web worker admission flows", () => {
       capabilityVersion: 1,
     });
 
-    const mutationStore = createStore(
+    const mutationStore = createGraphStore(
       authority.readSnapshot({ authorization: authorityAuthorization }),
     );
     const mutationGraph = createGraphClient(mutationStore, workerGraph);
@@ -1672,7 +1672,7 @@ describe("web worker admission flows", () => {
     });
     expect(
       createGraphClient(
-        createStore(authority.readSnapshot({ authorization: authorityAuthorization })),
+        createGraphStore(authority.readSnapshot({ authorization: authorityAuthorization })),
         workerGraph,
       ).envVar.get(envVarId)?.description,
     ).toBe("Updated by activated graph member");

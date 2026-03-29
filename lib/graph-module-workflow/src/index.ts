@@ -1,4 +1,4 @@
-import { applyGraphIdMap as applyIdMap, type ResolvedGraphNamespace } from "@io/graph-kernel";
+import { applyGraphIdMap, type ResolvedGraphNamespace } from "@io/graph-kernel";
 
 export * from "./schema.js";
 export * from "./env-var.js";
@@ -13,7 +13,7 @@ type WorkflowNamespaceInput = typeof documentSchema & typeof envVarSchema & Work
 
 export type WorkflowNamespace = ResolvedGraphNamespace<WorkflowNamespaceInput>;
 
-export const workflow: WorkflowNamespace = applyIdMap(ids, {
+export const workflow: WorkflowNamespace = applyGraphIdMap(ids, {
   ...documentSchema,
   ...envVarSchema,
   ...workflowSchema,

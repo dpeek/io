@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { bootstrap } from "@io/graph-bootstrap";
 import { createGraphClient } from "@io/graph-client";
-import { createGraphIdMap as createIdMap, createGraphStore } from "@io/graph-kernel";
+import { createGraphIdMap, createGraphStore } from "@io/graph-kernel";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 
 import { workflow } from "./index.js";
@@ -378,7 +378,7 @@ describe("workflow schema", () => {
   });
 
   it("owns stable keys for workflow lineage, retained execution, and repository execution records", () => {
-    const { map } = createIdMap(workflowSchema);
+    const { map } = createGraphIdMap(workflowSchema);
 
     expect(Object.keys(map.keys)).toEqual(
       expect.arrayContaining([

@@ -1,4 +1,4 @@
-import { applyGraphIdMap as applyIdMap } from "@io/graph-kernel";
+import { applyGraphIdMap } from "@io/graph-kernel";
 
 import coreIdMap from "./core.json";
 import { booleanTypeModule } from "./core/boolean.js";
@@ -81,7 +81,7 @@ const range = rangeTypeModule.type;
 
 const rate = rateTypeModule.type;
 
-export const core = applyIdMap(coreIdMap, {
+export const core = applyGraphIdMap(coreIdMap, {
   string,
   number,
   date,

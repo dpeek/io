@@ -19,9 +19,9 @@ import {
 } from "@io/graph-client";
 import { createGraphClient } from "@io/graph-client";
 import {
-  applyGraphIdMap as applyIdMap,
-  createGraphIdMap as createIdMap,
-  createGraphStore as createStore,
+  applyGraphIdMap,
+  createGraphIdMap,
+  createGraphStore,
   defineType,
   edgeId,
   createGraphWriteTransactionFromSnapshots,
@@ -48,7 +48,7 @@ const item = defineType({
   },
 });
 
-const testGraph = applyIdMap(createIdMap({ item }).map, { item });
+const testGraph = applyGraphIdMap(createGraphIdMap({ item }).map, { item });
 const testDefs = { ...core, ...testGraph } as const;
 
 const hiddenCursorProbe = defineType({
@@ -70,13 +70,13 @@ const hiddenCursorProbe = defineType({
   },
 });
 
-const hiddenCursorNamespace = applyIdMap(createIdMap({ hiddenCursorProbe }).map, {
+const hiddenCursorNamespace = applyGraphIdMap(createGraphIdMap({ hiddenCursorProbe }).map, {
   hiddenCursorProbe,
 });
 const hiddenGraph = { ...core, ...hiddenCursorNamespace } as const;
 
 function createAuthority() {
-  const store = createStore();
+  const store = createGraphStore();
   bootstrap(store, core, coreGraphBootstrapOptions);
   bootstrap(store, testGraph, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, testGraph, testDefs);
@@ -136,7 +136,7 @@ function createHiddenCursorAuthority(
     retainedHistoryPolicy?: AuthoritativeGraphRetainedHistoryPolicy;
   } = {},
 ) {
-  const store = createStore();
+  const store = createGraphStore();
   bootstrap(store, hiddenGraph, coreGraphBootstrapOptions);
   const graph = createGraphClient(store, hiddenGraph);
   const probeId = graph.hiddenCursorProbe.create({
@@ -162,7 +162,7 @@ function createHiddenCursorAdvanceTransaction(
   hiddenState: string,
   txId: string,
 ): GraphWriteTransaction {
-  const mutationStore = createStore(snapshot);
+  const mutationStore = createGraphStore(snapshot);
   const mutationGraph = createGraphClient(mutationStore, hiddenGraph);
   mutationGraph.hiddenCursorProbe.update(probeId, { hiddenState });
   return createGraphWriteTransactionFromSnapshots(snapshot, mutationStore.snapshot(), txId);
@@ -741,7 +741,7 @@ describe("createHttpGraphClient", () => {
   });
 
   it("does not resurrect bootstrapped retracted facts during total sync", async () => {
-    const authorityStore = createStore();
+    const authorityStore = createGraphStore();
     bootstrap(authorityStore, core, coreGraphBootstrapOptions);
     bootstrap(authorityStore, workflow, coreGraphBootstrapOptions);
 

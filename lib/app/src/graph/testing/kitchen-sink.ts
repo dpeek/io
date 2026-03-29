@@ -1,4 +1,4 @@
-import { applyGraphIdMap as applyIdMap, createGraphIdMap as createIdMap } from "@io/graph-kernel";
+import { applyGraphIdMap, createGraphIdMap } from "@io/graph-kernel";
 
 import { kitchenSinkEnumSchema } from "./kitchen-sink/enums.js";
 import { kitchenSinkScalarSchema } from "./kitchen-sink/scalars.js";
@@ -12,6 +12,6 @@ export const kitchenSinkSchema = {
   ...kitchenSinkTypeSchema,
 } as const;
 
-export const kitchenSinkIdMap = createIdMap(kitchenSinkSchema).map;
+export const kitchenSinkIdMap = createGraphIdMap(kitchenSinkSchema).map;
 
-export const kitchenSink = applyIdMap(kitchenSinkIdMap, kitchenSinkSchema);
+export const kitchenSink = applyGraphIdMap(kitchenSinkIdMap, kitchenSinkSchema);

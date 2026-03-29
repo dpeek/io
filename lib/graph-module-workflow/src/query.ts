@@ -1,5 +1,5 @@
 import { type GraphClient } from "@io/graph-client";
-import { applyGraphIdMap as applyIdMap, type ResolvedGraphNamespace } from "@io/graph-kernel";
+import { applyGraphIdMap, type ResolvedGraphNamespace } from "@io/graph-kernel";
 import { core } from "@io/graph-module-core";
 import {
   findRetainedProjectionRecord,
@@ -228,7 +228,7 @@ export interface CommitQueueScopeResult {
   readonly rows: readonly CommitQueueScopeCommitRow[];
 }
 
-const projectionWorkflowSchema: ProjectionWorkflowSchema = applyIdMap(workflowIds, {
+const projectionWorkflowSchema: ProjectionWorkflowSchema = applyGraphIdMap(workflowIds, {
   project,
   repository,
   branchState,

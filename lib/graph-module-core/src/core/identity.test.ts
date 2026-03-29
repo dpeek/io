@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createGraphIdMap as createIdMap } from "@io/graph-kernel";
+import { createGraphIdMap } from "@io/graph-kernel";
 
 import { core } from "../core.js";
 import {
@@ -26,7 +26,7 @@ import {
 
 describe("core identity family", () => {
   it("owns stable keys for the branch-2 identity anchors", () => {
-    const { map } = createIdMap({
+    const { map } = createGraphIdMap({
       principalKind,
       principalStatus,
       authSubjectStatus,
