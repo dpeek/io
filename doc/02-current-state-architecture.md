@@ -1,13 +1,13 @@
 # Current-State Architecture
 
-This document summarizes what the repo appears to prove today based on
-[`../roadmap.md`](../roadmap.md).
+This document summarizes what the repo appears to prove today across the
+current workspace packages.
 
 ## Major Subsystems
 
-The repo-level package owns a shared project map across the agent runtime,
-config and context resolution, workflow contracts, graph runtime, web surface,
-and CLI.
+The repo root now coordinates a set of workspace packages across the operator
+runtime, config and context resolution, workflow contracts, graph runtime, web
+surface, and shared browser and utility layers.
 
 The current architecture is best described as:
 

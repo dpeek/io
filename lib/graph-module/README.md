@@ -78,3 +78,11 @@ Everything intended for consumers is re-exported from the package root.
 
 This package intentionally stops at definition-time authoring. Runtime module
 management belongs to later layers.
+
+## Build Output
+
+Run `turbo build --filter=@io/graph-module` from the repo root, or `bun run build`
+in this package, to emit `./out`.
+Run `turbo check --filter=@io/graph-module` from the repo root, or
+`bun run check` in this package, to lint, format, type-check, and execute the
+package-local Bun tests.

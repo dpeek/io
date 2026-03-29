@@ -1,6 +1,6 @@
 # Executive Summary
 
-This document captures the top-level thesis from [`../roadmap.md`](../roadmap.md).
+This document captures the top-level thesis for the current architecture split.
 
 ## Current State
 

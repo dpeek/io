@@ -8,7 +8,6 @@ Current top-level task modules are:
 
 - `agent`
 - `browser-agent`
-- `check`
 - `graph`
 - `install`
 - `mcp`

@@ -49,3 +49,11 @@ the `react-dom` subpath directly.
 
 Cross-package integration suites for this package live in
 `@io/graph-integration` so package-local tests can stay boundary-safe.
+
+## Build Output
+
+Run `turbo build --filter=@io/graph-module-core` from the repo root, or
+`bun run build` in this package, to emit `./out`.
+Run `turbo check --filter=@io/graph-module-core` from the repo root, or
+`bun run check` in this package, to lint, format, type-check, and execute the
+package-local Bun tests.

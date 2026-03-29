@@ -1,4 +1,4 @@
-import { handleExit } from "../lib/index.js";
+import { handleExit } from "@io/utils";
 
 import { AgentService } from "./service.js";
 

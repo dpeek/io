@@ -79,7 +79,7 @@ compose shared `@io/web` primitives rather than duplicate browser chrome.
 ## Canonical Package Exports
 
 The root `@io/app` package publishes these graph subpaths from
-`../../package.json`:
+`../../lib/app/package.json`:
 
 - `@io/app/graph`: `../../lib/app/src/graph/index.ts`; re-exports
   curated kernel aliases plus graph-owned icon helpers
@@ -128,9 +128,8 @@ The root `@io/app/graph` surface stays focused on a small helper layer and
 icon contracts. Definition-time authorship now lives on `@io/graph-module`.
 The built-in `core:` namespace now lives on `@io/graph-module-core`.
 Bootstrap, client, authority, sync, projection, the host-neutral React layer,
-and the default DOM/browser layer live on their extracted packages. `workflow:`
-slice exports stay on the remaining root-package subpath until that module is
-extracted too.
+and the default DOM/browser layer live on their extracted packages.
+Workflow-owned contracts now live on `@io/graph-module-workflow`.
 
 ## Source Layout
 

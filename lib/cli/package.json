@@ -7,7 +7,12 @@
   },
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./agent": "./src/agent/index.ts",
+    "./browser-agent": "./src/browser-agent/index.ts",
+    "./config": "./src/lib/config.ts",
+    "./mcp": "./src/mcp/index.ts",
+    "./tui": "./src/tui/index.ts"
   },
   "scripts": {
     "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.ts' --ignore-pattern '**/*.test.tsx' && oxfmt && bun test ./src"
@@ -18,6 +23,7 @@
     "@io/graph-module-core": "workspace:*",
     "@io/graph-module-workflow": "workspace:*",
     "@io/graph-react": "workspace:*",
+    "@io/utils": "workspace:*",
     "@linear/sdk": "^76.0.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@opentui/core": "^0.1.87",

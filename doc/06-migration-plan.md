@@ -1,7 +1,7 @@
 # Migration Plan
 
-This document collects the phased rollout from [`../roadmap.md`](../roadmap.md)
-and the recommended first 90 days.
+This document collects the phased rollout and the recommended first 90 days for
+the current plan.
 
 ## Phased Roadmap
 

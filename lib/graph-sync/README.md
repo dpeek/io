@@ -62,9 +62,10 @@ Everything intended for consumers is re-exported from the package root.
 
 ## Build Output
 
-Run `vp run @io/graph-sync#build` from the workspace root, or `bun run build`
-in this package, to emit `./out`.
-Run `turbo run test --filter=@io/graph-sync` from the workspace root, or `bun run test` in
-this package, to execute the extracted sync-core unit tests.
+Run `turbo build --filter=@io/graph-sync` from the repo root, or
+`bun run build` in this package, to emit `./out`.
+Run `turbo check --filter=@io/graph-sync` from the repo root, or
+`bun run check` in this package, to lint, format, type-check, and execute the
+extracted sync-core Bun tests.
 
 The package `tsconfig.json` drives the normal `tsgo` build and emits `./out`.

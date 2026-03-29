@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from "../../lib/index.js";
+import { createLogger, type Logger } from "@io/utils";
 import { LinearClient } from "@linear/sdk";
 
 import type { AgentIssue, TrackerConfig } from "../types.js";

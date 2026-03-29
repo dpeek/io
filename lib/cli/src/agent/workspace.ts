@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import { createLogger, type Logger } from "../lib/index.js";
+import { createLogger, type Logger } from "@io/utils";
 
 import type { AgentIssue, HookConfig, PreparedWorkspace, StreamRuntimeState } from "./types.js";
 import { toWorkspaceKey } from "./workflow.js";

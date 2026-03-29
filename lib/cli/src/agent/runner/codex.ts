@@ -1,7 +1,7 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 
-import { createLogger, type Logger } from "../../lib/index.js";
+import { createLogger, type Logger } from "@io/utils";
 
 import type {
   ApplyPatchApprovalResponse,

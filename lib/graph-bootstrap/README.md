@@ -56,3 +56,11 @@ owning domain and be passed into bootstrap through these contracts.
   rewriting previously materialized facts.
 
 Both APIs share the same traversal and icon-extension seams.
+
+## Build Output
+
+Run `turbo build --filter=@io/graph-bootstrap` from the repo root, or
+`bun run build` in this package, to emit `./out`.
+Run `turbo check --filter=@io/graph-bootstrap` from the repo root, or
+`bun run check` in this package, to lint, format, type-check, and execute the
+package-local Bun tests.

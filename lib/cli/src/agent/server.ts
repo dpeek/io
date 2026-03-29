@@ -1,4 +1,4 @@
-import { createLogger, handleExit } from "../lib/index.js";
+import { createLogger, handleExit } from "@io/utils";
 
 import { AgentService } from "./service.js";
 import { AgentTuiRetainedReader } from "./tui-runtime.js";

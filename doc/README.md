@@ -1,10 +1,10 @@
 # Architecture And Vision Docs
 
-This directory breaks both [`../roadmap.md`](../roadmap.md) and
-[`../vision.md`](../vision.md) into smaller documents. The source drafts remain
-canonical; these files reorganize them into reviewable slices.
+This directory collects the repo's architecture and vision docs.
+[`../vision.md`](../vision.md) remains the long-form narrative, while the files
+here keep the current architecture split in smaller reviewable slices.
 
-## Roadmap Docs
+## Architecture Docs
 
 1. [`01-executive-summary.md`](./01-executive-summary.md): current thesis,
    target product, and the platform primitives that should be stabilized first
@@ -21,8 +21,8 @@ canonical; these files reorganize them into reviewable slices.
    topology
 6. [`06-migration-plan.md`](./06-migration-plan.md): phased rollout, sequencing
    rationale, fallback options, and the first 90 days
-7. [`07-open-questions.md`](./07-open-questions.md): roadmap decisions that
-   still need validation
+7. [`07-open-questions.md`](./07-open-questions.md): open architecture
+   decisions that still need validation
 
 ## Vision Docs
 
@@ -41,8 +41,8 @@ canonical; these files reorganize them into reviewable slices.
 
 ## Working Docs
 
-- [`perf.md`](./perf.md): measured test-performance baseline, primary
-  bottlenecks, and the current optimization plan for `bun test ./src`
+- [`perf.md`](./perf.md): historical March 2026 Bun test-performance baseline,
+  primary bottlenecks, and current `turbo check` guardrail context
 
 ## Branch Docs
 
@@ -66,7 +66,7 @@ canonical; these files reorganize them into reviewable slices.
 
 ## Source Mapping
 
-### Roadmap
+### Architecture
 
 - Section `1. Executive summary` -> `01-executive-summary.md`
 - Section `2. Current-state architecture` ->

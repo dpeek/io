@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 
 import z from "zod";
 
-import { createLogger } from "../lib/index.js";
+import { createLogger } from "@io/utils";
 import { IO_TS_FILE, loadIoConfig, type NormalizedIoConfig } from "../lib/config.js";
 import {
   DEFAULT_BACKLOG_BUILTIN_DOC_IDS,

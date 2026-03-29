@@ -1,6 +1,6 @@
 # CLI
 
-`@op/cli` owns the operator/runtime shell for the monorepo.
+`@op/cli` owns the operator/runtime shell for the workspace repo.
 
 ## What It Owns
 
@@ -15,8 +15,7 @@
 
 - extracted graph packages such as `@io/graph-client`, `@io/graph-kernel`, and
   `@io/graph-module-workflow`
-- local copies of the current env/log/process helpers until a dedicated utility
-  package exists
+- `@io/utils` for generic env/log/process helpers
 
 ## What It Does Not Own
 
@@ -26,5 +25,6 @@
 
 ## Validation
 
-Run `bun check lib/cli` for the package-local lint/type/test pass, or
-`turbo check` for the repo-wide validation pass.
+Run `turbo check --filter=@op/cli` from the repo root, or `bun run check` in
+this package, for the package-local lint/format/type/test pass. Run
+`turbo check` from the repo root before landing repo-wide changes.

@@ -1,6 +1,7 @@
 # Gap Analysis
 
-This document isolates the gap analysis from [`../roadmap.md`](../roadmap.md).
+This document isolates the main gaps between the current repo and the target
+platform model.
 
 ## What Is Missing
 

@@ -2,19 +2,21 @@
 
 ## Goal
 
-Bring `bun test ./src` down from the current roughly `239s` wall-clock
-baseline to a materially faster default developer loop without losing coverage
-by accident.
+Historical goal on 2026-03-23: bring `bun test ./src` down from the roughly
+`239s` wall-clock baseline to a materially faster default developer loop
+without losing coverage by accident.
 
-As of 2026-03-28, root `bun check` runs one cached repo-wide static
-format/lint/type-check task and then cached Bun tests for workspace packages
-through `turbo run test --affected`.
+Historical note: this document records the March 2026 performance pass that
+predated the current workspace-package split. As of 2026-03-29, repo
+validation runs through `turbo check`, and each package-local `check` script
+executes `oxlint`, `oxfmt`, and Bun tests.
 
-As of 2026-03-28, Turborepo is also configured to:
+As of 2026-03-29, Turborepo is configured to:
 
 - treat package `build` outputs as cached `out/**` artifacts instead of hashing
-  committed build output back into `build` and `test`
-- make `test` depend on dependency `build` tasks for cleaner cache correctness
+  committed build output back into `build` and `check`
+- make `check` depend on dependency `check` tasks for cleaner workspace-package
+  validation ordering
 - use task-level `inputs` for `--affected`
 - default task logs to `errors-only` with hash markers so agent runs stay quiet
 
@@ -46,7 +48,7 @@ Measured on 2026-03-23 after the latest pass:
 
 - `bun test ./src --reporter=junit --reporter-outfile tmp/bun-junit.xml`:
   `31.83s`
-- `bun check src`: `42.09s`
+- historical pre-split guardrail command `bun check src`: `42.09s`
 
 The repo guardrail command covers a slightly broader set than `./src`, so the
 test counts differ, but the tracked perf target remains the JUnit-profiled
@@ -124,11 +126,11 @@ Implemented on 2026-03-23:
   stream squash finalization, and interrupted issue resume. Duplicated
   recovery and finalization variants were removed.
 
-Validation completed for this pass:
+Historical validation completed for that pass:
 
-- `bun check lib/cli/src/agent`
+- historical pre-split guardrail command `bun check lib/cli/src/agent`
 - `bun test lib/cli/src/agent/workspace.test.ts`
-- `bun check src`
+- historical pre-split guardrail command `bun check src`
 - `bun test ./src --reporter=junit --reporter-outfile tmp/bun-junit.xml`
 
 Remaining hotspots:

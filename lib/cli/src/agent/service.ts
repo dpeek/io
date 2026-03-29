@@ -1,7 +1,7 @@
 import { appendFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 
-import { createLogger, type Logger } from "../lib/index.js";
+import { createLogger, type Logger } from "@io/utils";
 
 import { renderContextBundle, resolveIssueContext, summarizeContextBundle } from "./context.js";
 import { resolveIssueRouting } from "./issue-routing.js";

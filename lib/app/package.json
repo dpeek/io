@@ -6,8 +6,7 @@
   "exports": {
     "./graph": "./src/graph/index.ts",
     "./web/better-auth": "./src/web/lib/better-auth.ts",
-    "./web/query-container": "./src/web/lib/query-container.ts",
-    "./lib": "./src/lib/index.ts"
+    "./web/query-container": "./src/web/lib/query-container.ts"
   },
   "scripts": {
     "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.ts' && oxfmt && bun test"

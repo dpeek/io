@@ -97,7 +97,6 @@ It is grounded in:
 - [`../09-vision-platform-architecture.md`](../09-vision-platform-architecture.md)
 - [`../10-vision-product-model.md`](../10-vision-product-model.md)
 - [`../11-vision-execution-model.md`](../11-vision-execution-model.md)
-- [`../../roadmap.md`](../../roadmap.md)
 - [`../../vision.md`](../../vision.md)
 
 ## 1. Purpose

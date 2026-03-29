@@ -33,3 +33,11 @@
 The package root is the canonical internal import surface for built-in
 `workflow:` contracts, projection metadata, and query helpers. Web and TUI
 runtime code consume this package; they do not extend it.
+
+## Build Output
+
+Run `turbo build --filter=@io/graph-module-workflow` from the repo root, or
+`bun run build` in this package, to emit `./out`.
+Run `turbo check --filter=@io/graph-module-workflow` from the repo root, or
+`bun run check` in this package, to lint, format, type-check, and execute the
+package-local Bun tests.

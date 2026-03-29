@@ -2,7 +2,8 @@ Project-local guidance for the `io` workspace.
 
 Purpose:
 
-- this repo owns the agent runtime, CLI, shared config surface, and the graph packages used to prove the model end to end
+- this repo owns the operator runtime, shared config surface, and the graph,
+  web, and utility workspace packages used to prove the model end to end
 
 Read first:
 
@@ -12,15 +13,9 @@ Read first:
 
 Validation:
 
-- `bun check` is required before the change is done
-- `bun check` runs one repo-wide `vp lint --fix` plus `vp fmt` pass and then
-  cached Bun tests for affected workspace packages through `turbo run test --affected`
-- Turbo task selection now uses task-level inputs for `--affected`, so doc-only
-  and generated `out/**` changes do not fan out into unrelated package tests
-- use `turbo run test --filter=@io/<package>` for focused package test runs
-- Turbo defaults to `errors-only` task logs with hash markers to keep agent
-  runs compact while still showing cache hits and misses
-- run focused tests for the packages and config/docs you touch
+- `turbo check` is required before the change is done
+- use package-local `bun run check` only for faster iteration inside one
+  workspace
 
 Local constraints:
 

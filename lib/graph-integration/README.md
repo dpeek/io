@@ -23,3 +23,9 @@ fixtures that exercise multiple graph packages together.
 `@io/graph-integration` is intentionally downstream of the extracted graph
 packages. It depends on public package entrypoints only; graph packages must not
 import it.
+
+## Validation
+
+Run `turbo check --filter=@io/graph-integration` from the repo root, or
+`bun run check` in this package, to lint, format, type-check, and execute the
+cross-package Bun suites.

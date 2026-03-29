@@ -1,7 +1,7 @@
 # Recommended Architecture
 
-This document contains the proposed architecture split and runtime model from
-[`../roadmap.md`](../roadmap.md).
+This document contains the proposed architecture split and runtime model for
+the current plan.
 
 ## Concrete Subsystem Design
 

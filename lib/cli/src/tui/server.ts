@@ -1,4 +1,4 @@
-import { handleExit } from "../lib/index.js";
+import { handleExit } from "@io/utils";
 import { createHttpGraphClient } from "@io/graph-client";
 import { coreGraphBootstrapOptions } from "@io/graph-module-core";
 import {

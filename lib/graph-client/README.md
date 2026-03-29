@@ -65,10 +65,11 @@ transport helpers.
 
 ## Build Output
 
-Run `vp run @io/graph-client#build` from the workspace root, or `bun run build`
-in this package, to emit `./out`.
-Run `turbo run test --filter=@io/graph-client` from the workspace root, or `bun run test`
-in this package, to execute the package-local tests.
+Run `turbo build --filter=@io/graph-client` from the repo root, or
+`bun run build` in this package, to emit `./out`.
+Run `turbo check --filter=@io/graph-client` from the repo root, or
+`bun run check` in this package, to lint, format, type-check, and execute the
+package-local Bun tests.
 
 Cross-package client/bootstrap coverage lives in `@io/graph-integration` so the
 package can stay on public entrypoints and local fixtures only.

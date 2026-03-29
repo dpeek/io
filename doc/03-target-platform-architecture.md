@@ -1,7 +1,7 @@
 # Target-State Platform Architecture
 
-This document captures the intended end-state platform model from
-[`../roadmap.md`](../roadmap.md).
+This document captures the intended end-state platform model for the current
+architecture split.
 
 ## Core Platform Primitives
 
