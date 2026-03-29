@@ -9,6 +9,9 @@ was extracted into `@op/cli`.
 - browser Worker, routes, and app-owned web composition on top of `@io/web`
 - app-owned web exports such as `@io/app/web/better-auth` and
   `@io/app/web/query-container`
+- app-local web runtime config via `auth.ts`, `vite.config.ts`,
+  `wrangler.jsonc`, and `index.html`
+- Better Auth D1 migrations under `migrations/auth-store`
 
 ## What Moved Out
 
@@ -22,9 +25,13 @@ was extracted into `@op/cli`.
 
 - workspace orchestration and shared tool configuration via `package.json`,
   `turbo.json`, `.oxlintrc.json`, and `.oxfmtrc.json`
-- top-level config files such as `io.ts`, `auth.ts`, `vite.config.ts`, and
-  `wrangler.jsonc`
-- repo docs, migrations, and other global assets
+- top-level repo config such as `io.ts`
+- repo docs and other global assets
+
+## Dev
+
+Run `turbo dev --filter=@io/app` from the repo root, or `bun run dev` in this
+package, to start the web app through Turbo and the app-local Vite runtime.
 
 ## Validation
 

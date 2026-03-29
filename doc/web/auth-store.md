@@ -13,13 +13,15 @@ The key boundary is:
 - Better Auth state lives in the dedicated `AUTH_DB` D1 database.
 - Graph state remains in the SQLite-backed `GRAPH_AUTHORITY` Durable Object.
 - Better Auth schema changes are applied through D1 migrations, not through the
-  Durable Object migration block in `wrangler.jsonc`.
+  Durable Object migration block in `lib/app/wrangler.jsonc`.
 
 ## Runtime Surface
 
-- `wrangler.jsonc` declares the `AUTH_DB` D1 binding and points it at
-  `./migrations/auth-store` with its own `better_auth_migrations` table.
-- [`../../auth.ts`](../../auth.ts) exports a Better Auth config entrypoint for
+- [`../../lib/app/wrangler.jsonc`](../../lib/app/wrangler.jsonc) declares the
+  `AUTH_DB` D1 binding and points it at `./migrations/auth-store` with its own
+  `better_auth_migrations` table.
+- [`../../lib/app/auth.ts`](../../lib/app/auth.ts) exports a Better Auth config
+  entrypoint for
   the CLI. It uses in-memory SQLite only to let the Better Auth generator
   produce SQL; it is not the Worker runtime database.
 - [`../../lib/app/src/web/lib/better-auth.ts`](../../lib/app/src/web/lib/better-auth.ts)
@@ -38,19 +40,19 @@ The key boundary is:
 ## Migration Workflow
 
 The committed initial auth-store schema lives at
-[`../../migrations/auth-store/0001_better_auth.sql`](../../migrations/auth-store/0001_better_auth.sql).
+[`../../lib/app/migrations/auth-store/0001_better_auth.sql`](../../lib/app/migrations/auth-store/0001_better_auth.sql).
 
 Use these repo scripts:
 
 - `bun run auth:migrations:create -- <message>`
-- `bun run auth:migrations:generate -- --output migrations/auth-store/<NNNN_name>.sql --yes`
+- `bun run auth:migrations:generate -- --output lib/app/migrations/auth-store/<NNNN_name>.sql --yes`
 - `bun run auth:migrations:apply:local`
 - `bun run auth:migrations:apply:remote`
 
 Local development now also applies pending auth-store migrations automatically
-when `io start` runs. That uses the same `out/wrangler` persistence directory
-as the Vite Cloudflare plugin so the Worker and the migration command point at
-the same local D1 database.
+when `io start` runs. That uses the same `lib/app/out/wrangler` persistence
+directory as the Vite Cloudflare plugin so the Worker and the migration
+command point at the same local D1 database.
 
 Expected flow for future Better Auth schema changes:
 

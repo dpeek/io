@@ -25,8 +25,8 @@ Repo sources used for this guide:
 - `lib/graph-authority/src/authorization.ts`
 - `lib/app/src/graph/runtime/contracts.ts`
 - `lib/graph-module-core/src/core/identity.ts`
-- `package.json`
-- `wrangler.jsonc`
+- `lib/app/package.json`
+- `lib/app/wrangler.jsonc`
 
 Primary external sources used for unresolved runtime details:
 
@@ -104,7 +104,7 @@ Repo:
   - writes validate with `authorizeWrite(...)`
   - `/api/commands` validates with `authorizeCommand(...)`
   - stale `policyVersion` fails closed with `policy.stale_context`
-- `wrangler.jsonc` already enables `nodejs_compat`, which Better Auth expects on
+- `lib/app/wrangler.jsonc` already enables `nodejs_compat`, which Better Auth expects on
   Workers for Node compatibility features.
 
 ### What Is Still Hardcoded, Stubbed, Or Provisional
@@ -120,9 +120,9 @@ Repo:
 - `lib/app/src/web/lib/auth-bridge.ts` now keeps the stable projection seam and also
   owns the Better Auth-specific reduction helpers that turn Worker session
   results into `AuthenticatedSession | null` before principal lookup runs.
-- `package.json` now carries pinned `better-auth` runtime and the current
+- `lib/app/package.json` now carries pinned `better-auth` runtime and the current
   Better Auth `auth` CLI migration dependency.
-- `auth.ts` now gives the Better Auth CLI a repo-local config entrypoint for
+- `lib/app/auth.ts` now gives the Better Auth CLI a repo-local config entrypoint for
   generating committed auth-store SQL migrations.
 - `lib/app/src/web/lib/better-auth.ts` now owns the shared Better Auth Worker factory
   and stable `/api/auth` base path, including optional trusted-origin env
@@ -137,8 +137,9 @@ Repo:
 - graph-backed routes now gate `GraphRuntimeBootstrap` behind that client-side
   session check instead of mounting the full graph proof surface for anonymous
   browsers by default.
-- `wrangler.jsonc` now declares a dedicated `AUTH_DB` D1 binding with a
-  separate `migrations/auth-store` path and `better_auth_migrations` table.
+- `lib/app/wrangler.jsonc` now declares a dedicated `AUTH_DB` D1 binding with a
+  separate `lib/app/migrations/auth-store` path and `better_auth_migrations`
+  table.
 - `lib/app/src/web/lib/graph-authority-do.ts` now exposes a Worker-only internal fetch
   path that resolves a verified auth subject through the authority before the
   public graph routes are forwarded.
@@ -300,7 +301,7 @@ Repo:
 
 - `doc/03-target-platform-architecture.md` already says Better Auth should run
   against a dedicated auth store separate from graph storage.
-- `wrangler.jsonc` currently binds only the graph Durable Object and static
+- `lib/app/wrangler.jsonc` currently binds only the graph Durable Object and static
   assets.
 
 External:
@@ -534,7 +535,7 @@ Do not do this:
 
 Repo:
 
-- `wrangler.jsonc` already includes `"compatibility_flags": ["nodejs_compat"]`.
+- `lib/app/wrangler.jsonc` already includes `"compatibility_flags": ["nodejs_compat"]`.
 
 External:
 
@@ -1009,14 +1010,15 @@ This makes:
 
 The repo now includes the runtime foundation described here:
 
-1. `package.json`
+1. `lib/app/package.json`
    - committed `better-auth` runtime and `auth` CLI migration tooling
-2. `wrangler.jsonc`
+2. `lib/app/wrangler.jsonc`
    - a dedicated `AUTH_DB` D1 binding
-   - a separate `migrations/auth-store` path plus `better_auth_migrations`
+   - a separate `lib/app/migrations/auth-store` path plus
+     `better_auth_migrations`
    - the existing `nodejs_compat`, `GRAPH_AUTHORITY`, and `ASSETS` surfaces
 3. auth database migrations
-   - a committed Better Auth SQL migration workflow rooted at `auth.ts`
+   - a committed Better Auth SQL migration workflow rooted at `lib/app/auth.ts`
    - a dedicated D1 migration path outside the Durable Object migration block
 
 ### File-By-File Change Plan

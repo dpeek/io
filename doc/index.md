@@ -35,9 +35,9 @@ shared env/log/process helpers.
 
 ## Layout
 
-- `../package.json`: Bun workspaces, the pinned package manager version, and
-  root auth-migration scripts
-- `../turbo.json`: repo task graph for `build`, `check`, and `clean`
+- `../package.json`: Bun workspaces, the pinned package manager version, the
+  root Turbo web-dev entrypoint, and app auth-migration proxy scripts
+- `../turbo.json`: repo task graph for `build`, `check`, `clean`, and `dev`
 - `../.oxlintrc.json`, `../.oxfmtrc.json`: repo-wide lint and formatting config
 - `../io.ts`: repo config, context registry, profiles, modules, routing
 - `../io.md`: repo-local execution guidance included in prompt context
@@ -65,6 +65,11 @@ shared env/log/process helpers.
 - `./index.md`: repo map and context entrypoint
 - `../lib/app/`: `@io/app`, the app package for graph helper exports plus the
   browser Worker, routes, and app-owned web composition
+- `../lib/app/auth.ts`, `../lib/app/vite.config.ts`,
+  `../lib/app/wrangler.jsonc`, `../lib/app/index.html`: app-local auth, Vite,
+  Worker, and SPA entry config
+- `../lib/app/migrations/auth-store/`: committed Better Auth D1 migrations for
+  the app-owned auth store
 - `../lib/cli/`: `@op/cli`, the operator shell package for command dispatch,
   task execution, agent/browser-agent runtimes, MCP, TUI, and runtime config
 - `../lib/web/`: `@io/web`, the shared browser primitive package for reusable

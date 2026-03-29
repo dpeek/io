@@ -1258,6 +1258,16 @@ export function WorkflowReviewPage({
   const selectedCommit =
     readState.status === "ready" ? resolveSelectedCommitRow(readState.commitQueue) : undefined;
   const selectedCommitId = selectedCommit?.commit.id;
+  const selectedProjectId =
+    startupState.kind === "ready" || startupState.kind === "partial-data"
+      ? startupState.project.id
+      : undefined;
+  const startupSelectedBranchId =
+    startupState.kind === "ready" ? startupState.selectedBranch?.id : undefined;
+  const readyBranchBoardProjectId =
+    readState.status === "ready" ? readState.branchBoard.project.id : undefined;
+  const readyCommitQueueBranchId =
+    readState.status === "ready" ? readState.commitQueue?.branch.branch.id : undefined;
   const commitAction = useMemo(
     () =>
       createCommitSessionActionModel({
@@ -1296,18 +1306,25 @@ export function WorkflowReviewPage({
       runtimeState.status !== "ready" ||
       startupState.kind !== "ready"
     ) {
-      setBranchLookupState({ status: "idle" });
+      setBranchLookupState((current) => (current.status === "idle" ? current : { status: "idle" }));
       return;
     }
 
-    const branchId = startupState.selectedBranch?.id;
+    const branchId = startupSelectedBranchId;
     if (!branchId) {
-      setBranchLookupState({ status: "idle" });
+      setBranchLookupState((current) => (current.status === "idle" ? current : { status: "idle" }));
+      return;
+    }
+    const projectId = selectedProjectId;
+    if (!projectId) {
+      setBranchLookupState((current) => (current.status === "idle" ? current : { status: "idle" }));
       return;
     }
 
     let cancelled = false;
-    setBranchLookupState({ status: "checking" });
+    setBranchLookupState((current) =>
+      current.status === "checking" ? current : { status: "checking" },
+    );
     void requestBrowserAgentActiveSessionLookup({
       actor: {
         principalId: auth.principalId,
@@ -1315,7 +1332,7 @@ export function WorkflowReviewPage({
         surface: "browser",
       },
       kind: "planning",
-      projectId: startupState.project.id,
+      projectId,
       subject: {
         kind: "branch",
         branchId,
@@ -1344,7 +1361,15 @@ export function WorkflowReviewPage({
     return () => {
       cancelled = true;
     };
-  }, [auth, runtimeState, startupState]);
+  }, [
+    auth.principalId,
+    auth.sessionId,
+    auth.status,
+    runtimeState.status,
+    selectedProjectId,
+    startupSelectedBranchId,
+    startupState.kind,
+  ]);
 
   useEffect(() => {
     if (
@@ -1352,19 +1377,28 @@ export function WorkflowReviewPage({
       runtimeState.status !== "ready" ||
       readState.status !== "ready"
     ) {
-      setCommitLookupState({ status: "idle" });
+      setCommitLookupState((current) => (current.status === "idle" ? current : { status: "idle" }));
       return;
     }
 
-    const selectedCommit = resolveSelectedCommitRow(readState.commitQueue);
     const commitQueue = readState.commitQueue;
+    const selectedCommit = resolveSelectedCommitRow(commitQueue);
     if (!selectedCommit || !commitQueue) {
-      setCommitLookupState({ status: "idle" });
+      setCommitLookupState((current) => (current.status === "idle" ? current : { status: "idle" }));
+      return;
+    }
+    const projectId = readyBranchBoardProjectId;
+    const branchId = readyCommitQueueBranchId;
+    const commitId = selectedCommitId;
+    if (!projectId || !branchId || !commitId) {
+      setCommitLookupState((current) => (current.status === "idle" ? current : { status: "idle" }));
       return;
     }
 
     let cancelled = false;
-    setCommitLookupState({ status: "checking" });
+    setCommitLookupState((current) =>
+      current.status === "checking" ? current : { status: "checking" },
+    );
     void requestBrowserAgentActiveSessionLookup({
       actor: {
         principalId: auth.principalId,
@@ -1372,11 +1406,11 @@ export function WorkflowReviewPage({
         surface: "browser",
       },
       kind: "execution",
-      projectId: readState.branchBoard.project.id,
+      projectId,
       subject: {
         kind: "commit",
-        branchId: commitQueue.branch.branch.id,
-        commitId: selectedCommit.commit.id,
+        branchId,
+        commitId,
       },
     })
       .then((result) => {
@@ -1402,7 +1436,16 @@ export function WorkflowReviewPage({
     return () => {
       cancelled = true;
     };
-  }, [auth, readState, runtimeState]);
+  }, [
+    auth.principalId,
+    auth.sessionId,
+    auth.status,
+    readState.status,
+    readyBranchBoardProjectId,
+    readyCommitQueueBranchId,
+    runtimeState.status,
+    selectedCommitId,
+  ]);
 
   useEffect(() => {
     let cancelled = false;

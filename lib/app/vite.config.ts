@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindPlugin from "@tailwindcss/vite";
@@ -6,23 +6,26 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+const appRoot = fileURLToPath(new URL(".", import.meta.url));
+
 export default defineConfig({
   plugins: [
     cloudflare({
       persistState: {
-        path: resolve("./out/wrangler"),
+        path: fileURLToPath(new URL("./out/wrangler", import.meta.url)),
       },
     }),
     tanstackRouter({
       target: "react",
       autoCodeSplitting: true,
-      routesDirectory: "./lib/app/src/web/routes",
-      generatedRouteTree: "./lib/app/src/web/routeTree.gen.ts",
+      routesDirectory: fileURLToPath(new URL("./src/web/routes", import.meta.url)),
+      generatedRouteTree: fileURLToPath(new URL("./src/web/routeTree.gen.ts", import.meta.url)),
     }),
     react(),
     tailwindPlugin(),
   ],
   build: {
-    outDir: resolve("./out/web"),
+    outDir: fileURLToPath(new URL("./out/web", import.meta.url)),
   },
+  root: appRoot,
 });

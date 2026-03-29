@@ -8,8 +8,6 @@ const requiredExports = [
   "createAuthoritativeGraphWriteSession",
   "createAuthoritativeTotalSyncPayload",
   "createAuthoritativeTotalSyncValidator",
-  "createJsonPersistedAuthoritativeGraph",
-  "createJsonPersistedAuthoritativeGraphStorage",
   "createPersistedAuthoritativeGraph",
   "defineAdmissionPolicy",
   "defineShareGrant",
@@ -41,5 +39,20 @@ describe("@io/graph-authority", () => {
     for (const name of forbiddenExports) {
       expect(Object.keys(authorityExports)).not.toContain(name);
     }
+    expect(Object.keys(authorityExports)).not.toContain("createJsonPersistedAuthoritativeGraph");
+    expect(Object.keys(authorityExports)).not.toContain(
+      "createJsonPersistedAuthoritativeGraphStorage",
+    );
+  });
+
+  it("exposes node-backed persistence helpers from the server subpath", async () => {
+    const authorityServerExports = await import("@io/graph-authority/server");
+
+    expect(Object.keys(authorityServerExports)).toEqual(
+      expect.arrayContaining([
+        "createJsonPersistedAuthoritativeGraph",
+        "createJsonPersistedAuthoritativeGraphStorage",
+      ]),
+    );
   });
 });

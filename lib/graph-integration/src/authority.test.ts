@@ -22,7 +22,6 @@ import { validateIncrementalSyncResult } from "@io/graph-sync";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 import {
   authorizeRead,
-  createJsonPersistedAuthoritativeGraph,
   createAuthoritativeGraphWriteSession,
   createAuthoritativeTotalSyncPayload,
   createPersistedAuthoritativeGraph,
@@ -32,6 +31,7 @@ import {
   type PersistedAuthoritativeGraphStorage,
   type PersistedAuthoritativeGraphStorageLoadResult,
 } from "@io/graph-authority";
+import { createJsonPersistedAuthoritativeGraph } from "@io/graph-authority/server";
 
 import { kitchenSink } from "./fixtures/kitchen-sink.js";
 

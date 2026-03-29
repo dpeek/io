@@ -45,11 +45,11 @@ authoritative graph behavior.
 
 ## Public API
 
-`@io/graph-authority` exposes a single public entrypoint from `./src/index.ts`.
+`@io/graph-authority` exposes a browser-safe root entrypoint from `./src/index.ts`
+plus a Node-only `@io/graph-authority/server` subpath for filesystem-backed
+helpers.
 
-- persisted authority runtime: `createPersistedAuthoritativeGraph`,
-  `createJsonPersistedAuthoritativeGraph`,
-  `createJsonPersistedAuthoritativeGraphStorage`
+- persisted authority runtime: `createPersistedAuthoritativeGraph`
 - write/session helpers: `createAuthoritativeGraphWriteSession`,
   `createAuthoritativeTotalSyncPayload`
 - validation helpers: `validateAuthoritativeGraphWriteTransaction`,
@@ -62,6 +62,9 @@ authoritative graph behavior.
 - graph-owned policy contracts: `AuthorizationContext`, `AdmissionPolicy`,
   `CapabilityGrant`, `ShareGrant`, `PrincipalRoleBinding`, `GraphCommandPolicy`,
   `WebPrincipalBootstrapPayload`, `ModulePermissionApprovalRecord`
+- server-only persistence helpers from `@io/graph-authority/server`:
+  `createJsonPersistedAuthoritativeGraph`,
+  `createJsonPersistedAuthoritativeGraphStorage`
 
 ## Build Output
 

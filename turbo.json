@@ -7,14 +7,16 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**"],
       "outputs": ["out/**"]
     },
     "check": {
       "dependsOn": ["^check"],
-      "inputs": ["src/**"],
       "outputs": [],
       "outputLogs": "errors-only"
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
     }
   }
 }

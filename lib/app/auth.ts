@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 
-import { createBetterAuth } from "./lib/app/src/web/lib/better-auth.js";
+import { createBetterAuth } from "@io/app/web/better-auth";
 
 // The Better Auth CLI needs a concrete sqlite database to infer the auth
 // schema. Use a Node-compatible sqlite driver here because the CLI loads this

@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./agent": "./src/agent/index.ts",
     "./browser-agent": "./src/browser-agent/index.ts",
+    "./browser-agent/server": "./src/browser-agent/server-index.ts",
     "./config": "./src/lib/config.ts",
     "./mcp": "./src/mcp/index.ts",
     "./tui": "./src/tui/index.ts"

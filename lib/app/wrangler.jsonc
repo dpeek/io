@@ -1,9 +1,9 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "io",
   "compatibility_date": "2026-02-12",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "./lib/app/src/web/worker/index.ts",
+  "main": "./src/web/worker/index.ts",
   "preview_urls": true,
   "durable_objects": {
     "bindings": [

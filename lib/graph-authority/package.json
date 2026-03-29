@@ -10,6 +10,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./out/index.js"
+    },
+    "./server": {
+      "types": "./src/server.ts",
+      "default": "./out/server.js"
     }
   },
   "scripts": {

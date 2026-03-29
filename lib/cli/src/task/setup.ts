@@ -1,6 +1,6 @@
 const vscodeSettings = {
   "editor.defaultFormatter": "oxc.oxc-vscode",
-  "oxc.fmt.configPath": "./vite.config.ts",
+  "oxc.fmt.configPath": "./.oxfmtrc.json",
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",
   "editor.codeActionsOnSave": {

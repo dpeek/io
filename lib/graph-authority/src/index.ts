@@ -7,10 +7,6 @@
  * sync-core contracts, clients, and web adapters stay outside this package.
  */
 export {
-  createJsonPersistedAuthoritativeGraph,
-  createJsonPersistedAuthoritativeGraphStorage,
-} from "./json-storage.js";
-export {
   createPersistedAuthoritativeGraph,
   persistedAuthoritativeGraphStateVersion,
   type JsonPersistedAuthoritativeGraphOptions,

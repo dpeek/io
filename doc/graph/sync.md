@@ -15,9 +15,11 @@ The relevant package split is now:
 - `@io/graph-projection`: shared module scope definitions, projection metadata, dependency keys, invalidation contracts, and retained projection compatibility helpers
 - `@io/graph-sync`: sync contracts, cursor helpers, sync-core validation, sync-specific transaction materialization/apply helpers, and total sync sessions
 - `@io/graph-client`: synced-client runtime behavior, including the runtime-only `"pushing"` flush state
-- `@io/graph-authority`: shipped JSON persistence adapter, durable authority
-  contracts and startup recovery behavior, plus authoritative write-session
-  state, history replay, and incremental delivery
+- `@io/graph-authority`: durable authority contracts and startup recovery
+  behavior, plus authoritative write-session state, history replay, and
+  incremental delivery
+- `@io/graph-authority/server`: shipped JSON persistence adapter for Node
+  environments
 
 ## Current Contract
 
@@ -182,9 +184,7 @@ The current live workflow proof layers on top of that scoped sync baseline:
 Import these from `@io/graph-authority`:
 
 - `createAuthoritativeGraphWriteSession(store, namespace)`
-- `createJsonPersistedAuthoritativeGraph(store, namespace, { path, ... })`
 - `createPersistedAuthoritativeGraph(store, namespace, { storage, ... })`
-- `createJsonPersistedAuthoritativeGraphStorage(path, namespace)`
 - `apply(transaction)`
 - `getBaseCursor()`
 - `getCursor()`
@@ -193,6 +193,11 @@ Import these from `@io/graph-authority`:
 - `getChangesAfter(cursor?)`
 - `getIncrementalSyncResult(after?, { freshness?, authorizeRead? })`
 - `getHistory()`
+
+Import these from `@io/graph-authority/server`:
+
+- `createJsonPersistedAuthoritativeGraph(store, namespace, { path, ... })`
+- `createJsonPersistedAuthoritativeGraphStorage(path, namespace)`
 
 The current authority session already treats transaction ids as idempotency keys and emits monotonic cursors.
 The persisted authority helper layers restart hydration, per-transaction durable commits, explicit snapshot persistence, retained history recovery, legacy snapshot rewrite, and rollback-on-durable-write-failure on top of that session model without changing the sync payload shapes clients consume.

@@ -143,9 +143,12 @@ Current editor interaction model:
 - `../../lib/app/src/web/router.tsx`, `../../lib/app/src/web/routeTree.gen.ts`: router assembly
   and generated route tree for the SPA routes, including `/workflow` and
   `/graph`
-- `../../auth.ts`: Better Auth CLI config entrypoint that keeps schema
+- `../../lib/app/auth.ts`: Better Auth CLI config entrypoint that keeps schema
   generation on a dedicated auth-store path without coupling it to the Worker's
   runtime bindings
+- `../../lib/app/vite.config.ts`, `../../lib/app/wrangler.jsonc`,
+  `../../lib/app/index.html`: app-local Vite, Worker, and SPA entry config for
+  the shipped web runtime
 - `../../lib/app/src/web/routes/`: top-level pages including `workflow`, `sync`,
   `views`, and the graph explorer routes
 - `../../lib/app/src/web/components/home-page.tsx`: session-aware landing page that
@@ -384,6 +387,6 @@ The current Branch 3 browser model stays fail closed.
   explicit initial role-binding workflow
 - `../../lib/app/src/web/lib/graph-authority-do.test.ts`: Durable Object lookup-and-
   repair coverage for the same first authenticated-use admission branches
-- `../../migrations/auth-store/`: committed Better Auth schema migrations for
-  the dedicated D1 auth store, applied separately from Durable Object
-  migrations
+- `../../lib/app/migrations/auth-store/`: committed Better Auth schema
+  migrations for the dedicated D1 auth store, applied separately from Durable
+  Object migrations

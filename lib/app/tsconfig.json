@@ -4,8 +4,8 @@
   "compilerOptions": {
     "types": ["@types/bun", "node"],
     "outDir": "./out",
-    "rootDir": "./src"
+    "rootDir": "."
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "auth.ts", "vite.config.ts"],
   "exclude": ["**/*.test.ts"]
 }
