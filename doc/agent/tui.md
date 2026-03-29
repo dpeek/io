@@ -4,7 +4,7 @@
 
 The agent-owned TUI renders the legacy operator-facing session UI for IO runs on
 top of the retained runtime and normalized event stream produced by `agent`.
-The new graph-backed workflow product shell now lives in `../../lib/app/src/tui/*`.
+The new graph-backed workflow product shell now lives in `../../lib/cli/src/tui/*`.
 
 ## Entry Points
 
@@ -18,7 +18,7 @@ The new graph-backed workflow product shell now lives in `../../lib/app/src/tui/
 ## Current Behavior
 
 - live mode subscribes to the session event bus emitted by
-  [service.ts](../../lib/app/src/agent/service.ts)
+  [service.ts](../../lib/cli/src/agent/service.ts)
 - retained modes rebuild session state from runtime files, retained events, and
   `codex.stdout.jsonl`
 - the default live store keeps the two most recent terminal worker sessions
@@ -28,11 +28,11 @@ The new graph-backed workflow product shell now lives in `../../lib/app/src/tui/
 
 ## Migration Boundary
 
-- `../../lib/app/src/agent/tui/*` remains the retained session monitor while the
-  graph-backed workflow shell in `../../lib/app/src/tui/*` stays focused on workflow
+- `../../lib/cli/src/agent/tui/*` remains the retained session monitor while the
+  graph-backed workflow shell in `../../lib/cli/src/tui/*` stays focused on workflow
   board, detail, and commit-queue composition
 - do not add new workflow product-shell panels here; branch selection and
-  commit-queue UX belong in `../../lib/app/src/tui/*`
+  commit-queue UX belong in `../../lib/cli/src/tui/*`
 - when session launch moves into the workflow shell, keep shared event
   envelopes and transcript formatting reusable, but move workflow-specific
   chrome and selection logic from the new shell rather than expanding the
@@ -50,18 +50,18 @@ The new graph-backed workflow product shell now lives in `../../lib/app/src/tui/
 
 ## Code Surface
 
-- [agent/server.ts](../../lib/app/src/agent/server.ts): CLI modes and retained TUI
+- [agent/server.ts](../../lib/cli/src/agent/server.ts): CLI modes and retained TUI
   command parsing
-- [agent/tui-runtime.ts](../../lib/app/src/agent/tui-runtime.ts): retained replay and
+- [agent/tui-runtime.ts](../../lib/cli/src/agent/tui-runtime.ts): retained replay and
   attach support
-- [agent/tui/store.ts](../../lib/app/src/agent/tui/store.ts): retained session state and
+- [agent/tui/store.ts](../../lib/cli/src/agent/tui/store.ts): retained session state and
   pruning rules
-- [agent/tui/transcript.ts](../../lib/app/src/agent/tui/transcript.ts): transcript
+- [agent/tui/transcript.ts](../../lib/cli/src/agent/tui/transcript.ts): transcript
   shaping and block formatting
-- [agent/tui/layout.ts](../../lib/app/src/agent/tui/layout.ts) and
-  [agent/tui/tui.tsx](../../lib/app/src/agent/tui/tui.tsx): layout and rendering
-- [agent/tui/session-events.ts](../../lib/app/src/agent/tui/session-events.ts) and
-  [agent/tui/codex-event-stream.ts](../../lib/app/src/agent/tui/codex-event-stream.ts):
+- [agent/tui/layout.ts](../../lib/cli/src/agent/tui/layout.ts) and
+  [agent/tui/tui.tsx](../../lib/cli/src/agent/tui/tui.tsx): layout and rendering
+- [agent/tui/session-events.ts](../../lib/cli/src/agent/tui/session-events.ts) and
+  [agent/tui/codex-event-stream.ts](../../lib/cli/src/agent/tui/codex-event-stream.ts):
   event schema and Codex stream normalization
-- [agent/tui/ui.test.ts](../../lib/app/src/agent/tui/ui.test.ts): UI/runtime regression
+- [agent/tui/ui.test.ts](../../lib/cli/src/agent/tui/ui.test.ts): UI/runtime regression
   coverage

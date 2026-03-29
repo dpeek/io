@@ -18,12 +18,12 @@ import type {
   CodexSessionLaunchPreference,
   CodexSessionLaunchResult,
   CodexSessionLaunchSuccess,
-} from "../../browser-agent/transport.js";
+} from "@op/cli/browser-agent";
 import {
   probeBrowserAgentRuntime,
   requestBrowserAgentActiveSessionLookup,
   requestBrowserAgentLaunch,
-} from "../../browser-agent/transport.js";
+} from "@op/cli/browser-agent";
 import {
   createWorkflowReviewStartupContract,
   resolveCanonicalWorkflowRouteSearch,

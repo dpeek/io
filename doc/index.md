@@ -5,6 +5,8 @@
 `io` is the repo-level package. It owns the shared project map: agent runtime,
 context and config resolution, the stream/feature/task workflow contract, and
 the graph-first application direction the rest of the workspace is proving.
+The operator/runtime implementation now lives in `@op/cli`, while `@io/app`
+stays focused on graph and web application surfaces.
 
 ## Docs
 
@@ -52,14 +54,18 @@ the graph-first application direction the rest of the workspace is proving.
 - `./README.md`: architecture and vision doc map for the numbered roadmap and branch docs
 - `./branch/README.md`: platform branches as parallel workstreams with canonical specs where available
 - `./index.md`: repo map and context entrypoint
-- `../lib/app/src/agent/`: scheduler, context assembly, tracker integration, retained runtime,
+- `../lib/cli/`: `@op/cli`, the operator shell package for command dispatch,
+  task execution, agent/browser-agent runtimes, MCP, TUI, and runtime config
+- `../lib/cli/src/agent/`: scheduler, context assembly, tracker integration, retained runtime,
   and the operator TUI
-- `../lib/app/src/tui/`: graph-backed terminal workflow product surface
-- `../lib/app/src/lib/`: shared config loading and typed config surface
+- `../lib/cli/src/tui/`: graph-backed terminal workflow product surface
+- `../lib/cli/src/lib/config.ts`: runtime config loading, normalization, and typed config surface
+- `../lib/app/src/lib/`: generic process, env, and logging helpers that have not
+  been extracted yet
 - `../lib/app/src/graph/`: root `@io/app/graph` wrappers, local schema and module
   authoring, graph adapters, and graph-owned icon helpers
 - `../lib/graph-*/`: extracted graph kernel, bootstrap, client, authority,
   sync, and projection packages
 - `../lib/app/src/web/`: worker-backed browser surfaces and the SQLite Durable Object
   authority path that backs the web shell
-- `../lib/app/src/cli/`: operator command surface
+- `../lib/cli/src/cli/`: operator command surface

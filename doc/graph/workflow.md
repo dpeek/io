@@ -262,9 +262,9 @@ directly, but the ownership line stays explicit:
 - `graph` owns the fixed workflow review sync scope descriptor,
   `createWorkflowProjectionIndex(...)`, and the stable
   `ProjectBranchScope` plus `CommitQueueScope` read contracts
-- `../../lib/app/src/tui/server.ts` owns CLI parsing, graph URL selection, initial
+- `../../lib/cli/src/tui/server.ts` owns CLI parsing, graph URL selection, initial
   project-and-branch resolution, and startup failure presentation
-- `../../lib/app/src/tui/startup.ts` owns the startup contract defaults and the
+- `../../lib/cli/src/tui/startup.ts` owns the startup contract defaults and the
   `--graph-url` / workflow-config / default precedence that selects the graph
   source before hydration starts
 - the first TUI hydration remains read-only: it consumes graph-backed

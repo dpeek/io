@@ -1,4 +1,4 @@
-import { defineIoConfig, env, linearTracker } from "@io/app/lib/config";
+import { defineIoConfig, env, linearTracker } from "@op/cli/config";
 
 const reviewPlanningEnabled = false;
 
@@ -64,9 +64,9 @@ export default defineIoConfig({
   },
   modules: {
     agent: {
-      allowedSharedPaths: ["./lib/app/src"],
+      allowedSharedPaths: ["./lib/cli/src"],
       docs: ["./doc/agent/index.md", "./doc/agent/workflow.md"],
-      path: "./lib/app/src/agent",
+      path: "./lib/cli/src/agent",
     },
     graph: {
       allowedSharedPaths: ["./lib/app/src"],

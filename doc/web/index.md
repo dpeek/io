@@ -71,7 +71,7 @@ Current proof anchors:
 ## Ownership Boundary
 
 `web` is the browser product surface package, not the shared browser-primitive
-package. The terminal sibling surface lives in `../../lib/app/src/tui/*`.
+package. The terminal sibling surface lives in `../../lib/cli/src/tui/*`.
 
 - keep reusable browser UI and editor chrome in `../../lib/web/src/*`
 - keep graph-aware field resolver, predicate mutation, and typed preview logic
@@ -96,7 +96,7 @@ and compatibility surface for the first shipped board and commit-queue reads.
 Those routes are still web-owned surfaces rather than published graph-owned
 command registries. Browser launch and attach do not go through Worker routes:
 the browser now probes a separate localhost `browser-agent` runtime over
-`../../lib/app/src/browser-agent/transport.ts`, and `/workflow` keeps unavailable local
+`../../lib/cli/src/browser-agent/transport.ts`, and `/workflow` keeps unavailable local
 runtime state explicit until that bridge is reachable.
 command registries. The shared browser query-container contract now also lives
 behind the dedicated `@io/app/web/query-container` export, so routes can bind
@@ -127,7 +127,7 @@ Current editor interaction model:
   serialized/normalized inspectors stay fail closed when the draft is invalid
 - browser launch and attach do not go through Worker routes: the browser now
   probes a separate localhost `browser-agent` runtime over
-  `../../lib/app/src/browser-agent/transport.ts`, and `/workflow` keeps unavailable
+  `../../lib/cli/src/browser-agent/transport.ts`, and `/workflow` keeps unavailable
   local runtime state explicit until that bridge is reachable
 
 ## Docs
@@ -266,7 +266,7 @@ Current editor interaction model:
   loop that keeps `/workflow` registered against workflow-review live
   invalidations, triggers scoped refreshes only, and tears the registration
   down on route exit
-- `../../lib/app/src/browser-agent/transport.ts`: shared localhost browser-agent
+- `../../lib/cli/src/browser-agent/transport.ts`: shared localhost browser-agent
   transport contract covering runtime health, launch-session requests, and
   active-session lookup so browser and local runtime use the same typed bridge
 

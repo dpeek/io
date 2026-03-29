@@ -52,10 +52,10 @@ surface:
   `WorkflowArtifact`, `WorkflowDecision`, and `ContextBundle` in
   `doc/graph/workflow.md`
 - `tui` already proves the desired branch-board, branch-detail, commit-queue,
-  and subject-scoped action model in `lib/app/src/tui/*`
+  and subject-scoped action model in `lib/cli/src/tui/*`
 - `agent` already exposes a canonical session event envelope in
-  `lib/app/src/agent/tui/session-events.ts` and a live subscription seam in
-  `lib/app/src/agent/service.ts`
+  `lib/cli/src/agent/tui/session-events.ts` and a live subscription seam in
+  `lib/cli/src/agent/service.ts`
 
 ### What the current browser route does now
 
@@ -93,9 +93,9 @@ Today it already proves:
 
 But it still does not launch anything on `main`.
 
-- `lib/app/src/tui/tui.tsx` supports an `onAction` callback, but the CLI bootstrap in
-  `lib/app/src/tui/server.ts` does not wire one
-- `lib/app/src/tui/model.ts` still states that the first contract does not launch
+- `lib/cli/src/tui/tui.tsx` supports an `onAction` callback, but the CLI bootstrap in
+  `lib/cli/src/tui/server.ts` does not wire one
+- `lib/cli/src/tui/model.ts` still states that the first contract does not launch
   sessions or perform workflow writes
 
 That matters because the TUI is the best semantic reference for the workflow
@@ -105,11 +105,11 @@ surface, but it is not yet the shipping execution path either.
 
 Live session behavior is still agent-owned:
 
-- the canonical event schema is in `lib/app/src/agent/tui/session-events.ts`
+- the canonical event schema is in `lib/cli/src/agent/tui/session-events.ts`
 - live publication is process-local through `createAgentSessionEventBus()`
 - `AgentService.observeSessionEvents(...)` is an in-memory subscription seam
 - retained attach and replay are still rebuilt from runtime files in
-  `lib/app/src/agent/tui-runtime.ts` and described in `doc/agent/tui.md`
+  `lib/cli/src/agent/tui-runtime.ts` and described in `doc/agent/tui.md`
 
 The repo does not currently implement a graph-backed `AgentSessionAppend`
 write path. The contract exists in `doc/branch/06-workflow-and-agent-runtime.md`,
@@ -267,7 +267,7 @@ different branch.
 
 Implementation notes:
 
-- treat `lib/app/src/tui/model.ts` as the semantic reference
+- treat `lib/cli/src/tui/model.ts` as the semantic reference
 - do not import TUI layout or OpenTUI code into the browser
 - extract shared workflow action-policy logic if the browser needs the same
   availability rules
@@ -468,13 +468,13 @@ Acceptance criteria:
 ### Shared workflow policy
 
 - extract a shared action-policy and subject-state layer from the semantics
-  currently embedded in `lib/app/src/tui/model.ts`
+  currently embedded in `lib/cli/src/tui/model.ts`
 - keep layout and interaction rendering web-owned and TUI-owned separately
 
 ### Browser-agent runtime
 
-- add a new local runtime package or entrypoint under `lib/app/src/agent/` or
-  `lib/app/src/browser-agent/`
+- add a new local runtime package or entrypoint under `lib/cli/src/agent/` or
+  `lib/cli/src/browser-agent/`
 - keep workspace, PTY, git, and Codex runner ownership there
 - teach it to append authoritative session history as it executes
 

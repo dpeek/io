@@ -34,8 +34,8 @@ The current run profile is concentrated in a small number of suites:
 - `lib/app/src/web/lib/graph-authority-do.test.ts`: about `53.4s`
 - `lib/app/src/web/lib/workflow-authority.test.ts`: about `50.9s`
 - `lib/app/src/web/lib/example-runtime.test.ts`: about `14.2s`
-- `lib/app/src/agent/workspace.test.ts`: about `16.4s`
-- `lib/app/src/mcp/graph.test.ts`: about `7.5s`
+- `lib/cli/src/agent/workspace.test.ts`: about `16.4s`
+- `lib/cli/src/mcp/graph.test.ts`: about `7.5s`
 
 The web authority tests alone account for about `194s` of testcase time. That
 is the critical path.
@@ -63,9 +63,9 @@ Intermediate milestones from the same day:
 
 Slowest files in that JUnit profile:
 
-- `lib/app/src/agent/workspace.test.ts`: `7.13s`
+- `lib/cli/src/agent/workspace.test.ts`: `7.13s`
 - `lib/app/src/web/lib/graph-authority-do.test.ts`: `2.70s`
-- `lib/app/src/mcp/graph.test.ts`: `2.69s`
+- `lib/cli/src/mcp/graph.test.ts`: `2.69s`
 - `lib/app/src/web/components/explorer/catalog.test.ts`: `2.40s`
 - `lib/app/src/web/lib/authority.test.ts`: `2.32s`
 - `lib/app/src/graph/validation-lifecycle.test.ts`: `2.07s`
@@ -73,9 +73,9 @@ Slowest files in that JUnit profile:
 
 Slowest individual testcases in that profile:
 
-- `lib/app/src/mcp/graph.test.ts`: `reports synced graph status for the product namespace` at `2.32s`
-- `lib/app/src/agent/workspace.test.ts`: `WorkspaceManager lands task work onto the latest parent feature branch` at `1.48s`
-- `lib/app/src/agent/workspace.test.ts`: `WorkspaceManager squashes a done feature branch onto its stream branch and cleans up` at `1.36s`
+- `lib/cli/src/mcp/graph.test.ts`: `reports synced graph status for the product namespace` at `2.32s`
+- `lib/cli/src/agent/workspace.test.ts`: `WorkspaceManager lands task work onto the latest parent feature branch` at `1.48s`
+- `lib/cli/src/agent/workspace.test.ts`: `WorkspaceManager squashes a done feature branch onto its stream branch and cleans up` at `1.36s`
 - `lib/app/src/web/lib/example-runtime.test.ts`: `proves peers catch up through ordered incremental delivery without extra total snapshots` at `1.32s`
 - `lib/app/src/web/components/explorer/catalog.test.ts`: `builds entity entries with handles for every explorer entity type` at `1.22s`
 - `lib/app/src/web/lib/authority.test.ts`: `allows authority-only commands to reuse the shared authority command seam` at `1.19s`
@@ -110,14 +110,14 @@ Implemented on 2026-03-23:
 - `lib/app/src/web/lib/example-runtime.ts` now reuses a cached seeded authority
   baseline and records hidden-only cursor mutations directly instead of
   rebuilding and diffing a fresh seeded runtime graph for every test case.
-- `lib/app/src/mcp/schema.ts` and `lib/app/src/mcp/graph.ts` now cache MCP schema/session
-  metadata per namespace, and `lib/app/src/mcp/graph.test.ts` plus
+- `lib/cli/src/mcp/schema.ts` and `lib/cli/src/mcp/graph.ts` now cache MCP schema/session
+  metadata per namespace, and `lib/cli/src/mcp/graph.test.ts` plus
   `lib/graph-authority/src/authority.test.ts` now reuse cached bootstrapped or
   seeded snapshots instead of repeating raw schema bootstrap in every case.
 - `lib/app/src/web/lib/example-runtime.test.ts` now uses an explicit `20_000ms`
   default timeout so the full profiled suite is stable under the slower JUnit
   reporter.
-- `lib/app/src/agent/workspace.test.ts` now keeps only the essential git integration
+- `lib/cli/src/agent/workspace.test.ts` now keeps only the essential git integration
   proofs: detached issue bootstrap, dirty-work resume/issue switch guard,
   detached landing, standalone stream finalization, child-task landing onto
   the latest parent feature branch, rebase-conflict preservation, feature to
@@ -126,15 +126,15 @@ Implemented on 2026-03-23:
 
 Validation completed for this pass:
 
-- `bun check lib/app/src/agent`
-- `bun test lib/app/src/agent/workspace.test.ts`
+- `bun check lib/cli/src/agent`
+- `bun test lib/cli/src/agent/workspace.test.ts`
 - `bun check src`
 - `bun test ./src --reporter=junit --reporter-outfile tmp/bun-junit.xml`
 
 Remaining hotspots:
 
-- `lib/app/src/agent/workspace.test.ts`
-- `lib/app/src/mcp/graph.test.ts`
+- `lib/cli/src/agent/workspace.test.ts`
+- `lib/cli/src/mcp/graph.test.ts`
 - `lib/app/src/web/lib/graph-authority-do.test.ts`
 - `lib/app/src/web/components/explorer/catalog.test.ts`
 - `lib/app/src/graph/validation-lifecycle.test.ts`
@@ -143,7 +143,7 @@ Remaining hotspots:
 
 ### Git-heavy workspace integration
 
-`lib/app/src/agent/workspace.test.ts` still shells out to real `git`, worktree,
+`lib/cli/src/agent/workspace.test.ts` still shells out to real `git`, worktree,
 merge, and rebase flows, but it is now down to the eight end-to-end behaviors
 that matter most. At `7.13s`, it is still the slowest individual file, but it
 no longer dominates the loop. Further reduction would likely mean mocking away
@@ -151,7 +151,7 @@ behavior we still want covered with real repositories.
 
 ### MCP cold-start integration
 
-`lib/app/src/mcp/graph.test.ts` is now mostly one cold-start case:
+`lib/cli/src/mcp/graph.test.ts` is now mostly one cold-start case:
 `createGraphMcpSession > reports synced graph status for the product
 namespace`. The rest of the MCP suite is already down in the tens of
 milliseconds.
@@ -166,12 +166,12 @@ integration costs after the workspace suite.
 
 The original web authority bottleneck is no longer first-order:
 
-- `lib/app/src/agent/workspace.test.ts`: `17.82s` -> `7.13s`
+- `lib/cli/src/agent/workspace.test.ts`: `17.82s` -> `7.13s`
 - `lib/app/src/web/lib/authority.test.ts`: `22.20s` -> `2.32s`
 - `lib/app/src/web/lib/graph-authority-do.test.ts`: `25.55s` -> `2.70s`
 - `lib/app/src/web/lib/workflow-authority.test.ts`: `6.53s` -> `0.49s`
 - `lib/app/src/web/lib/example-runtime.test.ts`: `14.47s` -> `1.73s`
-- `lib/app/src/mcp/graph.test.ts`: `7.72s` -> `2.69s`
+- `lib/cli/src/mcp/graph.test.ts`: `7.72s` -> `2.69s`
 - `lib/graph-authority/src/authority.test.ts`: `2.76s` -> `0.31s`
 
 ## Success Criteria
@@ -238,9 +238,9 @@ Expected outcome:
 
 ## Recommended Order
 
-1. Triage the cold-start `lib/app/src/mcp/graph.test.ts` session-status case.
+1. Triage the cold-start `lib/cli/src/mcp/graph.test.ts` session-status case.
 2. Triage `lib/app/src/web/lib/graph-authority-do.test.ts` and `lib/app/src/web/components/explorer/catalog.test.ts`.
-3. Revisit `lib/app/src/agent/workspace.test.ts` only if a low-complexity fixture-sharing improvement appears.
+3. Revisit `lib/cli/src/agent/workspace.test.ts` only if a low-complexity fixture-sharing improvement appears.
 4. Reassess whether further optimization is worth the maintenance cost.
 
 ## Validation After Each Step

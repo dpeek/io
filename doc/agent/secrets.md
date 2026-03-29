@@ -36,4 +36,4 @@ contracts it described are now implemented.
 - [runtime schema](../../lib/app/src/graph/runtime/schema.ts)
 - [type-module helpers](../../lib/graph-module/src/type-module.ts)
 - [web authority](../../lib/app/src/web/lib/authority.ts)
-- [MCP schema filtering](../../lib/app/src/mcp/schema.ts)
+- [MCP schema filtering](../../lib/cli/src/mcp/schema.ts)

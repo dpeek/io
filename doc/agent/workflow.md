@@ -9,7 +9,7 @@ assembly, and module-scoped doc selection. For the user-facing
 
 ## Current Entry Model
 
-- [workflow.ts](../../lib/app/src/agent/workflow.ts) accepts either `./io.ts` or
+- [workflow.ts](../../lib/cli/src/agent/workflow.ts) accepts either `./io.ts` or
   `./io.md` as the entrypoint path.
 - When no path is passed, the loader looks for both files in the repo root and
   fails if only one exists.
@@ -51,7 +51,7 @@ current matters for `graph`-labeled issue context.
 
 ## Routing
 
-[issue-routing.ts](../../lib/app/src/agent/issue-routing.ts) uses first-match routing:
+[issue-routing.ts](../../lib/cli/src/agent/issue-routing.ts) uses first-match routing:
 
 - the first matching explicit rule wins
 - otherwise the fallback default agent/profile from `workflow.issues` is used
@@ -60,7 +60,7 @@ There is no score-based merge or multi-rule combination.
 
 ## Context Assembly
 
-[context.ts](../../lib/app/src/agent/context.ts) builds one ordered context bundle from:
+[context.ts](../../lib/cli/src/agent/context.ts) builds one ordered context bundle from:
 
 1. built-in docs
 2. the entrypoint prompt doc, unless the selected profile opts out
@@ -75,7 +75,7 @@ available.
 ## Doc Reference Rules
 
 - `builtin:*` references resolve from
-  [builtins.ts](../../lib/app/src/agent/builtins.ts)
+  [builtins.ts](../../lib/cli/src/agent/builtins.ts)
 - registered doc ids resolve from `workflow.context.docs`
 - repo-path docs must use `./...`
 - issue descriptions are scanned in source order for builtins, registered doc

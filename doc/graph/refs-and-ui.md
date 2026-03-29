@@ -99,7 +99,7 @@ from `../../lib/graph-module-core/src/react-dom/`:
 There is no dedicated `react-opentui` adapter anymore. The workflow TUI reads
 the same host-neutral runtime provider and query hooks directly from
 `@io/graph-react`, while workflow projection hooks still live in
-`../../lib/app/src/tui/projection.ts`.
+`../../lib/cli/src/tui/projection.ts`.
 
 ## Boundary Rules
 

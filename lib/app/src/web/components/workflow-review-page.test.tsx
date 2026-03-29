@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import type { CommitQueueScopeResult, ProjectBranchScopeResult } from "@io/graph-module-workflow";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { BrowserAgentRuntimeProbe } from "../../browser-agent/transport.js";
+import type { BrowserAgentRuntimeProbe } from "@op/cli/browser-agent";
 import type { WorkflowReviewStartupState } from "../lib/workflow-review-contract.js";
 import {
   createBranchSessionActionModel,

@@ -334,11 +334,11 @@ That suggests a staged path:
 The implementation should stay small and keep transport separate from graph
 runtime internals.
 
-- `../../lib/app/src/task/mcp.ts`: CLI entrypoint for `io mcp ...`
-- `../../lib/app/src/mcp/index.ts`: MCP server bootstrap
-- `../../lib/app/src/mcp/graph.ts`: graph-session bootstrap and tool registration
-- `../../lib/app/src/mcp/schema.ts`: type lookup, selection validation, preview shaping
-- `../../lib/app/src/mcp/*.test.ts`: protocol and handler coverage
+- `../../lib/cli/src/task/mcp.ts`: CLI entrypoint for `io mcp ...`
+- `../../lib/cli/src/mcp/index.ts`: MCP server bootstrap
+- `../../lib/cli/src/mcp/graph.ts`: graph-session bootstrap and tool registration
+- `../../lib/cli/src/mcp/schema.ts`: type lookup, selection validation, preview shaping
+- `../../lib/cli/src/mcp/*.test.ts`: protocol and handler coverage
 
 The root `graph` package should not absorb MCP-specific transport logic.
 `graph` should keep owning schema, client, validation, sync, and authority

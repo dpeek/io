@@ -2,26 +2,18 @@
   "name": "@io/app",
   "version": "0.0.1",
   "private": true,
-  "bin": {
-    "io": "./src/cli/index.ts"
-  },
   "type": "module",
   "exports": {
-    "./agent": "./src/agent/index.ts",
-    "./browser-agent": "./src/browser-agent/index.ts",
-    "./cli": "./src/cli/index.ts",
     "./graph": "./src/graph/index.ts",
     "./web/better-auth": "./src/web/lib/better-auth.ts",
     "./web/query-container": "./src/web/lib/query-container.ts",
-    "./lib": "./src/lib/index.ts",
-    "./lib/config": "./src/lib/config.ts"
+    "./lib": "./src/lib/index.ts"
   },
   "scripts": {
     "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.ts' && oxfmt && bun test"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
-    "@cloudflare/vite-plugin": "^1.25.0",
     "@io/graph-authority": "workspace:*",
     "@io/graph-bootstrap": "workspace:*",
     "@io/graph-client": "workspace:*",
@@ -33,14 +25,8 @@
     "@io/graph-react": "workspace:*",
     "@io/graph-sync": "workspace:*",
     "@io/web": "workspace:*",
-    "@linear/sdk": "^76.0.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "@opentui/core": "^0.1.87",
-    "@opentui/react": "^0.1.87",
-    "@tailwindcss/vite": "^4.2.1",
+    "@op/cli": "workspace:*",
     "@tanstack/react-router": "^1.167.4",
-    "@tanstack/router-plugin": "^1.166.13",
-    "@vitejs/plugin-react": "^6.0.1",
     "better-auth": "1.5.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -56,7 +42,6 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.3.9",
     "@types/node": "^25.3.2",
     "@types/react": "^19.2.14",

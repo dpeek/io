@@ -38,27 +38,27 @@ state, and the operator-facing session stream used by the TUI.
 - Successful execution lands the task commit onto the feature branch and moves
   the task to `Done` in the current repo configuration.
 - Feature closure stays human-owned. When a feature moves to `Done`,
-  [workspace.ts](../../lib/app/src/agent/workspace.ts) squashes the feature branch onto
+  [workspace.ts](../../lib/cli/src/agent/workspace.ts) squashes the feature branch onto
   the stream branch, preserves recoverable state on conflicts, and cleans up the
   branch when finalization succeeds.
 
 ## Code Surface
 
-- [server.ts](../../lib/app/src/agent/server.ts): `io agent ...` command handling and
+- [server.ts](../../lib/cli/src/agent/server.ts): `io agent ...` command handling and
   live/retained TUI modes
-- [service.ts](../../lib/app/src/agent/service.ts): scheduling, prompt assembly, run
+- [service.ts](../../lib/cli/src/agent/service.ts): scheduling, prompt assembly, run
   orchestration, and issue state transitions
-- [workspace.ts](../../lib/app/src/agent/workspace.ts): control repo, feature branches,
+- [workspace.ts](../../lib/cli/src/agent/workspace.ts): control repo, feature branches,
   issue worktrees, retained runtime files, landing, and finalization
-- [workflow.ts](../../lib/app/src/agent/workflow.ts),
-  [context.ts](../../lib/app/src/agent/context.ts),
-  [issue-routing.ts](../../lib/app/src/agent/issue-routing.ts), and
-  [builtins.ts](../../lib/app/src/agent/builtins.ts): workflow config, doc resolution,
+- [workflow.ts](../../lib/cli/src/agent/workflow.ts),
+  [context.ts](../../lib/cli/src/agent/context.ts),
+  [issue-routing.ts](../../lib/cli/src/agent/issue-routing.ts), and
+  [builtins.ts](../../lib/cli/src/agent/builtins.ts): workflow config, doc resolution,
   routing, and built-in prompt docs
-- [runner/codex.ts](../../lib/app/src/agent/runner/codex.ts): Codex app-server process,
+- [runner/codex.ts](../../lib/cli/src/agent/runner/codex.ts): Codex app-server process,
   approvals, session logging, and sandbox defaults
-- [tui-runtime.ts](../../lib/app/src/agent/tui-runtime.ts) and
-  [tui/index.ts](../../lib/app/src/agent/tui/index.ts): retained replay/attach support,
+- [tui-runtime.ts](../../lib/cli/src/agent/tui-runtime.ts) and
+  [tui/index.ts](../../lib/cli/src/agent/tui/index.ts): retained replay/attach support,
   session event schema, transcript shaping, layout, and rendering
-- [tracker/linear.ts](../../lib/app/src/agent/tracker/linear.ts): Linear candidate
+- [tracker/linear.ts](../../lib/cli/src/agent/tracker/linear.ts): Linear candidate
   polling and state writes

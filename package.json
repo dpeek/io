@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.25.0",
-    "@io/app": "workspace:*",
+    "@op/cli": "workspace:*",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/router-plugin": "^1.166.13",
     "@types/node": "^25.3.2",
