@@ -13,6 +13,7 @@ const branchTypeId = workflow.branch.values.id as string;
 const commitTypeId = workflow.commit.values.id as string;
 const repositoryBranchTypeId = workflow.repositoryBranch.values.id as string;
 const repositoryCommitTypeId = workflow.repositoryCommit.values.id as string;
+const agentSessionTypeId = workflow.agentSession.values.id as string;
 const documentTypeId = workflow.document.values.id as string;
 
 const inferredProjectLimitMessage =
@@ -96,6 +97,21 @@ export function requireRepositoryCommit(
     );
   }
   return graph.repositoryCommit.get(repositoryCommitId);
+}
+
+export function requireAgentSession(
+  graph: ProductGraphClient,
+  store: GraphStore,
+  sessionId: string,
+) {
+  if (!hasEntityOfType(store, sessionId, agentSessionTypeId)) {
+    throw new WorkflowMutationError(
+      404,
+      `Workflow session "${sessionId}" was not found.`,
+      "subject-not-found",
+    );
+  }
+  return graph.agentSession.get(sessionId);
 }
 
 export function requireDocument(graph: ProductGraphClient, store: GraphStore, documentId: string) {

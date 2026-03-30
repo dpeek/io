@@ -1,5 +1,8 @@
 export * from "./type.js";
 export * from "./command.js";
+export * from "./artifact-write.js";
+export * from "./decision-write.js";
+export * from "./session-append.js";
 export * from "./projection.js";
 export * from "./query.js";
 

@@ -505,6 +505,9 @@ function isSupportedWebCommandPayload(value: unknown): value is WebAuthorityComm
     isObjectRecord(value) &&
     ((value.kind === "write-secret-field" && isObjectRecord(value.input)) ||
       (value.kind === "workflow-mutation" && isObjectRecord(value.input)) ||
+      (value.kind === "agent-session-append" && isObjectRecord(value.input)) ||
+      (value.kind === "artifact-write" && isObjectRecord(value.input)) ||
+      (value.kind === "decision-write" && isObjectRecord(value.input)) ||
       (value.kind === "bootstrap-operator-access" && isObjectRecord(value.input)) ||
       (value.kind === "set-admission-approval" && isObjectRecord(value.input)))
   );
@@ -515,16 +518,26 @@ function webCommandSuccessStatus(
   result: WebAuthorityCommandResult,
 ): number {
   if (command.kind === "write-secret-field") {
-    return result.created ? 201 : 200;
+    return (result as WebAuthorityCommandResult<"write-secret-field">).created ? 201 : 200;
   }
   if (command.kind === "workflow-mutation") {
-    return result.created ? 201 : 200;
+    return (result as WebAuthorityCommandResult<"workflow-mutation">).created ? 201 : 200;
+  }
+  if (command.kind === "agent-session-append") {
+    const appendResult = result as WebAuthorityCommandResult<"agent-session-append">;
+    return appendResult.ok && appendResult.session.status === "created" ? 201 : 200;
+  }
+  if (command.kind === "artifact-write") {
+    return 201;
+  }
+  if (command.kind === "decision-write") {
+    return 201;
   }
   if (command.kind === "bootstrap-operator-access") {
-    return result.created ? 201 : 200;
+    return (result as WebAuthorityCommandResult<"bootstrap-operator-access">).created ? 201 : 200;
   }
   if (command.kind === "set-admission-approval") {
-    return result.created ? 201 : 200;
+    return (result as WebAuthorityCommandResult<"set-admission-approval">).created ? 201 : 200;
   }
 
   return 200;

@@ -61,6 +61,12 @@ import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 import { workflow } from "@io/graph-module-workflow";
 import {
   agentSession,
+  type AgentSessionAppendRequest,
+  type AgentSessionAppendResult,
+  type ArtifactWriteRequest,
+  type ArtifactWriteResult,
+  type DecisionWriteRequest,
+  type DecisionWriteResult,
   compileWorkflowReviewScopeDependencyKeys,
   createWorkflowReviewInvalidationEvent,
   createWorkflowProjectionIndexFromRetainedState,
@@ -142,6 +148,9 @@ import {
   type LoadedRetainedDocumentState,
   type RetainedDocumentState,
 } from "./retained-documents.js";
+import { runWorkflowArtifactWriteCommand } from "./workflow-artifact.js";
+import { runWorkflowDecisionWriteCommand } from "./workflow-decision.js";
+import { runAgentSessionAppendCommand } from "./workflow-session-history.js";
 import { runWorkflowMutationCommand } from "./workflow-authority.js";
 import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-transport.js";
 
@@ -260,6 +269,21 @@ export type WorkflowMutationWebAppAuthorityCommand = {
   readonly input: WorkflowMutationAction;
 };
 
+export type AgentSessionAppendWebAppAuthorityCommand = {
+  readonly kind: "agent-session-append";
+  readonly input: AgentSessionAppendRequest;
+};
+
+export type ArtifactWriteWebAppAuthorityCommand = {
+  readonly kind: "artifact-write";
+  readonly input: ArtifactWriteRequest;
+};
+
+export type DecisionWriteWebAppAuthorityCommand = {
+  readonly kind: "decision-write";
+  readonly input: DecisionWriteRequest;
+};
+
 export type BootstrapOperatorAccessInput = {
   readonly email: string;
   readonly graphId?: string;
@@ -286,6 +310,9 @@ export type SetAdmissionApprovalWebAppAuthorityCommand = {
 export type WebAppAuthorityCommand =
   | WriteSecretFieldWebAuthorityCommand
   | WorkflowMutationWebAppAuthorityCommand
+  | AgentSessionAppendWebAppAuthorityCommand
+  | ArtifactWriteWebAppAuthorityCommand
+  | DecisionWriteWebAppAuthorityCommand
   | BootstrapOperatorAccessWebAppAuthorityCommand
   | SetAdmissionApprovalWebAppAuthorityCommand;
 
@@ -310,6 +337,9 @@ export type SetAdmissionApprovalResult = {
 type WebAppAuthorityCommandResultMap = {
   "write-secret-field": WriteSecretFieldResult;
   "workflow-mutation": WorkflowMutationResult;
+  "agent-session-append": AgentSessionAppendResult;
+  "artifact-write": ArtifactWriteResult;
+  "decision-write": DecisionWriteResult;
   "bootstrap-operator-access": BootstrapOperatorAccessResult;
   "set-admission-approval": SetAdmissionApprovalResult;
 };
@@ -5203,6 +5233,36 @@ export async function createWebAppAuthority(
     }
     if (command.kind === "workflow-mutation") {
       return runWorkflowMutationCommand(
+        command.input,
+        {
+          store: authority.store,
+          applyTransaction,
+        },
+        options,
+      ) as Promise<WebAppAuthorityCommandResult<Command["kind"]>>;
+    }
+    if (command.kind === "agent-session-append") {
+      return runAgentSessionAppendCommand(
+        command.input,
+        {
+          store: authority.store,
+          applyTransaction,
+        },
+        options,
+      ) as Promise<WebAppAuthorityCommandResult<Command["kind"]>>;
+    }
+    if (command.kind === "artifact-write") {
+      return runWorkflowArtifactWriteCommand(
+        command.input,
+        {
+          store: authority.store,
+          applyTransaction,
+        },
+        options,
+      ) as Promise<WebAppAuthorityCommandResult<Command["kind"]>>;
+    }
+    if (command.kind === "decision-write") {
+      return runWorkflowDecisionWriteCommand(
         command.input,
         {
           store: authority.store,

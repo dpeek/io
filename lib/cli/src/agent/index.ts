@@ -6,6 +6,14 @@ export {
   resolveBuiltinDoc,
 } from "./builtins.js";
 export { runAgentCli } from "./server.js";
+export {
+  createAgentSessionAppendRequestFromRetainedEvents,
+  mapRetainedAgentSessionEventToAppendEvent,
+} from "./session-history.js";
+export {
+  AgentSessionHistoryBridge,
+  type AgentSessionHistoryObserver,
+} from "./session-history-bridge.js";
 export { AgentService, pickCandidateIssues } from "./service.js";
 export * from "./tui/index.js";
 export { LinearTrackerAdapter, normalizeLinearIssue } from "./tracker/linear.js";

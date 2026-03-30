@@ -107,13 +107,16 @@ Live session behavior is still agent-owned:
 
 - the canonical event schema is in `lib/cli/src/agent/tui/session-events.ts`
 - live publication is process-local through `createAgentSessionEventBus()`
-- `AgentService.observeSessionEvents(...)` is an in-memory subscription seam
+- `AgentService.observeSessionEvents(...)` is still the local subscription seam
+- retained runner and TUI session events now have a graph-backed
+  `AgentSessionAppend` write path for session creation plus ordered event append
 - retained attach and replay are still rebuilt from runtime files in
   `lib/cli/src/agent/tui-runtime.ts` and described in `doc/agent/tui.md`
 
-The repo does not currently implement a graph-backed `AgentSessionAppend`
-write path. The contract exists in `doc/branch/06-workflow-and-agent-runtime.md`,
-but the codebase still writes and replays retained session output locally.
+The repo now persists workflow artifacts and decisions through the
+authoritative graph runtime, but browser-native retained session feeds outside
+the shared append history remain a follow-on slice. Reload and attach behavior
+outside the legacy runtime files still needs its own product path.
 
 ### What the current web live path does not do
 
@@ -393,6 +396,24 @@ Acceptance criteria:
 - artifacts and decisions appear with direct provenance from the running
   session and selected subject
 
+Concrete boundary for this phase:
+
+- `CodexSessionLaunch` still owns graph-native session selection: project,
+  repository, subject, session key, session kind, and the authoritative
+  `sessionId`
+- `AgentSessionAppend` persists history only:
+  - the local runtime maps retained `AgentSessionEvent` envelopes into append
+    events by keeping the existing envelope fields and dropping only the
+    repeated `event.session` wrapper
+  - the first create batch carries one retained `AgentSessionRef` snapshot so
+    supervisor/worker/child lineage, issue refs, workflow refs, runtime
+    metadata, and workspace path survive the migration boundary
+  - exact sequence retries acknowledge as duplicates; gaps or same-sequence
+    payload drift fail as `sequence-conflict`
+- this phase does not promise a browser replay model yet; it only makes the
+  authoritative history write contract explicit so reload and later feed reads
+  have one stable source
+
 ### Phase 4: Build the browser-native session feed
 
 Once graph-backed session history exists, add a dedicated session panel to the
@@ -477,6 +498,8 @@ Acceptance criteria:
   `lib/cli/src/browser-agent/`
 - keep workspace, PTY, git, and Codex runner ownership there
 - teach it to append authoritative session history as it executes
+- use `lib/cli/src/agent/session-history.ts` as the retained-envelope mapping
+  seam into the graph-backed append contract
 
 ### Authority and read models
 

@@ -7,12 +7,20 @@ import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 
 import { workflow } from "./index.js";
 import {
+  agentSessionAppendCommand,
+  agentSessionAppendEventAckStatusValues,
+  agentSessionAppendFailureCodes,
+  agentSessionAppendRetainedRoleValues,
+  agentSessionAppendRetainedRuntimeStateValues,
+  agentSessionAppendSessionAckStatusValues,
   agentSessionKeyPattern,
   commitQueueScopeFailureCodes,
   type CommitQueueScopeQuery,
   type CommitQueueScopeResult,
   contextBundleKeyPattern,
   defaultProjectBranchScopeOrder,
+  decisionWriteCommand,
+  decisionWriteFailureCodes,
   projectBranchScopeFailureCodes,
   projectBranchScopeOrderDirectionValues,
   projectBranchScopeOrderFieldValues,
@@ -85,6 +93,8 @@ describe("workflow schema", () => {
     );
 
     expect(workflowMutationCommand.key).toBe("workflow:mutation");
+    expect(agentSessionAppendCommand.key).toBe("workflow:agent-session-append");
+    expect(decisionWriteCommand.key).toBe("workflow:decision-write");
     expect(workflowMutationFailureCodes).toEqual([
       "repository-missing",
       "branch-lock-conflict",
@@ -101,6 +111,22 @@ describe("workflow schema", () => {
       "branch-not-found",
       "policy-denied",
       "projection-stale",
+    ]);
+    expect(agentSessionAppendFailureCodes).toEqual([
+      "subject-missing",
+      "sequence-conflict",
+      "event-too-large",
+    ]);
+    expect(decisionWriteFailureCodes).toEqual(["details-missing", "summary-missing"]);
+    expect(agentSessionAppendSessionAckStatusValues).toEqual(["created", "existing"]);
+    expect(agentSessionAppendEventAckStatusValues).toEqual(["accepted", "duplicate"]);
+    expect(agentSessionAppendRetainedRoleValues).toEqual(["supervisor", "worker", "child"]);
+    expect(agentSessionAppendRetainedRuntimeStateValues).toEqual([
+      "blocked",
+      "finalized",
+      "interrupted",
+      "pending-finalization",
+      "running",
     ]);
     expect(projectBranchScopeOrderFieldValues).toEqual([
       "queue-rank",
@@ -123,6 +149,14 @@ describe("workflow schema", () => {
         { predicateId: workflow.branch.fields.state.key },
         { predicateId: workflow.branch.fields.activeCommit.key },
         { predicateId: workflow.commit.fields.state.key },
+      ]),
+    );
+    expect(agentSessionAppendCommand.policy.touchesPredicates).toEqual(
+      expect.arrayContaining([
+        { predicateId: workflow.agentSession.fields.sessionKey.key },
+        { predicateId: workflow.agentSession.fields.runtimeState.key },
+        { predicateId: workflow.agentSessionEvent.fields.type.key },
+        { predicateId: workflow.agentSessionEvent.fields.sequence.key },
       ]),
     );
   });

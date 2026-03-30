@@ -19,6 +19,8 @@ import {
 import { workflow as canonicalWorkflow } from "./index.js";
 import * as workflowExports from "./index.js";
 import {
+  artifactWriteCommand,
+  agentSessionAppendCommand,
   agentSession,
   agentSessionEvent,
   artifact,
@@ -27,6 +29,7 @@ import {
   contextBundle,
   contextBundleEntry,
   decision,
+  decisionWriteCommand,
   project,
   repository,
   repositoryBranch,
@@ -45,9 +48,23 @@ const requiredEnvVarExports = [
 ] as const;
 
 const requiredWorkflowExports = [
+  "agentSessionAppendCommand",
+  "agentSessionAppendEventAckStatusValues",
+  "agentSessionAppendFailureCodes",
+  "agentSessionAppendRetainedRoleValues",
+  "agentSessionAppendRetainedRuntimeStateValues",
+  "agentSessionAppendSessionAckStatusValues",
+  "artifactWriteCommand",
+  "artifactWriteFailureCodes",
   "compileWorkflowReviewScopeDependencyKeys",
   "compileWorkflowReviewWriteDependencyKeys",
+  "createAgentSessionAppendEventFingerprint",
+  "evaluateArtifactWriteRequest",
+  "decisionWriteCommand",
+  "decisionWriteFailureCodes",
   "createWorkflowReviewInvalidationEvent",
+  "evaluateDecisionWriteRequest",
+  "evaluateAgentSessionAppendRequest",
   "repositoryBranch",
   "repositoryCommit",
   "repositoryCommitLeaseState",
@@ -221,6 +238,18 @@ describe("workflow module entry surfaces", () => {
     expect(String(contextBundleEntry.fields.bundle.range)).toBe(resolvedTypeId(contextBundle));
     expect(workflowMutationCommand).toMatchObject({
       key: "workflow:mutation",
+      execution: "serverOnly",
+    });
+    expect(agentSessionAppendCommand).toMatchObject({
+      key: "workflow:agent-session-append",
+      execution: "serverOnly",
+    });
+    expect(artifactWriteCommand).toMatchObject({
+      key: "workflow:artifact-write",
+      execution: "serverOnly",
+    });
+    expect(decisionWriteCommand).toMatchObject({
+      key: "workflow:decision-write",
       execution: "serverOnly",
     });
   });

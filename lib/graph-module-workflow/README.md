@@ -7,7 +7,8 @@
 
 - the canonical `workflow` namespace assembly
 - workflow entity, enum, and type definitions
-- workflow command contracts and summary/result types
+- workflow command contracts and summary/result types, including retained
+  session append, artifact-write, and decision-write surfaces
 - workflow projection metadata, read-scope contracts, and invalidation helpers
 - workflow query-surface catalogs for planner, saved-query, editor, and
   renderer registration

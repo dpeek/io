@@ -1189,17 +1189,150 @@ type CodexSessionLaunchResult = CodexSessionLaunchSuccess | CodexSessionLaunchFa
   `lib/cli/src/agent/tui/session-events.ts`
 - caller: `lib/cli/src/agent/service.ts`, `lib/cli/src/agent/runner/codex.ts`, TUI bridge
 - callee: authoritative workflow runtime
-- inputs:
-  - session creation payloads derived from current `AgentSessionRef`
-  - append-only `AgentSessionEvent` envelopes with per-session sequence numbers
-- outputs:
-  - persisted session ids and event acknowledgements
-  - optional summary state for current diagnostics
+- request shape:
+
+```ts
+type AgentSessionAppendSubject =
+  | { kind: "branch"; branchId: string }
+  | { kind: "commit"; branchId: string; commitId: string };
+
+interface AgentSessionAppendRetainedSessionRef {
+  externalSessionId: string;
+  retainedRole: "supervisor" | "worker" | "child";
+  rootSessionId: string;
+  parentSessionId?: string;
+  branchName?: string;
+  issue?: AgentSessionIssueRef;
+  workflow?: AgentSessionWorkflowRef;
+  runtime?: AgentSessionRuntimeRef;
+  workspacePath?: string;
+}
+
+type AgentSessionAppendSessionInput =
+  | {
+      mode: "create";
+      projectId: string;
+      repositoryId?: string;
+      sessionKey: string;
+      kind: CodexSessionKind;
+      subject: AgentSessionAppendSubject;
+      startedAt?: string;
+      title: string;
+      workerId: string;
+      threadId?: string;
+      turnId?: string;
+      retainedSession: AgentSessionAppendRetainedSessionRef;
+    }
+  | {
+      mode: "existing";
+      sessionId: string;
+    };
+
+type AgentSessionAppendEvent =
+  | Omit<AgentSessionLifecycleEvent, "session">
+  | Omit<AgentStatusEvent, "session">
+  | Omit<AgentRawLineEvent, "session">
+  | Omit<AgentCodexNotificationEvent, "session">;
+
+interface AgentSessionAppendRequest {
+  session: AgentSessionAppendSessionInput;
+  events: readonly AgentSessionAppendEvent[];
+}
+
+interface AgentSessionAppendSuccess {
+  ok: true;
+  session: {
+    sessionId: string;
+    status: "created" | "existing";
+  };
+  events: readonly {
+    bytes: number;
+    fingerprint: string;
+    sequence: number;
+    status: "accepted" | "duplicate";
+  }[];
+  nextExpectedSequence: number;
+}
+```
+
+- contract rules:
+  - `CodexSessionLaunch` owns graph-native `projectId`, `repositoryId`,
+    `subject`, `sessionKey`, and `kind`; `AgentSessionAppend` must not infer
+    those values from the retained envelope
+  - the retained event mapping is one-to-one at the envelope layer: keep
+    `sequence`, `timestamp`, `type`, and type-specific payload fields exactly as
+    they exist today and drop only the repeated `event.session` wrapper from
+    each appended event
+  - first-write `session.mode = "create"` carries the latest retained
+    `AgentSessionRef` snapshot for lineage, issue/workflow refs, runtime
+    metadata, and workspace path; later writes use `session.mode = "existing"`
+    with the authoritative `sessionId`
+  - `retainedRole` preserves legacy `supervisor | worker | child` semantics
+    even though graph launch `kind` remains `planning | execution | review`
+  - if launch did not already provide `startedAt`, use the first retained event
+    timestamp in the create batch as the session start time
+  - the first accepted event for one session must be `sequence = 1`; accepted
+    events must stay contiguous and strictly ordered per session
+  - retrying an already-acknowledged sequence with the exact same normalized
+    envelope is idempotent and returns `status = "duplicate"` without advancing
+    `nextExpectedSequence`
+  - retrying an acknowledged sequence with different payload, or skipping over
+    `nextExpectedSequence`, fails as `sequence-conflict`
+  - event size limits are authority-defined; an oversized event fails as
+    `event-too-large`
+  - this contract is only the durable history append boundary; replay layout,
+    transcript block shaping, and browser/TUI feed composition remain read-side
+    concerns
 - failure shape:
   - `subject-missing`
   - `sequence-conflict`
   - `event-too-large`
 - stability: envelope is `stable`; storage materialization is `provisional`
+
+### `DecisionWrite`
+
+- purpose: persist durable workflow decisions and blockers from planning or
+  execution sessions without coupling the write path to later editing UX
+- caller: worker runtime, operator UI, future browser-agent surfaces
+- callee: authoritative workflow runtime
+- request shape:
+
+```ts
+type WorkflowDecisionInput = {
+  kind: "plan" | "question" | "assumption" | "blocker" | "resolution";
+  summary: string;
+  details?: string;
+};
+
+interface DecisionWriteRequest {
+  sessionId: string;
+  decision: WorkflowDecisionInput;
+}
+
+interface DecisionWriteSuccess {
+  decision: WorkflowDecision;
+}
+```
+
+- contract rules:
+  - `sessionId` is the authority-owned provenance root; the write derives
+    `projectId`, `repositoryId?`, `branchId`, and optional `commitId` from the
+    existing `AgentSession`
+  - branch-scoped planning sessions write explicit branch provenance without a
+    commit id; commit-scoped execution sessions write both branch and commit
+    provenance
+  - `summary` is required and trimmed before persistence
+  - `details` is optional for general decisions but required and trimmed for
+    `kind = "blocker"`
+  - the retained decision payload is intentionally small in the first
+    milestone: `kind`, `summary`, and optional `details`; richer review,
+    editing, and resolution workflows remain separate follow-on concerns
+- failure shape:
+  - `subject-not-found`
+  - `summary-missing`
+  - `details-missing`
+  - `policy-denied`
+- stability: `stable`
 
 ## 5. Runtime Architecture
 

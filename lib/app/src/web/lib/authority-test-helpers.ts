@@ -1,5 +1,14 @@
 import { type AuthorizationContext } from "@io/graph-authority";
-import type { WorkflowMutationAction, WorkflowMutationResult } from "@io/graph-module-workflow";
+import type {
+  AgentSessionAppendRequest,
+  AgentSessionAppendResult,
+  ArtifactWriteRequest,
+  ArtifactWriteResult,
+  DecisionWriteRequest,
+  DecisionWriteResult,
+  WorkflowMutationAction,
+  WorkflowMutationResult,
+} from "@io/graph-module-workflow";
 
 import {
   createInMemoryTestWebAppAuthorityStorage,
@@ -53,6 +62,48 @@ export async function executeTestWorkflowMutation(
     },
     { authorization },
   )) as WorkflowMutationResult;
+}
+
+export async function executeTestAgentSessionAppend(
+  authority: WebAppAuthority,
+  authorization: AuthorizationContext,
+  input: AgentSessionAppendRequest,
+): Promise<AgentSessionAppendResult> {
+  return (await authority.executeCommand(
+    {
+      kind: "agent-session-append",
+      input,
+    },
+    { authorization },
+  )) as AgentSessionAppendResult;
+}
+
+export async function executeTestWorkflowArtifactWrite(
+  authority: WebAppAuthority,
+  authorization: AuthorizationContext,
+  input: ArtifactWriteRequest,
+): Promise<ArtifactWriteResult> {
+  return (await authority.executeCommand(
+    {
+      kind: "artifact-write",
+      input,
+    },
+    { authorization },
+  )) as ArtifactWriteResult;
+}
+
+export async function executeTestWorkflowDecisionWrite(
+  authority: WebAppAuthority,
+  authorization: AuthorizationContext,
+  input: DecisionWriteRequest,
+): Promise<DecisionWriteResult> {
+  return (await authority.executeCommand(
+    {
+      kind: "decision-write",
+      input,
+    },
+    { authorization },
+  )) as DecisionWriteResult;
 }
 
 export async function createTestWorkflowFixture(

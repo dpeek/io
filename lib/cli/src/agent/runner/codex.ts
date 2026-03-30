@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 
 import { createLogger, type Logger } from "@io/utils";
 
+import type { AgentSessionHistoryObserver } from "../session-history-bridge.js";
 import type {
   ApplyPatchApprovalResponse,
   ExecCommandApprovalResponse,
@@ -346,12 +347,14 @@ async function createWorkspaceLogObserver(
 
 export interface CodexAppServerRunnerOptions {
   sessionEvents?: AgentSessionEventBus;
+  sessionHistory?: AgentSessionHistoryObserver;
 }
 
 export class CodexAppServerRunner {
   readonly #config: CodexConfig;
   readonly #log: Logger;
   readonly #sessionEvents: AgentSessionEventBus;
+  readonly #sessionHistory?: AgentSessionHistoryObserver;
 
   constructor(
     config: CodexConfig,
@@ -361,6 +364,7 @@ export class CodexAppServerRunner {
     this.#config = config;
     this.#log = log.child({ event_prefix: "codex" });
     this.#sessionEvents = options.sessionEvents ?? createAgentSessionEventBus();
+    this.#sessionHistory = options.sessionHistory;
   }
 
   async run(options: {
@@ -369,6 +373,7 @@ export class CodexAppServerRunner {
     session?: AgentSessionRef;
     workspace: PreparedWorkspace;
   }): Promise<IssueRunResult> {
+    const sessionHistory = this.#sessionHistory;
     let session = options.session ?? {
       branchName: options.workspace.branchName,
       id: `worker:${options.workspace.workerId}`,
@@ -390,6 +395,7 @@ export class CodexAppServerRunner {
         session,
       } as AgentSessionEventInit);
       logs.observe(stampedEvent);
+      void sessionHistory?.observe(stampedEvent);
       return stampedEvent;
     };
     const proc = Bun.spawn({
@@ -588,6 +594,7 @@ export class CodexAppServerRunner {
         workspace: options.workspace,
       };
       await logs.flush();
+      await sessionHistory?.flush();
       return result;
     } catch (error) {
       publish({
@@ -597,6 +604,7 @@ export class CodexAppServerRunner {
         phase: "failed",
         type: "session",
       });
+      await sessionHistory?.flush().catch(() => undefined);
       throw error;
     } finally {
       clearInterval(heartbeat);
@@ -615,6 +623,7 @@ export class CodexAppServerRunner {
         // ignore
       }
       await logs.flush();
+      await sessionHistory?.flush().catch(() => undefined);
     }
   }
 
