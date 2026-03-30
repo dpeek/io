@@ -78,9 +78,31 @@ function createSignedOutAuthState(): WebAuthViewState {
   };
 }
 
+function renderWithLocation(
+  origin: string,
+  input: Parameters<typeof renderToStaticMarkup>[0],
+): string {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "location");
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: { origin } as Location,
+  });
+
+  try {
+    return renderToStaticMarkup(input);
+  } finally {
+    if (previous) {
+      Object.defineProperty(globalThis, "location", previous);
+    } else {
+      Reflect.deleteProperty(globalThis, "location");
+    }
+  }
+}
+
 describe("auth shell", () => {
-  it("keeps graph bootstrap in the signed-out shell until a session exists", () => {
-    const html = renderToStaticMarkup(
+  it("keeps graph bootstrap in the signed-out shell and exposes the localhost entry action", () => {
+    const html = renderWithLocation(
+      "http://io.localhost:8787",
       <GraphAccessGateView
         auth={createSignedOutAuthState()}
         description="Resolve a session before mounting graph access."
@@ -92,6 +114,8 @@ describe("auth shell", () => {
 
     expect(html).toContain("Sign in to open the graph");
     expect(html).toContain('data-auth-entry-card=""');
+    expect(html).toContain("Start locally");
+    expect(html).toContain("Localhost only");
     expect(html).not.toContain("protected graph surface");
   });
 

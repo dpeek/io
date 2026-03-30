@@ -51,8 +51,9 @@ export function HomePageStateView({
   if (auth.status === "signed-out") {
     return (
       <AuthSessionEntryCard
-        description="Sign in or create a local account before the shell boots the synced graph runtime. Protected routes stay in the signed-out shell until this session is ready."
-        title="Sign in to bootstrap graph access"
+        description="Start locally on localhost for instant onboarding, or use email auth below before the shell boots the synced graph runtime. Protected routes stay in the signed-out shell until this session is ready."
+        showLocalhostOnboarding
+        title="Start locally or sign in to bootstrap graph access"
       />
     );
   }

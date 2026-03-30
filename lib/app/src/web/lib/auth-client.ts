@@ -7,15 +7,30 @@ import {
 } from "@io/graph-authority";
 import { createAuthClient } from "better-auth/react";
 
+import type { SessionPrincipalProjection } from "./auth-bridge.js";
 import { betterAuthBasePath } from "./auth-path.js";
+import {
+  createLocalhostSyntheticEmail,
+  defaultLocalhostSyntheticIdentityId,
+  defineLocalhostBootstrapCredential,
+  isLocalhostOrigin,
+  localhostBootstrapIssuePath,
+  localhostBootstrapRedeemPath,
+  type LocalhostBootstrapCredential,
+} from "./local-bootstrap.js";
 
 export const authClient = createAuthClient({
   basePath: betterAuthBasePath,
 });
 
 export const webPrincipalBootstrapPath = "/api/bootstrap";
+export const webGraphAccessActivationPath = "/api/access/activate";
+export const webGraphCommandsPath = "/api/commands";
 
 const webPrincipalBootstrapChangedEvent = "io:web-principal-bootstrap-changed";
+const localhostSyntheticBootstrapEmail = createLocalhostSyntheticEmail(
+  defaultLocalhostSyntheticIdentityId,
+);
 
 type BootstrapFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -88,6 +103,30 @@ type WebAuthStateInput = {
   readonly isRefetching: boolean;
 };
 
+type WebAuthErrorPayload = {
+  readonly code?: unknown;
+  readonly error?: unknown;
+  readonly message?: unknown;
+};
+
+export class WebAuthRequestError extends Error {
+  readonly code?: string;
+  readonly status: number;
+
+  constructor(
+    message: string,
+    input: {
+      readonly code?: string;
+      readonly status: number;
+    },
+  ) {
+    super(message);
+    this.name = "WebAuthRequestError";
+    this.code = input.code;
+    this.status = input.status;
+  }
+}
+
 function readTrimmedString(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -103,17 +142,34 @@ export function readWebPrincipalDisplayName(
   return readTrimmedString(payload.session.displayName);
 }
 
-async function readBootstrapErrorMessage(response: Response): Promise<string> {
+async function readResponseError(
+  response: Response,
+  fallback: string,
+): Promise<WebAuthRequestError> {
+  let payload: WebAuthErrorPayload | undefined;
+
   try {
-    const payload = (await response.json()) as { readonly error?: unknown };
+    payload = (await response.json()) as WebAuthErrorPayload;
     if (typeof payload.error === "string" && payload.error.trim().length > 0) {
-      return payload.error;
+      return new WebAuthRequestError(payload.error, {
+        code: typeof payload.code === "string" ? payload.code : undefined,
+        status: response.status,
+      });
+    }
+    if (typeof payload.message === "string" && payload.message.trim().length > 0) {
+      return new WebAuthRequestError(payload.message, {
+        code: typeof payload.code === "string" ? payload.code : undefined,
+        status: response.status,
+      });
     }
   } catch {
     // Fall through to the generic response summary.
   }
 
-  return `Unable to load the principal bootstrap (${response.status} ${response.statusText}).`;
+  return new WebAuthRequestError(`${fallback} (${response.status} ${response.statusText}).`, {
+    code: typeof payload?.code === "string" ? payload.code : undefined,
+    status: response.status,
+  });
 }
 
 export async function fetchWebPrincipalBootstrap(
@@ -132,12 +188,291 @@ export async function fetchWebPrincipalBootstrap(
   });
 
   if (!response.ok) {
-    throw new Error(await readBootstrapErrorMessage(response));
+    throw await readResponseError(response, "Unable to load the principal bootstrap");
   }
 
   return defineWebPrincipalBootstrapPayload(
     (await response.json()) as WebPrincipalBootstrapPayload,
   );
+}
+
+export async function issueLocalhostBootstrapCredential(
+  input: {
+    readonly fetcher?: BootstrapFetch;
+    readonly path?: string;
+    readonly request?: RequestInit;
+  } = {},
+): Promise<LocalhostBootstrapCredential> {
+  const fetcher = input.fetcher ?? fetch;
+  const response = await fetcher(input.path ?? localhostBootstrapIssuePath, {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    ...input.request,
+  });
+
+  if (!response.ok) {
+    throw await readResponseError(response, "Unable to issue the localhost bootstrap credential");
+  }
+
+  return defineLocalhostBootstrapCredential(
+    (await response.json()) as LocalhostBootstrapCredential,
+  );
+}
+
+export async function redeemLocalhostBootstrapCredential(input: {
+  readonly fetcher?: BootstrapFetch;
+  readonly path?: string;
+  readonly request?: RequestInit;
+  readonly token: string;
+}): Promise<void> {
+  const fetcher = input.fetcher ?? fetch;
+  const headers = new Headers(input.request?.headers);
+  headers.set("content-type", "application/json");
+  const response = await fetcher(input.path ?? localhostBootstrapRedeemPath, {
+    ...input.request,
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers,
+    body: JSON.stringify({
+      token: input.token,
+    }),
+  });
+
+  if (!response.ok) {
+    throw await readResponseError(response, "Unable to redeem the localhost bootstrap credential");
+  }
+}
+
+export async function startLocalhostBootstrapSession(
+  input: {
+    readonly fetcher?: BootstrapFetch;
+    readonly issuePath?: string;
+    readonly issueRequest?: RequestInit;
+    readonly redeemPath?: string;
+    readonly redeemRequest?: RequestInit;
+  } = {},
+): Promise<LocalhostBootstrapCredential> {
+  const credential = await issueLocalhostBootstrapCredential({
+    fetcher: input.fetcher,
+    path: input.issuePath,
+    request: input.issueRequest,
+  });
+  await redeemLocalhostBootstrapCredential({
+    fetcher: input.fetcher,
+    path: input.redeemPath,
+    request: input.redeemRequest,
+    token: credential.token,
+  });
+  return credential;
+}
+
+function hasWritableGraphAccess(
+  summary: Pick<WebPrincipalSummary, "access"> | SessionPrincipalProjection["summary"],
+): boolean {
+  return summary.access.authority || summary.access.graphMember;
+}
+
+function isLocalSyntheticBootstrapPayload(payload: WebPrincipalBootstrapPayload): boolean {
+  return (
+    payload.session.authState === "ready" &&
+    readWebPrincipalDisplayName(payload) === localhostSyntheticBootstrapEmail
+  );
+}
+
+export async function activateGraphAccess(
+  input: {
+    readonly fetcher?: BootstrapFetch;
+    readonly path?: string;
+    readonly request?: RequestInit;
+  } = {},
+): Promise<SessionPrincipalProjection> {
+  const fetcher = input.fetcher ?? fetch;
+  const response = await fetcher(input.path ?? webGraphAccessActivationPath, {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    ...input.request,
+  });
+
+  if (!response.ok) {
+    throw await readResponseError(response, "Unable to activate graph access");
+  }
+
+  return (await response.json()) as SessionPrincipalProjection;
+}
+
+export async function bootstrapLocalhostOperatorAccess(
+  input: {
+    readonly email?: string;
+    readonly fetcher?: BootstrapFetch;
+    readonly path?: string;
+    readonly request?: RequestInit;
+  } = {},
+): Promise<void> {
+  const fetcher = input.fetcher ?? fetch;
+  const headers = new Headers(input.request?.headers);
+  headers.set("content-type", "application/json");
+  const response = await fetcher(input.path ?? webGraphCommandsPath, {
+    ...input.request,
+    method: "POST",
+    credentials: "omit",
+    cache: "no-store",
+    headers,
+    body: JSON.stringify({
+      kind: "bootstrap-operator-access",
+      input: {
+        email: input.email ?? localhostSyntheticBootstrapEmail,
+        graphId: "graph:global",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw await readResponseError(response, "Unable to bootstrap local operator access");
+  }
+}
+
+async function fetchActivatedLocalhostBootstrap(input: {
+  readonly activationPath?: string;
+  readonly activationRequest?: RequestInit;
+  readonly bootstrapPath?: string;
+  readonly bootstrapRequest?: RequestInit;
+  readonly fetcher?: BootstrapFetch;
+}): Promise<WebPrincipalBootstrapPayload> {
+  const activated = await activateGraphAccess({
+    fetcher: input.fetcher,
+    path: input.activationPath,
+    request: input.activationRequest,
+  });
+
+  if (!hasWritableGraphAccess(activated.summary)) {
+    throw new Error(
+      "Localhost instant onboarding could not determine a unique writable graph access path.",
+    );
+  }
+
+  return fetchWebPrincipalBootstrap({
+    fetcher: input.fetcher,
+    path: input.bootstrapPath,
+    request: input.bootstrapRequest,
+  });
+}
+
+export async function completeLocalhostOnboarding(
+  input: {
+    readonly activationPath?: string;
+    readonly activationRequest?: RequestInit;
+    readonly bootstrapPath?: string;
+    readonly bootstrapRequest?: RequestInit;
+    readonly commandPath?: string;
+    readonly commandRequest?: RequestInit;
+    readonly fetcher?: BootstrapFetch;
+    readonly issuePath?: string;
+    readonly issueRequest?: RequestInit;
+    readonly origin?: string;
+    readonly redeemPath?: string;
+    readonly redeemRequest?: RequestInit;
+  } = {},
+): Promise<WebPrincipalBootstrapPayload> {
+  const origin = input.origin;
+  if (!origin || !isLocalhostOrigin(origin)) {
+    throw new Error("Localhost instant onboarding is only available on localhost origins.");
+  }
+
+  await startLocalhostBootstrapSession({
+    fetcher: input.fetcher,
+    issuePath: input.issuePath,
+    issueRequest: input.issueRequest,
+    redeemPath: input.redeemPath,
+    redeemRequest: input.redeemRequest,
+  });
+
+  let bootstrap: WebPrincipalBootstrapPayload;
+  try {
+    bootstrap = await fetchWebPrincipalBootstrap({
+      fetcher: input.fetcher,
+      path: input.bootstrapPath,
+      request: input.bootstrapRequest,
+    });
+  } catch (error) {
+    if (!(error instanceof WebAuthRequestError) || error.code !== "auth.principal_missing") {
+      throw error;
+    }
+
+    await bootstrapLocalhostOperatorAccess({
+      fetcher: input.fetcher,
+      path: input.commandPath,
+      request: input.commandRequest,
+    });
+    return fetchActivatedLocalhostBootstrap({
+      activationPath: input.activationPath,
+      activationRequest: input.activationRequest,
+      bootstrapPath: input.bootstrapPath,
+      bootstrapRequest: input.bootstrapRequest,
+      fetcher: input.fetcher,
+    });
+  }
+
+  if (bootstrap.session.authState !== "ready") {
+    throw new Error("Localhost instant onboarding did not establish a ready browser session.");
+  }
+
+  if (!isLocalSyntheticBootstrapPayload(bootstrap)) {
+    return bootstrap;
+  }
+
+  if (!bootstrap.principal) {
+    throw new TypeError(
+      'Authenticated bootstrap payloads must include both "session.sessionId" and "principal".',
+    );
+  }
+
+  if (hasWritableGraphAccess(bootstrap.principal)) {
+    return bootstrap;
+  }
+
+  const activated = await activateGraphAccess({
+    fetcher: input.fetcher,
+    path: input.activationPath,
+    request: input.activationRequest,
+  });
+
+  if (hasWritableGraphAccess(activated.summary)) {
+    return fetchWebPrincipalBootstrap({
+      fetcher: input.fetcher,
+      path: input.bootstrapPath,
+      request: input.bootstrapRequest,
+    });
+  }
+
+  await bootstrapLocalhostOperatorAccess({
+    fetcher: input.fetcher,
+    path: input.commandPath,
+    request: input.commandRequest,
+  });
+  return fetchActivatedLocalhostBootstrap({
+    activationPath: input.activationPath,
+    activationRequest: input.activationRequest,
+    bootstrapPath: input.bootstrapPath,
+    bootstrapRequest: input.bootstrapRequest,
+    fetcher: input.fetcher,
+  });
+}
+
+export async function resolveWebPrincipalBootstrap(
+  input: {
+    readonly bootstrapPath?: string;
+    readonly bootstrapRequest?: RequestInit;
+    readonly fetcher?: BootstrapFetch;
+  } = {},
+): Promise<WebPrincipalBootstrapPayload> {
+  return fetchWebPrincipalBootstrap({
+    fetcher: input.fetcher,
+    path: input.bootstrapPath,
+    request: input.bootstrapRequest,
+  });
 }
 
 export function notifyWebPrincipalBootstrapChanged(): void {

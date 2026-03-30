@@ -20,8 +20,16 @@ browser resolves an explicit signed-out, ready, or expired bootstrap state.
 The shared graph runtime contracts now also publish the
 stable minimum browser identity bootstrap surface:
 `WebPrincipalSession`, `WebPrincipalSummary`, and
-`WebPrincipalBootstrapPayload`. That create-account path is still a provisional
-local demo surface rather than a finished account-management product.
+`WebPrincipalBootstrapPayload`. The repo now also defines the planned
+localhost-only instant-onboarding contract in `./local-bootstrap.md` so the
+future local happy path can exchange one short-lived bootstrap credential for a
+normal Better Auth session without adding a second long-lived auth model. The
+current browser shell now exposes that localhost path as an explicit signed-out
+`Start locally` action for the deterministic synthetic local identity, then
+reuses the existing principal bootstrap, optional first-operator bootstrap, and
+access-activation seams until the local session reaches a writable graph state
+or fails explicitly. The create-account path is still a provisional local demo
+surface rather than a finished account-management product.
 
 ## Principal Bootstrap Contract
 
@@ -67,6 +75,33 @@ Current proof anchors:
   bootstrap-error handling
 - `../../lib/app/src/web/components/auth-shell.test.tsx`: graph-route gating for
   signed-out, expired, ready, and retryable bootstrap-error states
+
+## Localhost Bootstrap Contract
+
+The shipped localhost instant-onboarding slice does not change the browser's
+stable bootstrap state machine. It first redeems a local-only bootstrap
+credential into a normal Better Auth session, then the browser continues
+through the existing `GET /api/bootstrap` and `POST /api/access/activate`
+seams.
+
+For developers, this is the default local first-run path: `io start`, open the
+localhost web shell, then click `Start locally` once. That one click should end
+in the same Better Auth-backed browser session model as every other auth path,
+plus writable graph access when the local flow can determine one safe outcome.
+Use the email auth entry instead when you want the more production-like path.
+
+Stable contract anchors:
+
+- `./local-bootstrap.md`: localhost bootstrap credential, deterministic
+  synthetic local identity, the shipped Worker route contract, local-only
+  guardrails, and failure behavior
+- `../../lib/app/src/web/lib/local-bootstrap.ts`: typed contract and validation
+  helpers for the shared Worker/browser flow
+- `../../lib/app/src/web/lib/local-bootstrap.test.ts`: token format, TTL,
+  local-origin, and deterministic identity coverage
+- `../../lib/app/src/web/worker/index.test.ts`: local credential issuance,
+  redemption, full instant-onboarding happy path, writable-graph proof, expiry,
+  replay rejection, non-local denial, and ambiguous local-admission coverage
 
 ## Ownership Boundary
 
@@ -134,6 +169,7 @@ Current editor interaction model:
 
 - `../index.md`
 - `./auth-store.md`
+- `./local-bootstrap.md`
 - `../storage.md`
 - `./explorer.md`
 - `../graph/spec/refs-and-ui.md`
@@ -155,8 +191,9 @@ Current editor interaction model:
   keeps the signed-out auth entry flow and the signed-in bootstrap summary in
   one place
 - `../../lib/app/src/web/components/auth-shell.tsx`: principal-bootstrap consumer
-  hook, sign-in/sign-out chrome, provisional create-account form, and the gate
-  that keeps graph surfaces from booting until bootstrap state is known
+  hook, signed-out localhost onboarding entrypoint, sign-in/sign-out chrome,
+  provisional create-account form, and the gate that keeps graph surfaces from
+  booting until bootstrap state is known
 - `../../lib/app/src/web/components/graph-runtime-bootstrap.tsx`: shared synced graph
   runtime bootstrap for browser pages
 - `../../lib/app/src/web/components/entity-type-browser.tsx`: reusable list/detail
@@ -249,6 +286,10 @@ Current editor interaction model:
   for the dedicated `AUTH_DB` binding, optional trusted-origin wiring, the
   stable `/api/auth` base path, and the minimal email/password browser demo
   flow
+- `../../lib/app/src/web/lib/local-bootstrap.ts`: shared localhost-only instant
+  onboarding contract covering token format, TTL, local-origin guardrails, and
+  deterministic synthetic local identity mapping ahead of the Worker/browser
+  redemption flow
 - `../../lib/app/src/web/lib/auth-client.ts`: Better Auth React client mutations plus
   the shared principal-bootstrap fetch and shell-state projection helpers
 - `../../lib/app/src/web/lib/workflow-transport.ts`: shared `POST /api/workflow-read`

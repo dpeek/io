@@ -8,12 +8,14 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 
 import {
   authClient,
-  fetchWebPrincipalBootstrap,
+  completeLocalhostOnboarding,
   notifyWebPrincipalBootstrapChanged,
   readWebAuthState,
+  resolveWebPrincipalBootstrap,
   subscribeWebPrincipalBootstrapChanged,
   type WebAuthViewState,
 } from "../lib/auth-client.js";
+import { isLocalhostOrigin } from "../lib/local-bootstrap.js";
 import { resetSharedGraphRuntime } from "./graph-runtime-bootstrap.js";
 
 type AuthSessionFeedback =
@@ -29,11 +31,26 @@ type AuthSessionFeedback =
 type UseWebAuthSessionResult = WebAuthViewState & {
   refetch(): Promise<void>;
 };
+
 type GraphAccessActivationState =
   | { status: "idle" }
   | { status: "activating" }
   | { status: "ready" }
   | { status: "error"; message: string };
+
+type LocalhostOnboardingState =
+  | {
+      readonly available: false;
+      readonly feedback: null;
+      readonly pending: false;
+      start(): Promise<void>;
+    }
+  | {
+      readonly available: true;
+      readonly feedback: AuthSessionFeedback | null;
+      readonly pending: boolean;
+      start(): Promise<void>;
+    };
 
 function readDefaultName(email: string): string {
   const localPart = email.split("@", 1)[0]?.trim();
@@ -55,6 +72,83 @@ function readAuthStatusLabel(auth: WebAuthViewState): string {
   }
 }
 
+function readCurrentBrowserOrigin(): string | null {
+  if (
+    typeof window === "object" &&
+    window !== null &&
+    typeof window.location?.origin === "string" &&
+    window.location.origin.length > 0
+  ) {
+    return window.location.origin;
+  }
+
+  if (
+    typeof globalThis.location === "object" &&
+    globalThis.location !== null &&
+    typeof globalThis.location.origin === "string" &&
+    globalThis.location.origin.length > 0
+  ) {
+    return globalThis.location.origin;
+  }
+
+  return null;
+}
+
+function readErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function useLocalhostOnboardingState(enabled: boolean): LocalhostOnboardingState {
+  const [feedback, setFeedback] = useState<AuthSessionFeedback | null>(null);
+  const [pending, setPending] = useState(false);
+  const origin = readCurrentBrowserOrigin();
+  const available = enabled && origin !== null && isLocalhostOrigin(origin);
+
+  if (!available || origin === null) {
+    return {
+      available: false,
+      feedback: null,
+      pending: false,
+      start: async () => {},
+    };
+  }
+
+  return {
+    available: true,
+    feedback,
+    pending,
+    start: async () => {
+      setPending(true);
+      setFeedback(null);
+
+      try {
+        await completeLocalhostOnboarding({
+          origin,
+        });
+        setFeedback({
+          kind: "success",
+          message: "Local session established. Loading graph-backed routes.",
+        });
+        notifyWebPrincipalBootstrapChanged();
+      } catch (error) {
+        setFeedback({
+          kind: "error",
+          message: readErrorMessage(
+            error,
+            "Unable to complete localhost onboarding for this browser session.",
+          ),
+        });
+      } finally {
+        setPending(false);
+      }
+    },
+  };
+}
+
 function useResetSharedGraphRuntimeOnSessionChange(sessionId: string | null) {
   const previousSessionIdRef = useRef<string | null>(sessionId);
 
@@ -70,7 +164,7 @@ function useResetSharedGraphRuntimeOnSessionChange(sessionId: string | null) {
 
 export function useWebAuthSession(): UseWebAuthSessionResult {
   const [query, setQuery] = useState<{
-    readonly data: Awaited<ReturnType<typeof fetchWebPrincipalBootstrap>> | null;
+    readonly data: Awaited<ReturnType<typeof resolveWebPrincipalBootstrap>> | null;
     readonly error: Error | null;
     readonly isPending: boolean;
     readonly isRefetching: boolean;
@@ -91,7 +185,7 @@ export function useWebAuthSession(): UseWebAuthSessionResult {
       isRefetching: current.data !== null || current.error !== null,
     }));
 
-    void fetchWebPrincipalBootstrap()
+    void resolveWebPrincipalBootstrap({})
       .then((data) => {
         if (cancelled) {
           return;
@@ -196,9 +290,11 @@ export function AuthSessionErrorCard({
 
 export function AuthSessionEntryCard({
   description,
+  showLocalhostOnboarding = false,
   title,
 }: {
   readonly description: string;
+  readonly showLocalhostOnboarding?: boolean;
   readonly title: string;
 }) {
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
@@ -207,6 +303,7 @@ export function AuthSessionEntryCard({
   const [password, setPassword] = useState("");
   const [feedback, setFeedback] = useState<AuthSessionFeedback | null>(null);
   const [pending, setPending] = useState(false);
+  const localhostOnboarding = useLocalhostOnboardingState(showLocalhostOnboarding);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -272,6 +369,55 @@ export function AuthSessionEntryCard({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
+        {showLocalhostOnboarding ? (
+          <div
+            className="border-border/70 bg-muted/30 grid gap-3 rounded-lg border p-4"
+            data-auth-localhost-entry=""
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">Localhost only</Badge>
+              <span className="text-sm font-medium">Instant onboarding</span>
+            </div>
+            <p className="text-muted-foreground text-sm">
+              Start locally to exchange one loopback-only bootstrap credential for a normal browser
+              session, then reuse the existing principal bootstrap flow.
+            </p>
+            {localhostOnboarding.available ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  disabled={localhostOnboarding.pending}
+                  onClick={() => {
+                    void localhostOnboarding.start();
+                  }}
+                  type="button"
+                >
+                  {localhostOnboarding.pending ? "Starting locally..." : "Start locally"}
+                </Button>
+                <p className="text-muted-foreground text-xs">
+                  Use email sign-in below when you want the production-like auth path instead.
+                </p>
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-xs" data-auth-localhost-unavailable="">
+                Start locally is available only on localhost and loopback origins.
+              </p>
+            )}
+
+            {localhostOnboarding.available && localhostOnboarding.feedback ? (
+              <div
+                className={
+                  localhostOnboarding.feedback.kind === "error"
+                    ? "border-destructive/20 bg-destructive/5 text-destructive rounded-lg border px-3 py-2 text-xs"
+                    : "border-primary/20 bg-primary/5 text-foreground rounded-lg border px-3 py-2 text-xs"
+                }
+                data-auth-localhost-feedback={localhostOnboarding.feedback.kind}
+              >
+                {localhostOnboarding.feedback.message}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => setEntryMode("sign-in")}
@@ -333,8 +479,9 @@ export function AuthSessionEntryCard({
               {pending ? "Submitting..." : mode === "sign-in" ? "Sign in" : "Create account"}
             </Button>
             <p className="text-muted-foreground text-xs">
-              The create-account path is provisional and exists to make the Better Auth-backed
-              request path demonstrable from the browser.
+              {showLocalhostOnboarding
+                ? "Email auth stays available below the local shortcut for production-like auth testing."
+                : "The create-account path is provisional and exists to make the Better Auth-backed request path demonstrable from the browser."}
             </p>
           </div>
         </form>
@@ -443,7 +590,7 @@ export function GraphAccessGateView({
     );
   }
 
-  return <AuthSessionEntryCard description={description} title={title} />;
+  return <AuthSessionEntryCard description={description} showLocalhostOnboarding title={title} />;
 }
 
 export function GraphAccessGate({

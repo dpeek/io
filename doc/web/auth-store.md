@@ -7,6 +7,10 @@ This doc defines the runtime and migration foundation for Better Auth in the
 API requests now verify Better Auth session state server-side, reduce it into
 the repo's stable `AuthenticatedSession` contract, and only forward anonymous
 or successfully projected request authorization state to the graph authority.
+The localhost instant-onboarding path also stays inside that same Better Auth
+boundary: it redeems a short-lived local bootstrap credential into a
+normal Better Auth user/session pair instead of introducing a second auth
+database or long-lived local token model.
 
 The key boundary is:
 
@@ -35,7 +39,13 @@ The key boundary is:
     Better Auth, which requires a runtime with native D1 adapter support
 - [`../../lib/app/src/web/worker/index.ts`](../../lib/app/src/web/worker/index.ts) mounts that
   shared Better Auth instance before the graph API and SPA asset routes so the
-  auth handler is part of the real Worker surface.
+  auth handler is part of the real Worker surface. The same Worker now also owns
+  `POST /api/local-bootstrap/issue` and `POST /api/local-bootstrap/redeem`,
+  which stay local-only and terminate in normal Better Auth session cookies.
+- [`../../lib/app/src/web/lib/local-bootstrap.ts`](../../lib/app/src/web/lib/local-bootstrap.ts)
+  defines the localhost-only bootstrap credential and deterministic synthetic
+  local identity contract that the Worker issue/redeem path uses to bridge into
+  normal Better Auth state.
 
 ## Migration Workflow
 

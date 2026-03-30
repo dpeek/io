@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
+import { parseSetCookieHeader } from "better-auth/cookies";
 
 import type { AuthorizationContext, WebPrincipalSummary } from "@io/graph-authority";
 import { createGraphClient } from "@io/graph-client";
@@ -9,6 +12,15 @@ import { core } from "@io/graph-module-core";
 import { workflow } from "@io/graph-module-workflow";
 
 import { createAnonymousAuthorizationContext, issueBearerShareToken } from "../lib/auth-bridge.js";
+import {
+  completeLocalhostOnboarding,
+  redeemLocalhostBootstrapCredential,
+  startLocalhostBootstrapSession,
+  WebAuthRequestError,
+  webGraphAccessActivationPath,
+  webGraphCommandsPath,
+  webPrincipalBootstrapPath,
+} from "../lib/auth-client.js";
 import { createTestWebAppAuthority } from "../lib/authority-test-helpers.js";
 import type { WebAppAuthority } from "../lib/authority.js";
 import type { BetterAuthWorkerEnv } from "../lib/better-auth.js";
@@ -18,6 +30,13 @@ import {
   webGraphAuthorityPolicyVersionPath,
   webGraphAuthoritySessionPrincipalLookupPath,
 } from "../lib/graph-authority-do.js";
+import {
+  createLocalhostSyntheticEmail,
+  defineLocalhostBootstrapCredential,
+  localhostBootstrapIssuePath,
+  localhostBootstrapRedeemPath,
+  type LocalhostBootstrapCredential,
+} from "../lib/local-bootstrap.js";
 import { webSerializedQueryPath } from "../lib/query-transport.js";
 import { readRequestAuthorizationContext } from "../lib/server-routes.js";
 import { webWorkflowLivePath } from "../lib/workflow-live-transport.js";
@@ -43,6 +62,11 @@ const authorityAuthorization: AuthorizationContext = {
   capabilityVersion: 0,
   policyVersion: 0,
 };
+
+const betterAuthSchemaSql = readFileSync(
+  new URL("../../../migrations/auth-store/0001_better_auth.sql", import.meta.url),
+  "utf8",
+);
 
 function createSessionPrincipalProjectionResponse(
   overrides: Partial<WebPrincipalSummary> = {},
@@ -73,12 +97,28 @@ function createSessionPrincipalProjectionResponse(
   };
 }
 
-function createBetterAuthEnv(): BetterAuthWorkerEnv {
+function createBetterAuthEnv(
+  overrides: Partial<Omit<BetterAuthWorkerEnv, "AUTH_DB">> & {
+    readonly AUTH_DB?: Database;
+  } = {},
+): BetterAuthWorkerEnv {
   return {
-    AUTH_DB: new Database(":memory:"),
-    BETTER_AUTH_SECRET: "L5tH1pQ8xJ2mR9vN4sC7kW3yF6uB0dE!ZaG1oP5qT8xV2",
-    BETTER_AUTH_URL: "https://web.local",
+    AUTH_DB: overrides.AUTH_DB ?? new Database(":memory:"),
+    BETTER_AUTH_SECRET:
+      overrides.BETTER_AUTH_SECRET ?? "L5tH1pQ8xJ2mR9vN4sC7kW3yF6uB0dE!ZaG1oP5qT8xV2",
+    ...(overrides.BETTER_AUTH_TRUSTED_ORIGINS
+      ? { BETTER_AUTH_TRUSTED_ORIGINS: overrides.BETTER_AUTH_TRUSTED_ORIGINS }
+      : {}),
+    BETTER_AUTH_URL: overrides.BETTER_AUTH_URL ?? "https://web.local",
   };
+}
+
+function applyBetterAuthSchema(env: BetterAuthWorkerEnv): void {
+  if (!(env.AUTH_DB instanceof Database)) {
+    throw new Error("Worker tests expect a Bun sqlite AUTH_DB binding.");
+  }
+
+  env.AUTH_DB.exec(betterAuthSchemaSql);
 }
 
 function createCursor<T extends Record<string, unknown>>(
@@ -276,7 +316,11 @@ async function createProjectedPrincipalWithoutBindings(
   );
 }
 
-function createEndToEndWorkerEnv() {
+function createEndToEndWorkerEnv(
+  input: {
+    readonly betterAuthEnv?: BetterAuthWorkerEnv;
+  } = {},
+) {
   const { state } = createSqliteDurableObjectState();
   const durableObject = new WebGraphAuthorityDurableObject(
     state,
@@ -288,7 +332,7 @@ function createEndToEndWorkerEnv() {
     },
   );
   const env = {
-    ...createBetterAuthEnv(),
+    ...(input.betterAuthEnv ?? createBetterAuthEnv()),
     ASSETS: {
       async fetch() {
         return new Response("asset");
@@ -321,6 +365,7 @@ function createWorkerEnv(
     readonly assetResponse?: Response;
     readonly authorityResponse?: Response;
     readonly bearerLookupResponse?: Response;
+    readonly betterAuthEnv?: BetterAuthWorkerEnv;
     readonly policyVersionLookupResponse?: Response;
     readonly resolvePolicyVersionLookupResponse?: (
       request: Request,
@@ -341,7 +386,7 @@ function createWorkerEnv(
   let forwardedAuthorization: AuthorizationContext | null = null;
 
   const env = {
-    ...createBetterAuthEnv(),
+    ...(input.betterAuthEnv ?? createBetterAuthEnv()),
     ASSETS: {
       async fetch(request: Request) {
         assetPaths.push(new URL(request.url).pathname);
@@ -407,6 +452,110 @@ function createWorkerEnv(
     },
     readForwardedAuthorizations() {
       return [...forwardedAuthorizations];
+    },
+  };
+}
+
+function readSessionCookieHeader(setCookieHeader: string): string {
+  const sessionCookie = parseSetCookieHeader(setCookieHeader).get("better-auth.session_token");
+  if (!sessionCookie) {
+    throw new Error("Expected the Better Auth session cookie to be present.");
+  }
+
+  return `better-auth.session_token=${encodeURIComponent(sessionCookie.value)}`;
+}
+
+function expireStoredLocalhostBootstrapCredential(database: Database): void {
+  const stored = database.query('select "id", "value" from "verification"').get() as {
+    readonly id: string;
+    readonly value: string;
+  } | null;
+
+  if (!stored) {
+    throw new Error("Expected an issued localhost bootstrap credential in the auth store.");
+  }
+
+  const now = Date.now();
+  const expiredCredential = defineLocalhostBootstrapCredential({
+    ...(JSON.parse(stored.value) as LocalhostBootstrapCredential),
+    issuedAt: new Date(now - 2 * 60 * 1000).toISOString(),
+    expiresAt: new Date(now - 60 * 1000).toISOString(),
+  });
+  database
+    .query('update "verification" set "value" = ?, "expiresAt" = ?, "updatedAt" = ? where "id" = ?')
+    .run(
+      JSON.stringify(expiredCredential),
+      expiredCredential.expiresAt,
+      expiredCredential.issuedAt,
+      stored.id,
+    );
+}
+
+function readStoredAuthUser(database: Database): {
+  readonly email: string;
+  readonly id: string;
+} {
+  const user = database.query('select "id", "email" from "user"').get() as {
+    readonly email: string;
+    readonly id: string;
+  } | null;
+
+  if (!user) {
+    throw new Error("Expected a Better Auth user to exist for the local browser session.");
+  }
+
+  return user;
+}
+
+function createBrowserWorkerSession(input: {
+  readonly env: Parameters<typeof worker.fetch>[1];
+  readonly handler: ReturnType<typeof createWorkerFetchHandler>;
+  readonly origin: string;
+  readonly onResponse?: (context: {
+    readonly path: string;
+    readonly request: Request;
+    readonly response: Response;
+  }) => Promise<void> | void;
+}) {
+  let cookieHeader: string | null = null;
+  const paths: string[] = [];
+
+  return {
+    async fetcher(path: string, init?: RequestInit): Promise<Response> {
+      const requestUrl = new URL(path, input.origin);
+      const headers = new Headers(init?.headers);
+      const method = init?.method ?? "GET";
+
+      if (cookieHeader && init?.credentials !== "omit") {
+        headers.set("cookie", cookieHeader);
+      }
+      if (method !== "GET" && method !== "HEAD" && !headers.has("origin")) {
+        headers.set("origin", input.origin);
+      }
+
+      const request = new Request(requestUrl, {
+        ...init,
+        headers,
+      });
+      paths.push(requestUrl.pathname);
+
+      const response = await input.handler.fetch(request, input.env);
+      const setCookieHeader = response.headers.get("set-cookie");
+      if (setCookieHeader) {
+        cookieHeader = readSessionCookieHeader(setCookieHeader);
+      }
+      await input.onResponse?.({
+        path: requestUrl.pathname,
+        request,
+        response,
+      });
+      return response;
+    },
+    readCookieHeader(): string | null {
+      return cookieHeader;
+    },
+    readPaths(): readonly string[] {
+      return [...paths];
     },
   };
 }
@@ -1299,6 +1448,522 @@ describe("web worker route forwarding", () => {
     expect(response.status).toBe(404);
     expect(assetPaths).toEqual(["/api/secret-fields"]);
     expect(authorityPaths).toEqual([]);
+  });
+});
+
+describe("web worker localhost bootstrap routes", () => {
+  it("issues a localhost-only bootstrap credential for the configured local origin", async () => {
+    const localAuthEnv = createBetterAuthEnv({
+      BETTER_AUTH_URL: "http://io.localhost:8787",
+    });
+    applyBetterAuthSchema(localAuthEnv);
+    const { authorityPaths, env, principalLookupPaths } = createWorkerEnv({
+      betterAuthEnv: localAuthEnv,
+    });
+    const handler = createWorkerFetchHandler();
+
+    const response = await handler.fetch(
+      new Request(`http://io.localhost:8787${localhostBootstrapIssuePath}`, {
+        method: "POST",
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(201);
+    expect(authorityPaths).toEqual([]);
+    expect(principalLookupPaths).toEqual([]);
+    expect(
+      defineLocalhostBootstrapCredential((await response.json()) as LocalhostBootstrapCredential),
+    ).toMatchObject({
+      redeemOrigin: "http://io.localhost:8787",
+      syntheticIdentity: {
+        email: createLocalhostSyntheticEmail("local:default"),
+      },
+    });
+  });
+
+  it("redeems a localhost bootstrap credential into a real Better Auth session cookie", async () => {
+    const localAuthEnv = createBetterAuthEnv({
+      BETTER_AUTH_URL: "http://io.localhost:8787",
+    });
+    applyBetterAuthSchema(localAuthEnv);
+
+    const { authorityPaths, env, principalLookupPaths } = createWorkerEnv({
+      betterAuthEnv: localAuthEnv,
+      principalLookupResponse: Response.json(createSessionPrincipalProjectionResponse()),
+      async onPrincipalLookup(request) {
+        expect(await request.json()).toMatchObject({
+          graphId: "graph:global",
+          email: createLocalhostSyntheticEmail("local:default"),
+          subject: {
+            issuer: "better-auth",
+            provider: "user",
+            providerAccountId: expect.any(String),
+            authUserId: expect.any(String),
+          },
+        });
+      },
+    });
+    const handler = createWorkerFetchHandler();
+
+    const issueResponse = await handler.fetch(
+      new Request(`http://io.localhost:8787${localhostBootstrapIssuePath}`, {
+        method: "POST",
+      }),
+      env,
+    );
+    const credential = defineLocalhostBootstrapCredential(
+      (await issueResponse.json()) as LocalhostBootstrapCredential,
+    );
+
+    const redeemResponse = await handler.fetch(
+      new Request(`http://io.localhost:8787${localhostBootstrapRedeemPath}`, {
+        method: "POST",
+        headers: {
+          origin: "http://io.localhost:8787",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token: credential.token,
+        }),
+      }),
+      env,
+    );
+
+    expect(redeemResponse.status).toBe(204);
+    const setCookieHeader = redeemResponse.headers.get("set-cookie");
+    expect(setCookieHeader).toBeTruthy();
+
+    const bootstrapResponse = await handler.fetch(
+      new Request(`http://io.localhost:8787${webAppBootstrapPath}`, {
+        headers: {
+          cookie: readSessionCookieHeader(setCookieHeader!),
+        },
+      }),
+      env,
+    );
+
+    expect(authorityPaths).toEqual([]);
+    expect(principalLookupPaths).toEqual([webGraphAuthoritySessionPrincipalLookupPath]);
+    expect(bootstrapResponse.status).toBe(200);
+    expect(await bootstrapResponse.json()).toMatchObject({
+      session: {
+        authState: "ready",
+      },
+      principal: expect.objectContaining({
+        principalId: "principal:user-better-auth",
+      }),
+    });
+  });
+
+  it("rejects replayed localhost bootstrap credentials", async () => {
+    const localAuthEnv = createBetterAuthEnv({
+      BETTER_AUTH_URL: "http://io.localhost:8787",
+    });
+    applyBetterAuthSchema(localAuthEnv);
+
+    const { env } = createWorkerEnv({
+      betterAuthEnv: localAuthEnv,
+    });
+    const handler = createWorkerFetchHandler();
+
+    const issueResponse = await handler.fetch(
+      new Request(`http://io.localhost:8787${localhostBootstrapIssuePath}`, {
+        method: "POST",
+      }),
+      env,
+    );
+    const credential = defineLocalhostBootstrapCredential(
+      (await issueResponse.json()) as LocalhostBootstrapCredential,
+    );
+
+    const firstRedeem = await handler.fetch(
+      new Request(`http://io.localhost:8787${localhostBootstrapRedeemPath}`, {
+        method: "POST",
+        headers: {
+          origin: "http://io.localhost:8787",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token: credential.token,
+        }),
+      }),
+      env,
+    );
+    const secondRedeem = await handler.fetch(
+      new Request(`http://io.localhost:8787${localhostBootstrapRedeemPath}`, {
+        method: "POST",
+        headers: {
+          origin: "http://io.localhost:8787",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token: credential.token,
+        }),
+      }),
+      env,
+    );
+
+    expect(firstRedeem.status).toBe(204);
+    expect(secondRedeem.status).toBe(401);
+    expect(await secondRedeem.json()).toMatchObject({
+      code: "auth.local_bootstrap_invalid",
+    });
+  });
+
+  it("rejects expired localhost bootstrap credentials", async () => {
+    const localAuthEnv = createBetterAuthEnv({
+      BETTER_AUTH_URL: "http://io.localhost:8787",
+    });
+    applyBetterAuthSchema(localAuthEnv);
+    const { env } = createWorkerEnv({
+      betterAuthEnv: localAuthEnv,
+    });
+    const handler = createWorkerFetchHandler();
+
+    const issueResponse = await handler.fetch(
+      new Request(`http://io.localhost:8787${localhostBootstrapIssuePath}`, {
+        method: "POST",
+      }),
+      env,
+    );
+    const issuedCredential = defineLocalhostBootstrapCredential(
+      (await issueResponse.json()) as LocalhostBootstrapCredential,
+    );
+
+    const stored = localAuthEnv.AUTH_DB.query('select "id", "value" from "verification"').get() as {
+      readonly id: string;
+      readonly value: string;
+    };
+    const now = Date.now();
+    const expiredCredential = defineLocalhostBootstrapCredential({
+      ...(JSON.parse(stored.value) as LocalhostBootstrapCredential),
+      issuedAt: new Date(now - 2 * 60 * 1000).toISOString(),
+      expiresAt: new Date(now - 60 * 1000).toISOString(),
+    });
+    localAuthEnv.AUTH_DB.query(
+      'update "verification" set "value" = ?, "expiresAt" = ?, "updatedAt" = ? where "id" = ?',
+    ).run(
+      JSON.stringify(expiredCredential),
+      expiredCredential.expiresAt,
+      expiredCredential.issuedAt,
+      stored.id,
+    );
+
+    const redeemResponse = await handler.fetch(
+      new Request(`http://io.localhost:8787${localhostBootstrapRedeemPath}`, {
+        method: "POST",
+        headers: {
+          origin: "http://io.localhost:8787",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token: issuedCredential.token,
+        }),
+      }),
+      env,
+    );
+
+    expect(redeemResponse.status).toBe(410);
+    expect(await redeemResponse.json()).toMatchObject({
+      code: "auth.local_bootstrap_expired",
+    });
+  });
+
+  it("denies localhost bootstrap routes for non-local worker origins", async () => {
+    const { env } = createWorkerEnv();
+    const handler = createWorkerFetchHandler();
+
+    const issueResponse = await handler.fetch(
+      new Request(`https://web.local${localhostBootstrapIssuePath}`, {
+        method: "POST",
+      }),
+      env,
+    );
+    const redeemResponse = await handler.fetch(
+      new Request(`https://web.local${localhostBootstrapRedeemPath}`, {
+        method: "POST",
+        headers: {
+          origin: "https://web.local",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token:
+            "io_local_bootstrap_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        }),
+      }),
+      env,
+    );
+
+    expect(issueResponse.status).toBe(404);
+    expect(redeemResponse.status).toBe(404);
+    expect(await redeemResponse.json()).toMatchObject({
+      code: "auth.local_bootstrap_unavailable",
+    });
+  });
+});
+
+describe("web worker localhost instant onboarding end to end", () => {
+  it("turns one localhost click into a writable graph session", async () => {
+    const localAuthEnv = createBetterAuthEnv({
+      BETTER_AUTH_URL: "http://io.localhost:8787",
+    });
+    applyBetterAuthSchema(localAuthEnv);
+
+    const { durableObject, env } = createEndToEndWorkerEnv({
+      betterAuthEnv: localAuthEnv,
+    });
+    const authority = await getDurableAuthority(durableObject);
+    const handler = createWorkerFetchHandler();
+    const browser = createBrowserWorkerSession({
+      handler,
+      env,
+      origin: "http://io.localhost:8787",
+    });
+
+    const payload = await completeLocalhostOnboarding({
+      fetcher: browser.fetcher,
+      origin: "http://io.localhost:8787",
+    });
+
+    expect(browser.readCookieHeader()).toBeTruthy();
+    expect(browser.readPaths()).toEqual([
+      localhostBootstrapIssuePath,
+      localhostBootstrapRedeemPath,
+      webPrincipalBootstrapPath,
+      webGraphAccessActivationPath,
+      webGraphCommandsPath,
+      webGraphAccessActivationPath,
+      webPrincipalBootstrapPath,
+    ]);
+    expect(payload).toMatchObject({
+      session: {
+        authState: "ready",
+        displayName: createLocalhostSyntheticEmail("local:default"),
+      },
+      principal: {
+        access: {
+          authority: true,
+          graphMember: true,
+        },
+      },
+    });
+    expect(payload.principal?.roleKeys).toEqual(
+      expect.arrayContaining(["graph:authority", "graph:owner"]),
+    );
+
+    const mutationStore = createGraphStore(
+      authority.readSnapshot({ authorization: authorityAuthorization }),
+    );
+    const workerGraph = { ...core, ...workflow } as const;
+    const mutationGraph = createGraphClient(mutationStore, workerGraph);
+    const beforeCreate = mutationStore.snapshot();
+    const envVarId = mutationGraph.envVar.create({
+      description: "Created through localhost instant onboarding",
+      name: "LOCAL_ONBOARDING_TEST",
+    });
+    const transaction = buildGraphWriteTransaction(
+      beforeCreate,
+      mutationStore.snapshot(),
+      "tx:localhost-onboarding-create-env-var",
+    );
+
+    const txResponse = await browser.fetcher("/api/tx", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(transaction),
+    });
+
+    expect(txResponse.status).toBe(200);
+    expect(await txResponse.json()).toMatchObject({
+      txId: "tx:localhost-onboarding-create-env-var",
+      writeScope: "client-tx",
+    });
+    expect(
+      createGraphClient(
+        createGraphStore(authority.readSnapshot({ authorization: authorityAuthorization })),
+        workerGraph,
+      ).envVar.get(envVarId)?.description,
+    ).toBe("Created through localhost instant onboarding");
+  });
+
+  it("fails clearly when the issued localhost credential expires before redemption", async () => {
+    const localAuthEnv = createBetterAuthEnv({
+      BETTER_AUTH_URL: "http://io.localhost:8787",
+    });
+    applyBetterAuthSchema(localAuthEnv);
+
+    const { env } = createEndToEndWorkerEnv({
+      betterAuthEnv: localAuthEnv,
+    });
+    const handler = createWorkerFetchHandler();
+    const browser = createBrowserWorkerSession({
+      handler,
+      env,
+      origin: "http://io.localhost:8787",
+      onResponse({ path, response }) {
+        if (path === localhostBootstrapIssuePath && response.ok) {
+          expireStoredLocalhostBootstrapCredential(localAuthEnv.AUTH_DB);
+        }
+      },
+    });
+
+    let error: unknown;
+    try {
+      await completeLocalhostOnboarding({
+        fetcher: browser.fetcher,
+        origin: "http://io.localhost:8787",
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(WebAuthRequestError);
+    expect(error).toMatchObject({
+      code: "auth.local_bootstrap_expired",
+      status: 410,
+    });
+    expect(browser.readPaths()).toEqual([
+      localhostBootstrapIssuePath,
+      localhostBootstrapRedeemPath,
+    ]);
+  });
+
+  it("rejects replayed localhost bootstrap redemptions through the real worker", async () => {
+    const localAuthEnv = createBetterAuthEnv({
+      BETTER_AUTH_URL: "http://io.localhost:8787",
+    });
+    applyBetterAuthSchema(localAuthEnv);
+
+    const { env } = createEndToEndWorkerEnv({
+      betterAuthEnv: localAuthEnv,
+    });
+    const handler = createWorkerFetchHandler();
+    const browser = createBrowserWorkerSession({
+      handler,
+      env,
+      origin: "http://io.localhost:8787",
+    });
+
+    const credential = await startLocalhostBootstrapSession({
+      fetcher: browser.fetcher,
+    });
+
+    let error: unknown;
+    try {
+      await redeemLocalhostBootstrapCredential({
+        fetcher: browser.fetcher,
+        token: credential.token,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(browser.readCookieHeader()).toBeTruthy();
+    expect(error).toBeInstanceOf(WebAuthRequestError);
+    expect(error).toMatchObject({
+      code: "auth.local_bootstrap_invalid",
+      status: 401,
+    });
+    expect(browser.readPaths()).toEqual([
+      localhostBootstrapIssuePath,
+      localhostBootstrapRedeemPath,
+      localhostBootstrapRedeemPath,
+    ]);
+  });
+
+  it("denies localhost instant onboarding before any worker call when the browser origin is not local", async () => {
+    const { env } = createEndToEndWorkerEnv();
+    const handler = createWorkerFetchHandler();
+    const browser = createBrowserWorkerSession({
+      handler,
+      env,
+      origin: "https://web.local",
+    });
+
+    let error: unknown;
+    try {
+      await completeLocalhostOnboarding({
+        fetcher: browser.fetcher,
+        origin: "https://web.local",
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(
+      "Localhost instant onboarding is only available on localhost origins.",
+    );
+    expect(browser.readPaths()).toEqual([]);
+  });
+
+  it("fails clearly when localhost onboarding reaches an ambiguous local admission state", async () => {
+    const localAuthEnv = createBetterAuthEnv({
+      BETTER_AUTH_URL: "http://io.localhost:8787",
+    });
+    applyBetterAuthSchema(localAuthEnv);
+
+    const { durableObject, env } = createEndToEndWorkerEnv({
+      betterAuthEnv: localAuthEnv,
+    });
+    const authority = await getDurableAuthority(durableObject);
+    await authority.executeCommand(
+      {
+        kind: "bootstrap-operator-access",
+        input: {
+          email: "operator@example.com",
+          graphId: "graph:global",
+        },
+      },
+      {
+        authorization: createAnonymousAuthorizationContext({
+          graphId: "graph:global",
+          policyVersion: 0,
+        }),
+      },
+    );
+
+    const handler = createWorkerFetchHandler();
+    const browser = createBrowserWorkerSession({
+      handler,
+      env,
+      origin: "http://io.localhost:8787",
+      async onResponse({ path, response }) {
+        if (path !== localhostBootstrapRedeemPath || !response.ok) {
+          return;
+        }
+
+        const localUser = readStoredAuthUser(localAuthEnv.AUTH_DB);
+        await createProjectedPrincipalWithoutBindings(authority, {
+          email: localUser.email,
+          userId: localUser.id,
+        });
+      },
+    });
+
+    let error: unknown;
+    try {
+      await completeLocalhostOnboarding({
+        fetcher: browser.fetcher,
+        origin: "http://io.localhost:8787",
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(browser.readCookieHeader()).toBeTruthy();
+    expect(error).toBeInstanceOf(WebAuthRequestError);
+    expect((error as WebAuthRequestError).status).toBe(403);
+    expect((error as Error).message).toContain("Initial role binding denied");
+    expect(browser.readPaths()).toEqual([
+      localhostBootstrapIssuePath,
+      localhostBootstrapRedeemPath,
+      webPrincipalBootstrapPath,
+      webGraphAccessActivationPath,
+    ]);
   });
 });
 
