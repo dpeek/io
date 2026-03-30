@@ -16,7 +16,7 @@ import {
 } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
 import { defineSecretField, defineType } from "@io/graph-module";
-import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { core, coreBuiltInQuerySurfaceIds, coreGraphBootstrapOptions } from "@io/graph-module-core";
 import { workflow } from "@io/graph-module-workflow";
 import {
   type RetainedWorkflowProjectionState,
@@ -2194,7 +2194,7 @@ describe("web authority", () => {
     expect(secondCommitPage.nextCursor).toBeUndefined();
   });
 
-  it("executes serialized entity, neighborhood, and scope reads through the reusable authority seam", async () => {
+  it("executes serialized entity, neighborhood, and cross-module scope reads through the reusable authority seam", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const { authority, fixture } =
       await createTestWebAppAuthorityWithWorkflowFixture(authorization);
@@ -2254,9 +2254,27 @@ describe("web authority", () => {
     expect(scoped.result.kind).toBe("scope");
     expect(scoped.result.freshness.scopeCursor).toEqual(expect.any(String));
     expect(scoped.result.items.map((item) => item.entityId)).toContain(fixture.projectId);
+
+    const coreScoped = await authority.executeSerializedQuery(
+      {
+        version: 1,
+        query: {
+          kind: "scope",
+          scopeId: coreBuiltInQuerySurfaceIds.catalogScope,
+        },
+      } satisfies SerializedQueryRequest,
+      { authorization },
+    );
+    expect(coreScoped.ok).toBe(true);
+    if (!coreScoped.ok) {
+      throw new Error("Expected core scope serialized query execution to succeed.");
+    }
+    expect(coreScoped.result.kind).toBe("scope");
+    expect(coreScoped.result.freshness.scopeCursor).toEqual(expect.any(String));
+    expect(coreScoped.result.items.map((item) => item.entityId)).toContain(core.node.values.id);
   });
 
-  it("dispatches serialized collection reads onto the registered workflow projection surfaces", async () => {
+  it("routes serialized collection reads through the registered executor surface seam", async () => {
     const authorization = createAuthorityAuthorizationContext();
     const { authority, fixture } =
       await createTestWebAppAuthorityWithWorkflowFixture(authorization);
@@ -2358,6 +2376,58 @@ describe("web authority", () => {
       ok: false,
       code: "unsupported-query",
       error: `Collection query "${workflowBuiltInQuerySurfaceIds.projectBranchBoard}" requires an equality filter for "projectId".`,
+    });
+
+    const unregisteredCollection = await authority.executeSerializedQuery(
+      {
+        version: 1,
+        query: {
+          kind: "collection",
+          indexId: "workflow:missing-surface",
+        },
+      } satisfies SerializedQueryRequest,
+      { authorization },
+    );
+    expect(unregisteredCollection).toEqual({
+      ok: false,
+      code: "unsupported-query",
+      error:
+        'Collection query "workflow:missing-surface" is not a registered serialized-query surface.',
+    });
+
+    const unregisteredScope = await authority.executeSerializedQuery(
+      {
+        version: 1,
+        query: {
+          kind: "scope",
+          scopeId: "workflow:missing-scope",
+        },
+      } satisfies SerializedQueryRequest,
+      { authorization },
+    );
+    expect(unregisteredScope).toEqual({
+      ok: false,
+      code: "unsupported-query",
+      error: 'Scope query "workflow:missing-scope" is not a registered serialized-query surface.',
+    });
+
+    const unsupportedCoreScopeWindow = await authority.executeSerializedQuery(
+      {
+        version: 1,
+        query: {
+          kind: "scope",
+          scopeId: coreBuiltInQuerySurfaceIds.catalogScope,
+          window: {
+            limit: 1,
+          },
+        },
+      } satisfies SerializedQueryRequest,
+      { authorization },
+    );
+    expect(unsupportedCoreScopeWindow).toEqual({
+      ok: false,
+      code: "unsupported-query",
+      error: `Scope query "${coreBuiltInQuerySurfaceIds.catalogScope}" does not support windowed pagination.`,
     });
 
     const invalid = await authority.executeSerializedQuery(

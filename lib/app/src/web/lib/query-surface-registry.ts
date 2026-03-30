@@ -1,3 +1,4 @@
+import { coreQuerySurfaceCatalog } from "@io/graph-module-core";
 import { workflowQuerySurfaceCatalog } from "@io/graph-module-workflow";
 import type {
   ModuleQuerySurfaceCatalog,
@@ -139,6 +140,7 @@ export function createQuerySurfaceRendererCompatibility(
 
 export const installedModuleQuerySurfaceRegistry = createInstalledModuleQuerySurfaceRegistry([
   workflowQuerySurfaceCatalog,
+  coreQuerySurfaceCatalog,
 ]);
 
 export const installedModuleQueryEditorCatalog = createQueryEditorCatalogFromRegistry(

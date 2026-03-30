@@ -66,7 +66,10 @@ describe("workflow session live overlay", () => {
     });
     expect(
       mergeWorkflowSessionTimelineEvents({
-        authoritativeEvents: [createStatusEvent(1, "Started"), createStatusEvent(2, "Authoritative event")],
+        authoritativeEvents: [
+          createStatusEvent(1, "Started"),
+          createStatusEvent(2, "Authoritative event"),
+        ],
         localEvents: [localEvent],
       }),
     ).toEqual([

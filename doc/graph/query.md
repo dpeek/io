@@ -14,9 +14,11 @@ This doc covers:
 - how query execution interacts with scoped sync, pagination, and live
   invalidation
 
-It is intentionally broader than the current workflow read proof. The repo
-already ships one workflow-specific serialized read envelope, but this doc
-defines the reusable platform model that later surfaces should converge on.
+It is intentionally broader than the current bounded multi-module proof. The
+repo already ships one workflow-specific serialized read envelope plus one
+generic shared-seam proof across workflow and core module scope surfaces, but
+this doc defines the reusable platform model that later surfaces should
+converge on.
 
 ## Current State
 
@@ -45,10 +47,20 @@ What exists today:
   shapes
 - `../../lib/app/src/web/lib/authority.ts` now exposes one reusable
   `executeSerializedQuery(...)` seam that normalizes serialized requests and
-  routes the first supported families through bounded authority-owned plans
+  routes the supported families through one registered executor dispatch seam
+- installed query-surface catalogs now include bounded workflow and core module
+  scope surfaces so the generic serialized-query registry is proven across
+  more than one module without opening arbitrary scans
+- `../../lib/app/src/web/lib/registered-serialized-query-executors.ts` now owns
+  the shipped bounded executor registrations for the two workflow projection
+  collections plus the workflow and core module scopes, so authority no longer
+  carries hard-coded workflow surface dispatch branches
 - authority-owned workflow reads rebuild from authoritative graph state and
   expose `projectionCursor`, `projectedAt`, pagination, and fail-closed
   `projection-stale` semantics
+- authority-owned module scope reads for both `workflow:review-scope` and the
+  bounded `core:catalog` surface now execute through the same registered scope
+  executor path and reject unsupported windowed pagination
 - `@io/graph-module-core` now ships the built-in `core:savedQuery`,
   `core:savedQueryParameter`, and `core:savedView` object types plus typed
   helpers for creating, updating, and traversing those graph-native records
@@ -584,16 +596,18 @@ route-local knowledge:
 - `workflow:branch-commit-queue`: projection-backed `collection`
 - `scope:workflow:review`: scope-backed `scope`
 
-The current authority planner supports:
+The current registered executor set supports:
 
 - `entity`: authoritative filtered entity reads
 - `neighborhood`: authoritative bounded neighborhood reads
 - the two workflow `collection` surfaces above
 - the shipped workflow review `scope`
+- the shipped core catalog `scope`
 
 Unsupported collection or scope shapes fail closed with explicit
-`unsupported-query` responses; malformed requests fail with `invalid-query`;
-projection cursor mismatches remain `projection-stale`.
+`unsupported-query` responses; stale or mismatched registered surfaces fail
+closed before dispatch; malformed requests fail with `invalid-query`; projection
+cursor mismatches remain `projection-stale`.
 
 ## Query Result Model
 

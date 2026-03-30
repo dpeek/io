@@ -26,7 +26,6 @@ import {
   collectTypeIndex,
   createGraphClient,
   GraphValidationError,
-  type NormalizedQueryFilter,
   type NormalizedQueryRequest,
   type GraphClient,
   type QueryIdentityExecutionContext,
@@ -58,7 +57,7 @@ import {
   type AuthoritativeGraphWriteResult,
   type GraphWriteScope,
 } from "@io/graph-kernel";
-import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { core, coreCatalogModuleReadScope, coreGraphBootstrapOptions } from "@io/graph-module-core";
 import { workflow } from "@io/graph-module-workflow";
 import {
   agentSession,
@@ -81,14 +80,11 @@ import {
   type CommitQueueScopeFailureCode,
   type CommitQueueScopeQuery,
   type CommitQueueScopeResult,
-  projectBranchScopeOrderFieldValues,
   type ProjectBranchScopeFailureCode,
   type ProjectBranchScopeQuery,
   type ProjectBranchScopeResult,
   type RetainedWorkflowProjectionState,
   WorkflowProjectionQueryError,
-  branchStateValues,
-  workflowBuiltInQuerySurfaceIds,
   projectionSchema,
   workflowReviewModuleReadScope,
   type WorkflowMutationAction,
@@ -122,6 +118,11 @@ import {
   installedModuleQueryEditorCatalog,
   installedModuleQuerySurfaceRegistry,
 } from "./query-surface-registry.js";
+import {
+  resolveSerializedQueryCollectionExecutor,
+  resolveSerializedQueryScopeExecutor,
+} from "./serialized-query-executor-registry.js";
+import { createWebAppSerializedQueryExecutorRegistry } from "./registered-serialized-query-executors.js";
 import {
   createGraphBackedSavedQueryRepository,
   deriveSavedQueryRecord,
@@ -170,18 +171,6 @@ import { WorkflowMutationError } from "./workflow-mutation-helpers.js";
 import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-transport.js";
 
 const webAppGraph = { ...core, ...workflow } as const;
-const workflowProjectBranchBoardSurface = getInstalledModuleQuerySurface(
-  installedModuleQuerySurfaceRegistry,
-  workflowBuiltInQuerySurfaceIds.projectBranchBoard,
-);
-const workflowBranchCommitQueueSurface = getInstalledModuleQuerySurface(
-  installedModuleQuerySurfaceRegistry,
-  workflowBuiltInQuerySurfaceIds.branchCommitQueue,
-);
-const workflowReviewQuerySurface = getInstalledModuleQuerySurface(
-  installedModuleQuerySurfaceRegistry,
-  workflowBuiltInQuerySurfaceIds.reviewScope,
-);
 
 type WebAppGraph = typeof webAppGraph;
 type PersistedWebAppAuthority = PersistedAuthoritativeGraph<WebAppGraph>;
@@ -593,14 +582,21 @@ const writeSecretFieldCommandBasePredicateIds = [
   secretHandleLastRotatedAtPredicateId,
 ] as const;
 const moduleScopeCursorPrefix = "scope:";
-const workflowModuleEntityTypeIds = new Set(
-  Object.values(projectionSchema)
-    .filter(isEntityType)
-    .map((typeDef) => {
-      const values = typeDef.values as { readonly id?: string; readonly key: string };
-      return values.id ?? values.key;
-    }),
-);
+function createModuleEntityTypeIds(
+  definitions: Readonly<Record<string, AnyTypeOutput>>,
+): ReadonlySet<string> {
+  return new Set(
+    Object.values(definitions)
+      .filter(isEntityType)
+      .map((typeDef) => {
+        const values = typeDef.values as { readonly id?: string; readonly key: string };
+        return values.id ?? values.key;
+      }),
+  );
+}
+
+const workflowModuleEntityTypeIds = createModuleEntityTypeIds(projectionSchema);
+const coreModuleEntityTypeIds = createModuleEntityTypeIds(core);
 const projectionReadEntityTypeIds = new Set(
   [
     project,
@@ -1463,20 +1459,30 @@ function planSyncScope(
 ): PlannedWebAppAuthorityScope | undefined {
   if (isGraphScopeRequest(scope)) return undefined;
 
-  if (!matchesModuleReadScopeRequest(scope, workflowReviewModuleReadScope)) {
-    throw new WebAppAuthorityReadError(
-      404,
-      `Scope "${scope.scopeId}" was not found for module "${scope.moduleId}".`,
-    );
+  if (matchesModuleReadScopeRequest(scope, workflowReviewModuleReadScope)) {
+    return {
+      scope: createModuleReadScope(
+        workflowReviewModuleReadScope,
+        createPolicyFilterVersion(authorityPolicyVersion),
+      ),
+      typeIds: workflowModuleEntityTypeIds,
+    };
   }
 
-  return {
-    scope: createModuleReadScope(
-      workflowReviewModuleReadScope,
-      createPolicyFilterVersion(authorityPolicyVersion),
-    ),
-    typeIds: workflowModuleEntityTypeIds,
-  };
+  if (matchesModuleReadScopeRequest(scope, coreCatalogModuleReadScope)) {
+    return {
+      scope: createModuleReadScope(
+        coreCatalogModuleReadScope,
+        createPolicyFilterVersion(authorityPolicyVersion),
+      ),
+      typeIds: coreModuleEntityTypeIds,
+    };
+  }
+
+  throw new WebAppAuthorityReadError(
+    404,
+    `Scope "${scope.scopeId}" was not found for module "${scope.moduleId}".`,
+  );
 }
 export class WebAppAuthoritySessionPrincipalLookupError extends Error {
   readonly status: number;
@@ -3925,20 +3931,6 @@ export async function createWebAppAuthority(
     };
   }
 
-  function requireStringQueryLiteral(value: QueryLiteral, label: string): string {
-    if (typeof value !== "string" || value.length === 0) {
-      throw new UnsupportedSerializedQueryPlanError(`${label} must resolve to a non-empty string.`);
-    }
-    return value;
-  }
-
-  function requireBooleanQueryLiteral(value: QueryLiteral, label: string): boolean {
-    if (typeof value !== "boolean") {
-      throw new UnsupportedSerializedQueryPlanError(`${label} must resolve to a boolean.`);
-    }
-    return value;
-  }
-
   const serializedQueryPageCursorPrefix = "serialized-query:";
 
   type SerializedQueryPageCursor = {
@@ -4009,224 +4001,35 @@ export async function createWebAppAuthority(
     };
   }
 
-  function planWorkflowProjectBranchCollectionQuery(
-    query: Extract<NormalizedQueryRequest["query"], { readonly kind: "collection" }>,
-    pageCursor: string | undefined,
-  ): ProjectBranchScopeQuery {
-    let projectId: string | undefined;
-    const states = new Set<(typeof branchStateValues)[number]>();
-    let hasActiveCommit: boolean | undefined;
-    let showUnmanagedRepositoryBranches: boolean | undefined;
-
-    const applyFilter = (filter: NormalizedQueryFilter | undefined): void => {
-      if (!filter) {
-        return;
-      }
-      if (filter.op === "and") {
-        for (const clause of filter.clauses) {
-          applyFilter(clause);
-        }
-        return;
-      }
-      if (filter.op === "eq") {
-        if (filter.fieldId === "projectId") {
-          projectId = requireStringQueryLiteral(filter.value, 'Collection filter "projectId"');
-          return;
-        }
-        if (filter.fieldId === "state") {
-          const state = requireStringQueryLiteral(filter.value, 'Collection filter "state"');
-          if (!branchStateValues.includes(state as (typeof branchStateValues)[number])) {
-            throw new UnsupportedSerializedQueryPlanError(
-              `Collection filter "state" must be one of: ${branchStateValues.join(", ")}.`,
-            );
-          }
-          states.add(state as (typeof branchStateValues)[number]);
-          return;
-        }
-        if (filter.fieldId === "hasActiveCommit") {
-          hasActiveCommit = requireBooleanQueryLiteral(
-            filter.value,
-            'Collection filter "hasActiveCommit"',
-          );
-          return;
-        }
-        if (filter.fieldId === "showUnmanagedRepositoryBranches") {
-          showUnmanagedRepositoryBranches = requireBooleanQueryLiteral(
-            filter.value,
-            'Collection filter "showUnmanagedRepositoryBranches"',
-          );
-          return;
-        }
-      }
-      if (filter.op === "in" && filter.fieldId === "state") {
-        for (const value of filter.values) {
-          const state = requireStringQueryLiteral(value, 'Collection filter "state"');
-          if (!branchStateValues.includes(state as (typeof branchStateValues)[number])) {
-            throw new UnsupportedSerializedQueryPlanError(
-              `Collection filter "state" must be one of: ${branchStateValues.join(", ")}.`,
-            );
-          }
-          states.add(state as (typeof branchStateValues)[number]);
-        }
-        return;
-      }
-
-      throw new UnsupportedSerializedQueryPlanError(
-        `Collection query "${query.indexId}" only supports "and", "eq", and "in" filters over projectId, state, hasActiveCommit, and showUnmanagedRepositoryBranches.`,
-      );
-    };
-
-    applyFilter(query.filter);
-
-    if (!projectId) {
-      throw new UnsupportedSerializedQueryPlanError(
-        `Collection query "${query.indexId}" requires an equality filter for "projectId".`,
-      );
-    }
-
-    const order = query.order?.map((clause) => {
-      if (
-        !projectBranchScopeOrderFieldValues.includes(
-          clause.fieldId as (typeof projectBranchScopeOrderFieldValues)[number],
-        )
-      ) {
-        throw new UnsupportedSerializedQueryPlanError(
-          `Collection query "${query.indexId}" only supports order fields: ${projectBranchScopeOrderFieldValues.join(", ")}.`,
-        );
-      }
+  const serializedQueryExecutorRegistry = createWebAppSerializedQueryExecutorRegistry({
+    executeModuleScopeQuery({ options, surface }) {
+      const payload = createTotalSyncPayload({
+        authorization: options.authorization,
+        scope: {
+          kind: "module",
+          moduleId: surface.moduleId,
+          scopeId: surface.source.scopeId,
+        },
+      });
+      const store = createStore(payload.snapshot);
+      const subjectIds = [...new Set(payload.snapshot.edges.map((edge) => edge.s))].sort();
 
       return {
-        field: clause.fieldId as (typeof projectBranchScopeOrderFieldValues)[number],
-        direction: clause.direction,
-      };
-    });
-
-    return {
-      projectId,
-      ...(pageCursor ? { cursor: pageCursor } : {}),
-      ...(query.window ? { limit: query.window.limit } : {}),
-      ...(order ? { order } : {}),
-      ...(states.size > 0 ||
-      hasActiveCommit !== undefined ||
-      showUnmanagedRepositoryBranches !== undefined
-        ? {
-            filter: {
-              ...(states.size > 0 ? { states: [...states] } : {}),
-              ...(hasActiveCommit !== undefined ? { hasActiveCommit } : {}),
-              ...(showUnmanagedRepositoryBranches !== undefined
-                ? { showUnmanagedRepositoryBranches }
-                : {}),
-            },
-          }
-        : {}),
-    };
-  }
-
-  function planWorkflowCommitQueueCollectionQuery(
-    query: Extract<NormalizedQueryRequest["query"], { readonly kind: "collection" }>,
-    pageCursor: string | undefined,
-  ): CommitQueueScopeQuery {
-    let branchId: string | undefined;
-
-    const applyFilter = (filter: NormalizedQueryFilter | undefined): void => {
-      if (!filter) {
-        return;
-      }
-      if (filter.op === "and") {
-        for (const clause of filter.clauses) {
-          applyFilter(clause);
-        }
-        return;
-      }
-      if (filter.op === "eq" && filter.fieldId === "branchId") {
-        branchId = requireStringQueryLiteral(filter.value, 'Collection filter "branchId"');
-        return;
-      }
-
-      throw new UnsupportedSerializedQueryPlanError(
-        `Collection query "${query.indexId}" only supports an equality filter for "branchId".`,
-      );
-    };
-
-    if (query.order && query.order.length > 0) {
-      throw new UnsupportedSerializedQueryPlanError(
-        `Collection query "${query.indexId}" does not support custom ordering.`,
-      );
-    }
-
-    applyFilter(query.filter);
-
-    if (!branchId) {
-      throw new UnsupportedSerializedQueryPlanError(
-        `Collection query "${query.indexId}" requires an equality filter for "branchId".`,
-      );
-    }
-
-    return {
-      branchId,
-      ...(pageCursor ? { cursor: pageCursor } : {}),
-      ...(query.window ? { limit: query.window.limit } : {}),
-    };
-  }
-
-  function mapWorkflowProjectBranchCollectionResult(
-    result: ProjectBranchScopeResult,
-  ): QueryResultPage {
-    return {
-      kind: "collection",
-      items: [
-        ...result.rows.map((row) => ({
-          key: row.branch.id,
-          entityId: row.branch.id,
-          payload: {
-            kind: "workflow-project-branch-row",
-            project: result.project,
-            repository: result.repository,
-            row,
-          },
-        })),
-        ...result.unmanagedRepositoryBranches.map((row) => ({
-          key: `repository-branch:${row.repositoryBranch.id}`,
-          entityId: row.repositoryBranch.id,
-          payload: {
-            kind: "workflow-unmanaged-repository-branch",
-            project: result.project,
-            repository: result.repository,
-            row,
-          },
-        })),
-      ],
-      ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
-      freshness: {
-        completeness: "complete",
-        freshness: "current",
-        projectedAt: result.freshness.projectedAt,
-        projectionCursor: result.freshness.projectionCursor,
-      },
-    };
-  }
-
-  function mapWorkflowCommitQueueCollectionResult(result: CommitQueueScopeResult): QueryResultPage {
-    return {
-      kind: "collection",
-      items: result.rows.map((row) => ({
-        key: row.commit.id,
-        entityId: row.commit.id,
-        payload: {
-          kind: "workflow-commit-queue-row",
-          branch: result.branch,
-          row,
+        kind: "scope",
+        items: subjectIds.map((subjectId) => buildEntityQueryItem(store, subjectId)),
+        freshness: {
+          completeness: payload.completeness,
+          freshness: payload.freshness,
+          scopeCursor: payload.cursor,
         },
-      })),
-      ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
-      freshness: {
-        completeness: "complete",
-        freshness: "current",
-        projectedAt: result.freshness.projectedAt,
-        projectionCursor: result.freshness.projectionCursor,
-      },
-    };
-  }
+      };
+    },
+    readCommitQueueScope,
+    readProjectBranchScope,
+    unsupported(message) {
+      return new UnsupportedSerializedQueryPlanError(message);
+    },
+  });
 
   function executeCollectionSerializedQuery(
     query: Extract<NormalizedQueryRequest["query"], { readonly kind: "collection" }>,
@@ -4237,96 +4040,78 @@ export async function createWebAppAuthority(
       normalizedRequest.metadata.pageCursor,
       normalizedRequest.metadata.identityHash,
     );
-
-    if (
-      workflowProjectBranchBoardSurface?.source.kind === "projection" &&
-      query.indexId === workflowProjectBranchBoardSurface.surfaceId
-    ) {
-      return bindSerializedQueryPageCursor(
-        mapWorkflowProjectBranchCollectionResult(
-          readProjectBranchScope(
-            planWorkflowProjectBranchCollectionQuery(query, pageCursor),
-            options,
-          ),
-        ),
-        normalizedRequest.metadata.identityHash,
-      );
-    }
-
-    if (
-      workflowBranchCommitQueueSurface?.source.kind === "projection" &&
-      query.indexId === workflowBranchCommitQueueSurface.surfaceId
-    ) {
-      return bindSerializedQueryPageCursor(
-        mapWorkflowCommitQueueCollectionResult(
-          readCommitQueueScope(planWorkflowCommitQueueCollectionQuery(query, pageCursor), options),
-        ),
-        normalizedRequest.metadata.identityHash,
-      );
-    }
-
-    throw new UnsupportedSerializedQueryPlanError(
-      `Collection query "${query.indexId}" is not a registered serialized-query surface.`,
+    const resolution = resolveSerializedQueryCollectionExecutor(
+      serializedQueryExecutorRegistry,
+      query,
     );
-  }
+    if (!resolution.ok) {
+      switch (resolution.code) {
+        case "unregistered-surface":
+          throw new UnsupportedSerializedQueryPlanError(
+            `Collection query "${query.indexId}" is not a registered serialized-query surface.`,
+          );
+        case "missing-executor":
+          throw new UnsupportedSerializedQueryPlanError(
+            `Collection query "${resolution.surface.surfaceId}" does not have a registered serialized-query executor.`,
+          );
+        case "stale-executor":
+          throw new UnsupportedSerializedQueryPlanError(
+            `Collection query "${resolution.surface.surfaceId}" requires serialized-query executor version "${resolution.surface.surfaceVersion}", but the registered executor reports "${resolution.executor.surfaceVersion}".`,
+          );
+      }
+    }
 
-  function matchesWorkflowReviewScopeQuery(
-    query: Extract<NormalizedQueryRequest["query"], { readonly kind: "scope" }>,
-  ): boolean {
-    if (query.scopeId) {
-      return query.scopeId === workflowReviewQuerySurface?.surfaceId;
-    }
-    if (!query.definition || query.definition.kind !== "module") {
-      return false;
-    }
-    if (query.definition.projectionId || query.definition.roots) {
-      return false;
-    }
-    if (
-      query.definition.scopeId &&
-      query.definition.scopeId !== workflowReviewModuleReadScope.scopeId
-    ) {
-      return false;
-    }
-    const moduleIds = query.definition.moduleIds ?? [];
-    return moduleIds.length === 1 && moduleIds[0] === workflowReviewQuerySurface?.moduleId;
+    return bindSerializedQueryPageCursor(
+      resolution.executor.execute({
+        normalizedRequest: {
+          ...normalizedRequest,
+          query,
+        },
+        options,
+        pageCursor,
+        surface: resolution.surface,
+      }),
+      normalizedRequest.metadata.identityHash,
+    );
   }
 
   function executeScopeSerializedQuery(
     query: Extract<NormalizedQueryRequest["query"], { readonly kind: "scope" }>,
+    normalizedRequest: NormalizedQueryRequest,
     options: WebAppAuthorityReadOptions,
   ): QueryResultPage {
-    if (query.window) {
-      throw new UnsupportedSerializedQueryPlanError(
-        `Scope query "${query.scopeId ?? "inline"}" does not support windowed pagination.`,
-      );
-    }
-    if (!matchesWorkflowReviewScopeQuery(query)) {
-      throw new UnsupportedSerializedQueryPlanError(
-        `Scope query "${query.scopeId ?? "inline"}" is not a registered serialized-query surface.`,
-      );
+    const resolution = resolveSerializedQueryScopeExecutor(serializedQueryExecutorRegistry, query);
+    if (!resolution.ok) {
+      switch (resolution.code) {
+        case "unregistered-surface":
+          throw new UnsupportedSerializedQueryPlanError(
+            `Scope query "${query.scopeId ?? "inline"}" is not a registered serialized-query surface.`,
+          );
+        case "missing-executor":
+          throw new UnsupportedSerializedQueryPlanError(
+            `Scope query "${resolution.surface.surfaceId}" does not have a registered serialized-query executor.`,
+          );
+        case "stale-executor":
+          throw new UnsupportedSerializedQueryPlanError(
+            `Scope query "${resolution.surface.surfaceId}" requires serialized-query executor version "${resolution.surface.surfaceVersion}", but the registered executor reports "${resolution.executor.surfaceVersion}".`,
+          );
+        case "ambiguous-surface":
+          throw new UnsupportedSerializedQueryPlanError(
+            `Scope query "${query.scopeId ?? "inline"}" matches multiple registered serialized-query surfaces: ${resolution.surfaces
+              .map((surface) => `"${surface.surfaceId}"`)
+              .join(", ")}.`,
+          );
+      }
     }
 
-    const payload = createTotalSyncPayload({
-      authorization: options.authorization,
-      scope: {
-        kind: "module",
-        moduleId: workflowReviewModuleReadScope.moduleId,
-        scopeId: workflowReviewModuleReadScope.scopeId,
+    return resolution.executor.execute({
+      normalizedRequest: {
+        ...normalizedRequest,
+        query,
       },
+      options,
+      surface: resolution.surface,
     });
-    const store = createStore(payload.snapshot);
-    const subjectIds = [...new Set(payload.snapshot.edges.map((edge) => edge.s))].sort();
-
-    return {
-      kind: "scope",
-      items: subjectIds.map((subjectId) => buildEntityQueryItem(store, subjectId)),
-      freshness: {
-        completeness: payload.completeness,
-        freshness: payload.freshness,
-        scopeCursor: payload.cursor,
-      },
-    };
   }
 
   function executeNormalizedSerializedQuery(
@@ -4345,7 +4130,7 @@ export async function createWebAppAuthority(
           options,
         );
       case "scope":
-        return executeScopeSerializedQuery(normalizedRequest.query, options);
+        return executeScopeSerializedQuery(normalizedRequest.query, normalizedRequest, options);
     }
 
     throw new UnsupportedSerializedQueryPlanError("Serialized query kind is not supported.");

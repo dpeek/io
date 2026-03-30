@@ -1360,7 +1360,9 @@ function SessionFeedPanel({
           <Badge>{result.header.kind}</Badge>
           <Badge variant="secondary">{formatEnumLabel(result.runtime.state)}</Badge>
           <Badge variant="outline">{finalization.label}</Badge>
-          {conflictingSequenceLabels.length > 0 ? <Badge variant="outline">live drift</Badge> : null}
+          {conflictingSequenceLabels.length > 0 ? (
+            <Badge variant="outline">live drift</Badge>
+          ) : null}
           {transientEventCount > 0 ? (
             <Badge variant="secondary">{transientEventCount} transient</Badge>
           ) : null}
@@ -1387,9 +1389,8 @@ function SessionFeedPanel({
       {conflictingSequenceLabels.length > 0 ? (
         <div className="border-destructive/20 bg-destructive/5 rounded-lg border px-3 py-3 text-sm">
           Local live reconciliation drifted from graph-backed history at sequence
-          {conflictingSequenceLabels.length === 1 ? "" : "s"}{" "}
-          {conflictingSequenceLabels.join(", ")}. Keeping the authoritative timeline visible and
-          marking the conflicting local update
+          {conflictingSequenceLabels.length === 1 ? "" : "s"} {conflictingSequenceLabels.join(", ")}
+          . Keeping the authoritative timeline visible and marking the conflicting local update
           {conflictingSequenceLabels.length === 1 ? "" : "s"} as transient.
         </div>
       ) : null}

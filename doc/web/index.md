@@ -290,10 +290,23 @@ Current editor interaction model:
   adapters, and normalized-resolution seams that return validated graph-native
   definitions plus normalized query requests for planner, editor, and
   container consumers, exported as `@io/app/web/saved-query`
+- `../../lib/app/src/web/lib/serialized-query-executor-registry.ts`: installed
+  query-surface executor registration seam that binds bounded collection and
+  scope executors to registered surfaces, resolves runtime dispatch from the
+  installed workflow and core surface catalogs, and fails closed when a
+  surface is missing, ambiguous, stale, or missing an executor
+- `../../lib/app/src/web/lib/registered-serialized-query-executors.ts`: the
+  shipped web-authority executor registrations for the current bounded surface
+  set, including the workflow branch board and commit queue planners plus the
+  shared module-scope executor wrapper used for both workflow and core scopes
 - `../../lib/app/src/web/lib/authority.ts`: principal-scoped Durable Object
   saved-query and saved-view CRUD plus normalized-resolution seams that sit
   beside the generic serialized-query executor instead of overloading
-  `/api/query`
+  `/api/query`, with collection and scope execution now dispatched through the
+  registered serialized-query executor registry rather than any authority-local
+  workflow surface branches, with the bounded built-in registrations defined in
+  one dedicated seam and one shared module-scope executor path now proven
+  across both workflow and core surfaces
 - `../../lib/app/src/web/lib/graph-authority-internal-routes.ts`: web-only
   session-principal lookup-and-repair, bearer-share hash lookup, and
   authoritative policy-version handlers kept separate from the Durable Object

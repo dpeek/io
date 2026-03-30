@@ -26,6 +26,7 @@
     "@io/graph-client": "workspace:*",
     "@io/graph-kernel": "workspace:*",
     "@io/graph-module": "workspace:*",
+    "@io/graph-projection": "workspace:*",
     "@io/graph-react": "workspace:*",
     "@io/web": "workspace:*",
     "lucide-react": "^0.577.0",

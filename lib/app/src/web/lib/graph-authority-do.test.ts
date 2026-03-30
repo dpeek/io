@@ -22,8 +22,8 @@ import {
   type GraphWriteTransaction,
 } from "@io/graph-kernel";
 import { defineSecretField, defineType } from "@io/graph-module";
-import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
-import { workflow } from "@io/graph-module-workflow";
+import { core, coreBuiltInQuerySurfaceIds, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import { workflow, workflowBuiltInQuerySurfaceIds } from "@io/graph-module-workflow";
 import {
   projectionMetadata,
   workflowReviewModuleReadScope,
@@ -2706,6 +2706,47 @@ describe("web graph authority durable object", () => {
     });
     expect(refreshed.response.status).toBe(200);
     expect(refreshed.payload.ok).toBe(true);
+  });
+
+  it("dispatches workflow and core scope surfaces over /api/query through the shared module-scope seam", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const fixture = await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+
+    const workflowScope = await postSerializedQuery(durableObject, {
+      version: 1,
+      query: {
+        kind: "scope",
+        scopeId: workflowBuiltInQuerySurfaceIds.reviewScope,
+      },
+    });
+    expect(workflowScope.response.status).toBe(200);
+    expect(workflowScope.payload.ok).toBe(true);
+    if (!workflowScope.payload.ok) {
+      throw new Error("Expected workflow scope query to succeed over /api/query.");
+    }
+    expect(workflowScope.payload.result.kind).toBe("scope");
+    expect(workflowScope.payload.result.items.map((item) => item.entityId)).toContain(
+      fixture.projectId,
+    );
+
+    const coreScope = await postSerializedQuery(durableObject, {
+      version: 1,
+      query: {
+        kind: "scope",
+        scopeId: coreBuiltInQuerySurfaceIds.catalogScope,
+      },
+    });
+    expect(coreScope.response.status).toBe(200);
+    expect(coreScope.payload.ok).toBe(true);
+    if (!coreScope.payload.ok) {
+      throw new Error("Expected core scope query to succeed over /api/query.");
+    }
+    expect(coreScope.payload.result.kind).toBe("scope");
+    expect(coreScope.payload.result.items.map((item) => item.entityId)).toContain(
+      core.node.values.id,
+    );
   });
 
   it("registers and removes workflow review live scope interest over the durable workflow live route", async () => {

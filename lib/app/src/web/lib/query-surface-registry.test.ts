@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
+import { coreBuiltInQuerySurfaceIds } from "@io/graph-module-core";
+
 import {
   createInstalledModuleQuerySurfaceRegistry,
   createQueryEditorCatalogFromRegistry,
@@ -9,10 +11,14 @@ import {
 } from "./query-surface-registry.js";
 
 describe("query surface registry", () => {
-  it("loads installed module catalogs and exposes workflow surface metadata", () => {
+  it("loads installed module catalogs and exposes workflow and core surface metadata", () => {
     const surface = getInstalledModuleQuerySurface(
       installedModuleQuerySurfaceRegistry,
       "workflow:project-branch-board",
+    );
+    const coreSurface = getInstalledModuleQuerySurface(
+      installedModuleQuerySurfaceRegistry,
+      coreBuiltInQuerySurfaceIds.catalogScope,
     );
 
     expect(surface).toMatchObject({
@@ -51,6 +57,21 @@ describe("query surface registry", () => {
       "core:table",
       "core:card-grid",
     ]);
+    expect(
+      installedModuleQuerySurfaceRegistry.catalogs.map((catalog) => catalog.catalogId),
+    ).toEqual(["workflow:query-surfaces", "core:query-surfaces"]);
+    expect(coreSurface).toMatchObject({
+      catalogId: "core:query-surfaces",
+      catalogVersion: "query-catalog:core:v1",
+      moduleId: "core",
+      surfaceId: "scope:core:catalog",
+      surfaceVersion: "query-surface:core:catalog-scope:v1",
+      queryKind: "scope",
+      source: {
+        kind: "scope",
+        scopeId: "scope:core:catalog",
+      },
+    });
   });
 
   it("projects installed surfaces into editor and renderer views", () => {

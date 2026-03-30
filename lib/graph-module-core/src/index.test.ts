@@ -44,6 +44,13 @@ import { tag } from "./core/tag.js";
 import { coreType } from "./core/type.js";
 import { urlTypeModule } from "./core/url.js";
 import {
+  coreBuiltInQuerySurfaceIds,
+  coreBuiltInQuerySurfaces,
+  coreCatalogModuleReadScope,
+  coreModuleId,
+  coreQuerySurfaceCatalog,
+} from "./query.js";
+import {
   resolveDefinitionIconId,
   resolvePredicateDefinitionIconId,
   resolveTypeDefinitionIconId,
@@ -59,6 +66,11 @@ const requiredExports = [
   "country",
   "currency",
   "defaultMoneyCurrencyKey",
+  "coreBuiltInQuerySurfaceIds",
+  "coreBuiltInQuerySurfaces",
+  "coreCatalogModuleReadScope",
+  "coreModuleId",
+  "coreQuerySurfaceCatalog",
   "iconReferenceField",
   "moneyTypeModule",
   "normalizeMoneyInput",
@@ -225,6 +237,44 @@ describe("@io/graph-module-core", () => {
     );
   });
 
+  it("publishes one bounded core-owned query surface for shared serialized-query dispatch", () => {
+    expect(coreModuleId).toBe("core");
+    expect(coreCatalogModuleReadScope).toEqual({
+      kind: "module",
+      moduleId: "core",
+      scopeId: "scope:core:catalog",
+      definitionHash: "scope-def:core:catalog:v1",
+    });
+    expect(coreQuerySurfaceCatalog).toMatchObject({
+      catalogId: "core:query-surfaces",
+      catalogVersion: "query-catalog:core:v1",
+      moduleId: "core",
+      surfaces: expect.any(Array),
+    });
+    expect(coreBuiltInQuerySurfaces).toEqual({
+      catalogScope: {
+        surfaceId: coreCatalogModuleReadScope.scopeId,
+        surfaceVersion: "query-surface:core:catalog-scope:v1",
+        queryKind: "scope",
+        source: {
+          kind: "scope",
+          scopeId: coreCatalogModuleReadScope.scopeId,
+        },
+        label: "Core Catalog Scope",
+        description: expect.any(String),
+        renderers: {
+          compatibleRendererIds: ["core:list", "core:table"],
+          itemEntityIds: "required",
+          resultKind: "scope",
+          sourceKinds: ["saved", "inline"],
+        },
+      },
+    });
+    expect(coreBuiltInQuerySurfaceIds).toEqual({
+      catalogScope: coreCatalogModuleReadScope.scopeId,
+    });
+  });
+
   it("freezes the shared secret-handle contract on the canonical core namespace", () => {
     expect(canonicalCore.secretHandle.values).toMatchObject({
       key: "core:secretHandle",
@@ -259,6 +309,11 @@ describe("@io/graph-module-core", () => {
   it("exposes canonical namespaces and representative built-ins from the package root", () => {
     expectNamedExports(moduleExports, [
       "core",
+      "coreBuiltInQuerySurfaceIds",
+      "coreBuiltInQuerySurfaces",
+      "coreCatalogModuleReadScope",
+      "coreModuleId",
+      "coreQuerySurfaceCatalog",
       "node",
       "icon",
       "iconReferenceField",
@@ -276,6 +331,11 @@ describe("@io/graph-module-core", () => {
     ]);
 
     expect(moduleExports.core).toBe(canonicalCore);
+    expect(moduleExports.coreModuleId).toBe(coreModuleId);
+    expect(moduleExports.coreCatalogModuleReadScope).toBe(coreCatalogModuleReadScope);
+    expect(moduleExports.coreQuerySurfaceCatalog).toBe(coreQuerySurfaceCatalog);
+    expect(moduleExports.coreBuiltInQuerySurfaces).toBe(coreBuiltInQuerySurfaces);
+    expect(moduleExports.coreBuiltInQuerySurfaceIds).toBe(coreBuiltInQuerySurfaceIds);
     expect(moduleExports.node.values.key).toBe(canonicalCore.node.values.key);
     expect(moduleExports.icon.values.key).toBe(canonicalCore.icon.values.key);
     expect(moduleExports.iconReferenceField).toBe(iconReferenceField);

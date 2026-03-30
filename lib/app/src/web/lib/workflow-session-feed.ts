@@ -1,5 +1,6 @@
 import { type GraphStore } from "@io/app/graph";
 import {
+  type AgentSessionAppendEvent,
   type CommitQueueScopeSessionKind,
   type CommitQueueScopeSessionRuntimeState,
   type CommitQueueScopeSessionSummary,
@@ -500,14 +501,12 @@ function readPersistedSessionEvents(
   };
 }
 
-function buildHistoryState(
-  input: {
-    readonly events: WorkflowSessionFeedReadyResult["events"];
-    readonly lastPersistedSequence?: number;
-    readonly runtimeState: WorkflowSessionFeedReadyResult["runtime"]["state"];
-    readonly transcriptTruncated?: boolean;
-  },
-): WorkflowSessionFeedHistoryState {
+function buildHistoryState(input: {
+  readonly events: WorkflowSessionFeedReadyResult["events"];
+  readonly lastPersistedSequence?: number;
+  readonly runtimeState: WorkflowSessionFeedReadyResult["runtime"]["state"];
+  readonly transcriptTruncated?: boolean;
+}): WorkflowSessionFeedHistoryState {
   if (input.transcriptTruncated) {
     return {
       ...(input.lastPersistedSequence !== undefined
