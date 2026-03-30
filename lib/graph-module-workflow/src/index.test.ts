@@ -64,6 +64,7 @@ const requiredWorkflowExports = [
   "projectBranchBoardProjectionDependencyKey",
   "project",
   "projectBranchBoardProjection",
+  "workflowQuerySurfaceCatalog",
   "projectionMetadata",
   "workflowReviewDependencyKeys",
   "workflowReviewModuleReadScope",

@@ -13,7 +13,6 @@ import {
   mountSavedQueryRenderer,
   createQueryContainerRuntime,
   type QueryContainerSpec,
-  type QuerySurfaceRendererCompatibility,
 } from "../lib/query-container.js";
 import {
   getQueryEditorSurface,
@@ -37,7 +36,12 @@ import {
   type QueryWorkbenchStore,
   type QueryWorkbenchRouteSearch,
 } from "../lib/query-workbench.js";
-import { QueryEditor, createQueryEditorDemoCatalog } from "./query-editor.js";
+import {
+  getInstalledModuleQuerySurface,
+  getInstalledModuleQuerySurfaceRendererCompatibility,
+  installedModuleQuerySurfaceRegistry,
+} from "../lib/query-surface-registry.js";
+import { QueryEditor, createInstalledQueryEditorCatalog } from "./query-editor.js";
 import {
   builtInQueryRendererRegistry,
   createCardGridRendererBinding,
@@ -47,7 +51,7 @@ import {
 } from "./query-renderers.js";
 import { QueryRouteMount } from "./query-route-mount.js";
 
-const catalog = createQueryEditorDemoCatalog();
+const catalog = createInstalledQueryEditorCatalog();
 const rendererCapabilities = createQueryRendererCapabilityMap(builtInQueryRendererRegistry);
 const rendererIds = ["core:list", "core:table", "core:card-grid"] as const;
 
@@ -67,28 +71,62 @@ const defaultPreviewControls: PreviewControls = {
   rendererId: "core:list",
 };
 
-function createPreviewRendererBinding(rendererId: PreviewControls["rendererId"]) {
+function createPreviewRendererBinding(_rendererId: PreviewControls["rendererId"]) {
+  return createListRendererBinding({
+    metaFields: [{ fieldId: "state", label: "State" }],
+    titleField: "title",
+  });
+}
+
+function preferredSelectionField(
+  fieldIds: readonly string[],
+  preferred: readonly string[],
+): string | undefined {
+  for (const fieldId of preferred) {
+    if (fieldIds.includes(fieldId)) {
+      return fieldId;
+    }
+  }
+  return fieldIds[0];
+}
+
+function createPreviewRendererBindingForSurface(
+  rendererId: PreviewControls["rendererId"],
+  surfaceId: string,
+) {
+  const surface = getInstalledModuleQuerySurface(installedModuleQuerySurfaceRegistry, surfaceId);
+  const fieldIds = surface?.selections?.map((selection) => selection.fieldId) ?? [
+    "title",
+    "state",
+    "updatedAt",
+  ];
+  const titleField = preferredSelectionField(fieldIds, ["title", "name", "id"]);
+  const badgeField = preferredSelectionField(fieldIds, ["state", "status", "kind"]);
+  const remainingFields = fieldIds.filter(
+    (fieldId) => fieldId !== titleField && fieldId !== badgeField,
+  );
+
   if (rendererId === "core:table") {
-    return createTableRendererBinding([
-      { fieldId: "title", label: "Title" },
-      { fieldId: "status", label: "Status" },
-      { fieldId: "ownerName", label: "Owner" },
-    ]);
+    return createTableRendererBinding(
+      [titleField, badgeField, ...remainingFields.slice(0, 2)]
+        .filter((fieldId): fieldId is string => typeof fieldId === "string")
+        .map((fieldId) => ({
+          fieldId,
+          label: fieldId,
+        })),
+    );
   }
   if (rendererId === "core:card-grid") {
     return createCardGridRendererBinding({
-      badgeField: "status",
-      fields: [
-        { fieldId: "ownerName", label: "Owner" },
-        { fieldId: "updatedAt", label: "Updated" },
-      ],
-      titleField: "title",
+      ...(badgeField ? { badgeField } : {}),
+      fields: remainingFields.slice(0, 2).map((fieldId) => ({
+        fieldId,
+        label: fieldId,
+      })),
+      ...(titleField ? { titleField } : {}),
     });
   }
-  return createListRendererBinding({
-    metaFields: [{ fieldId: "status", label: "Status" }],
-    titleField: "title",
-  });
+  return createPreviewRendererBinding(rendererId);
 }
 
 export function QueryWorkbench({
@@ -99,6 +137,8 @@ export function QueryWorkbench({
   const [store] = useState(() => providedStore ?? createQueryWorkbenchBrowserStore());
   const initialState = resolveQueryWorkbenchState({
     catalog,
+    rendererCapabilities,
+    resolveSurfaceCompatibility: getInstalledModuleQuerySurfaceRendererCompatibility,
     target: resolveQueryWorkbenchRouteTarget(search, store),
   });
   const [draft, setDraft] = useState<QueryEditorDraft>(() => {
@@ -117,6 +157,8 @@ export function QueryWorkbench({
     () =>
       resolveQueryWorkbenchState({
         catalog,
+        rendererCapabilities,
+        resolveSurfaceCompatibility: getInstalledModuleQuerySurfaceRendererCompatibility,
         target: resolveQueryWorkbenchRouteTarget(search, store),
       }),
     [search, store],
@@ -132,13 +174,16 @@ export function QueryWorkbench({
       : routeTarget.kind === "saved-query"
         ? routeTarget.query.surfaceId
         : (activeSurface?.surfaceId ?? draft.surfaceId);
-  const surface = useMemo(() => createWorkbenchSurface(activeSurfaceId), [activeSurfaceId]);
+  const surface = useMemo(
+    () => getInstalledModuleQuerySurfaceRendererCompatibility(activeSurfaceId),
+    [activeSurfaceId],
+  );
   const routeParams = search.params ? decodeQueryWorkbenchParamOverrides(search.params) : undefined;
   const runtime = useMemo(
     () =>
       createQueryContainerRuntime({
         executePage: (request) => executeQueryWorkbenchPreviewRequest(request),
-        resolveSource: createQueryWorkbenchSourceResolver(store),
+        resolveSource: createQueryWorkbenchSourceResolver(store, { catalog }),
       }),
     [store],
   );
@@ -181,14 +226,20 @@ export function QueryWorkbench({
       refresh: {
         mode: "manual" as const,
       },
-      renderer: createPreviewRendererBinding(previewControls.rendererId),
+      renderer: createPreviewRendererBindingForSurface(previewControls.rendererId, activeSurfaceId),
     };
     return (
       source.kind === "saved"
         ? mountSavedQueryRenderer(source, mountOptions)
         : mountInlineQueryRenderer(source.request, mountOptions)
     ) satisfies QueryContainerSpec;
-  }, [previewControls.pageSize, previewControls.rendererId, routeParams, routeTarget]);
+  }, [
+    activeSurfaceId,
+    previewControls.pageSize,
+    previewControls.rendererId,
+    routeParams,
+    routeTarget,
+  ]);
 
   const activeParameters =
     routeTarget.kind === "saved-query"
@@ -479,7 +530,7 @@ export function QueryWorkbench({
         <QueryRouteMount
           description="Shared query container preview path for inline drafts, saved queries, and saved views."
           executePage={(request) => executeQueryWorkbenchPreviewRequest(request)}
-          resolveSource={createQueryWorkbenchSourceResolver(store)}
+          resolveSource={createQueryWorkbenchSourceResolver(store, { catalog })}
           runtime={runtime}
           spec={previewSpec}
           surface={surface}
@@ -488,17 +539,6 @@ export function QueryWorkbench({
       ) : null}
     </div>
   );
-}
-
-function createWorkbenchSurface(surfaceId: string): QuerySurfaceRendererCompatibility {
-  return {
-    compatibleRendererIds: [...rendererIds],
-    itemEntityIds: "optional",
-    queryKind: "collection",
-    resultKind: "collection",
-    sourceKinds: ["saved", "inline"],
-    surfaceId,
-  };
 }
 
 function ParameterOverrideEditor({

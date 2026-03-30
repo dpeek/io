@@ -18,12 +18,14 @@ import {
 import type { QueryRendererCapability } from "./query-container.js";
 import {
   createQueryEditorDraft,
+  getQueryEditorSurface,
   hydrateQueryEditorDraft,
   QueryEditorHydrationError,
   serializeQueryEditorDraft,
   validateQueryEditorDraft,
   type QueryEditorCatalog,
   type QueryEditorDraft,
+  type QueryEditorSurfaceSpec,
 } from "./query-editor.js";
 
 export type QueryWorkbenchRouteSearch = {
@@ -34,15 +36,20 @@ export type QueryWorkbenchRouteSearch = {
 };
 
 export type QueryWorkbenchSavedQuery = {
+  readonly catalogId: string;
+  readonly catalogVersion: string;
   readonly id: string;
   readonly name: string;
   readonly parameterDefinitions: readonly QueryParameterDefinition[];
   readonly request: SerializedQueryRequest;
   readonly surfaceId: string;
+  readonly surfaceVersion: string;
   readonly updatedAt: string;
 };
 
 export type QueryWorkbenchSavedView = {
+  readonly catalogId: string;
+  readonly catalogVersion: string;
   readonly id: string;
   readonly name: string;
   readonly queryId: string;
@@ -54,6 +61,7 @@ export type QueryWorkbenchSavedView = {
     };
   };
   readonly surfaceId: string;
+  readonly surfaceVersion: string;
   readonly updatedAt: string;
 };
 
@@ -91,10 +99,20 @@ export type QueryWorkbenchRouteTarget =
       readonly view: QueryWorkbenchSavedView;
     }
   | {
-      readonly code: "invalid-draft" | "invalid-params" | "stale-query" | "stale-view";
+      readonly code:
+        | "invalid-draft"
+        | "invalid-params"
+        | "stale-query"
+        | "stale-view"
+        | "incompatible-query"
+        | "incompatible-view";
       readonly kind: "invalid";
       readonly message: string;
     };
+
+export type QueryWorkbenchSurfaceCompatibilityResolver = (
+  surfaceId: string,
+) => QuerySurfaceRendererCompatibility | undefined;
 
 export class QueryWorkbenchSaveError extends Error {
   readonly code: string;
@@ -151,11 +169,15 @@ const defaultPreviewDataset = Object.freeze({
       entityId: "workflow-branch:1",
       key: "row:branch-1",
       payload: {
-        needsReview: true,
-        openPullRequests: 4,
-        ownerId: "person:avery",
-        ownerName: "Avery Operator",
-        status: "draft",
+        "created-at": "2026-03-20",
+        "queue-rank": 1,
+        "updated-at": "2026-03-26",
+        hasActiveCommit: true,
+        projectId: "workflow-project:io",
+        queueRank: 1,
+        repositoryFreshness: "fresh",
+        showUnmanagedRepositoryBranches: false,
+        state: "active",
         title: "Workflow shell",
         updatedAt: "2026-03-26",
       },
@@ -164,11 +186,15 @@ const defaultPreviewDataset = Object.freeze({
       entityId: "workflow-branch:2",
       key: "row:branch-2",
       payload: {
-        needsReview: false,
-        openPullRequests: 1,
-        ownerId: "person:sam",
-        ownerName: "Sam Reviewer",
-        status: "ready",
+        "created-at": "2026-03-18",
+        "queue-rank": 2,
+        "updated-at": "2026-03-25",
+        hasActiveCommit: false,
+        projectId: "workflow-project:io",
+        queueRank: 2,
+        repositoryFreshness: "stale",
+        showUnmanagedRepositoryBranches: false,
+        state: "ready",
         title: "Query cards",
         updatedAt: "2026-03-25",
       },
@@ -177,11 +203,15 @@ const defaultPreviewDataset = Object.freeze({
       entityId: "workflow-branch:3",
       key: "row:branch-3",
       payload: {
-        needsReview: true,
-        openPullRequests: 2,
-        ownerId: "person:avery",
-        ownerName: "Avery Operator",
-        status: "ready",
+        "created-at": "2026-03-16",
+        "queue-rank": 3,
+        "updated-at": "2026-03-24",
+        hasActiveCommit: true,
+        projectId: "workflow-project:io",
+        queueRank: 3,
+        repositoryFreshness: "missing",
+        showUnmanagedRepositoryBranches: true,
+        state: "blocked",
         title: "Saved view refresh",
         updatedAt: "2026-03-24",
       },
@@ -192,13 +222,28 @@ const defaultPreviewDataset = Object.freeze({
       entityId: "queue-row:1",
       key: "row:queue-1",
       payload: {
-        queueState: "queued",
+        branchId: "workflow-branch:1",
+        order: 1,
+        state: "planned",
+        title: "Define workflow query surface registry",
+        updatedAt: "2026-03-26",
+      },
+    },
+    {
+      entityId: "queue-row:2",
+      key: "row:queue-2",
+      payload: {
+        branchId: "workflow-branch:1",
+        order: 2,
+        state: "active",
+        title: "Register catalog with authority planner",
+        updatedAt: "2026-03-27",
       },
     },
   ],
 }) as PreviewDataset;
 
-const queryWorkbenchStoreVersion = 1;
+const queryWorkbenchStoreVersion = 3;
 const defaultQueryWorkbenchStorageKey = "io.web.query-workbench";
 
 export function encodeQueryWorkbenchDraft(request: SerializedQueryRequest): string {
@@ -374,11 +419,43 @@ export function hydrateQueryWorkbenchDraft(input: {
 
 export function resolveQueryWorkbenchState(input: {
   readonly catalog: QueryEditorCatalog;
+  readonly rendererCapabilities?: Readonly<Record<string, QueryRendererCapability>>;
+  readonly resolveSurfaceCompatibility?: QueryWorkbenchSurfaceCompatibilityResolver;
   readonly target: QueryWorkbenchRouteTarget;
 }): ResolvedQueryWorkbenchState {
-  const { catalog, target } = input;
+  const { catalog, rendererCapabilities, resolveSurfaceCompatibility, target } = input;
   if (target.kind === "invalid") {
     return { target };
+  }
+  if (target.kind === "saved-query") {
+    const compatibility = validateSavedQueryCompatibility(target.query, catalog);
+    if (!compatibility.ok) {
+      return {
+        target: {
+          code: compatibility.code,
+          kind: "invalid",
+          message: compatibility.message,
+        },
+      };
+    }
+  }
+  if (target.kind === "saved-view") {
+    const compatibility = validateSavedViewCompatibility({
+      catalog,
+      query: target.query,
+      rendererCapabilities,
+      resolveSurfaceCompatibility,
+      view: target.view,
+    });
+    if (!compatibility.ok) {
+      return {
+        target: {
+          code: compatibility.code,
+          kind: "invalid",
+          message: compatibility.message,
+        },
+      };
+    }
   }
   try {
     return {
@@ -392,18 +469,18 @@ export function resolveQueryWorkbenchState(input: {
     if (target.kind === "saved-view") {
       return {
         target: {
-          code: "stale-view",
+          code: "incompatible-view",
           kind: "invalid",
-          message: `Saved view "${target.view.id}" no longer matches the current query surfaces.`,
+          message: `Saved view "${target.view.id}" can no longer hydrate against the current query surfaces.`,
         },
       };
     }
     if (target.kind === "saved-query") {
       return {
         target: {
-          code: "stale-query",
+          code: "incompatible-query",
           kind: "invalid",
-          message: `Saved query "${target.query.id}" no longer matches the current query surfaces.`,
+          message: `Saved query "${target.query.id}" can no longer hydrate against the current query surfaces.`,
         },
       };
     }
@@ -450,11 +527,14 @@ export function createQueryWorkbenchMemoryStore(
     saveQuery(input) {
       const id = input.id ?? `saved-query:${++queryCount}`;
       const saved = Object.freeze({
+        catalogId: input.catalogId,
+        catalogVersion: input.catalogVersion,
         id,
         name: input.name,
         parameterDefinitions: [...input.parameterDefinitions],
         request: input.request,
         surfaceId: input.surfaceId,
+        surfaceVersion: input.surfaceVersion,
         updatedAt: new Date().toISOString(),
       } satisfies QueryWorkbenchSavedQuery);
       queries.set(id, saved);
@@ -463,11 +543,14 @@ export function createQueryWorkbenchMemoryStore(
     saveView(input) {
       const id = input.id ?? `saved-view:${++viewCount}`;
       const saved = Object.freeze({
+        catalogId: input.catalogId,
+        catalogVersion: input.catalogVersion,
         id,
         name: input.name,
         queryId: input.queryId,
         spec: input.spec,
         surfaceId: input.surfaceId,
+        surfaceVersion: input.surfaceVersion,
         updatedAt: new Date().toISOString(),
       } satisfies QueryWorkbenchSavedView);
       views.set(id, saved);
@@ -545,12 +628,16 @@ export function saveQueryWorkbenchQuery(input: {
     );
   }
   const serialized = serializeQueryEditorDraft(input.draft, input.catalog);
+  const surfaceRef = requireInstalledSurfaceRef(serialized.surface);
   return input.store.saveQuery({
     ...(input.id ? { id: input.id } : {}),
+    catalogId: surfaceRef.catalogId,
+    catalogVersion: surfaceRef.catalogVersion,
     name: input.name.trim() || "Untitled query",
     parameterDefinitions: serialized.parameterDefinitions,
     request: serialized.request,
-    surfaceId: serialized.surface.surfaceId,
+    surfaceId: surfaceRef.surfaceId,
+    surfaceVersion: surfaceRef.surfaceVersion,
   });
 }
 
@@ -564,7 +651,7 @@ export function saveQueryWorkbenchView(input: {
   readonly viewName: string;
   readonly spec: Omit<QueryContainerSpec, "query">;
   readonly store: QueryWorkbenchStore;
-  readonly surface: QuerySurfaceRendererCompatibility;
+  readonly surface?: QuerySurfaceRendererCompatibility;
 }): {
   readonly query: QueryWorkbenchSavedQuery;
   readonly view: QueryWorkbenchSavedView;
@@ -580,6 +667,13 @@ export function saveQueryWorkbenchView(input: {
     );
   }
   const serialized = serializeQueryEditorDraft(input.draft, input.catalog);
+  const surfaceRef = requireInstalledSurfaceRef(serialized.surface);
+  if (!input.surface) {
+    throw new QueryWorkbenchSaveError(
+      "missing-surface-contract",
+      `Saved view "${input.viewName.trim() || "Untitled view"}" does not have a current renderer compatibility contract.`,
+    );
+  }
   const spec = {
     ...input.spec,
     query: {
@@ -592,9 +686,10 @@ export function saveQueryWorkbenchView(input: {
     surface: input.surface,
   });
   if (!containerValidation.ok) {
+    const issue = containerValidation.issues[0];
     throw new QueryWorkbenchSaveError(
-      containerValidation.issues[0]?.code ?? "invalid-view",
-      containerValidation.issues[0]?.message ?? "Saved view is invalid.",
+      issue?.code ?? "invalid-view",
+      issue ? formatValidationIssue(issue) : "Saved view is invalid.",
       {
         issues: containerValidation.issues,
       },
@@ -602,13 +697,18 @@ export function saveQueryWorkbenchView(input: {
   }
   const query = input.store.saveQuery({
     ...(input.queryId ? { id: input.queryId } : {}),
+    catalogId: surfaceRef.catalogId,
+    catalogVersion: surfaceRef.catalogVersion,
     name: input.queryName.trim() || "Untitled query",
     parameterDefinitions: serialized.parameterDefinitions,
     request: serialized.request,
-    surfaceId: serialized.surface.surfaceId,
+    surfaceId: surfaceRef.surfaceId,
+    surfaceVersion: surfaceRef.surfaceVersion,
   });
   const view = input.store.saveView({
     ...(input.viewId ? { id: input.viewId } : {}),
+    catalogId: surfaceRef.catalogId,
+    catalogVersion: surfaceRef.catalogVersion,
     name: input.viewName.trim() || "Untitled view",
     queryId: query.id,
     spec: {
@@ -618,13 +718,17 @@ export function saveQueryWorkbenchView(input: {
         queryId: query.id,
       },
     },
-    surfaceId: input.surface.surfaceId,
+    surfaceId: surfaceRef.surfaceId,
+    surfaceVersion: surfaceRef.surfaceVersion,
   });
   return { query, view };
 }
 
 export function createQueryWorkbenchSourceResolver(
   store: Pick<QueryWorkbenchStore, "getQuery">,
+  options: {
+    readonly catalog?: QueryEditorCatalog;
+  } = {},
 ): QueryContainerSourceResolver {
   return async (source) => {
     if (source.kind === "inline") {
@@ -635,6 +739,15 @@ export function createQueryWorkbenchSourceResolver(
       const error = new Error(`Saved query "${source.queryId}" is no longer available.`);
       (error as Error & { code: string }).code = "saved-query-stale";
       throw error;
+    }
+    if (options.catalog) {
+      const compatibility = validateSavedQueryCompatibility(saved, options.catalog);
+      if (!compatibility.ok) {
+        const error = new Error(compatibility.message);
+        (error as Error & { code: string }).code =
+          compatibility.code === "stale-query" ? "saved-query-stale" : "saved-query-incompatible";
+        throw error;
+      }
     }
     const request = mergeQueryParams(saved.request, source.params);
     validateSerializedQueryRequest(request);
@@ -686,6 +799,242 @@ export async function executeQueryWorkbenchPreviewRequest(
 
 export function createQueryWorkbenchInitialDraft(catalog: QueryEditorCatalog): QueryEditorDraft {
   return createQueryEditorDraft(catalog);
+}
+
+type QueryWorkbenchSavedSurfaceRef = {
+  readonly catalogId: string;
+  readonly catalogVersion: string;
+  readonly surfaceId: string;
+  readonly surfaceVersion: string;
+};
+
+type SavedQueryCompatibilityResult =
+  | {
+      readonly ok: true;
+      readonly surface: QueryEditorSurfaceSpec;
+    }
+  | {
+      readonly code: "incompatible-query" | "stale-query";
+      readonly message: string;
+      readonly ok: false;
+    };
+
+type SavedViewCompatibilityResult =
+  | {
+      readonly ok: true;
+      readonly surface: QueryEditorSurfaceSpec;
+    }
+  | {
+      readonly code: "incompatible-view" | "stale-view";
+      readonly message: string;
+      readonly ok: false;
+    };
+
+function requireInstalledSurfaceRef(
+  surface: QueryEditorSurfaceSpec,
+): QueryWorkbenchSavedSurfaceRef {
+  const ref = readInstalledSurfaceRef(surface);
+  if (!ref) {
+    throw new QueryWorkbenchSaveError(
+      "missing-catalog-ref",
+      `Query surface "${surface.surfaceId}" does not expose installed catalog metadata.`,
+    );
+  }
+  return ref;
+}
+
+function readInstalledSurfaceRef(
+  surface: QueryEditorSurfaceSpec,
+): QueryWorkbenchSavedSurfaceRef | undefined {
+  const catalogId = readTrimmedString(surface.catalogId);
+  const catalogVersion = readTrimmedString(surface.catalogVersion);
+  if (!catalogId || !catalogVersion) {
+    return undefined;
+  }
+  return {
+    catalogId,
+    catalogVersion,
+    surfaceId: surface.surfaceId,
+    surfaceVersion: surface.surfaceVersion,
+  };
+}
+
+function validateSavedQueryCompatibility(
+  query: QueryWorkbenchSavedQuery,
+  catalog: QueryEditorCatalog,
+): SavedQueryCompatibilityResult {
+  const requestSurfaceId = resolveSerializedSurfaceId(query.request);
+  if (!requestSurfaceId) {
+    return {
+      code: "incompatible-query",
+      message: `Saved query "${query.id}" uses unsupported query kind "${query.request.query.kind}".`,
+      ok: false,
+    };
+  }
+  if (requestSurfaceId !== query.surfaceId) {
+    return {
+      code: "incompatible-query",
+      message:
+        `Saved query "${query.id}" references surface "${query.surfaceId}" ` +
+        `but serializes "${requestSurfaceId}".`,
+      ok: false,
+    };
+  }
+  const surface = getQueryEditorSurface(catalog, query.surfaceId);
+  if (!surface) {
+    return {
+      code: "stale-query",
+      message: `Saved query "${query.id}" references removed query surface "${query.surfaceId}".`,
+      ok: false,
+    };
+  }
+  const currentRef = readInstalledSurfaceRef(surface);
+  if (!currentRef) {
+    return {
+      code: "incompatible-query",
+      message:
+        `Saved query "${query.id}" cannot be validated because query surface ` +
+        `"${query.surfaceId}" does not expose installed catalog metadata.`,
+      ok: false,
+    };
+  }
+  if (currentRef.catalogId !== query.catalogId) {
+    return {
+      code: "stale-query",
+      message:
+        `Saved query "${query.id}" references removed query catalog ` + `"${query.catalogId}".`,
+      ok: false,
+    };
+  }
+  if (currentRef.catalogVersion !== query.catalogVersion) {
+    return {
+      code: "incompatible-query",
+      message:
+        `Saved query "${query.id}" references incompatible query catalog ` +
+        `"${query.catalogId}@${query.catalogVersion}".`,
+      ok: false,
+    };
+  }
+  if (currentRef.surfaceVersion !== query.surfaceVersion) {
+    return {
+      code: "incompatible-query",
+      message:
+        `Saved query "${query.id}" references incompatible surface version ` +
+        `"${query.surfaceVersion}".`,
+      ok: false,
+    };
+  }
+  return {
+    ok: true,
+    surface,
+  };
+}
+
+function validateSavedViewCompatibility(input: {
+  readonly catalog: QueryEditorCatalog;
+  readonly query: QueryWorkbenchSavedQuery;
+  readonly rendererCapabilities?: Readonly<Record<string, QueryRendererCapability>>;
+  readonly resolveSurfaceCompatibility?: QueryWorkbenchSurfaceCompatibilityResolver;
+  readonly view: QueryWorkbenchSavedView;
+}): SavedViewCompatibilityResult {
+  const { catalog, query, rendererCapabilities, resolveSurfaceCompatibility, view } = input;
+  const queryCompatibility = validateSavedQueryCompatibility(query, catalog);
+  if (!queryCompatibility.ok) {
+    return {
+      code: queryCompatibility.code === "stale-query" ? "stale-view" : "incompatible-view",
+      message:
+        `Saved view "${view.id}" references saved query "${query.id}" ` +
+        `that is no longer valid: ${queryCompatibility.message}`,
+      ok: false,
+    };
+  }
+  if (view.spec.query.queryId !== view.queryId) {
+    return {
+      code: "incompatible-view",
+      message:
+        `Saved view "${view.id}" references saved query "${view.spec.query.queryId}" ` +
+        `in its container binding but is stored against "${view.queryId}".`,
+      ok: false,
+    };
+  }
+  if (view.surfaceId !== query.surfaceId) {
+    return {
+      code: "incompatible-view",
+      message:
+        `Saved view "${view.id}" references surface "${view.surfaceId}" ` +
+        `but saved query "${query.id}" uses "${query.surfaceId}".`,
+      ok: false,
+    };
+  }
+  if (view.catalogId !== query.catalogId || view.catalogVersion !== query.catalogVersion) {
+    return {
+      code: "incompatible-view",
+      message:
+        `Saved view "${view.id}" references query catalog ` +
+        `"${view.catalogId}@${view.catalogVersion}" but saved query "${query.id}" uses ` +
+        `"${query.catalogId}@${query.catalogVersion}".`,
+      ok: false,
+    };
+  }
+  if (view.surfaceVersion !== query.surfaceVersion) {
+    return {
+      code: "incompatible-view",
+      message:
+        `Saved view "${view.id}" references surface version "${view.surfaceVersion}" ` +
+        `but saved query "${query.id}" uses "${query.surfaceVersion}".`,
+      ok: false,
+    };
+  }
+  const surfaceCompatibility = resolveSurfaceCompatibility?.(view.surfaceId);
+  if (resolveSurfaceCompatibility && !surfaceCompatibility) {
+    return {
+      code: "stale-view",
+      message:
+        `Saved view "${view.id}" references query surface "${view.surfaceId}" ` +
+        `but the current renderer compatibility contract is missing.`,
+      ok: false,
+    };
+  }
+  if (surfaceCompatibility && rendererCapabilities) {
+    const containerValidation = validateQueryContainerSpec(view.spec, {
+      rendererCapabilities,
+      surface: surfaceCompatibility,
+    });
+    if (!containerValidation.ok) {
+      return {
+        code: "incompatible-view",
+        message:
+          `Saved view "${view.id}" has incompatible container defaults: ` +
+          `${formatValidationIssue(containerValidation.issues[0])}`,
+        ok: false,
+      };
+    }
+  }
+  return {
+    ok: true,
+    surface: queryCompatibility.surface,
+  };
+}
+
+function resolveSerializedSurfaceId(request: SerializedQueryRequest): string | undefined {
+  if (request.query.kind === "collection") {
+    return request.query.indexId;
+  }
+  if (request.query.kind === "scope") {
+    return request.query.scopeId;
+  }
+  return undefined;
+}
+
+function formatValidationIssue(
+  issue:
+    | {
+        readonly message: string;
+        readonly path: string;
+      }
+    | undefined,
+): string {
+  return issue ? `${issue.path} ${issue.message}` : "Unknown validation issue.";
 }
 
 function readPersistedWorkbenchStore(
@@ -801,9 +1150,12 @@ function isSavedQueryRecord(value: unknown): value is QueryWorkbenchSavedQuery {
   }
   const candidate = value as Partial<QueryWorkbenchSavedQuery>;
   return (
+    typeof candidate.catalogId === "string" &&
+    typeof candidate.catalogVersion === "string" &&
     typeof candidate.id === "string" &&
     typeof candidate.name === "string" &&
     typeof candidate.surfaceId === "string" &&
+    typeof candidate.surfaceVersion === "string" &&
     typeof candidate.updatedAt === "string" &&
     Array.isArray(candidate.parameterDefinitions) &&
     Boolean(candidate.request)
@@ -816,10 +1168,13 @@ function isSavedViewRecord(value: unknown): value is QueryWorkbenchSavedView {
   }
   const candidate = value as Partial<QueryWorkbenchSavedView>;
   return (
+    typeof candidate.catalogId === "string" &&
+    typeof candidate.catalogVersion === "string" &&
     typeof candidate.id === "string" &&
     typeof candidate.name === "string" &&
     typeof candidate.queryId === "string" &&
     typeof candidate.surfaceId === "string" &&
+    typeof candidate.surfaceVersion === "string" &&
     typeof candidate.updatedAt === "string" &&
     Boolean(candidate.spec)
   );

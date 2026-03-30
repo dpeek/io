@@ -147,7 +147,9 @@ query mounting helpers.
 The current query-authoring proof now also includes a form-first editor
 foundation in `query-editor.tsx` and `query-editor.ts` that lets routes author
 source selection, typed filters, sort clauses, pagination defaults, and
-parameter definitions before execution or save flows land.
+parameter definitions before execution or save flows land. The pure editor and
+saved-query helpers now also publish dedicated package exports:
+`@io/app/web/query-editor` and `@io/app/web/saved-query`.
 
 Current editor interaction model:
 
@@ -278,6 +280,15 @@ Current editor interaction model:
   surface catalog, field-aware validation, and serialization helpers that keep
   inline drafts aligned with the generic serialized-query contract plus future
   saved-query parameter metadata
+- `../../lib/app/src/web/lib/saved-query.ts`: shared saved-query and saved-view
+  record types, browser-store proof CRUD helpers, draft save helpers, and
+  resolution seams that return validated durable records plus normalized query
+  requests for planner, editor, and container consumers, exported as
+  `@io/app/web/saved-query`
+- `../../lib/app/src/web/lib/authority.ts`: principal-scoped Durable Object
+  saved-query and saved-view CRUD plus normalized-resolution seams that sit
+  beside the generic serialized-query executor instead of overloading
+  `/api/query`
 - `../../lib/app/src/web/lib/graph-authority-internal-routes.ts`: web-only
   session-principal lookup-and-repair, bearer-share hash lookup, and
   authoritative policy-version handlers kept separate from the Durable Object
@@ -331,12 +342,19 @@ The current Branch 3 browser model stays fail closed.
   of trying to continue an older pagination cursor
 - stale saved-query, saved-view, and draft route state now also fail closed
   when the current query catalog can no longer hydrate their surface
-  definitions, so the workbench renders an explicit recovery card instead of
-  crashing or silently drifting to another query
+  definitions, catalog versions, or saved-view container bindings, so the
+  workbench renders an explicit recovery card instead of crashing or silently
+  drifting to another query or renderer contract
 - the current proof anchors for those guarantees live in
   `../../lib/app/src/web/lib/query-container.test.ts`,
   `../../lib/app/src/web/lib/query-workbench.test.ts`, and
   `../../lib/app/src/web/components/query-workbench.test.tsx`
+- durable saved-query/view authority persistence, normalized re-derivation,
+  installed-catalog validation, and explicit stale-ref recovery are proven in
+  `../../lib/app/src/web/lib/authority.test.ts` and
+  `../../lib/app/src/web/lib/graph-authority-sql-saved-query.test.ts`; the
+  browser `/views` proof route still uses browser-local persistence until it
+  moves onto that authority seam
 - `../../lib/app/src/web/lib/authority.ts`: shared web authority behavior, secret-field
   mutation flow, the current web-owned `/api/commands` envelope, the shared
   write/command authorization seam, principal-aware sync filtering that omits

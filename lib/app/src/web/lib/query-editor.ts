@@ -43,17 +43,28 @@ export type QueryEditorFieldSpec = {
   readonly filterOperators: readonly QueryFilterOperator[];
   readonly label: string;
   readonly options?: readonly QueryEditorOption[];
-  readonly sortable?: boolean;
+};
+
+export type QueryEditorSortFieldSpec = {
+  readonly description?: string;
+  readonly directions?: readonly QueryOrderDirection[];
+  readonly fieldId: string;
+  readonly label: string;
 };
 
 export type QueryEditorSurfaceSpec = {
+  readonly catalogId?: string;
+  readonly catalogVersion?: string;
   readonly defaultPageSize?: number;
   readonly description?: string;
   readonly fields: readonly QueryEditorFieldSpec[];
   readonly label: string;
+  readonly moduleId?: string;
   readonly queryKind: "collection" | "scope";
+  readonly sortFields?: readonly QueryEditorSortFieldSpec[];
   readonly sourceKind: "projection" | "scope";
   readonly surfaceId: string;
+  readonly surfaceVersion: string;
 };
 
 export type QueryEditorCatalog = {
@@ -186,6 +197,13 @@ export function getQueryEditorField(
   fieldId: string,
 ): QueryEditorFieldSpec | undefined {
   return surface.fields.find((field) => field.fieldId === fieldId);
+}
+
+export function getQueryEditorSortField(
+  surface: QueryEditorSurfaceSpec,
+  fieldId: string,
+): QueryEditorSortFieldSpec | undefined {
+  return surface.sortFields?.find((field) => field.fieldId === fieldId);
 }
 
 export function createQueryEditorDraft(
@@ -354,7 +372,7 @@ export function addQueryEditorSort(
   catalog: QueryEditorCatalog,
 ): QueryEditorDraft {
   const surface = getQueryEditorSurface(catalog, draft.surfaceId);
-  const field = surface?.fields.find((candidate) => candidate.sortable);
+  const field = surface?.sortFields?.[0];
   if (!field) {
     return draft;
   }
@@ -364,7 +382,7 @@ export function addQueryEditorSort(
     sorts: [
       ...draft.sorts,
       {
-        direction: "asc",
+        direction: field.directions?.[0] ?? "asc",
         fieldId: field.fieldId,
         id: createDraftId("sort"),
       },
@@ -628,7 +646,7 @@ function collectQueryEditorIssues(
   const seenSorts = new Set<string>();
   for (const [index, sort] of draft.sorts.entries()) {
     const path = `draft.sorts[${index}]`;
-    const field = getQueryEditorField(surface, sort.fieldId);
+    const field = getQueryEditorSortField(surface, sort.fieldId);
     if (!field) {
       issues.push({
         code: "missing-field",
@@ -636,13 +654,6 @@ function collectQueryEditorIssues(
         path: `${path}.fieldId`,
       });
       continue;
-    }
-    if (!field.sortable) {
-      issues.push({
-        code: "non-sortable-field",
-        message: `Field "${field.fieldId}" cannot be used for sorting.`,
-        path: `${path}.fieldId`,
-      });
     }
     if (seenSorts.has(sort.fieldId)) {
       issues.push({
@@ -652,10 +663,11 @@ function collectQueryEditorIssues(
       });
     }
     seenSorts.add(sort.fieldId);
-    if (!queryOrderDirectionValues.includes(sort.direction)) {
+    const directions = field.directions ?? queryOrderDirectionValues;
+    if (!directions.includes(sort.direction)) {
       issues.push({
         code: "invalid-value",
-        message: `Sort direction "${sort.direction}" is invalid.`,
+        message: `Sort direction "${sort.direction}" is not supported for "${field.fieldId}".`,
         path: `${path}.direction`,
       });
     }

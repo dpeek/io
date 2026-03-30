@@ -50,6 +50,7 @@ const demoSurface = {
   resultKind: "collection",
   sourceKinds: ["inline"],
   surfaceId: "views:query-demo",
+  surfaceVersion: "query-surface:views:query-demo:v1",
 } as const satisfies QuerySurfaceRendererCompatibility;
 
 function createResultPage(): QueryResultPage {

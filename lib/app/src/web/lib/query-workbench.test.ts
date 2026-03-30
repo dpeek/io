@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { serializedQueryVersion, type SerializedQueryRequest } from "@io/graph-client";
 
-import { createQueryEditorDemoCatalog } from "../components/query-editor.js";
+import { createInstalledQueryEditorCatalog } from "../components/query-editor.js";
 import {
   createQueryRendererCapabilityMap,
   builtInQueryRendererRegistry,
@@ -25,6 +25,19 @@ import {
   saveQueryWorkbenchView,
   validateQueryWorkbenchRouteSearch,
 } from "./query-workbench.js";
+
+const workflowBoardSurfaceVersion = "query-surface:workflow:project-branch-board:v1";
+const workflowCatalogId = "workflow:query-surfaces";
+const workflowCatalogVersion = "query-catalog:workflow:v1";
+const workflowBoardSurface = {
+  compatibleRendererIds: ["core:list", "core:table", "core:card-grid"],
+  itemEntityIds: "required",
+  queryKind: "collection",
+  resultKind: "collection",
+  sourceKinds: ["saved", "inline"],
+  surfaceId: "workflow:project-branch-board",
+  surfaceVersion: workflowBoardSurfaceVersion,
+} as const;
 
 function readResolvedRequest(
   resolved: { readonly request: SerializedQueryRequest } | SerializedQueryRequest,
@@ -94,20 +107,20 @@ describe("query workbench preview execution", () => {
   it("executes preview requests with filters, params, and pagination", async () => {
     const result = await executeQueryWorkbenchPreviewRequest({
       params: {
-        owner: "person:avery",
+        project: "workflow-project:io",
       },
       query: {
         filter: {
-          fieldId: "ownerId",
+          fieldId: "projectId",
           op: "eq",
           value: {
             kind: "param",
-            name: "owner",
+            name: "project",
           },
         },
         indexId: "workflow:project-branch-board",
         kind: "collection",
-        order: [{ direction: "desc", fieldId: "updatedAt" }],
+        order: [{ direction: "desc", fieldId: "updated-at" }],
         window: {
           limit: 1,
         },
@@ -123,7 +136,7 @@ describe("query workbench preview execution", () => {
 
 describe("query workbench saves", () => {
   it("saves queries and views through the shared helpers", () => {
-    const catalog = createQueryEditorDemoCatalog();
+    const catalog = createInstalledQueryEditorCatalog();
     const draft = createQueryEditorDraft(catalog);
     const store = createQueryWorkbenchMemoryStore();
     const rendererCapabilities = createQueryRendererCapabilityMap(builtInQueryRendererRegistry);
@@ -158,12 +171,7 @@ describe("query workbench saves", () => {
       },
       store,
       surface: {
-        compatibleRendererIds: ["core:list", "core:table", "core:card-grid"],
-        itemEntityIds: "optional",
-        queryKind: "collection",
-        resultKind: "collection",
-        sourceKinds: ["saved", "inline"],
-        surfaceId: "workflow:project-branch-board",
+        ...workflowBoardSurface,
       },
       viewName: "Branch board view",
     });
@@ -176,7 +184,7 @@ describe("query workbench saves", () => {
   });
 
   it("updates the active saved query and view ids instead of creating duplicates", () => {
-    const catalog = createQueryEditorDemoCatalog();
+    const catalog = createInstalledQueryEditorCatalog();
     const draft = createQueryEditorDraft(catalog);
     const store = createQueryWorkbenchMemoryStore();
     const rendererCapabilities = createQueryRendererCapabilityMap(builtInQueryRendererRegistry);
@@ -209,12 +217,7 @@ describe("query workbench saves", () => {
       },
       store,
       surface: {
-        compatibleRendererIds: ["core:list", "core:table", "core:card-grid"],
-        itemEntityIds: "optional",
-        queryKind: "collection",
-        resultKind: "collection",
-        sourceKinds: ["saved", "inline"],
-        surfaceId: "workflow:project-branch-board",
+        ...workflowBoardSurface,
       },
       viewName: "Branch board view",
     });
@@ -246,12 +249,7 @@ describe("query workbench saves", () => {
       },
       store,
       surface: {
-        compatibleRendererIds: ["core:list", "core:table", "core:card-grid"],
-        itemEntityIds: "optional",
-        queryKind: "collection",
-        resultKind: "collection",
-        sourceKinds: ["saved", "inline"],
-        surfaceId: "workflow:project-branch-board",
+        ...workflowBoardSurface,
       },
       viewId: savedView.view.id,
       viewName: "Branch board view final",
@@ -267,7 +265,7 @@ describe("query workbench saves", () => {
   });
 
   it("rejects incompatible saved views", () => {
-    const catalog = createQueryEditorDemoCatalog();
+    const catalog = createInstalledQueryEditorCatalog();
     const draft = createQueryEditorDraft(catalog);
     const store = createQueryWorkbenchMemoryStore();
 
@@ -290,11 +288,12 @@ describe("query workbench saves", () => {
         store,
         surface: {
           compatibleRendererIds: ["core:list"],
-          itemEntityIds: "optional",
+          itemEntityIds: "required",
           queryKind: "collection",
           resultKind: "collection",
           sourceKinds: ["saved", "inline"],
           surfaceId: "workflow:project-branch-board",
+          surfaceVersion: workflowBoardSurfaceVersion,
         },
         viewName: "Invalid board view",
       }),
@@ -302,7 +301,7 @@ describe("query workbench saves", () => {
   });
 
   it("reopens saved queries and views end to end through route state and preview execution", async () => {
-    const catalog = createQueryEditorDemoCatalog();
+    const catalog = createInstalledQueryEditorCatalog();
     const draft = createQueryEditorDraft(catalog);
     const store = createQueryWorkbenchMemoryStore();
     const rendererCapabilities = createQueryRendererCapabilityMap(builtInQueryRendererRegistry);
@@ -313,20 +312,20 @@ describe("query workbench saves", () => {
         ...draft,
         filters: [
           {
-            fieldId: "ownerId",
-            id: "filter:owner",
+            fieldId: "state",
+            id: "filter:state",
             operator: "eq",
-            value: { kind: "param", name: "owner" },
+            value: { kind: "param", name: "state" },
           },
         ],
         parameters: [
           {
-            defaultValue: "person:avery",
-            id: "param:owner",
-            label: "Owner",
-            name: "owner",
+            defaultValue: "active",
+            id: "param:state",
+            label: "State",
+            name: "state",
             required: false,
-            type: "entity-ref",
+            type: "enum",
           },
         ],
       },
@@ -339,20 +338,20 @@ describe("query workbench saves", () => {
         ...draft,
         filters: [
           {
-            fieldId: "ownerId",
-            id: "filter:owner",
+            fieldId: "state",
+            id: "filter:state",
             operator: "eq",
-            value: { kind: "param", name: "owner" },
+            value: { kind: "param", name: "state" },
           },
         ],
         parameters: [
           {
-            defaultValue: "person:avery",
-            id: "param:owner",
-            label: "Owner",
-            name: "owner",
+            defaultValue: "active",
+            id: "param:state",
+            label: "State",
+            name: "state",
             required: false,
-            type: "entity-ref",
+            type: "enum",
           },
         ],
       },
@@ -373,12 +372,7 @@ describe("query workbench saves", () => {
       },
       store,
       surface: {
-        compatibleRendererIds: ["core:list", "core:table", "core:card-grid"],
-        itemEntityIds: "optional",
-        queryKind: "collection",
-        resultKind: "collection",
-        sourceKinds: ["saved", "inline"],
-        surfaceId: "workflow:project-branch-board",
+        ...workflowBoardSurface,
       },
       viewName: "Owner board view",
     });
@@ -386,7 +380,7 @@ describe("query workbench saves", () => {
     const savedQueryTarget = resolveQueryWorkbenchRouteTarget({ queryId: savedQuery.id }, store);
     const savedViewTarget = resolveQueryWorkbenchRouteTarget({ viewId: savedView.view.id }, store);
     const params = decodeQueryWorkbenchParamOverrides(
-      encodeQueryWorkbenchParamOverrides({ owner: "person:sam" }),
+      encodeQueryWorkbenchParamOverrides({ state: "ready" }),
     );
     const resolver = createQueryWorkbenchSourceResolver(store);
 
@@ -416,48 +410,47 @@ describe("query workbench saves", () => {
     );
 
     expect(savedQueryPreview.items.map((item) => item.payload.title)).toEqual(["Query cards"]);
-    expect(savedViewPreview.items.map((item) => item.payload.title)).toEqual([
-      "Workflow shell",
-      "Saved view refresh",
-    ]);
+    expect(savedViewPreview.items.map((item) => item.payload.title)).toEqual(["Workflow shell"]);
   });
 });
 
 describe("query workbench draft hydration", () => {
   it("hydrates saved query requests back into the editor draft", () => {
-    const catalog = createQueryEditorDemoCatalog();
+    const catalog = createInstalledQueryEditorCatalog();
     const draft = hydrateQueryWorkbenchDraft({
       catalog,
       target: {
         kind: "saved-query",
         query: {
           id: "saved-query:owner-board",
+          catalogId: workflowCatalogId,
+          catalogVersion: workflowCatalogVersion,
           name: "Owner board",
           parameterDefinitions: [
             {
-              defaultValue: "person:avery",
-              label: "Owner",
-              name: "owner",
+              defaultValue: "active",
+              label: "State",
+              name: "state",
               required: false,
-              type: "entity-ref",
+              type: "enum",
             },
           ],
           request: {
             params: {
-              owner: "person:avery",
+              state: "active",
             },
             query: {
               filter: {
-                fieldId: "ownerId",
+                fieldId: "state",
                 op: "eq",
                 value: {
                   kind: "param",
-                  name: "owner",
+                  name: "state",
                 },
               },
               indexId: "workflow:project-branch-board",
               kind: "collection",
-              order: [{ direction: "desc", fieldId: "updatedAt" }],
+              order: [{ direction: "desc", fieldId: "updated-at" }],
               window: {
                 limit: 25,
               },
@@ -465,6 +458,7 @@ describe("query workbench draft hydration", () => {
             version: serializedQueryVersion,
           },
           surfaceId: "workflow:project-branch-board",
+          surfaceVersion: workflowBoardSurfaceVersion,
           updatedAt: "2026-03-26T00:00:00.000Z",
         },
       },
@@ -473,19 +467,19 @@ describe("query workbench draft hydration", () => {
     expect(draft?.draft.surfaceId).toBe("workflow:project-branch-board");
     expect(draft?.draft.filters).toEqual([
       {
-        fieldId: "ownerId",
+        fieldId: "state",
         id: "filter:1",
         operator: "eq",
         value: {
           kind: "param",
-          name: "owner",
+          name: "state",
         },
       },
     ]);
     expect(draft?.draft.sorts).toEqual([
       {
         direction: "desc",
-        fieldId: "updatedAt",
+        fieldId: "updated-at",
         id: "sort:1",
       },
     ]);
@@ -493,11 +487,13 @@ describe("query workbench draft hydration", () => {
   });
 
   it("fails closed when saved query hydration becomes stale against the current catalog", () => {
-    const catalog = createQueryEditorDemoCatalog();
+    const catalog = createInstalledQueryEditorCatalog();
     const store = createQueryWorkbenchMemoryStore({
       queries: [
         {
           id: "saved-query:stale-surface",
+          catalogId: workflowCatalogId,
+          catalogVersion: workflowCatalogVersion,
           name: "Stale board",
           parameterDefinitions: [],
           request: {
@@ -511,6 +507,7 @@ describe("query workbench draft hydration", () => {
             version: serializedQueryVersion,
           },
           surfaceId: "workflow:missing-surface",
+          surfaceVersion: "query-surface:workflow:missing-surface:v1",
           updatedAt: "2026-03-26T00:00:00.000Z",
         },
       ],
@@ -531,12 +528,190 @@ describe("query workbench draft hydration", () => {
       code: "stale-query",
       kind: "invalid",
       message:
-        'Saved query "saved-query:stale-surface" no longer matches the current query surfaces.',
+        'Saved query "saved-query:stale-surface" references removed query surface "workflow:missing-surface".',
+    });
+  });
+
+  it("fails closed when saved query catalog versions drift from the installed registry", () => {
+    const catalog = createInstalledQueryEditorCatalog();
+    const store = createQueryWorkbenchMemoryStore({
+      queries: [
+        {
+          id: "saved-query:stale-catalog",
+          catalogId: workflowCatalogId,
+          catalogVersion: "query-catalog:workflow:v0",
+          name: "Catalog drift",
+          parameterDefinitions: [],
+          request: {
+            query: {
+              indexId: "workflow:project-branch-board",
+              kind: "collection",
+              window: {
+                limit: 25,
+              },
+            },
+            version: serializedQueryVersion,
+          },
+          surfaceId: "workflow:project-branch-board",
+          surfaceVersion: workflowBoardSurfaceVersion,
+          updatedAt: "2026-03-26T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const resolved = resolveQueryWorkbenchState({
+      catalog,
+      target: resolveQueryWorkbenchRouteTarget(
+        {
+          queryId: "saved-query:stale-catalog",
+        },
+        store,
+      ),
+    });
+
+    expect(resolved.hydrated).toBeUndefined();
+    expect(resolved.target).toEqual({
+      code: "incompatible-query",
+      kind: "invalid",
+      message:
+        'Saved query "saved-query:stale-catalog" references incompatible query catalog "workflow:query-surfaces@query-catalog:workflow:v0".',
+    });
+  });
+
+  it("fails closed when saved view refs drift away from the saved query binding", () => {
+    const catalog = createInstalledQueryEditorCatalog();
+    const store = createQueryWorkbenchMemoryStore({
+      queries: [
+        {
+          id: "saved-query:owner-board",
+          catalogId: workflowCatalogId,
+          catalogVersion: workflowCatalogVersion,
+          name: "Owner board",
+          parameterDefinitions: [],
+          request: {
+            query: {
+              indexId: "workflow:project-branch-board",
+              kind: "collection",
+              window: {
+                limit: 25,
+              },
+            },
+            version: serializedQueryVersion,
+          },
+          surfaceId: "workflow:project-branch-board",
+          surfaceVersion: workflowBoardSurfaceVersion,
+          updatedAt: "2026-03-26T00:00:00.000Z",
+        },
+      ],
+      views: [
+        {
+          id: "saved-view:owner-board",
+          catalogId: workflowCatalogId,
+          catalogVersion: workflowCatalogVersion,
+          name: "Owner board view",
+          queryId: "saved-query:owner-board",
+          spec: {
+            containerId: "saved-view-preview",
+            pagination: {
+              mode: "paged",
+              pageSize: 25,
+            },
+            query: {
+              kind: "saved",
+              queryId: "saved-query:other",
+            },
+            refresh: {
+              mode: "manual",
+            },
+            renderer: {
+              rendererId: "core:list",
+            },
+          },
+          surfaceId: "workflow:project-branch-board",
+          surfaceVersion: workflowBoardSurfaceVersion,
+          updatedAt: "2026-03-26T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const resolved = resolveQueryWorkbenchState({
+      catalog,
+      rendererCapabilities: createQueryRendererCapabilityMap(builtInQueryRendererRegistry),
+      resolveSurfaceCompatibility: () => ({ ...workflowBoardSurface }),
+      target: resolveQueryWorkbenchRouteTarget(
+        {
+          viewId: "saved-view:owner-board",
+        },
+        store,
+      ),
+    });
+
+    expect(resolved.hydrated).toBeUndefined();
+    expect(resolved.target).toEqual({
+      code: "incompatible-view",
+      kind: "invalid",
+      message:
+        'Saved view "saved-view:owner-board" references saved query "saved-query:other" in its container binding but is stored against "saved-query:owner-board".',
+    });
+  });
+
+  it("fails closed when saved view renderer compatibility no longer matches the current runtime", () => {
+    const catalog = createInstalledQueryEditorCatalog();
+    const store = createQueryWorkbenchMemoryStore();
+    const draft = createQueryEditorDraft(catalog);
+    const rendererCapabilities = createQueryRendererCapabilityMap(builtInQueryRendererRegistry);
+
+    const saved = saveQueryWorkbenchView({
+      catalog,
+      draft,
+      queryName: "Branch board",
+      rendererCapabilities,
+      spec: {
+        containerId: "saved-view-preview",
+        pagination: {
+          mode: "paged",
+          pageSize: 25,
+        },
+        refresh: {
+          mode: "manual",
+        },
+        renderer: {
+          rendererId: "core:table",
+        },
+      },
+      store,
+      surface: {
+        ...workflowBoardSurface,
+      },
+      viewName: "Branch board view",
+    });
+
+    const resolved = resolveQueryWorkbenchState({
+      catalog,
+      rendererCapabilities,
+      resolveSurfaceCompatibility: () => ({
+        ...workflowBoardSurface,
+        compatibleRendererIds: ["core:list"],
+      }),
+      target: resolveQueryWorkbenchRouteTarget(
+        {
+          viewId: saved.view.id,
+        },
+        store,
+      ),
+    });
+
+    expect(resolved.hydrated).toBeUndefined();
+    expect(resolved.target).toEqual({
+      code: "incompatible-view",
+      kind: "invalid",
+      message:
+        'Saved view "saved-view:1" has incompatible container defaults: Query container renderer.rendererId is not compatible with query surface "workflow:project-branch-board".',
     });
   });
 
   it("fails closed when draft hydration becomes stale against the current catalog", () => {
-    const catalog = createQueryEditorDemoCatalog();
+    const catalog = createInstalledQueryEditorCatalog();
     const resolved = resolveQueryWorkbenchState({
       catalog,
       target: {
@@ -568,6 +743,8 @@ describe("query workbench browser store", () => {
     const storage = createMemoryStorage();
     const first = createQueryWorkbenchBrowserStore({ key: "test-store", storage });
     first.saveQuery({
+      catalogId: workflowCatalogId,
+      catalogVersion: workflowCatalogVersion,
       id: "saved-query:1",
       name: "Branch board",
       parameterDefinitions: [],
@@ -582,8 +759,11 @@ describe("query workbench browser store", () => {
         version: serializedQueryVersion,
       },
       surfaceId: "workflow:project-branch-board",
+      surfaceVersion: workflowBoardSurfaceVersion,
     });
     first.saveView({
+      catalogId: workflowCatalogId,
+      catalogVersion: workflowCatalogVersion,
       id: "saved-view:1",
       name: "Branch board view",
       queryId: "saved-query:1",
@@ -605,6 +785,7 @@ describe("query workbench browser store", () => {
         },
       },
       surfaceId: "workflow:project-branch-board",
+      surfaceVersion: workflowBoardSurfaceVersion,
     });
 
     const second = createQueryWorkbenchBrowserStore({ key: "test-store", storage });

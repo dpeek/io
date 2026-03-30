@@ -16,10 +16,13 @@ import type {
 } from "./authority.js";
 import { collectLiveSecretIds } from "./authority.js";
 import type { LoadedRetainedDocumentState, RetainedDocumentState } from "./retained-documents.js";
+import type { SavedQueryRecord, SavedViewRecord } from "./saved-query.js";
 
 export type PersistedTestWebAppAuthorityState = PersistedAuthoritativeGraphState & {
   readonly retainedDocuments?: RetainedDocumentState;
   readonly secrets?: Record<string, WebAppAuthoritySecretRecord>;
+  readonly savedQueries?: Record<string, readonly SavedQueryRecord[]>;
+  readonly savedViews?: Record<string, readonly SavedViewRecord[]>;
   readonly projection?: RetainedWorkflowProjectionState;
 };
 
@@ -77,6 +80,84 @@ function toSecretRecord(secretWrite: WebAppAuthoritySecretWrite): WebAppAuthorit
   return clonePersistedValue(secret);
 }
 
+function createSavedQueryOwnerMap(
+  input: Record<string, readonly SavedQueryRecord[]> | undefined,
+): Map<string, Map<string, SavedQueryRecord>> {
+  return new Map(
+    Object.entries(input ?? {}).map(([ownerId, queries]) => [
+      ownerId,
+      new Map(queries.map((query) => [query.id, clonePersistedValue(query)])),
+    ]),
+  );
+}
+
+function createSavedViewOwnerMap(
+  input: Record<string, readonly SavedViewRecord[]> | undefined,
+): Map<string, Map<string, SavedViewRecord>> {
+  return new Map(
+    Object.entries(input ?? {}).map(([ownerId, views]) => [
+      ownerId,
+      new Map(views.map((view) => [view.id, clonePersistedValue(view)])),
+    ]),
+  );
+}
+
+function serializeSavedQueryOwnerMap(
+  input: ReadonlyMap<string, ReadonlyMap<string, SavedQueryRecord>>,
+): Record<string, readonly SavedQueryRecord[]> {
+  return Object.fromEntries(
+    [...input.entries()]
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([ownerId, queries]) => [
+        ownerId,
+        [...queries.values()]
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+          .map((query) => clonePersistedValue(query)),
+      ]),
+  );
+}
+
+function serializeSavedViewOwnerMap(
+  input: ReadonlyMap<string, ReadonlyMap<string, SavedViewRecord>>,
+): Record<string, readonly SavedViewRecord[]> {
+  return Object.fromEntries(
+    [...input.entries()]
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([ownerId, views]) => [
+        ownerId,
+        [...views.values()]
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+          .map((view) => clonePersistedValue(view)),
+      ]),
+  );
+}
+
+function getSavedQueryBucket(
+  queriesByOwner: Map<string, Map<string, SavedQueryRecord>>,
+  ownerId: string,
+): Map<string, SavedQueryRecord> {
+  const existing = queriesByOwner.get(ownerId);
+  if (existing) {
+    return existing;
+  }
+  const created = new Map<string, SavedQueryRecord>();
+  queriesByOwner.set(ownerId, created);
+  return created;
+}
+
+function getSavedViewBucket(
+  viewsByOwner: Map<string, Map<string, SavedViewRecord>>,
+  ownerId: string,
+): Map<string, SavedViewRecord> {
+  const existing = viewsByOwner.get(ownerId);
+  if (existing) {
+    return existing;
+  }
+  const created = new Map<string, SavedViewRecord>();
+  viewsByOwner.set(ownerId, created);
+  return created;
+}
+
 function pruneSecretRecordMap(
   secrets: Map<string, WebAppAuthoritySecretRecord>,
   input: WebAppAuthoritySecretRepairInput,
@@ -105,6 +186,8 @@ export function createInMemoryTestWebAppAuthorityStorage(
   let persistedWorkflowProjection = initialState?.projection
     ? clonePersistedValue(initialState.projection)
     : null;
+  let persistedSavedQueries = createSavedQueryOwnerMap(initialState?.savedQueries);
+  let persistedSavedViews = createSavedViewOwnerMap(initialState?.savedViews);
 
   function writeState(input: PersistedAuthoritativeGraphStoragePersistInput): void {
     persistedState = clonePersistedValue({
@@ -116,6 +199,33 @@ export function createInMemoryTestWebAppAuthorityStorage(
 
   return {
     storage: {
+      async deleteSavedQuery(ownerId, queryId): Promise<void> {
+        persistedSavedQueries.get(ownerId)?.delete(queryId);
+        for (const [viewId, view] of persistedSavedViews.get(ownerId)?.entries() ?? []) {
+          if (view.queryId === queryId) {
+            persistedSavedViews.get(ownerId)?.delete(viewId);
+          }
+        }
+      },
+      async deleteSavedView(ownerId, viewId): Promise<void> {
+        persistedSavedViews.get(ownerId)?.delete(viewId);
+      },
+      async getSavedQuery(ownerId, queryId): Promise<SavedQueryRecord | undefined> {
+        return clonePersistedValue(persistedSavedQueries.get(ownerId)?.get(queryId));
+      },
+      async getSavedView(ownerId, viewId): Promise<SavedViewRecord | undefined> {
+        return clonePersistedValue(persistedSavedViews.get(ownerId)?.get(viewId));
+      },
+      async listSavedQueries(ownerId): Promise<readonly SavedQueryRecord[]> {
+        return [...(persistedSavedQueries.get(ownerId)?.values() ?? [])]
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+          .map((query) => clonePersistedValue(query));
+      },
+      async listSavedViews(ownerId): Promise<readonly SavedViewRecord[]> {
+        return [...(persistedSavedViews.get(ownerId)?.values() ?? [])]
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+          .map((view) => clonePersistedValue(view));
+      },
       async load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null> {
         if (!persistedState) return null;
         return {
@@ -165,6 +275,15 @@ export function createInMemoryTestWebAppAuthorityStorage(
       async repairSecrets(input: WebAppAuthoritySecretRepairInput): Promise<void> {
         persistedSecrets = pruneSecretRecordMap(persistedSecrets, input);
       },
+      async saveSavedQuery(ownerId, query): Promise<void> {
+        getSavedQueryBucket(persistedSavedQueries, ownerId).set(
+          query.id,
+          clonePersistedValue(query),
+        );
+      },
+      async saveSavedView(ownerId, view): Promise<void> {
+        getSavedViewBucket(persistedSavedViews, ownerId).set(view.id, clonePersistedValue(view));
+      },
       async commit(input, options): Promise<void> {
         writeState(input);
         persistedRetainedDocuments = options?.retainedDocuments
@@ -201,6 +320,8 @@ export function createInMemoryTestWebAppAuthorityStorage(
         ...(persistedRetainedDocuments
           ? { retainedDocuments: clonePersistedValue(persistedRetainedDocuments) }
           : {}),
+        savedQueries: serializeSavedQueryOwnerMap(persistedSavedQueries),
+        savedViews: serializeSavedViewOwnerMap(persistedSavedViews),
         ...(persistedWorkflowProjection
           ? { projection: clonePersistedValue(persistedWorkflowProjection) }
           : {}),

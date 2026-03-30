@@ -9,6 +9,8 @@
 - workflow entity, enum, and type definitions
 - workflow command contracts and summary/result types
 - workflow projection metadata, read-scope contracts, and invalidation helpers
+- workflow query-surface catalogs for planner, saved-query, editor, and
+  renderer registration
 - retained workflow projection checkpoint and row types
 - workflow query/projection index builders and projection schema
 - workflow-owned `env-var` and `document` slices

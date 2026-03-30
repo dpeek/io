@@ -8,6 +8,16 @@
  * projection implementations stay outside this package.
  */
 import {
+  queryFilterOperatorValues,
+  queryOrderDirectionValues,
+  queryParameterTypeValues,
+  type QueryFilterOperator,
+  type QueryLiteral,
+  type QueryOrderDirection,
+  type QueryParameterType,
+  type ReadQuery,
+} from "@io/graph-client";
+import {
   createModuleSyncScope,
   createModuleSyncScopeRequest,
   type ModuleSyncScope,
@@ -206,9 +216,138 @@ export type RetainedProjectionRecordLookupResult<T extends RetainedProjectionMet
       readonly expectedDefinitionHash: string;
     };
 
+export const moduleQuerySurfaceQueryKinds = ["collection", "scope"] as const;
+
+export type ModuleQuerySurfaceQueryKind = (typeof moduleQuerySurfaceQueryKinds)[number];
+
+export const querySurfaceFieldKindValues = [
+  "enum",
+  "entity-ref",
+  "date",
+  "boolean",
+  "text",
+  "number",
+] as const;
+
+export type QuerySurfaceFieldKind = (typeof querySurfaceFieldKindValues)[number];
+
+export type QuerySurfaceOption = {
+  readonly label: string;
+  readonly value: string;
+};
+
+export interface QuerySurfaceFilterFieldSpec {
+  readonly description?: string;
+  readonly fieldId: string;
+  readonly kind: QuerySurfaceFieldKind;
+  readonly label: string;
+  readonly operators: readonly QueryFilterOperator[];
+  readonly options?: readonly QuerySurfaceOption[];
+}
+
+export interface QuerySurfaceOrderFieldSpec {
+  readonly description?: string;
+  readonly directions?: readonly QueryOrderDirection[];
+  readonly fieldId: string;
+  readonly label: string;
+}
+
+export interface QuerySurfaceSelectableFieldSpec {
+  readonly defaultSelected?: boolean;
+  readonly description?: string;
+  readonly fieldId: string;
+  readonly label: string;
+}
+
+export interface QuerySurfaceParameterSpec {
+  readonly defaultValue?: QueryLiteral;
+  readonly description?: string;
+  readonly label: string;
+  readonly name: string;
+  readonly required?: boolean;
+  readonly type: QueryParameterType;
+}
+
+export const querySurfaceRendererResultKindValues = [
+  "entity-detail",
+  "entity-list",
+  "collection",
+  "scope",
+] as const;
+
+export type QuerySurfaceRendererResultKind = (typeof querySurfaceRendererResultKindValues)[number];
+
+export const querySurfaceRendererSourceKindValues = ["saved", "inline"] as const;
+
+export type QuerySurfaceRendererSourceKind = (typeof querySurfaceRendererSourceKindValues)[number];
+
+export const querySurfaceEntityIdSupportValues = ["required", "optional", "forbidden"] as const;
+
+export type QuerySurfaceEntityIdSupport = (typeof querySurfaceEntityIdSupportValues)[number];
+
+export interface QuerySurfaceRendererSpec {
+  readonly compatibleRendererIds: readonly string[];
+  readonly itemEntityIds?: QuerySurfaceEntityIdSupport;
+  readonly resultKind: QuerySurfaceRendererResultKind;
+  readonly sourceKinds?: readonly QuerySurfaceRendererSourceKind[];
+}
+
+export type ModuleQuerySurfaceSourceSpec =
+  | {
+      readonly kind: "projection";
+      readonly projectionId: string;
+    }
+  | {
+      readonly kind: "scope";
+      readonly scopeId: string;
+    };
+
+/**
+ * One module-authored bounded query surface.
+ *
+ * `surfaceVersion` is the compatibility boundary for saved queries, planner
+ * assumptions, and web editor/view bindings. Change it whenever filter,
+ * ordering, parameter, selection, renderer, or source semantics become
+ * incompatible with previously retained client state.
+ */
+export interface ModuleQuerySurfaceSpec {
+  readonly defaultPageSize?: number;
+  readonly description?: string;
+  readonly filters?: readonly QuerySurfaceFilterFieldSpec[];
+  readonly label: string;
+  readonly ordering?: readonly QuerySurfaceOrderFieldSpec[];
+  readonly parameters?: readonly QuerySurfaceParameterSpec[];
+  readonly queryKind: Extract<ReadQuery["kind"], "collection" | "scope">;
+  readonly renderers?: QuerySurfaceRendererSpec;
+  readonly selections?: readonly QuerySurfaceSelectableFieldSpec[];
+  readonly source: ModuleQuerySurfaceSourceSpec;
+  readonly surfaceId: string;
+  readonly surfaceVersion: string;
+}
+
+/**
+ * One installable module query-surface catalog.
+ *
+ * `catalogVersion` should change whenever the installed bundle of surfaces is
+ * no longer compatible as a group. Callers may use it to invalidate cached
+ * registrations or stale editor/planner assumptions across the whole catalog.
+ */
+export interface ModuleQuerySurfaceCatalog {
+  readonly catalogId: string;
+  readonly catalogVersion: string;
+  readonly moduleId: string;
+  readonly surfaces: readonly ModuleQuerySurfaceSpec[];
+}
+
 function assertNonEmptyString(value: string, label: string): void {
   if (value.length === 0) {
     throw new TypeError(`${label} must not be empty.`);
+  }
+}
+
+function assertPositiveInteger(value: number, label: string): void {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new TypeError(`${label} must be a positive integer.`);
   }
 }
 
@@ -276,6 +415,196 @@ function freezeOptionalUniqueValues(
 
   assertUniqueValues(values, label);
   return Object.freeze([...values]);
+}
+
+function freezeQuerySurfaceOptions(
+  options: readonly QuerySurfaceOption[] | undefined,
+  label: string,
+): readonly QuerySurfaceOption[] | undefined {
+  if (options === undefined) {
+    return undefined;
+  }
+  if (options.length === 0) {
+    throw new TypeError(`${label} must not be empty when provided.`);
+  }
+
+  assertUniqueValues(
+    options.map((option) => option.value),
+    `${label}.value`,
+  );
+
+  return Object.freeze(
+    options.map((option) => {
+      assertNonEmptyString(option.label, `${label}.label`);
+      assertNonEmptyString(option.value, `${label}.value`);
+      return Object.freeze({ ...option });
+    }),
+  );
+}
+
+function freezeQuerySurfaceFilterFields(
+  fields: readonly QuerySurfaceFilterFieldSpec[] | undefined,
+): readonly QuerySurfaceFilterFieldSpec[] | undefined {
+  if (fields === undefined) {
+    return undefined;
+  }
+  if (fields.length === 0) {
+    throw new TypeError("filters must not be empty when provided.");
+  }
+
+  assertUniqueValues(
+    fields.map((field) => field.fieldId),
+    "filters.fieldId",
+  );
+
+  return Object.freeze(
+    fields.map((field, index) => {
+      const path = `filters[${index}]`;
+      assertNonEmptyString(field.fieldId, `${path}.fieldId`);
+      assertKnownValue(querySurfaceFieldKindValues, field.kind, `${path}.kind`);
+      assertNonEmptyString(field.label, `${path}.label`);
+      if (field.operators.length === 0) {
+        throw new TypeError(`${path}.operators must not be empty.`);
+      }
+      assertUniqueValues(field.operators, `${path}.operators`);
+      for (const operator of field.operators) {
+        assertKnownValue(queryFilterOperatorValues, operator, `${path}.operators`);
+      }
+
+      const options = freezeQuerySurfaceOptions(field.options, `${path}.options`);
+      return Object.freeze({
+        ...field,
+        operators: Object.freeze([...field.operators]),
+        ...(options ? { options } : {}),
+      });
+    }),
+  );
+}
+
+function freezeQuerySurfaceOrderFields(
+  fields: readonly QuerySurfaceOrderFieldSpec[] | undefined,
+): readonly QuerySurfaceOrderFieldSpec[] | undefined {
+  if (fields === undefined) {
+    return undefined;
+  }
+  if (fields.length === 0) {
+    throw new TypeError("ordering must not be empty when provided.");
+  }
+
+  assertUniqueValues(
+    fields.map((field) => field.fieldId),
+    "ordering.fieldId",
+  );
+
+  return Object.freeze(
+    fields.map((field, index) => {
+      const path = `ordering[${index}]`;
+      assertNonEmptyString(field.fieldId, `${path}.fieldId`);
+      assertNonEmptyString(field.label, `${path}.label`);
+      if (field.directions && field.directions.length === 0) {
+        throw new TypeError(`${path}.directions must not be empty when provided.`);
+      }
+      assertUniqueValues(field.directions ?? [], `${path}.directions`);
+      for (const direction of field.directions ?? []) {
+        assertKnownValue(queryOrderDirectionValues, direction, `${path}.directions`);
+      }
+
+      return Object.freeze({
+        ...field,
+        ...(field.directions ? { directions: Object.freeze([...field.directions]) } : {}),
+      });
+    }),
+  );
+}
+
+function freezeQuerySurfaceSelections(
+  selections: readonly QuerySurfaceSelectableFieldSpec[] | undefined,
+): readonly QuerySurfaceSelectableFieldSpec[] | undefined {
+  if (selections === undefined) {
+    return undefined;
+  }
+  if (selections.length === 0) {
+    throw new TypeError("selections must not be empty when provided.");
+  }
+
+  assertUniqueValues(
+    selections.map((selection) => selection.fieldId),
+    "selections.fieldId",
+  );
+
+  return Object.freeze(
+    selections.map((selection, index) => {
+      const path = `selections[${index}]`;
+      assertNonEmptyString(selection.fieldId, `${path}.fieldId`);
+      assertNonEmptyString(selection.label, `${path}.label`);
+      return Object.freeze({ ...selection });
+    }),
+  );
+}
+
+function freezeQuerySurfaceParameters(
+  parameters: readonly QuerySurfaceParameterSpec[] | undefined,
+): readonly QuerySurfaceParameterSpec[] | undefined {
+  if (parameters === undefined) {
+    return undefined;
+  }
+  if (parameters.length === 0) {
+    throw new TypeError("parameters must not be empty when provided.");
+  }
+
+  assertUniqueValues(
+    parameters.map((parameter) => parameter.name),
+    "parameters.name",
+  );
+
+  return Object.freeze(
+    parameters.map((parameter, index) => {
+      const path = `parameters[${index}]`;
+      assertNonEmptyString(parameter.name, `${path}.name`);
+      assertNonEmptyString(parameter.label, `${path}.label`);
+      assertKnownValue(queryParameterTypeValues, parameter.type, `${path}.type`);
+      return Object.freeze({ ...parameter });
+    }),
+  );
+}
+
+function freezeQuerySurfaceRendererSpec(
+  renderer: QuerySurfaceRendererSpec | undefined,
+): QuerySurfaceRendererSpec | undefined {
+  if (renderer === undefined) {
+    return undefined;
+  }
+  if (renderer.compatibleRendererIds.length === 0) {
+    throw new TypeError("renderers.compatibleRendererIds must not be empty.");
+  }
+
+  assertUniqueValues(renderer.compatibleRendererIds, "renderers.compatibleRendererIds");
+  assertKnownValue(
+    querySurfaceRendererResultKindValues,
+    renderer.resultKind,
+    "renderers.resultKind",
+  );
+
+  const sourceKinds = freezeOptionalUniqueValues(renderer.sourceKinds, "renderers.sourceKinds") as
+    | readonly QuerySurfaceRendererSourceKind[]
+    | undefined;
+  for (const sourceKind of sourceKinds ?? []) {
+    assertKnownValue(querySurfaceRendererSourceKindValues, sourceKind, "renderers.sourceKinds");
+  }
+
+  if (renderer.itemEntityIds !== undefined) {
+    assertKnownValue(
+      querySurfaceEntityIdSupportValues,
+      renderer.itemEntityIds,
+      "renderers.itemEntityIds",
+    );
+  }
+
+  return Object.freeze({
+    ...renderer,
+    compatibleRendererIds: Object.freeze([...renderer.compatibleRendererIds]),
+    ...(sourceKinds ? { sourceKinds } : {}),
+  });
 }
 
 function freezeInvalidationDelivery(delivery: InvalidationDelivery): InvalidationDelivery {
@@ -416,6 +745,75 @@ export function defineProjectionSpec<const T extends ProjectionSpec>(spec: T): R
     sourceScopeKinds: Object.freeze([...spec.sourceScopeKinds]),
     dependencyKeys: Object.freeze([...spec.dependencyKeys]),
   });
+}
+
+export function defineModuleQuerySurfaceSpec<const T extends ModuleQuerySurfaceSpec>(
+  spec: T,
+): Readonly<T> {
+  assertNonEmptyString(spec.surfaceId, "surfaceId");
+  assertNonEmptyString(spec.surfaceVersion, "surfaceVersion");
+  assertNonEmptyString(spec.label, "label");
+  assertKnownValue(moduleQuerySurfaceQueryKinds, spec.queryKind, "queryKind");
+
+  if (spec.defaultPageSize !== undefined) {
+    assertPositiveInteger(spec.defaultPageSize, "defaultPageSize");
+  }
+
+  assertKnownValue(["projection", "scope"] as const, spec.source.kind, "source.kind");
+  if (spec.source.kind === "projection") {
+    assertNonEmptyString(spec.source.projectionId, "source.projectionId");
+    if (spec.queryKind !== "collection") {
+      throw new TypeError('scope query surfaces must use source.kind "scope".');
+    }
+  }
+  if (spec.source.kind === "scope") {
+    assertNonEmptyString(spec.source.scopeId, "source.scopeId");
+    if (spec.queryKind !== "scope") {
+      throw new TypeError('collection query surfaces must use source.kind "projection".');
+    }
+  }
+
+  const filters = freezeQuerySurfaceFilterFields(spec.filters);
+  const ordering = freezeQuerySurfaceOrderFields(spec.ordering);
+  if (spec.queryKind !== "collection" && (filters || ordering)) {
+    throw new TypeError("scope query surfaces must not declare filters or ordering.");
+  }
+
+  const selections = freezeQuerySurfaceSelections(spec.selections);
+  const parameters = freezeQuerySurfaceParameters(spec.parameters);
+  const renderers = freezeQuerySurfaceRendererSpec(spec.renderers);
+
+  return Object.freeze({
+    ...spec,
+    source: Object.freeze({ ...spec.source }),
+    ...(filters ? { filters } : {}),
+    ...(ordering ? { ordering } : {}),
+    ...(selections ? { selections } : {}),
+    ...(parameters ? { parameters } : {}),
+    ...(renderers ? { renderers } : {}),
+  });
+}
+
+export function defineModuleQuerySurfaceCatalog<const T extends ModuleQuerySurfaceCatalog>(
+  catalog: T,
+): Readonly<T> {
+  assertNonEmptyString(catalog.catalogId, "catalogId");
+  assertNonEmptyString(catalog.catalogVersion, "catalogVersion");
+  assertNonEmptyString(catalog.moduleId, "moduleId");
+  if (catalog.surfaces.length === 0) {
+    throw new TypeError("surfaces must not be empty.");
+  }
+
+  const surfaces = catalog.surfaces.map((surface) => defineModuleQuerySurfaceSpec(surface));
+  assertUniqueValues(
+    surfaces.map((surface) => surface.surfaceId),
+    "surfaceId",
+  );
+
+  return Object.freeze({
+    ...catalog,
+    surfaces: Object.freeze(surfaces),
+  }) as Readonly<T>;
 }
 
 export function defineInvalidationEvent<const T extends InvalidationEvent>(event: T): Readonly<T> {

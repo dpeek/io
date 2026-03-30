@@ -17,6 +17,17 @@ import type {
   WebAppAuthorityStorage,
 } from "./authority.js";
 import {
+  bootstrapSavedQueryTables,
+  deleteSavedQueryRows,
+  deleteSavedViewRow,
+  readSavedQueriesFromSql,
+  readSavedQueryFromSql,
+  readSavedViewsFromSql,
+  readSavedViewFromSql,
+  upsertSavedQueryRow,
+  upsertSavedViewRow,
+} from "./graph-authority-sql-saved-query.js";
+import {
   bootstrapSecretValueTable,
   pruneOrphanedSecretValues,
   pruneSecretValueRows,
@@ -423,6 +434,28 @@ export function createSqliteDurableObjectAuthorityStorage(
   state: DurableObjectStateLike,
 ): WebAppAuthorityStorage {
   return {
+    async deleteSavedQuery(ownerId: string, queryId: string): Promise<void> {
+      await runStorageTransaction(state.storage, () => {
+        deleteSavedQueryRows(state.storage.sql, ownerId, queryId);
+      });
+    },
+    async deleteSavedView(ownerId: string, viewId: string): Promise<void> {
+      await runStorageTransaction(state.storage, () => {
+        deleteSavedViewRow(state.storage.sql, ownerId, viewId);
+      });
+    },
+    async getSavedQuery(ownerId: string, queryId: string) {
+      return readSavedQueryFromSql(state.storage.sql, ownerId, queryId);
+    },
+    async getSavedView(ownerId: string, viewId: string) {
+      return readSavedViewFromSql(state.storage.sql, ownerId, viewId);
+    },
+    async listSavedQueries(ownerId: string) {
+      return readSavedQueriesFromSql(state.storage.sql, ownerId);
+    },
+    async listSavedViews(ownerId: string) {
+      return readSavedViewsFromSql(state.storage.sql, ownerId);
+    },
     async load() {
       return loadPersistedAuthorityState(state.storage.sql, {
         defaultRetainedHistoryPolicy,
@@ -463,6 +496,16 @@ export function createSqliteDurableObjectAuthorityStorage(
     async repairSecrets(input: WebAppAuthoritySecretRepairInput): Promise<void> {
       await runStorageTransaction(state.storage, () => {
         pruneSecretValueRows(state.storage.sql, input.liveSecretIds);
+      });
+    },
+    async saveSavedQuery(ownerId, query): Promise<void> {
+      await runStorageTransaction(state.storage, () => {
+        upsertSavedQueryRow(state.storage.sql, ownerId, query);
+      });
+    },
+    async saveSavedView(ownerId, view): Promise<void> {
+      await runStorageTransaction(state.storage, () => {
+        upsertSavedViewRow(state.storage.sql, ownerId, view);
       });
     },
     async commit(input, options): Promise<void> {
@@ -576,6 +619,7 @@ export function bootstrapDurableObjectAuthoritySchema(storage: DurableObjectStor
   }
   bootstrapRetainedRecordTables(storage.sql);
   bootstrapSecretValueTable(storage.sql);
+  bootstrapSavedQueryTables(storage.sql);
   bootstrapWorkflowProjectionTables(storage.sql);
   storage.sql.exec(
     `CREATE INDEX IF NOT EXISTS io_graph_edge_subject_predicate_idx

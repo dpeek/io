@@ -32,9 +32,9 @@ import {
   type QueryEditorFieldSpec,
   type QueryEditorParameterDraft,
   type QueryEditorRawValue,
-  type QueryEditorSurfaceSpec,
   type QueryEditorValueDraft,
 } from "../lib/query-editor.js";
+import { installedModuleQueryEditorCatalog } from "../lib/query-surface-registry.js";
 
 type QueryEditorProps = {
   readonly catalog: QueryEditorCatalog;
@@ -309,7 +309,7 @@ export function QueryEditor({
         <section className="grid gap-4" data-query-editor-section="sort">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <SectionHeader
-              description="Sorts stay limited to fields the current surface marks as sortable."
+              description="Sorts stay limited to the ordering fields the current surface catalog registers."
               title="Sort And Pagination"
             />
             <Button
@@ -384,13 +384,11 @@ export function QueryEditor({
                             }}
                             value={sort.fieldId}
                           >
-                            {surface.fields
-                              .filter((field) => field.sortable)
-                              .map((field) => (
-                                <option key={field.fieldId} value={field.fieldId}>
-                                  {field.label}
-                                </option>
-                              ))}
+                            {(surface.sortFields ?? []).map((field) => (
+                              <option key={field.fieldId} value={field.fieldId}>
+                                {field.label}
+                              </option>
+                            ))}
                           </NativeSelect>
                         </FieldContent>
                       </Field>
@@ -409,7 +407,10 @@ export function QueryEditor({
                             }}
                             value={sort.direction}
                           >
-                            {["asc", "desc"].map((direction) => (
+                            {(
+                              surface.sortFields?.find((field) => field.fieldId === sort.fieldId)
+                                ?.directions ?? ["asc", "desc"]
+                            ).map((direction) => (
                               <option key={direction} value={direction}>
                                 {direction}
                               </option>
@@ -956,120 +957,8 @@ function defaultParameterValue(type: string): QueryEditorRawValue {
   }
 }
 
-export function createQueryEditorDemoCatalog(): QueryEditorCatalog {
-  const boardSurface: QueryEditorSurfaceSpec = {
-    defaultPageSize: 25,
-    description: "Projection-backed workflow branch board with field-aware filtering and sorting.",
-    fields: [
-      {
-        control: "enum",
-        fieldId: "status",
-        filterOperators: ["eq", "neq", "in"],
-        label: "Status",
-        options: [
-          { label: "Draft", value: "draft" },
-          { label: "Active", value: "active" },
-          { label: "Ready", value: "ready" },
-        ],
-        sortable: true,
-      },
-      {
-        control: "entity-ref",
-        fieldId: "ownerId",
-        filterOperators: ["eq", "neq", "in"],
-        label: "Owner",
-        options: [
-          { label: "Avery Operator", value: "person:avery" },
-          { label: "Sam Reviewer", value: "person:sam" },
-        ],
-        sortable: true,
-      },
-      {
-        control: "date",
-        fieldId: "updatedAt",
-        filterOperators: ["eq", "gt", "gte", "lt", "lte"],
-        label: "Updated",
-        sortable: true,
-      },
-      {
-        control: "boolean",
-        fieldId: "needsReview",
-        filterOperators: ["eq", "neq", "exists"],
-        label: "Needs review",
-        sortable: true,
-      },
-      {
-        control: "text",
-        fieldId: "title",
-        filterOperators: ["eq", "neq", "contains", "starts-with", "in"],
-        label: "Title",
-        sortable: true,
-      },
-      {
-        control: "number",
-        fieldId: "openPullRequests",
-        filterOperators: ["eq", "neq", "gt", "gte", "lt", "lte"],
-        label: "Open pull requests",
-        sortable: true,
-      },
-    ],
-    label: "Workflow Branch Board",
-    queryKind: "collection",
-    sourceKind: "projection",
-    surfaceId: "workflow:project-branch-board",
-  };
-
-  const queueSurface: QueryEditorSurfaceSpec = {
-    defaultPageSize: 50,
-    description: "Projection-backed commit queue surface with a narrower field catalog.",
-    fields: [
-      {
-        control: "enum",
-        fieldId: "queueState",
-        filterOperators: ["eq", "neq", "in"],
-        label: "Queue state",
-        options: [
-          { label: "Queued", value: "queued" },
-          { label: "Running", value: "running" },
-          { label: "Blocked", value: "blocked" },
-        ],
-        sortable: true,
-      },
-      {
-        control: "entity-ref",
-        fieldId: "branchId",
-        filterOperators: ["eq", "neq", "in"],
-        label: "Branch",
-        options: [
-          { label: "main", value: "branch:main" },
-          { label: "release", value: "branch:release" },
-        ],
-        sortable: true,
-      },
-      {
-        control: "date",
-        fieldId: "queuedAt",
-        filterOperators: ["eq", "gt", "gte", "lt", "lte"],
-        label: "Queued at",
-        sortable: true,
-      },
-      {
-        control: "number",
-        fieldId: "attemptCount",
-        filterOperators: ["eq", "neq", "gt", "gte", "lt", "lte"],
-        label: "Attempts",
-        sortable: true,
-      },
-    ],
-    label: "Branch Commit Queue",
-    queryKind: "collection",
-    sourceKind: "projection",
-    surfaceId: "workflow:branch-commit-queue",
-  };
-
-  return {
-    surfaces: [boardSurface, queueSurface],
-  };
+export function createInstalledQueryEditorCatalog(): QueryEditorCatalog {
+  return installedModuleQueryEditorCatalog;
 }
 
 function NativeSelect(props: React.ComponentProps<"select">) {

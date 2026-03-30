@@ -184,6 +184,7 @@ export type QuerySurfaceRendererCompatibility = {
   readonly resultKind: QueryContainerResultKind;
   readonly sourceKinds?: readonly QueryContainerSourceKind[];
   readonly surfaceId: string;
+  readonly surfaceVersion: string;
 };
 
 export type QueryContainerValidationIssueCode =

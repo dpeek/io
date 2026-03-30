@@ -803,6 +803,10 @@ Current proof status:
 - `../../lib/app/src/web/lib/query-editor.ts` now defines the shared form-first draft,
   query surface catalog, validation rules, and serialization bridge into the
   generic `SerializedQueryRequest` plus `QueryParameterDefinition[]`
+- `../../lib/app/src/web/lib/saved-query.ts` now defines the reusable saved-query
+  and saved-view CRUD plus resolution seams used by planner, editor, and
+  container code, including browser-store proof persistence and normalized
+  saved-record resolution against the installed query catalog
 - `../../lib/app/src/web/components/query-editor.tsx` now mounts that draft model
   through typed source, filter, sort, pagination, and parameter sections
 - `../../lib/app/src/web/lib/query-workbench.ts` now adds shared route-state parsing,
@@ -817,10 +821,31 @@ Current proof status:
   apply parameter overrides, and fail closed when a saved query, saved view,
   route draft, or saved-route parameter override becomes invalid or stale,
   including current-catalog hydration failures when a previously saved surface
-  definition no longer exists
-- the current save flow still uses browser-local proof persistence; graph-owned
-  durable persistence remains the follow-up step once the durable model is
-  wired through the authority path
+  definition, catalog version, or saved-view/query binding no longer matches
+  the installed contracts
+- `../../lib/app/src/web/lib/authority.ts` and the Durable Object storage adapters
+  now expose the principal-scoped durable saved-query/view persistence path for
+  non-route consumers, with proof coverage in
+  `../../lib/app/src/web/lib/authority.test.ts` and
+  `../../lib/app/src/web/lib/graph-authority-sql-saved-query.test.ts` for
+  persistence, normalized re-derivation, installed-catalog validation, and
+  stale-ref recovery; the current `/views` proof route still uses browser-local
+  persistence until the editor UI moves onto that authority seam
+
+Current consumption seams:
+
+- editor consumers should use `@io/app/web/query-editor` to author or hydrate
+  drafts, then `@io/app/web/saved-query` save helpers to produce durable
+  saved-query and saved-view records
+- planner and container consumers should resolve saved records through
+  `@io/app/web/saved-query` resolution helpers or the matching
+  `WebAppAuthority.resolveSavedQuery(...)` and
+  `WebAppAuthority.resolveSavedView(...)` seams so normalized requests,
+  parameter overrides, and catalog compatibility stay centralized
+- generic serialized transport remains separate: callers that already have a
+  validated serialized request should continue using `/api/query` or
+  `executeSerializedQuery(...)` instead of wrapping that request inside a
+  saved-query object
 
 ### Advanced mode
 

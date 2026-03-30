@@ -28,6 +28,7 @@ import {
   type NormalizedQueryFilter,
   type NormalizedQueryRequest,
   type GraphClient,
+  type QueryIdentityExecutionContext,
   type QueryLiteral,
   type QueryResultItem,
   type QueryResultPage,
@@ -80,7 +81,7 @@ import {
   type RetainedWorkflowProjectionState,
   WorkflowProjectionQueryError,
   branchStateValues,
-  workflowBuiltInQuerySurfaces,
+  workflowBuiltInQuerySurfaceIds,
   projectionSchema,
   workflowReviewModuleReadScope,
   type WorkflowMutationAction,
@@ -109,6 +110,23 @@ import { seedExampleGraph } from "./example-data.js";
 import { planRecordedMutation } from "./mutation-planning.js";
 import { webAppPolicyVersion } from "./policy-version.js";
 import {
+  getInstalledModuleQuerySurface,
+  getInstalledModuleQuerySurfaceRendererCompatibility,
+  installedModuleQueryEditorCatalog,
+  installedModuleQuerySurfaceRegistry,
+} from "./query-surface-registry.js";
+import {
+  createSavedQueryMemoryStore,
+  resolveSavedQueryRecord,
+  resolveSavedViewRecord,
+  validateSavedQueryCompatibility,
+  validateSavedViewCompatibility,
+  type SavedQueryRecord,
+  type SavedQueryResolution,
+  type SavedViewRecord,
+  type SavedViewResolution,
+} from "./saved-query.js";
+import {
   buildSecretHandleName,
   secretFieldEntityIdRequiredMessage,
   secretFieldPlaintextRequiredMessage,
@@ -128,6 +146,18 @@ import { runWorkflowMutationCommand } from "./workflow-authority.js";
 import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-transport.js";
 
 const webAppGraph = { ...core, ...workflow } as const;
+const workflowProjectBranchBoardSurface = getInstalledModuleQuerySurface(
+  installedModuleQuerySurfaceRegistry,
+  workflowBuiltInQuerySurfaceIds.projectBranchBoard,
+);
+const workflowBranchCommitQueueSurface = getInstalledModuleQuerySurface(
+  installedModuleQuerySurfaceRegistry,
+  workflowBuiltInQuerySurfaceIds.branchCommitQueue,
+);
+const workflowReviewQuerySurface = getInstalledModuleQuerySurface(
+  installedModuleQuerySurfaceRegistry,
+  workflowBuiltInQuerySurfaceIds.reviewScope,
+);
 
 type WebAppGraph = typeof webAppGraph;
 type PersistedWebAppAuthority = PersistedAuthoritativeGraph<WebAppGraph>;
@@ -317,6 +347,12 @@ type WebAuthorityMutationStageContext = {
  * treated as stable across branches.
  */
 export interface WebAppAuthorityStorage {
+  deleteSavedQuery(ownerId: string, queryId: string): Promise<void>;
+  deleteSavedView(ownerId: string, viewId: string): Promise<void>;
+  getSavedQuery(ownerId: string, queryId: string): Promise<SavedQueryRecord | undefined>;
+  getSavedView(ownerId: string, viewId: string): Promise<SavedViewRecord | undefined>;
+  listSavedQueries(ownerId: string): Promise<readonly SavedQueryRecord[]>;
+  listSavedViews(ownerId: string): Promise<readonly SavedViewRecord[]>;
   load(): Promise<PersistedAuthoritativeGraphStorageLoadResult | null>;
   loadRetainedDocuments(): Promise<LoadedRetainedDocumentState | null>;
   loadWorkflowProjection(): Promise<RetainedWorkflowProjectionState | null>;
@@ -331,6 +367,8 @@ export interface WebAppAuthorityStorage {
     options?: WebAppAuthoritySecretLoadOptions,
   ): Promise<Record<string, WebAppAuthoritySecretRecord>>;
   repairSecrets(input: WebAppAuthoritySecretRepairInput): Promise<void>;
+  saveSavedQuery(ownerId: string, query: SavedQueryRecord): Promise<void>;
+  saveSavedView(ownerId: string, view: SavedViewRecord): Promise<void>;
   commit(
     input: PersistedAuthoritativeGraphStorageCommitInput,
     options?: {
@@ -382,6 +420,26 @@ export type WebAppAuthorityCommandOptions = {
   readonly authorization: AuthorizationContext;
 };
 
+export type WebAppAuthoritySavedQueryUpsertInput = Omit<SavedQueryRecord, "id" | "updatedAt"> & {
+  readonly id?: string;
+};
+
+export type WebAppAuthoritySavedViewUpsertInput = Omit<SavedViewRecord, "id" | "updatedAt"> & {
+  readonly id?: string;
+};
+
+export type WebAppAuthoritySavedQueryResolutionInput = {
+  readonly executionContext?: QueryIdentityExecutionContext;
+  readonly params?: Readonly<Record<string, QueryLiteral>>;
+  readonly queryId: string;
+};
+
+export type WebAppAuthoritySavedViewResolutionInput = {
+  readonly executionContext?: QueryIdentityExecutionContext;
+  readonly params?: Readonly<Record<string, QueryLiteral>>;
+  readonly viewId: string;
+};
+
 export type WebAppAuthority = Omit<
   PersistedWebAppAuthority,
   "applyTransaction" | "createTotalSyncPayload" | "getIncrementalSyncResult" | "graph" | "store"
@@ -389,7 +447,19 @@ export type WebAppAuthority = Omit<
   activateSessionPrincipalRoleBindings(
     input: SessionPrincipalLookupInput,
   ): Promise<SessionPrincipalProjection>;
+  deleteSavedQuery(id: string, options: WebAppAuthorityReadOptions): Promise<void>;
+  deleteSavedView(id: string, options: WebAppAuthorityReadOptions): Promise<void>;
   getPolicyVersion(): number;
+  getSavedQuery(
+    id: string,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedQueryRecord | undefined>;
+  getSavedView(
+    id: string,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedViewRecord | undefined>;
+  listSavedQueries(options: WebAppAuthorityReadOptions): Promise<readonly SavedQueryRecord[]>;
+  listSavedViews(options: WebAppAuthorityReadOptions): Promise<readonly SavedViewRecord[]>;
   lookupBearerShare(input: BearerShareLookupInput): Promise<BearerShareProjection>;
   lookupSessionPrincipal(
     input: SessionPrincipalLookupInput,
@@ -409,10 +479,26 @@ export type WebAppAuthority = Omit<
     query: CommitQueueScopeQuery,
     options: WebAppAuthorityReadOptions,
   ): CommitQueueScopeResult;
+  resolveSavedQuery(
+    input: WebAppAuthoritySavedQueryResolutionInput,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedQueryResolution>;
+  resolveSavedView(
+    input: WebAppAuthoritySavedViewResolutionInput,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedViewResolution>;
   executeSerializedQuery(
     request: SerializedQueryRequest,
     options: WebAppAuthorityReadOptions,
   ): Promise<SerializedQueryResponse>;
+  saveSavedQuery(
+    input: WebAppAuthoritySavedQueryUpsertInput,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedQueryRecord>;
+  saveSavedView(
+    input: WebAppAuthoritySavedViewUpsertInput,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedViewRecord>;
   planWorkflowReviewLiveRegistration(
     cursor: string,
     options: WebAppAuthorityReadOptions,
@@ -3529,6 +3615,34 @@ export async function createWebAppAuthority(
     );
   }
 
+  function requireSavedQueryOwnerId(options: WebAppAuthorityReadOptions): string {
+    const staleContextError = assertCurrentAuthorizationVersion(
+      authority.store,
+      options.authorization,
+      authorityPolicyVersion,
+    );
+    if (staleContextError) {
+      throw createReadPolicyError(staleContextError);
+    }
+    if (!options.authorization.principalId) {
+      throw new WebAppAuthorityReadError(401, "Saved queries require an identified principal.", {
+        code: "auth.unauthenticated",
+      });
+    }
+    return options.authorization.principalId;
+  }
+
+  function createSavedQueryExecutionContext(
+    executionContext: QueryIdentityExecutionContext | undefined,
+    authorization: AuthorizationContext,
+  ): QueryIdentityExecutionContext {
+    return {
+      ...executionContext,
+      ...(authorization.principalId ? { principalId: authorization.principalId } : {}),
+      policyFilterVersion: createPolicyFilterVersion(authorityPolicyVersion),
+    };
+  }
+
   function readPredicateValue(
     subjectId: string,
     predicateId: string,
@@ -3978,8 +4092,8 @@ export async function createWebAppAuthority(
     );
 
     if (
-      query.indexId === workflowBuiltInQuerySurfaces.projectBranchBoard.surfaceId &&
-      workflowBuiltInQuerySurfaces.projectBranchBoard.projectionId
+      workflowProjectBranchBoardSurface?.source.kind === "projection" &&
+      query.indexId === workflowProjectBranchBoardSurface.surfaceId
     ) {
       return bindSerializedQueryPageCursor(
         mapWorkflowProjectBranchCollectionResult(
@@ -3993,8 +4107,8 @@ export async function createWebAppAuthority(
     }
 
     if (
-      query.indexId === workflowBuiltInQuerySurfaces.branchCommitQueue.surfaceId &&
-      workflowBuiltInQuerySurfaces.branchCommitQueue.projectionId
+      workflowBranchCommitQueueSurface?.source.kind === "projection" &&
+      query.indexId === workflowBranchCommitQueueSurface.surfaceId
     ) {
       return bindSerializedQueryPageCursor(
         mapWorkflowCommitQueueCollectionResult(
@@ -4005,7 +4119,7 @@ export async function createWebAppAuthority(
     }
 
     throw new UnsupportedSerializedQueryPlanError(
-      `Collection query "${query.indexId}" is not a registered built-in serialized-query surface.`,
+      `Collection query "${query.indexId}" is not a registered serialized-query surface.`,
     );
   }
 
@@ -4013,7 +4127,7 @@ export async function createWebAppAuthority(
     query: Extract<NormalizedQueryRequest["query"], { readonly kind: "scope" }>,
   ): boolean {
     if (query.scopeId) {
-      return query.scopeId === workflowBuiltInQuerySurfaces.reviewScope.surfaceId;
+      return query.scopeId === workflowReviewQuerySurface?.surfaceId;
     }
     if (!query.definition || query.definition.kind !== "module") {
       return false;
@@ -4028,7 +4142,7 @@ export async function createWebAppAuthority(
       return false;
     }
     const moduleIds = query.definition.moduleIds ?? [];
-    return moduleIds.length === 1 && moduleIds[0] === workflowReviewModuleReadScope.moduleId;
+    return moduleIds.length === 1 && moduleIds[0] === workflowReviewQuerySurface?.moduleId;
   }
 
   function executeScopeSerializedQuery(
@@ -4042,7 +4156,7 @@ export async function createWebAppAuthority(
     }
     if (!matchesWorkflowReviewScopeQuery(query)) {
       throw new UnsupportedSerializedQueryPlanError(
-        `Scope query "${query.scopeId ?? "inline"}" is not a registered built-in serialized-query surface.`,
+        `Scope query "${query.scopeId ?? "inline"}" is not a registered serialized-query surface.`,
       );
     }
 
@@ -4088,6 +4202,177 @@ export async function createWebAppAuthority(
     }
 
     throw new UnsupportedSerializedQueryPlanError("Serialized query kind is not supported.");
+  }
+
+  function createSavedQueryConflict(message: string): WebAppAuthorityReadError {
+    return new WebAppAuthorityReadError(409, message);
+  }
+
+  async function listSavedQueries(
+    options: WebAppAuthorityReadOptions,
+  ): Promise<readonly SavedQueryRecord[]> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    return storage.listSavedQueries(ownerId);
+  }
+
+  async function listSavedViews(
+    options: WebAppAuthorityReadOptions,
+  ): Promise<readonly SavedViewRecord[]> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    return storage.listSavedViews(ownerId);
+  }
+
+  async function getSavedQuery(
+    id: string,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedQueryRecord | undefined> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    return storage.getSavedQuery(ownerId, id);
+  }
+
+  async function getSavedView(
+    id: string,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedViewRecord | undefined> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    return storage.getSavedView(ownerId, id);
+  }
+
+  async function deleteSavedQuery(id: string, options: WebAppAuthorityReadOptions): Promise<void> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    await storage.deleteSavedQuery(ownerId, id);
+  }
+
+  async function deleteSavedView(id: string, options: WebAppAuthorityReadOptions): Promise<void> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    await storage.deleteSavedView(ownerId, id);
+  }
+
+  async function saveSavedQuery(
+    input: WebAppAuthoritySavedQueryUpsertInput,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedQueryRecord> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    const [queries, views] = await Promise.all([
+      storage.listSavedQueries(ownerId),
+      storage.listSavedViews(ownerId),
+    ]);
+    const savedQueryStore = createSavedQueryMemoryStore({ queries, views });
+    const saved = savedQueryStore.saveSavedQuery(input);
+    const compatibility = validateSavedQueryCompatibility(saved, installedModuleQueryEditorCatalog);
+    if (!compatibility.ok) {
+      throw createSavedQueryConflict(compatibility.message);
+    }
+    await storage.saveSavedQuery(ownerId, saved);
+    return saved;
+  }
+
+  async function saveSavedView(
+    input: WebAppAuthoritySavedViewUpsertInput,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedViewRecord> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    const [queries, views] = await Promise.all([
+      storage.listSavedQueries(ownerId),
+      storage.listSavedViews(ownerId),
+    ]);
+    const savedQueryStore = createSavedQueryMemoryStore({ queries, views });
+    const saved = savedQueryStore.saveSavedView(input);
+    const query = savedQueryStore.getSavedQuery(saved.queryId);
+    if (!query) {
+      throw new WebAppAuthorityReadError(
+        404,
+        `Saved view "${saved.id}" references missing saved query "${saved.queryId}".`,
+      );
+    }
+    const compatibility = validateSavedViewCompatibility({
+      catalog: installedModuleQueryEditorCatalog,
+      query,
+      resolveSurfaceCompatibility: getInstalledModuleQuerySurfaceRendererCompatibility,
+      view: saved,
+    });
+    if (!compatibility.ok) {
+      throw createSavedQueryConflict(compatibility.message);
+    }
+    await storage.saveSavedView(ownerId, saved);
+    return saved;
+  }
+
+  async function resolveSavedQuery(
+    input: WebAppAuthoritySavedQueryResolutionInput,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedQueryResolution> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    const query = await storage.getSavedQuery(ownerId, input.queryId);
+    if (!query) {
+      throw new WebAppAuthorityReadError(
+        404,
+        `Saved query "${input.queryId}" is no longer available.`,
+      );
+    }
+    try {
+      return await resolveSavedQueryRecord({
+        catalog: installedModuleQueryEditorCatalog,
+        executionContext: createSavedQueryExecutionContext(
+          input.executionContext,
+          options.authorization,
+        ),
+        params: input.params,
+        query,
+      });
+    } catch (error) {
+      const code =
+        typeof (error as { code?: unknown })?.code === "string"
+          ? (error as { code: string }).code
+          : undefined;
+      if (code === "stale-query" || code === "incompatible-query") {
+        throw createSavedQueryConflict((error as Error).message);
+      }
+      throw error;
+    }
+  }
+
+  async function resolveSavedView(
+    input: WebAppAuthoritySavedViewResolutionInput,
+    options: WebAppAuthorityReadOptions,
+  ): Promise<SavedViewResolution> {
+    const ownerId = requireSavedQueryOwnerId(options);
+    const view = await storage.getSavedView(ownerId, input.viewId);
+    if (!view) {
+      throw new WebAppAuthorityReadError(
+        404,
+        `Saved view "${input.viewId}" is no longer available.`,
+      );
+    }
+    const query = await storage.getSavedQuery(ownerId, view.queryId);
+    if (!query) {
+      throw new WebAppAuthorityReadError(
+        404,
+        `Saved view "${view.id}" references missing saved query "${view.queryId}".`,
+      );
+    }
+    try {
+      return await resolveSavedViewRecord({
+        catalog: installedModuleQueryEditorCatalog,
+        executionContext: createSavedQueryExecutionContext(
+          input.executionContext,
+          options.authorization,
+        ),
+        params: input.params,
+        query,
+        resolveSurfaceCompatibility: getInstalledModuleQuerySurfaceRendererCompatibility,
+        view,
+      });
+    } catch (error) {
+      const code =
+        typeof (error as { code?: unknown })?.code === "string"
+          ? (error as { code: string }).code
+          : undefined;
+      if (code === "stale-view" || code === "incompatible-view") {
+        throw createSavedQueryConflict((error as Error).message);
+      }
+      throw error;
+    }
   }
 
   async function executeSerializedQuery(
@@ -4955,8 +5240,14 @@ export async function createWebAppAuthority(
     executeSerializedQuery,
     applyTransaction,
     createTotalSyncPayload,
+    deleteSavedQuery,
+    deleteSavedView,
+    getSavedQuery,
+    getSavedView,
     getIncrementalSyncResult,
     getPolicyVersion,
+    listSavedQueries,
+    listSavedViews,
     lookupBearerShare,
     lookupSessionPrincipal,
     planWorkflowReviewLiveRegistration,
@@ -4965,6 +5256,10 @@ export async function createWebAppAuthority(
     readProjectBranchScope,
     readSnapshot,
     rebuildRetainedWorkflowProjection,
+    resolveSavedQuery,
+    resolveSavedView,
+    saveSavedQuery,
+    saveSavedView,
     writeSecretField,
   };
 }

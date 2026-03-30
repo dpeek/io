@@ -14,6 +14,8 @@ live invalidation targeting.
 
 - module read-scope definition contracts and sync-scope interop helpers
 - projection kinds, rebuild strategies, visibility modes, and catalog helpers
+- module query-surface catalog contracts for filters, ordering, selections,
+  parameters, renderer compatibility, and versioned registration metadata
 - dependency-key kinds plus normalization and validation helpers
 - invalidation delivery, event, and target contracts
 - retained projection checkpoint and row metadata contracts
@@ -45,6 +47,11 @@ live invalidation targeting.
   `{ projectionId, definitionHash }` pairs are the compatibility boundary for
   retained rows and checkpoints. Incompatible retained state should rebuild, not
   silently coerce.
+- `ModuleQuerySurfaceCatalog.catalogVersion` and
+  `ModuleQuerySurfaceSpec.surfaceVersion` are the compatibility boundary for
+  installed planner/editor/view-binding metadata. Incompatible saved-query or
+  editor state should fail closed and re-hydrate from a fresh catalog, not
+  silently reinterpret old semantics.
 - Retained checkpoint and row records are rebuildable caches, not source of
   truth. If they are missing, stale, or incompatible, callers discard and
   rebuild from authoritative facts.
@@ -59,6 +66,7 @@ Everything intended for consumers is re-exported from the package root.
 
 - module read-scope definitions and sync-scope matching helpers
 - projection kinds, specs, and catalog helpers
+- query-surface specs and catalog helpers
 - dependency-key constants, types, and constructors
 - invalidation delivery/event/target contracts and matching helpers
 - retained projection metadata/checkpoint/row contracts plus lookup helpers

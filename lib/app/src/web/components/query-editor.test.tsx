@@ -8,11 +8,11 @@ import {
   createQueryEditorDraft,
   updateQueryEditorFilter,
 } from "../lib/query-editor.js";
-import { QueryEditor, createQueryEditorDemoCatalog } from "./query-editor.js";
+import { QueryEditor, createInstalledQueryEditorCatalog } from "./query-editor.js";
 
 describe("query editor component", () => {
   it("renders the form-first authoring sections with typed field controls", () => {
-    const catalog = createQueryEditorDemoCatalog();
+    const catalog = createInstalledQueryEditorCatalog();
     let draft = createQueryEditorDraft(catalog);
 
     draft = addQueryEditorFilter(draft, catalog);
@@ -20,9 +20,9 @@ describe("query editor component", () => {
       draft,
       draft.filters[0]!.id,
       {
-        fieldId: "status",
+        fieldId: "projectId",
         operator: "eq",
-        value: { kind: "literal", value: "draft" },
+        value: { kind: "literal", value: "workflow-project:io" },
       },
       catalog,
     );
@@ -32,9 +32,9 @@ describe("query editor component", () => {
       draft,
       draft.filters[1]!.id,
       {
-        fieldId: "ownerId",
+        fieldId: "state",
         operator: "eq",
-        value: { kind: "literal", value: "person:avery" },
+        value: { kind: "literal", value: "active" },
       },
       catalog,
     );
@@ -44,19 +44,7 @@ describe("query editor component", () => {
       draft,
       draft.filters[2]!.id,
       {
-        fieldId: "updatedAt",
-        operator: "gte",
-        value: { kind: "literal", value: "2026-03-26" },
-      },
-      catalog,
-    );
-
-    draft = addQueryEditorFilter(draft, catalog);
-    draft = updateQueryEditorFilter(
-      draft,
-      draft.filters[3]!.id,
-      {
-        fieldId: "needsReview",
+        fieldId: "hasActiveCommit",
         operator: "eq",
         value: { kind: "literal", value: true },
       },
@@ -66,23 +54,11 @@ describe("query editor component", () => {
     draft = addQueryEditorFilter(draft, catalog);
     draft = updateQueryEditorFilter(
       draft,
-      draft.filters[4]!.id,
+      draft.filters[3]!.id,
       {
-        fieldId: "title",
-        operator: "contains",
-        value: { kind: "literal", value: "workflow" },
-      },
-      catalog,
-    );
-
-    draft = addQueryEditorFilter(draft, catalog);
-    draft = updateQueryEditorFilter(
-      draft,
-      draft.filters[5]!.id,
-      {
-        fieldId: "openPullRequests",
-        operator: "gte",
-        value: { kind: "literal", value: 3 },
+        fieldId: "showUnmanagedRepositoryBranches",
+        operator: "eq",
+        value: { kind: "literal", value: true },
       },
       catalog,
     );
@@ -97,15 +73,12 @@ describe("query editor component", () => {
     expect(html).toContain('data-query-editor-section="parameters"');
     expect(html).toContain('data-query-editor-control="enum"');
     expect(html).toContain('data-query-editor-control="entity-ref"');
-    expect(html).toContain('data-query-editor-control="date"');
     expect(html).toContain('data-query-editor-control="boolean"');
-    expect(html).toContain('data-query-editor-control="text"');
-    expect(html).toContain('data-query-editor-control="number"');
     expect(html).toContain("&quot;indexId&quot;: &quot;workflow:project-branch-board&quot;");
   });
 
   it("renders inline validation feedback near invalid pagination controls", () => {
-    const catalog = createQueryEditorDemoCatalog();
+    const catalog = createInstalledQueryEditorCatalog();
     const draft = {
       ...createQueryEditorDraft(catalog),
       pagination: {

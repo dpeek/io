@@ -3,13 +3,17 @@ import {
   createProjectionDependencyKey,
   createScopeDependencyKey,
   defineInvalidationEvent,
+  defineModuleQuerySurfaceCatalog,
+  defineModuleQuerySurfaceSpec,
   defineModuleReadScopeDefinition,
   defineProjectionCatalog,
   defineProjectionSpec,
   type DependencyKey,
   type InvalidationEvent,
+  type ModuleQuerySurfaceSpec,
 } from "@io/graph-projection";
 
+import { branchStateValues } from "./command.js";
 import { document } from "./document.js";
 import {
   agentSession,
@@ -185,33 +189,239 @@ export const projectionDefinitionHashes = Object.freeze({
   branchCommitQueue: branchCommitQueueProjection.definitionHash,
 });
 
-export type WorkflowBuiltInQuerySurfaceSpec = {
-  readonly queryKind: "collection" | "scope";
-  readonly sourceKind: "projection" | "scope";
-  readonly surfaceId: string;
-  readonly projectionId?: string;
-  readonly scopeId?: string;
-};
+function titleCaseWord(value: string): string {
+  return value.length === 0 ? value : `${value[0]!.toUpperCase()}${value.slice(1)}`;
+}
+
+const workflowQueryRendererIds = ["core:list", "core:table", "core:card-grid"] as const;
+
+const workflowBranchStateOptions = Object.freeze(
+  branchStateValues.map((state) => ({
+    label: titleCaseWord(state),
+    value: state,
+  })),
+);
+
+const projectBranchBoardQuerySurface = defineModuleQuerySurfaceSpec({
+  surfaceId: projectBranchBoardProjection.projectionId,
+  surfaceVersion: "query-surface:workflow:project-branch-board:v1",
+  label: "Workflow Branch Board",
+  description:
+    "Projection-backed workflow branch board with planner-visible filters, ordering, selections, parameters, and renderer compatibility.",
+  queryKind: "collection",
+  source: {
+    kind: "projection",
+    projectionId: projectBranchBoardProjection.projectionId,
+  },
+  defaultPageSize: 25,
+  filters: [
+    {
+      fieldId: "projectId",
+      kind: "entity-ref",
+      label: "Project",
+      operators: ["eq"],
+    },
+    {
+      fieldId: "state",
+      kind: "enum",
+      label: "State",
+      operators: ["eq", "in"],
+      options: workflowBranchStateOptions,
+    },
+    {
+      fieldId: "hasActiveCommit",
+      kind: "boolean",
+      label: "Has Active Commit",
+      operators: ["eq"],
+    },
+    {
+      fieldId: "showUnmanagedRepositoryBranches",
+      kind: "boolean",
+      label: "Show Unmanaged Repository Branches",
+      operators: ["eq"],
+    },
+  ],
+  ordering: [
+    {
+      fieldId: "queue-rank",
+      label: "Queue Rank",
+      directions: ["asc", "desc"],
+    },
+    {
+      fieldId: "updated-at",
+      label: "Updated",
+      directions: ["asc", "desc"],
+    },
+    {
+      fieldId: "created-at",
+      label: "Created",
+      directions: ["asc", "desc"],
+    },
+    {
+      fieldId: "title",
+      label: "Title",
+      directions: ["asc", "desc"],
+    },
+    {
+      fieldId: "state",
+      label: "State",
+      directions: ["asc", "desc"],
+    },
+  ],
+  selections: [
+    {
+      fieldId: "title",
+      label: "Title",
+      defaultSelected: true,
+    },
+    {
+      fieldId: "state",
+      label: "State",
+      defaultSelected: true,
+    },
+    {
+      fieldId: "queueRank",
+      label: "Queue Rank",
+      defaultSelected: true,
+    },
+    {
+      fieldId: "hasActiveCommit",
+      label: "Has Active Commit",
+    },
+    {
+      fieldId: "repositoryFreshness",
+      label: "Repository Freshness",
+    },
+    {
+      fieldId: "updatedAt",
+      label: "Updated",
+    },
+  ],
+  parameters: [
+    {
+      name: "project-id",
+      label: "Project",
+      type: "entity-ref",
+      required: true,
+    },
+    {
+      name: "state",
+      label: "State",
+      type: "enum",
+    },
+    {
+      name: "has-active-commit",
+      label: "Has Active Commit",
+      type: "boolean",
+    },
+    {
+      name: "show-unmanaged-repository-branches",
+      label: "Show Unmanaged Repository Branches",
+      type: "boolean",
+      defaultValue: false,
+    },
+  ],
+  renderers: {
+    compatibleRendererIds: workflowQueryRendererIds,
+    itemEntityIds: "required",
+    resultKind: "collection",
+    sourceKinds: ["saved", "inline"],
+  },
+});
+
+const branchCommitQueueQuerySurface = defineModuleQuerySurfaceSpec({
+  surfaceId: branchCommitQueueProjection.projectionId,
+  surfaceVersion: "query-surface:workflow:branch-commit-queue:v1",
+  label: "Branch Commit Queue",
+  description:
+    "Projection-backed commit queue with one required branch filter and fixed queue ordering.",
+  queryKind: "collection",
+  source: {
+    kind: "projection",
+    projectionId: branchCommitQueueProjection.projectionId,
+  },
+  defaultPageSize: 50,
+  filters: [
+    {
+      fieldId: "branchId",
+      kind: "entity-ref",
+      label: "Branch",
+      operators: ["eq"],
+    },
+  ],
+  selections: [
+    {
+      fieldId: "title",
+      label: "Title",
+      defaultSelected: true,
+    },
+    {
+      fieldId: "state",
+      label: "State",
+      defaultSelected: true,
+    },
+    {
+      fieldId: "order",
+      label: "Order",
+      defaultSelected: true,
+    },
+    {
+      fieldId: "updatedAt",
+      label: "Updated",
+    },
+  ],
+  parameters: [
+    {
+      name: "branch-id",
+      label: "Branch",
+      type: "entity-ref",
+      required: true,
+    },
+  ],
+  renderers: {
+    compatibleRendererIds: workflowQueryRendererIds,
+    itemEntityIds: "required",
+    resultKind: "collection",
+    sourceKinds: ["saved", "inline"],
+  },
+});
+
+const reviewScopeQuerySurface = defineModuleQuerySurfaceSpec({
+  surfaceId: workflowReviewModuleReadScope.scopeId,
+  surfaceVersion: "query-surface:workflow:review-scope:v1",
+  label: "Workflow Review Scope",
+  description:
+    "Module review scope bootstrap surface used by the planner and live scope refresh path.",
+  queryKind: "scope",
+  source: {
+    kind: "scope",
+    scopeId: workflowReviewModuleReadScope.scopeId,
+  },
+  renderers: {
+    compatibleRendererIds: ["core:list", "core:table"],
+    itemEntityIds: "required",
+    resultKind: "scope",
+    sourceKinds: ["saved", "inline"],
+  },
+});
+
+export const workflowQuerySurfaceCatalog = defineModuleQuerySurfaceCatalog({
+  catalogId: "workflow:query-surfaces",
+  catalogVersion: "query-catalog:workflow:v1",
+  moduleId: workflowModuleId,
+  surfaces: [
+    projectBranchBoardQuerySurface,
+    branchCommitQueueQuerySurface,
+    reviewScopeQuerySurface,
+  ],
+});
+
+export type WorkflowBuiltInQuerySurfaceSpec = ModuleQuerySurfaceSpec;
 
 export const workflowBuiltInQuerySurfaces = Object.freeze({
-  projectBranchBoard: {
-    surfaceId: projectBranchBoardProjection.projectionId,
-    queryKind: "collection",
-    sourceKind: "projection",
-    projectionId: projectBranchBoardProjection.projectionId,
-  } satisfies WorkflowBuiltInQuerySurfaceSpec,
-  branchCommitQueue: {
-    surfaceId: branchCommitQueueProjection.projectionId,
-    queryKind: "collection",
-    sourceKind: "projection",
-    projectionId: branchCommitQueueProjection.projectionId,
-  } satisfies WorkflowBuiltInQuerySurfaceSpec,
-  reviewScope: {
-    surfaceId: workflowReviewModuleReadScope.scopeId,
-    queryKind: "scope",
-    sourceKind: "scope",
-    scopeId: workflowReviewModuleReadScope.scopeId,
-  } satisfies WorkflowBuiltInQuerySurfaceSpec,
+  projectBranchBoard: projectBranchBoardQuerySurface,
+  branchCommitQueue: branchCommitQueueQuerySurface,
+  reviewScope: reviewScopeQuerySurface,
 });
 
 export const workflowBuiltInQuerySurfaceIds = Object.freeze({

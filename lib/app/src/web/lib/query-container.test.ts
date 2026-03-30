@@ -55,6 +55,7 @@ describe("query container validation", () => {
     resultKind: "collection",
     sourceKinds: ["saved", "inline"],
     surfaceId: "workflow:project-branch-board",
+    surfaceVersion: "query-surface:workflow:project-branch-board:v1",
   } as const satisfies QuerySurfaceRendererCompatibility;
 
   const validSpec = {
@@ -156,6 +157,7 @@ describe("query container validation", () => {
         resultKind: "entity-detail",
         sourceKinds: ["inline"],
         surfaceId: "core:entity-detail",
+        surfaceVersion: "query-surface:core:entity-detail:v1",
       },
       rendererCapabilities["renderer:board"],
     );

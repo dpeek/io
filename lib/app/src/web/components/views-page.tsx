@@ -61,6 +61,7 @@ const queryRendererPreviewSurface = {
   resultKind: "collection",
   sourceKinds: ["inline"],
   surfaceId: "views:query-renderer-preview",
+  surfaceVersion: "query-surface:views:query-renderer-preview:v1",
 } as const satisfies QuerySurfaceRendererCompatibility;
 
 const queryRendererPreviewSpec = {

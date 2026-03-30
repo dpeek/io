@@ -262,6 +262,51 @@ Rules:
 - `scope` queries bootstrap or refresh one named scope, not an arbitrary graph
   traversal
 
+### Query surface catalog
+
+Modules register planner-visible query surfaces through one versioned catalog.
+
+```ts
+interface ModuleQuerySurfaceCatalog {
+  catalogId: string;
+  catalogVersion: string;
+  moduleId: string;
+  surfaces: readonly ModuleQuerySurfaceSpec[];
+}
+
+interface ModuleQuerySurfaceSpec {
+  surfaceId: string;
+  surfaceVersion: string;
+  queryKind: "collection" | "scope";
+  source:
+    | { kind: "projection"; projectionId: string }
+    | { kind: "scope"; scopeId: string };
+  filters?: readonly QuerySurfaceFilterFieldSpec[];
+  ordering?: readonly QuerySurfaceOrderFieldSpec[];
+  selections?: readonly QuerySurfaceSelectableFieldSpec[];
+  parameters?: readonly QuerySurfaceParameterSpec[];
+  renderers?: QuerySurfaceRendererSpec;
+}
+```
+
+Responsibilities:
+
+- give modules one explicit registration seam for planner, saved-query, editor,
+  and renderer metadata
+- describe which fields are filterable, orderable, selectable, or parameterized
+  without coupling that metadata to one host UI
+- keep compatibility explicit through `catalogVersion` and `surfaceVersion`
+  rather than silently reinterpreting stale saved state
+
+Lifecycle:
+
+- module authors define and version the catalog beside the owning projections or
+  scopes
+- the runtime loads installed module catalogs into one registry and rejects
+  duplicate `catalogId` or `surfaceId` registrations
+- planner, saved-query, and editor/view-binding layers resolve surfaces from
+  that registry and fail closed when the requested surface or version is stale
+
 ### Projection
 
 A projection is rebuildable derived state maintained for bounded reads.

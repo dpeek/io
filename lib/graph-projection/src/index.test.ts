@@ -10,6 +10,8 @@ import {
   createProjectionDependencyKey,
   createScopeDependencyKey,
   defineInvalidationEvent,
+  defineModuleQuerySurfaceCatalog,
+  defineModuleQuerySurfaceSpec,
   defineModuleReadScopeDefinition,
   defineProjectionCatalog,
   defineProjectionSpec,
@@ -119,6 +121,92 @@ describe("graph projection contracts", () => {
         }),
       ]),
     ).toThrow("projectionId must not contain duplicate values.");
+  });
+
+  it("defines module query-surface catalogs with explicit compatibility boundaries", () => {
+    const projectBranchBoard = defineModuleQuerySurfaceSpec({
+      surfaceId: "workflow:project-branch-board",
+      surfaceVersion: "query-surface:workflow:project-branch-board:v1",
+      label: "Workflow Branch Board",
+      queryKind: "collection",
+      source: {
+        kind: "projection",
+        projectionId: "workflow:project-branch-board",
+      },
+      defaultPageSize: 25,
+      filters: [
+        {
+          fieldId: "projectId",
+          kind: "entity-ref",
+          label: "Project",
+          operators: ["eq"],
+        },
+      ],
+      ordering: [
+        {
+          fieldId: "updated-at",
+          label: "Updated",
+          directions: ["asc", "desc"],
+        },
+      ],
+      selections: [
+        {
+          fieldId: "title",
+          label: "Title",
+          defaultSelected: true,
+        },
+      ],
+      parameters: [
+        {
+          name: "project-id",
+          label: "Project",
+          type: "entity-ref",
+          required: true,
+        },
+      ],
+      renderers: {
+        compatibleRendererIds: ["core:list", "core:table"],
+        itemEntityIds: "required",
+        resultKind: "collection",
+        sourceKinds: ["inline", "saved"],
+      },
+    });
+
+    expect(
+      defineModuleQuerySurfaceCatalog({
+        catalogId: "workflow:query-surfaces",
+        catalogVersion: "query-catalog:workflow:v1",
+        moduleId: "workflow",
+        surfaces: [projectBranchBoard],
+      }),
+    ).toEqual({
+      catalogId: "workflow:query-surfaces",
+      catalogVersion: "query-catalog:workflow:v1",
+      moduleId: "workflow",
+      surfaces: [projectBranchBoard],
+    });
+
+    expect(() =>
+      defineModuleQuerySurfaceSpec({
+        ...projectBranchBoard,
+        queryKind: "scope",
+      }),
+    ).toThrow('scope query surfaces must use source.kind "scope".');
+
+    expect(() =>
+      defineModuleQuerySurfaceCatalog({
+        catalogId: "workflow:query-surfaces",
+        catalogVersion: "query-catalog:workflow:v1",
+        moduleId: "workflow",
+        surfaces: [
+          projectBranchBoard,
+          defineModuleQuerySurfaceSpec({
+            ...projectBranchBoard,
+            surfaceVersion: "query-surface:workflow:project-branch-board:v2",
+          }),
+        ],
+      }),
+    ).toThrow("surfaceId must not contain duplicate values.");
   });
 
   it("defines invalidation events and matches them against router targets", () => {

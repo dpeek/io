@@ -27,6 +27,7 @@ import {
   projectionDefinitionHashes,
   workflowBuiltInQuerySurfaceIds,
   workflowBuiltInQuerySurfaces,
+  workflowQuerySurfaceCatalog,
   projectionIds,
   projectionMetadata,
   projectionSchema,
@@ -350,26 +351,57 @@ describe("workflow schema", () => {
       projectBranchBoard: projectBranchBoardProjection.definitionHash,
       branchCommitQueue: branchCommitQueueProjection.definitionHash,
     });
-    expect(workflowBuiltInQuerySurfaces).toEqual({
+    expect(workflowQuerySurfaceCatalog).toMatchObject({
+      catalogId: "workflow:query-surfaces",
+      catalogVersion: "query-catalog:workflow:v1",
+      moduleId: "workflow",
+      surfaces: expect.any(Array),
+    });
+    expect(workflowBuiltInQuerySurfaces).toMatchObject({
       projectBranchBoard: {
         surfaceId: projectBranchBoardProjection.projectionId,
+        surfaceVersion: "query-surface:workflow:project-branch-board:v1",
         queryKind: "collection",
-        sourceKind: "projection",
-        projectionId: projectBranchBoardProjection.projectionId,
+        source: {
+          kind: "projection",
+          projectionId: projectBranchBoardProjection.projectionId,
+        },
       },
       branchCommitQueue: {
         surfaceId: branchCommitQueueProjection.projectionId,
+        surfaceVersion: "query-surface:workflow:branch-commit-queue:v1",
         queryKind: "collection",
-        sourceKind: "projection",
-        projectionId: branchCommitQueueProjection.projectionId,
+        source: {
+          kind: "projection",
+          projectionId: branchCommitQueueProjection.projectionId,
+        },
       },
       reviewScope: {
         surfaceId: workflowReviewModuleReadScope.scopeId,
+        surfaceVersion: "query-surface:workflow:review-scope:v1",
         queryKind: "scope",
-        sourceKind: "scope",
-        scopeId: workflowReviewModuleReadScope.scopeId,
+        source: {
+          kind: "scope",
+          scopeId: workflowReviewModuleReadScope.scopeId,
+        },
       },
     });
+    expect(
+      workflowBuiltInQuerySurfaces.projectBranchBoard.filters?.map((field) => field.fieldId),
+    ).toEqual(["projectId", "state", "hasActiveCommit", "showUnmanagedRepositoryBranches"]);
+    expect(
+      workflowBuiltInQuerySurfaces.projectBranchBoard.ordering?.map((field) => field.fieldId),
+    ).toEqual(["queue-rank", "updated-at", "created-at", "title", "state"]);
+    expect(
+      workflowBuiltInQuerySurfaces.projectBranchBoard.selections?.map((field) => field.fieldId),
+    ).toEqual([
+      "title",
+      "state",
+      "queueRank",
+      "hasActiveCommit",
+      "repositoryFreshness",
+      "updatedAt",
+    ]);
     expect(workflowBuiltInQuerySurfaceIds).toEqual({
       projectBranchBoard: projectBranchBoardProjection.projectionId,
       branchCommitQueue: branchCommitQueueProjection.projectionId,

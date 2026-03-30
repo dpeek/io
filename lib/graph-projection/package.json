@@ -18,6 +18,7 @@
     "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.ts' && oxfmt && bun test"
   },
   "dependencies": {
+    "@io/graph-client": "workspace:*",
     "@io/graph-sync": "workspace:*"
   },
   "devDependencies": {

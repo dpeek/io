@@ -9,6 +9,10 @@ import {
 } from "../lib/query-workbench.js";
 import { QueryWorkbench } from "./query-workbench.js";
 
+const workflowBoardSurfaceVersion = "query-surface:workflow:project-branch-board:v1";
+const workflowCatalogId = "workflow:query-surfaces";
+const workflowCatalogVersion = "query-catalog:workflow:v1";
+
 describe("query workbench component", () => {
   it("renders preview and save flows around the shared editor", () => {
     const html = renderToStaticMarkup(<QueryWorkbench />);
@@ -30,6 +34,8 @@ describe("query workbench component", () => {
   it("renders a fail-closed state when a saved query no longer matches the current catalog", () => {
     const store = createQueryWorkbenchMemoryStore();
     store.saveQuery({
+      catalogId: workflowCatalogId,
+      catalogVersion: workflowCatalogVersion,
       id: "saved-query:stale-surface",
       name: "Stale board",
       parameterDefinitions: [],
@@ -44,6 +50,7 @@ describe("query workbench component", () => {
         version: serializedQueryVersion,
       },
       surfaceId: "workflow:missing-surface",
+      surfaceVersion: "query-surface:workflow:missing-surface:v1",
     });
 
     const html = renderToStaticMarkup(
@@ -52,34 +59,94 @@ describe("query workbench component", () => {
 
     expect(html).toContain("Preview unavailable");
     expect(html).toContain(
-      "Saved query &quot;saved-query:stale-surface&quot; no longer matches the current query surfaces.",
+      "Saved query &quot;saved-query:stale-surface&quot; references removed query surface &quot;workflow:missing-surface&quot;.",
+    );
+  });
+
+  it("renders a fail-closed state when a saved view binding no longer matches the current saved query", () => {
+    const store = createQueryWorkbenchMemoryStore();
+    store.saveQuery({
+      catalogId: workflowCatalogId,
+      catalogVersion: workflowCatalogVersion,
+      id: "saved-query:owner-board",
+      name: "Owner board",
+      parameterDefinitions: [],
+      request: {
+        query: {
+          indexId: "workflow:project-branch-board",
+          kind: "collection",
+          window: {
+            limit: 25,
+          },
+        },
+        version: serializedQueryVersion,
+      },
+      surfaceId: "workflow:project-branch-board",
+      surfaceVersion: workflowBoardSurfaceVersion,
+    });
+    store.saveView({
+      catalogId: workflowCatalogId,
+      catalogVersion: workflowCatalogVersion,
+      id: "saved-view:owner-board",
+      name: "Owner board view",
+      queryId: "saved-query:owner-board",
+      spec: {
+        containerId: "saved-view-preview",
+        pagination: {
+          mode: "paged",
+          pageSize: 25,
+        },
+        query: {
+          kind: "saved",
+          queryId: "saved-query:other",
+        },
+        refresh: {
+          mode: "manual",
+        },
+        renderer: {
+          rendererId: "core:list",
+        },
+      },
+      surfaceId: "workflow:project-branch-board",
+      surfaceVersion: workflowBoardSurfaceVersion,
+    });
+
+    const html = renderToStaticMarkup(
+      <QueryWorkbench search={{ viewId: "saved-view:owner-board" }} store={store} />,
+    );
+
+    expect(html).toContain("Preview unavailable");
+    expect(html).toContain(
+      "Saved view &quot;saved-view:owner-board&quot; references saved query &quot;saved-query:other&quot; in its container binding but is stored against &quot;saved-query:owner-board&quot;.",
     );
   });
 
   it("reopens saved queries from route state with parameter overrides in the preview", () => {
     const store = createQueryWorkbenchMemoryStore();
     store.saveQuery({
+      catalogId: workflowCatalogId,
+      catalogVersion: workflowCatalogVersion,
       id: "saved-query:owner-board",
       name: "Owner board",
       parameterDefinitions: [
         {
-          label: "Owner",
-          name: "owner",
+          label: "State",
+          name: "state",
           required: false,
-          type: "entity-ref",
+          type: "enum",
         },
       ],
       request: {
         params: {
-          owner: "person:avery",
+          state: "active",
         },
         query: {
           filter: {
-            fieldId: "ownerId",
+            fieldId: "state",
             op: "eq",
             value: {
               kind: "param",
-              name: "owner",
+              name: "state",
             },
           },
           indexId: "workflow:project-branch-board",
@@ -91,13 +158,14 @@ describe("query workbench component", () => {
         version: serializedQueryVersion,
       },
       surfaceId: "workflow:project-branch-board",
+      surfaceVersion: workflowBoardSurfaceVersion,
     });
 
     const html = renderToStaticMarkup(
       <QueryWorkbench
         search={{
           params: encodeQueryWorkbenchParamOverrides({
-            owner: "person:sam",
+            state: "ready",
           }),
           queryId: "saved-query:owner-board",
         }}
@@ -107,7 +175,7 @@ describe("query workbench component", () => {
 
     expect(html).toContain("Open query: Owner board");
     expect(html).toContain('value="Owner board"');
-    expect(html).toContain("query-param-owner");
+    expect(html).toContain("query-param-state");
     expect(html).toContain('data-query-route-mount="saved-query:saved-query:owner-board"');
     expect(html).toContain('data-query-container-state="loading"');
     expect(html).toContain("Update query");
@@ -116,6 +184,8 @@ describe("query workbench component", () => {
   it("reopens saved views from route state and keeps saved-state actions visible", () => {
     const store = createQueryWorkbenchMemoryStore();
     store.saveQuery({
+      catalogId: workflowCatalogId,
+      catalogVersion: workflowCatalogVersion,
       id: "saved-query:owner-board",
       name: "Owner board",
       parameterDefinitions: [],
@@ -130,8 +200,11 @@ describe("query workbench component", () => {
         version: serializedQueryVersion,
       },
       surfaceId: "workflow:project-branch-board",
+      surfaceVersion: workflowBoardSurfaceVersion,
     });
     store.saveView({
+      catalogId: workflowCatalogId,
+      catalogVersion: workflowCatalogVersion,
       id: "saved-view:owner-board",
       name: "Owner board view",
       queryId: "saved-query:owner-board",
@@ -153,6 +226,7 @@ describe("query workbench component", () => {
         },
       },
       surfaceId: "workflow:project-branch-board",
+      surfaceVersion: workflowBoardSurfaceVersion,
     });
 
     const html = renderToStaticMarkup(
