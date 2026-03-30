@@ -7,7 +7,6 @@
     "./graph": "./src/graph/index.ts",
     "./web/better-auth": "./src/web/lib/better-auth.ts",
     "./web/query-container": "./src/web/lib/query-container.ts",
-    "./web/query-editor": "./src/web/lib/query-editor.ts",
     "./web/saved-query": "./src/web/lib/saved-query.ts"
   },
   "scripts": {

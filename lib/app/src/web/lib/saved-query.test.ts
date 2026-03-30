@@ -10,7 +10,7 @@ import {
   builtInQueryRendererRegistry,
   createQueryRendererCapabilityMap,
 } from "../components/query-renderers.js";
-import { createQueryEditorDraft } from "./query-editor.js";
+import { createQueryEditorCatalog, createQueryEditorDraft } from "./query-editor.js";
 import { getInstalledModuleQuerySurfaceRendererCompatibility } from "./query-surface-registry.js";
 import {
   createGraphBackedSavedQueryRepository,
@@ -436,6 +436,64 @@ describe("saved query repository", () => {
       code: "stale-query",
       message:
         'Saved query "saved-query:stale-surface" references removed query surface "workflow:missing-surface".',
+      ok: false,
+    });
+  });
+
+  it("fails closed when a saved query references a surface with excluded list-valued field kinds", () => {
+    const catalog = createQueryEditorCatalog([
+      {
+        catalogId: "workflow:query-surfaces",
+        catalogVersion: "query-catalog:workflow:v1",
+        defaultPageSize: 25,
+        fields: [
+          {
+            control: "entity-ref",
+            fieldId: "reviewers",
+            filterOperators: ["exists"],
+            kind: "entity-ref-list",
+            label: "Reviewers",
+            options: [{ label: "Avery", value: "person:avery" }],
+          },
+        ],
+        label: "List Workflow Board",
+        moduleId: "workflow",
+        queryKind: "collection",
+        sourceKind: "projection",
+        surfaceId: "workflow:list-board",
+        surfaceVersion: "query-surface:workflow:list-board:v1",
+      },
+    ]);
+
+    expect(
+      validateSavedQueryCompatibility(
+        {
+          catalogId: "workflow:query-surfaces",
+          catalogVersion: "query-catalog:workflow:v1",
+          id: "saved-query:list-board",
+          name: "List board",
+          parameterDefinitions: [],
+          request: {
+            query: {
+              indexId: "workflow:list-board",
+              kind: "collection",
+              window: {
+                limit: 25,
+              },
+            },
+            version: 1,
+          },
+          surfaceId: "workflow:list-board",
+          surfaceVersion: "query-surface:workflow:list-board:v1",
+          updatedAt: "2026-03-26T00:00:00.000Z",
+        },
+        catalog,
+      ),
+    ).toMatchObject({
+      code: "incompatible-query",
+      message: expect.stringContaining(
+        'Saved query "saved-query:list-board" can no longer be authored against surface "workflow:list-board"',
+      ),
       ok: false,
     });
   });

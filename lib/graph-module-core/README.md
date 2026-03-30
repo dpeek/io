@@ -62,6 +62,8 @@ current default DOM/browser implementation, including:
 - the default field and filter resolver bundles
 - generic browser field views, editors, and filter operand editors used by the
   current graph UI
+- the shared browser query-editor draft model, installed-surface catalog
+  adapter, and form-first `QueryEditor` component used by app/web consumers
 - core structured-value editors and helpers
 - tag-aware entity-reference create-and-attach behavior
 - the default built-in browser behavior for the current `core:` module

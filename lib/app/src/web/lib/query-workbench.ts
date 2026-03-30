@@ -1,5 +1,13 @@
 import { coreBuiltInQuerySurfaceIds } from "@io/graph-module-core";
 import {
+  createQueryEditorDraft,
+  hydrateQueryEditorDraft,
+  QueryEditorHydrationError,
+  serializeQueryEditorDraft,
+  type QueryEditorCatalog,
+  type QueryEditorDraft,
+} from "@io/graph-module-core/react-dom/query-editor";
+import {
   validateSerializedQueryRequest,
   type QueryFilter,
   type QueryLiteral,
@@ -14,14 +22,6 @@ import {
   type QuerySurfaceRendererCompatibility,
 } from "./query-container.js";
 import type { QueryRendererCapability } from "./query-container.js";
-import {
-  createQueryEditorDraft,
-  hydrateQueryEditorDraft,
-  QueryEditorHydrationError,
-  serializeQueryEditorDraft,
-  type QueryEditorCatalog,
-  type QueryEditorDraft,
-} from "./query-editor.js";
 import {
   createSavedQueryRecordInputFromDraft,
   createSavedQueryRecordSourceResolver,

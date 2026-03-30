@@ -1,17 +1,9 @@
 import { coreQuerySurfaceCatalog } from "@io/graph-module-core";
+import { createQueryEditorCatalogFromRegistry as createSharedQueryEditorCatalogFromRegistry } from "@io/graph-module-core/react-dom/query-editor-catalog";
+import type { QueryEditorCatalog } from "@io/graph-module-core/react-dom";
 import { workflowQuerySurfaceCatalog } from "@io/graph-module-workflow";
-import type {
-  ModuleQuerySurfaceCatalog,
-  ModuleQuerySurfaceSpec,
-  QuerySurfaceFieldKind,
-} from "@io/graph-projection";
+import type { ModuleQuerySurfaceCatalog, ModuleQuerySurfaceSpec } from "@io/graph-projection";
 
-import {
-  createQueryEditorCatalog,
-  type QueryEditorCatalog,
-  type QueryEditorFieldControl,
-  type QueryEditorSurfaceSpec,
-} from "./query-editor.js";
 import type { QuerySurfaceRendererCompatibility } from "./query-container.js";
 
 export type InstalledModuleQuerySurface = ModuleQuerySurfaceSpec & {
@@ -37,35 +29,6 @@ function requireUniqueString(values: readonly string[], label: string): void {
     }
     seen.add(value);
   }
-}
-
-function toQueryEditorFieldControl(kind: QuerySurfaceFieldKind): QueryEditorFieldControl {
-  return kind;
-}
-
-function toQueryEditorSurface(surface: InstalledModuleQuerySurface): QueryEditorSurfaceSpec {
-  return {
-    catalogId: surface.catalogId,
-    catalogVersion: surface.catalogVersion,
-    ...(surface.defaultPageSize ? { defaultPageSize: surface.defaultPageSize } : {}),
-    ...(surface.description ? { description: surface.description } : {}),
-    fields:
-      surface.filters?.map((field) => ({
-        control: toQueryEditorFieldControl(field.kind),
-        ...(field.description ? { description: field.description } : {}),
-        fieldId: field.fieldId,
-        filterOperators: field.operators,
-        label: field.label,
-        ...(field.options ? { options: field.options } : {}),
-      })) ?? [],
-    label: surface.label,
-    moduleId: surface.moduleId,
-    queryKind: surface.queryKind,
-    ...(surface.ordering ? { sortFields: surface.ordering } : {}),
-    sourceKind: surface.source.kind,
-    surfaceId: surface.surfaceId,
-    surfaceVersion: surface.surfaceVersion,
-  };
 }
 
 export function createInstalledModuleQuerySurfaceRegistry(
@@ -114,10 +77,8 @@ export function getInstalledModuleQuerySurface(
 
 export function createQueryEditorCatalogFromRegistry(
   registry: InstalledModuleQuerySurfaceRegistry,
-): QueryEditorCatalog {
-  return createQueryEditorCatalog(
-    registry.surfaces.map((surface) => toQueryEditorSurface(surface)),
-  );
+) {
+  return createSharedQueryEditorCatalogFromRegistry(registry);
 }
 
 export function createQuerySurfaceRendererCompatibility(
@@ -150,6 +111,9 @@ export function getBuiltInInstalledModuleQuerySurfaceCatalogs(): readonly Module
   return [workflowQuerySurfaceCatalog, coreQuerySurfaceCatalog];
 }
 
+export const builtInInstalledModuleQuerySurfaceCatalogs =
+  getBuiltInInstalledModuleQuerySurfaceCatalogs();
+
 export function createBuiltInInstalledModuleQuerySurfaceRegistry(): InstalledModuleQuerySurfaceRegistry {
   return createInstalledModuleQuerySurfaceRegistry(getBuiltInInstalledModuleQuerySurfaceCatalogs());
 }
@@ -169,6 +133,8 @@ export function getInstalledModuleQueryEditorCatalog(): QueryEditorCatalog {
   );
   return installedModuleQueryEditorCatalogCache;
 }
+
+export const installedModuleQueryEditorCatalog = getInstalledModuleQueryEditorCatalog();
 
 export function getInstalledModuleQuerySurfaceRendererCompatibility(
   surfaceId: string,

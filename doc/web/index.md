@@ -145,13 +145,15 @@ initial built-in `core:list`, `core:table`, and `core:card-grid` layouts with
 declarative item, column, and card definitions plus shared inline and saved
 query mounting helpers.
 The current query-authoring proof now also includes a form-first editor
-foundation in `query-editor.tsx` and `query-editor.ts` that lets routes author
-source selection, typed filters, sort clauses, pagination defaults, and
-parameter definitions before execution or save flows land. That shared
-authoring path now reads from the installed multi-module query catalog, so core
-and workflow surfaces hydrate, reopen, and validate through the same consumer
-helpers. The pure editor and saved-query helpers now also publish dedicated package exports:
-`@io/app/web/query-editor` and `@io/app/web/saved-query`.
+foundation in `@io/graph-module-core/react-dom` through
+`query-editor-component.tsx`, `query-editor.ts`, and
+`query-editor-catalog.ts`, letting routes author source selection, typed
+filters, sort clauses, pagination defaults, and parameter definitions before
+execution or save flows land. That shared authoring path now reads from the
+installed multi-module query catalog, so core and workflow surfaces hydrate,
+reopen, and validate through the same consumer helpers. App/web keeps the
+built-in installation seam in `query-surface-registry.ts` and the saved-query
+helpers in `@io/app/web/saved-query`.
 
 Current editor interaction model:
 
@@ -168,6 +170,23 @@ Current editor interaction model:
   probes a separate localhost `browser-agent` runtime over
   `../../lib/cli/src/browser-agent/transport.ts`, and `/workflow` keeps unavailable
   local runtime state explicit until that bridge is reachable
+
+Current shared query-authoring coverage:
+
+- the shared editor now has one explicit proof for every supported single-value
+  predicate family, every matching supported `in` list-parameter family, and
+  every excluded list-valued field family through the shared query-authoring
+  draft rather than route-local `/query` composition
+- `url` and `email` equality and `in` filters stay on their richer scalar
+  contracts, but `contains` and `starts-with` intentionally use string
+  semantics, so those operators require `string` parameters instead of `url` or
+  `email`
+- excluded list-valued field families render explicit unsupported notices and
+  fail closed during draft validation, serialization, hydration, and saved-query
+  compatibility checks instead of silently widening to scalar comparisons
+- app/web now also carries one wrapper proof that the extracted
+  `@io/graph-module-core/react-dom` `QueryEditor` still renders correctly after
+  the package move while using the installed multi-module catalog seam
 
 ## Docs
 
@@ -209,11 +228,10 @@ Current editor interaction model:
   registry keyed by stable renderer ids plus the first built-in list, table,
   and card-grid layouts, explicit renderer binding helpers, and declarative
   item/column/card definitions
-- `../../lib/app/src/web/components/query-editor.tsx`: form-first query authoring
-  surface that renders source selection, field-aware filters, sort,
-  pagination, parameter editing, serialized-request inspection, and the first
-  route-backed reopen/update flows for saved queries and saved views from the
-  shared query catalog
+- `../../lib/graph-module-core/src/react-dom/query-editor-component.tsx`:
+  reusable form-first query authoring surface that renders source selection,
+  field-aware filters, sort, pagination, parameter editing, and
+  serialized-request inspection for app/web consumers
 - `../../lib/app/src/web/components/query-container-surface.tsx`: shared query
   container mount that validates renderer bindings, executes query pages, and
   renders the common loading, error, empty, stale, and pagination chrome
@@ -285,14 +303,18 @@ Current editor interaction model:
   invalid cursors
 - `../../lib/app/src/web/lib/query-surface-registry.ts`: explicit built-in
   workflow-plus-core query-surface installation seam that combines the package
-  root catalogs into one installed editor and runtime registry; the current
-  proof is intentionally limited to that hard-wired built-in list and does not
-  yet cover manifest-backed activation, runtime module toggling, or arbitrary
-  third-party module mixes
-- `../../lib/app/src/web/lib/query-editor.ts`: shared query-editor draft, query
-  surface catalog, field-aware validation, and serialization helpers that keep
-  inline drafts aligned with the generic serialized-query contract plus future
-  saved-query parameter metadata
+  root catalogs into one installed editor and runtime registry, then projects
+  that registry into `installedModuleQueryEditorCatalog` for the shared editor
+  surface; the current proof is intentionally limited to that hard-wired
+  built-in list and does not yet cover manifest-backed activation, runtime
+  module toggling, or arbitrary third-party module mixes
+- `../../lib/graph-module-core/src/react-dom/query-editor.ts`: shared
+  query-editor draft, query surface catalog, field-aware validation, and
+  serialization helpers that keep inline drafts aligned with the generic
+  serialized-query contract plus future saved-query parameter metadata
+- `../../lib/graph-module-core/src/react-dom/query-editor-catalog.ts`: generic
+  installed-surface-to-editor-catalog adapter for browser consumers that need
+  the shared form-first editor on top of module query-surface metadata
 - `../../lib/app/src/web/lib/saved-query.ts`: shared saved-query and saved-view
   graph-backed repository helpers, shared draft-to-record and record-to-definition
   adapters, and normalized-resolution seams that return validated graph-native
@@ -377,6 +399,7 @@ The current Branch 3 browser model stays fail closed.
   duplicate registrations and removed-surface failures explicit rather than
   silently shadowing one module with another
 - the current proof anchors for those guarantees live in
+  `../../lib/graph-module-core/src/react-dom/query-editor-authoring-coverage.test.ts`,
   `../../lib/app/src/web/lib/query-surface-registry.test.ts`,
   `../../lib/app/src/web/components/query-editor.test.tsx`,
   `../../lib/app/src/web/lib/saved-query.test.ts`,

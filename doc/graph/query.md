@@ -289,8 +289,30 @@ type QueryParameterDefinition = {
     | "date"
     | "enum"
     | "entity-ref"
+    | "url"
+    | "email"
+    | "color"
+    | "percent"
+    | "duration"
+    | "money"
+    | "quantity"
+    | "range"
+    | "rate"
     | "string-list"
-    | "entity-ref-list";
+    | "number-list"
+    | "boolean-list"
+    | "date-list"
+    | "enum-list"
+    | "entity-ref-list"
+    | "url-list"
+    | "email-list"
+    | "color-list"
+    | "percent-list"
+    | "duration-list"
+    | "money-list"
+    | "quantity-list"
+    | "range-list"
+    | "rate-list";
   required?: boolean;
   defaultValue?: QueryLiteral;
 };
@@ -304,6 +326,13 @@ Rules:
 - unresolved required parameters fail validation before execution
 - editor labels and descriptions are metadata only; execution depends on name
   and type
+- string-backed scalar and structured families serialize through bounded string
+  literals or string arrays rather than arbitrary JSON values
+- numeric families such as `number` and `percent` serialize through bounded
+  numbers or number arrays
+- boolean families serialize through booleans or boolean arrays
+- `json` stays outside the shared saved-query parameter contract until the
+  platform defines bounded authoring and comparison semantics for it
 
 ### Filter model
 
@@ -882,14 +911,93 @@ The editor should use the query catalog to render intuitive controls:
   operator picker plus input
 - numeric fields:
   range or comparison builder
+- url, email, color, and structured string-backed kinds such as duration,
+  money, quantity, range, and rate:
+  text-first inputs that preserve the richer contract kind while still binding
+  bounded string literals
+- percent:
+  numeric input with the richer contract kind preserved for saved-query and
+  hydration compatibility
 
 The editor must display human labels but bind stable field ids internally.
 
+Compatibility rules for richer kinds:
+
+- saved-query and saved-view compatibility still hinges on installed
+  `catalogVersion` and `surfaceVersion`; richer field kinds do not loosen those
+  boundaries
+- editor hydration may map richer kinds into current text, number, boolean, or
+  date controls, but it must preserve the original contract kind in the draft
+  and fail closed on unknown kinds rather than guessing semantics
+- list-backed richer parameter types must stay aligned with the underlying
+  bounded literal family used by transport validation
+
+Current first-surface support boundary:
+
+- supported query-authoring field families are the single-value kinds:
+  `enum`, `entity-ref`, `date`, `boolean`, `text`, `number`, `url`, `email`,
+  `color`, `percent`, `duration`, `money`, `quantity`, `range`, and `rate`
+- excluded query-authoring field families are the explicit list-valued kinds:
+  `enum-list`, `entity-ref-list`, `date-list`, `boolean-list`, `text-list`,
+  `number-list`, `url-list`, `email-list`, `color-list`, `percent-list`,
+  `duration-list`, `money-list`, `quantity-list`, `range-list`, and
+  `rate-list`
+- excluded list-valued families fail closed in the editor, hydration, and
+  saved-query compatibility checks instead of being coerced onto scalar
+  comparisons; the first `/query` authoring surface does not yet define list
+  membership or overlap semantics for field values
+- list parameter definitions remain supported for `in` filters over supported
+  single-value fields because those serialize through bounded literal arrays and
+  do not imply list-valued field semantics
+
+Current field-family mapping through the shared authoring path:
+
+- `enum` and `entity-ref` stay on select-backed ref controls; scalar filters use
+  `enum` and `entity-ref` parameter types, while `in` filters use the matching
+  `enum-list` and `entity-ref-list` parameter types
+- `date` stays on the date control and serializes to canonical ISO timestamp
+  strings for both literals and parameter defaults
+- `boolean` stays on the boolean control; `eq` and `neq` use the `boolean`
+  parameter type, while `exists` intentionally serializes as a bare boolean
+  flag instead of a query value envelope
+- `text` and `number` stay on the current text and number controls with the
+  matching `string`, `number`, `string-list`, and `number-list` parameter
+  families
+- `url` and `email` keep their richer contract kinds for equality and `in`
+  filters, but `contains` and `starts-with` intentionally fall back to string
+  semantics and therefore require `string` parameters rather than `url` or
+  `email`
+- `color`, `percent`, `duration`, `money`, `quantity`, `range`, and `rate`
+  stay on the shared predicate-backed editor path, preserve the richer field
+  kind in the draft and hydrated surface metadata, and serialize canonical
+  string or numeric literals plus the matching scalar and `*-list` parameter
+  families
+- excluded `*-list` field families fail closed during surface validation, draft
+  serialization, hydration, and saved-query compatibility checks instead of
+  being coerced into scalar comparisons
+- hydration only reopens collection or named scope requests, flattens `and`
+  filters, and rejects `or`, `not`, mixed literal-plus-param `in` payloads, and
+  excluded field families instead of guessing a form draft shape
+
 Current proof status:
 
-- `../../lib/app/src/web/lib/query-editor.ts` now defines the shared form-first draft,
-  query surface catalog, validation rules, and serialization bridge into the
-  generic `SerializedQueryRequest` plus `QueryParameterDefinition[]`
+- `../../lib/graph-module-core/src/react-dom/query-editor.ts` now defines the
+  shared form-first draft, query surface catalog, validation rules, and
+  serialization bridge into the generic `SerializedQueryRequest` plus
+  `QueryParameterDefinition[]`
+- `../../lib/graph-module-core/src/react-dom/query-editor-authoring-coverage.test.ts`
+  now enumerates every supported single-value field family, every matching
+  supported `in` list-parameter family, the intentional `url` and `email`
+  string-search exception, and every excluded list-valued field family so the
+  current support boundary stays explicit instead of accidental
+- `../../lib/graph-module-core/src/react-dom/query-editor-component.tsx` now
+  reuses the shipped predicate-aware browser field editors for single-value
+  filter operands and scalar parameter defaults through synthetic predicate
+  adapters, while keeping bespoke list authoring only where no shared many-value
+  editor exists yet
+- `../../lib/graph-module-core/src/react-dom/query-editor-catalog.ts` now maps
+  installed module query-surface registries into that shared editor catalog so
+  browser consumers can stay on one reusable authoring surface
 - `../../lib/graph-module-core/src/core/saved-query.ts` now defines the
   built-in graph-native `SavedQuery`, `SavedQueryParameter`, and `SavedView`
   schema plus typed helper functions for durable graph reads and writes
@@ -898,8 +1006,12 @@ Current proof status:
   by planner, editor, and container code, including graph-native definition
   reads/writes and normalized saved-record resolution against the installed
   query catalog
-- `../../lib/app/src/web/components/query-editor.tsx` now mounts that draft model
-  through typed source, filter, sort, pagination, and parameter sections
+- `../../lib/graph-module-core/src/react-dom/query-editor-component.tsx` now
+  mounts that draft model through typed source, filter, sort, pagination, and
+  parameter sections
+- `../../lib/app/src/web/lib/query-surface-registry.ts` now keeps the
+  built-in workflow-plus-core installation seam and publishes
+  `installedModuleQueryEditorCatalog` for app/web consumers
 - `../../lib/app/src/web/lib/query-workbench.ts` now adds shared route-state parsing,
   draft preview serialization, a workbench-local saved-query/view cache that
   reuses the shared saved-query record model for reopen flows, shared
@@ -927,8 +1039,9 @@ Current proof status:
 
 Current consumption seams:
 
-- editor consumers should use `@io/app/web/query-editor` to author or hydrate
-  drafts, then `@io/app/web/saved-query` save helpers to produce durable
+- editor consumers should use `@io/graph-module-core/react-dom` for the shared
+  `QueryEditor` component or `@io/graph-module-core/react-dom/query-editor` for
+  draft helpers, then `@io/app/web/saved-query` save helpers to produce durable
   saved-query and saved-view records
 - planner and container consumers should resolve saved records through
   `@io/app/web/saved-query` resolution helpers or the matching

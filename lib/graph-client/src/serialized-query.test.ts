@@ -191,6 +191,103 @@ describe("serialized query request validation", () => {
     );
   });
 
+  it("accepts richer string-backed and numeric list parameter families while keeping literal shapes bounded", () => {
+    const richerParameterDefinitions = [
+      {
+        name: "homepage",
+        label: "Homepage",
+        type: "url",
+        required: true,
+      },
+      {
+        name: "cycle-time",
+        label: "Cycle time",
+        type: "duration",
+      },
+      {
+        name: "completion-bands",
+        label: "Completion bands",
+        type: "percent-list",
+        defaultValue: [25, 50],
+      },
+      {
+        name: "ready-flags",
+        label: "Ready flags",
+        type: "boolean-list",
+        defaultValue: [true],
+      },
+    ] as const satisfies readonly QueryParameterDefinition[];
+
+    const request = validateSerializedQueryRequest(
+      {
+        version: 1,
+        params: {
+          homepage: "https://example.com",
+          "cycle-time": "30 min",
+          "ready-flags": [true, false],
+        },
+        query: {
+          kind: "collection",
+          indexId: "workflow:commit-queue",
+          filter: {
+            op: "and",
+            clauses: [
+              {
+                op: "eq",
+                fieldId: "homepage",
+                value: { kind: "param", name: "homepage" },
+              },
+              {
+                op: "gt",
+                fieldId: "cycleTime",
+                value: { kind: "param", name: "cycle-time" },
+              },
+              {
+                op: "in",
+                fieldId: "completionPercent",
+                values: [{ kind: "param", name: "completion-bands" }],
+              },
+            ],
+          },
+        },
+      },
+      { parameterDefinitions: richerParameterDefinitions },
+    );
+
+    expect(request.params).toEqual({
+      homepage: "https://example.com",
+      "cycle-time": "30 min",
+      "ready-flags": [true, false],
+    });
+
+    expect(() =>
+      validateSerializedQueryRequest(
+        {
+          version: 1,
+          params: {
+            homepage: "https://example.com",
+            "completion-bands": ["25", "50"],
+          },
+          query: {
+            kind: "collection",
+            indexId: "workflow:commit-queue",
+            filter: {
+              op: "in",
+              fieldId: "completionPercent",
+              values: [{ kind: "param", name: "completion-bands" }],
+            },
+          },
+        },
+        { parameterDefinitions: richerParameterDefinitions },
+      ),
+    ).toThrowError(
+      new SerializedQueryValidationError(
+        "Serialized query request.params.completion-bands",
+        'must match parameter type "percent-list".',
+      ),
+    );
+  });
+
   it("rejects malformed filter clauses", () => {
     expect(() =>
       validateSerializedQueryRequest({

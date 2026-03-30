@@ -141,6 +141,24 @@ describe("graph projection contracts", () => {
           label: "Project",
           operators: ["eq"],
         },
+        {
+          fieldId: "homepage",
+          kind: "url",
+          label: "Homepage",
+          operators: ["eq", "contains"],
+        },
+        {
+          fieldId: "cycleTime",
+          kind: "duration",
+          label: "Cycle Time",
+          operators: ["eq", "gt"],
+        },
+        {
+          fieldId: "completionPercent",
+          kind: "percent",
+          label: "Completion",
+          operators: ["gte", "lte", "in"],
+        },
       ],
       ordering: [
         {
@@ -162,6 +180,21 @@ describe("graph projection contracts", () => {
           label: "Project",
           type: "entity-ref",
           required: true,
+        },
+        {
+          name: "homepage",
+          label: "Homepage",
+          type: "url",
+        },
+        {
+          name: "cycle-time",
+          label: "Cycle Time",
+          type: "duration",
+        },
+        {
+          name: "completion-bands",
+          label: "Completion Bands",
+          type: "percent-list",
         },
       ],
       renderers: {

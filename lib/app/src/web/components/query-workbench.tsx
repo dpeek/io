@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  QueryEditor,
+  getQueryEditorSurface,
+  serializeQueryEditorDraft,
+  validateQueryEditorDraft,
+  type QueryEditorDraft,
+} from "@io/graph-module-core/react-dom";
 import type { QueryLiteral } from "@io/graph-client";
 import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
@@ -14,12 +21,6 @@ import {
   createQueryContainerRuntime,
   type QueryContainerSpec,
 } from "../lib/query-container.js";
-import {
-  getQueryEditorSurface,
-  serializeQueryEditorDraft,
-  validateQueryEditorDraft,
-  type QueryEditorDraft,
-} from "../lib/query-editor.js";
 import {
   QueryWorkbenchSaveError,
   createQueryWorkbenchBrowserStore,
@@ -39,9 +40,9 @@ import {
 import {
   getInstalledModuleQuerySurfaceRegistry,
   getInstalledModuleQuerySurface,
+  installedModuleQueryEditorCatalog,
   getInstalledModuleQuerySurfaceRendererCompatibility,
 } from "../lib/query-surface-registry.js";
-import { QueryEditor, createInstalledQueryEditorCatalog } from "./query-editor.js";
 import {
   builtInQueryRendererRegistry,
   createCardGridRendererBinding,
@@ -51,7 +52,7 @@ import {
 } from "./query-renderers.js";
 import { QueryRouteMount } from "./query-route-mount.js";
 
-const catalog = createInstalledQueryEditorCatalog();
+const catalog = installedModuleQueryEditorCatalog;
 const rendererCapabilities = createQueryRendererCapabilityMap(builtInQueryRendererRegistry);
 const rendererIds = ["core:list", "core:table", "core:card-grid"] as const;
 

@@ -7,8 +7,30 @@ export const queryParameterTypeValues = [
   "date",
   "enum",
   "entity-ref",
+  "url",
+  "email",
+  "color",
+  "percent",
+  "duration",
+  "money",
+  "quantity",
+  "range",
+  "rate",
   "string-list",
+  "number-list",
+  "boolean-list",
+  "date-list",
+  "enum-list",
   "entity-ref-list",
+  "url-list",
+  "email-list",
+  "color-list",
+  "percent-list",
+  "duration-list",
+  "money-list",
+  "quantity-list",
+  "range-list",
+  "rate-list",
 ] as const;
 
 export type QueryParameterType = (typeof queryParameterTypeValues)[number];
@@ -312,6 +334,46 @@ const readQueryKindValues = ["entity", "neighborhood", "collection", "scope"] as
 const responseFreshnessValues = ["current", "stale"] as const;
 const responseCompletenessValues = ["complete", "incomplete"] as const;
 const queryParameterNamePattern = /^[a-z][a-z0-9-]*$/;
+const stringQueryParameterTypes = [
+  "string",
+  "date",
+  "enum",
+  "entity-ref",
+  "url",
+  "email",
+  "color",
+  "duration",
+  "money",
+  "quantity",
+  "range",
+  "rate",
+] as const satisfies readonly QueryParameterType[];
+const numberQueryParameterTypes = [
+  "number",
+  "percent",
+] as const satisfies readonly QueryParameterType[];
+const booleanQueryParameterTypes = ["boolean"] as const satisfies readonly QueryParameterType[];
+const stringListQueryParameterTypes = [
+  "string-list",
+  "date-list",
+  "enum-list",
+  "entity-ref-list",
+  "url-list",
+  "email-list",
+  "color-list",
+  "duration-list",
+  "money-list",
+  "quantity-list",
+  "range-list",
+  "rate-list",
+] as const satisfies readonly QueryParameterType[];
+const numberListQueryParameterTypes = [
+  "number-list",
+  "percent-list",
+] as const satisfies readonly QueryParameterType[];
+const booleanListQueryParameterTypes = [
+  "boolean-list",
+] as const satisfies readonly QueryParameterType[];
 
 function createValidationError(path: string, message: string): SerializedQueryValidationError {
   return new SerializedQueryValidationError(path, message);
@@ -424,20 +486,31 @@ function requireQueryLiteral(value: unknown, path: string): QueryLiteral {
 }
 
 function isQueryLiteralCompatible(type: QueryParameterType, value: QueryLiteral): boolean {
-  switch (type) {
-    case "string":
-    case "date":
-    case "enum":
-    case "entity-ref":
-      return typeof value === "string";
-    case "number":
-      return typeof value === "number";
-    case "boolean":
-      return typeof value === "boolean";
-    case "string-list":
-    case "entity-ref-list":
-      return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+  if ((stringQueryParameterTypes as readonly QueryParameterType[]).includes(type)) {
+    return typeof value === "string";
   }
+
+  if ((numberQueryParameterTypes as readonly QueryParameterType[]).includes(type)) {
+    return typeof value === "number";
+  }
+
+  if ((booleanQueryParameterTypes as readonly QueryParameterType[]).includes(type)) {
+    return typeof value === "boolean";
+  }
+
+  if ((stringListQueryParameterTypes as readonly QueryParameterType[]).includes(type)) {
+    return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+  }
+
+  if ((numberListQueryParameterTypes as readonly QueryParameterType[]).includes(type)) {
+    return Array.isArray(value) && value.every((entry) => typeof entry === "number");
+  }
+
+  if ((booleanListQueryParameterTypes as readonly QueryParameterType[]).includes(type)) {
+    return Array.isArray(value) && value.every((entry) => typeof entry === "boolean");
+  }
+
+  return false;
 }
 
 function canonicalizeQueryLiteral(value: QueryLiteral): QueryLiteral {

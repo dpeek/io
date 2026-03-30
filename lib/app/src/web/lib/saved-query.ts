@@ -20,6 +20,15 @@ import {
   type SavedViewDefinition,
   type SavedViewDefinitionInput,
 } from "@io/graph-module-core";
+import {
+  describeQueryEditorSurfaceAuthoringExclusions,
+  getQueryEditorSurface,
+  serializeQueryEditorDraft,
+  validateQueryEditorDraft,
+  type QueryEditorCatalog,
+  type QueryEditorDraft,
+  type QueryEditorSurfaceSpec,
+} from "@io/graph-module-core/react-dom/query-editor";
 
 import {
   validateQueryContainerSpec,
@@ -28,14 +37,6 @@ import {
   type QuerySurfaceRendererCompatibility,
 } from "./query-container.js";
 import type { QueryRendererCapability } from "./query-container.js";
-import {
-  getQueryEditorSurface,
-  serializeQueryEditorDraft,
-  validateQueryEditorDraft,
-  type QueryEditorCatalog,
-  type QueryEditorDraft,
-  type QueryEditorSurfaceSpec,
-} from "./query-editor.js";
 
 export type SavedQueryRecord = {
   readonly catalogId: string;
@@ -705,6 +706,16 @@ export function validateSavedQueryCompatibility(
       message:
         `Saved query "${query.id}" references incompatible surface version ` +
         `"${query.surfaceVersion}".`,
+      ok: false,
+    };
+  }
+  const surfaceExclusionMessage = describeQueryEditorSurfaceAuthoringExclusions(surface);
+  if (surfaceExclusionMessage) {
+    return {
+      code: "incompatible-query",
+      message:
+        `Saved query "${query.id}" can no longer be authored against surface "${query.surfaceId}": ` +
+        surfaceExclusionMessage,
       ok: false,
     };
   }

@@ -14,6 +14,14 @@
     "./react-dom": {
       "types": "./src/react-dom/index.ts",
       "default": "./out/react-dom/index.js"
+    },
+    "./react-dom/query-editor": {
+      "types": "./src/react-dom/query-editor.ts",
+      "default": "./out/react-dom/query-editor.js"
+    },
+    "./react-dom/query-editor-catalog": {
+      "types": "./src/react-dom/query-editor-catalog.ts",
+      "default": "./out/react-dom/query-editor-catalog.js"
     }
   },
   "scripts": {

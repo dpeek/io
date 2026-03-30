@@ -224,6 +224,81 @@ describe("query surface registry", () => {
     });
   });
 
+  it("preserves richer surface kinds while mapping them into the current editor control families", () => {
+    const builtInInstalledModuleQuerySurfaceCatalogs =
+      getBuiltInInstalledModuleQuerySurfaceCatalogs();
+    const registry = createInstalledModuleQuerySurfaceRegistry([
+      {
+        ...builtInInstalledModuleQuerySurfaceCatalogs[0],
+        catalogId: "workflow:query-surfaces:rich",
+        surfaces: [
+          {
+            ...builtInInstalledModuleQuerySurfaceCatalogs[0].surfaces[0]!,
+            surfaceId: "workflow:rich-branch-board",
+            surfaceVersion: "query-surface:workflow:rich-branch-board:v1",
+            filters: [
+              {
+                fieldId: "homepage",
+                kind: "url",
+                label: "Homepage",
+                operators: ["eq", "contains"],
+              },
+              {
+                fieldId: "cycleTime",
+                kind: "duration",
+                label: "Cycle Time",
+                operators: ["eq", "gt"],
+              },
+              {
+                fieldId: "completionPercent",
+                kind: "percent",
+                label: "Completion",
+                operators: ["gte", "lte", "in"],
+              },
+            ],
+            parameters: [
+              {
+                label: "Homepage",
+                name: "homepage",
+                type: "url",
+              },
+              {
+                label: "Cycle Time",
+                name: "cycle-time",
+                type: "duration",
+              },
+              {
+                label: "Completion Bands",
+                name: "completion-bands",
+                type: "percent-list",
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const surface = createQueryEditorCatalogFromRegistry(registry).surfaces[0];
+
+    expect(surface?.fields).toEqual([
+      expect.objectContaining({
+        control: "text",
+        fieldId: "homepage",
+        kind: "url",
+      }),
+      expect.objectContaining({
+        control: "text",
+        fieldId: "cycleTime",
+        kind: "duration",
+      }),
+      expect.objectContaining({
+        control: "number",
+        fieldId: "completionPercent",
+        kind: "percent",
+      }),
+    ]);
+  });
+
   it("rejects duplicate installed surface registrations", () => {
     const builtInInstalledModuleQuerySurfaceCatalogs =
       getBuiltInInstalledModuleQuerySurfaceCatalogs();
