@@ -5,6 +5,13 @@ import type {
   AgentStatusEvent,
 } from "./session-events.js";
 import type { AgentTuiBlock, AgentTuiStatusSummary } from "./transcript.js";
+import {
+  appendBoundedLines,
+  appendBoundedParts,
+  appendBoundedText,
+  compactTranscriptValue,
+  truncateStoredText,
+} from "./transcript-bounds.js";
 
 type CodexBlockAdapter = {
   appendEntry: (entry: AgentTuiBlock) => void;
@@ -377,8 +384,8 @@ function appendCodexMessageEntry(adapter: CodexBlockAdapter, event: AgentCodexNo
   if (existing?.kind === "agent-message") {
     existing.count += 1;
     existing.sequenceEnd = event.sequence;
-    existing.segments.push(text);
-    existing.text += text;
+    appendBoundedParts(existing.segments, [text]);
+    existing.text = appendBoundedText(existing.text, text);
     existing.timestamp = event.timestamp;
     return;
   }
@@ -387,10 +394,10 @@ function appendCodexMessageEntry(adapter: CodexBlockAdapter, event: AgentCodexNo
     count: 1,
     itemId,
     kind: "agent-message",
-    segments: [text],
+    segments: [truncateStoredText(text)],
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
-    text,
+    text: truncateStoredText(text),
     timestamp: event.timestamp,
   });
 }
@@ -404,8 +411,8 @@ function completeCodexMessageEntry(adapter: CodexBlockAdapter, event: AgentCodex
     existing.timestamp = event.timestamp;
     const completedText = asString(item?.text);
     if (completedText && !existing.text) {
-      existing.text = completedText;
-      existing.segments = [completedText];
+      existing.text = truncateStoredText(completedText);
+      existing.segments = [truncateStoredText(completedText)];
     }
     return;
   }
@@ -419,10 +426,10 @@ function completeCodexMessageEntry(adapter: CodexBlockAdapter, event: AgentCodex
     count: 1,
     itemId,
     kind: "agent-message",
-    segments: [completedText],
+    segments: [truncateStoredText(completedText)],
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
-    text: completedText,
+    text: truncateStoredText(completedText),
     timestamp: event.timestamp,
   });
 }
@@ -477,7 +484,7 @@ function appendCodexCommandOutputDeltaEntry(
   const existing = adapter.findEntryByItemId(itemId);
   if (existing?.kind === "command") {
     existing.count += Math.max(1, outputLines.length);
-    existing.outputLines.push(...outputLines);
+    appendBoundedLines(existing.outputLines, outputLines);
     existing.sequenceEnd = event.sequence;
     existing.timestamp = event.timestamp;
     return;
@@ -487,7 +494,7 @@ function appendCodexCommandOutputDeltaEntry(
     count: Math.max(1, outputLines.length),
     itemId,
     kind: "command",
-    outputLines,
+    outputLines: outputLines.map((line) => truncateStoredText(line)),
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
     status: "running",
@@ -509,7 +516,8 @@ function appendCodexCommandCompletionEntry(
   if (existing?.kind === "command") {
     existing.count += Math.max(1, outputLines.length);
     if (outputLines.length) {
-      existing.outputLines = outputLines;
+      existing.outputLines = [];
+      appendBoundedLines(existing.outputLines, outputLines);
     }
     existing.exitCode = exitCode ?? existing.exitCode;
     existing.status = status;
@@ -525,7 +533,7 @@ function appendCodexCommandCompletionEntry(
     exitCode,
     itemId,
     kind: "command",
-    outputLines,
+    outputLines: outputLines.map((line) => truncateStoredText(line)),
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
     status,
@@ -541,7 +549,7 @@ function appendCodexToolEntry(adapter: CodexBlockAdapter, event: AgentCodexNotif
   const existing = adapter.findEntryByItemId(itemId);
 
   if (existing?.kind === "tool") {
-    existing.argumentsData = item?.arguments ?? existing.argumentsData;
+    existing.argumentsData = compactTranscriptValue(item?.arguments) ?? existing.argumentsData;
     existing.count += 1;
     existing.sequenceEnd = event.sequence;
     existing.timestamp = event.timestamp;
@@ -549,10 +557,10 @@ function appendCodexToolEntry(adapter: CodexBlockAdapter, event: AgentCodexNotif
   }
 
   adapter.appendEntry({
-    argumentsData: item?.arguments,
+    argumentsData: compactTranscriptValue(item?.arguments),
     argumentsText:
       item?.arguments && typeof item.arguments === "object"
-        ? JSON.stringify(item.arguments)
+        ? truncateStoredText(JSON.stringify(item.arguments))
         : undefined,
     count: 1,
     itemId,
@@ -581,11 +589,11 @@ function appendCodexToolCompletionEntry(
   const resultText = getCodexToolResultText(result);
 
   if (existing?.kind === "tool") {
-    existing.argumentsData = item?.arguments ?? existing.argumentsData;
+    existing.argumentsData = compactTranscriptValue(item?.arguments) ?? existing.argumentsData;
     existing.count += 1;
-    existing.errorText = errorText ?? existing.errorText;
-    existing.resultData = resultData ?? existing.resultData;
-    existing.resultText = resultText ?? existing.resultText;
+    existing.errorText = errorText ? truncateStoredText(errorText) : existing.errorText;
+    existing.resultData = compactTranscriptValue(resultData) ?? existing.resultData;
+    existing.resultText = resultText ? truncateStoredText(resultText) : existing.resultText;
     existing.sequenceEnd = event.sequence;
     existing.status = errorText ? "failed" : "completed";
     existing.timestamp = event.timestamp;
@@ -593,17 +601,17 @@ function appendCodexToolCompletionEntry(
   }
 
   adapter.appendEntry({
-    argumentsData: item?.arguments,
+    argumentsData: compactTranscriptValue(item?.arguments),
     argumentsText:
       item?.arguments && typeof item.arguments === "object"
-        ? JSON.stringify(item.arguments)
+        ? truncateStoredText(JSON.stringify(item.arguments))
         : undefined,
     count: 1,
-    errorText,
+    errorText: errorText ? truncateStoredText(errorText) : undefined,
     itemId,
     kind: "tool",
-    resultData,
-    resultText,
+    resultData: compactTranscriptValue(resultData),
+    resultText: resultText ? truncateStoredText(resultText) : undefined,
     server,
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
@@ -625,35 +633,41 @@ function appendCodexReasoningEntry(adapter: CodexBlockAdapter, event: AgentCodex
     existing.timestamp = event.timestamp;
     if (event.method === "item/reasoning/summaryTextDelta" && delta) {
       const index = asNumber(event.params.summaryIndex) ?? 0;
-      existing.summary[index] = `${existing.summary[index] ?? ""}${delta}`;
+      existing.summary[index] = appendBoundedText(existing.summary[index] ?? "", delta);
     } else if (event.method === "item/reasoning/summaryPartAdded") {
       const index = asNumber(event.params.summaryIndex) ?? existing.summary.length;
       existing.summary[index] = existing.summary[index] ?? "";
     } else if (event.method === "item/reasoning/textDelta" && delta) {
       const index = asNumber(event.params.contentIndex) ?? 0;
-      existing.content[index] = `${existing.content[index] ?? ""}${delta}`;
+      existing.content[index] = appendBoundedText(existing.content[index] ?? "", delta);
     } else if (event.method === "item/completed") {
       const item = asRecord(event.params.item);
       if (Array.isArray(item?.summary)) {
-        existing.summary = getReasoningItemLines(item, "summary");
+        existing.summary = [];
+        appendBoundedParts(existing.summary, getReasoningItemLines(item, "summary"));
       }
       if (Array.isArray(item?.content)) {
-        existing.content = getReasoningItemLines(item, "content");
+        existing.content = [];
+        appendBoundedParts(existing.content, getReasoningItemLines(item, "content"));
       }
     }
     return;
   }
 
   const item = asRecord(event.params.item);
+  const content: string[] = [];
+  appendBoundedParts(content, getReasoningItemLines(item, "content"));
+  const summary: string[] = [];
+  appendBoundedParts(summary, getReasoningItemLines(item, "summary"));
   adapter.appendEntry({
-    content: getReasoningItemLines(item, "content"),
+    content,
     count: 1,
     itemId,
     kind: "reasoning",
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
     status: event.method === "item/completed" ? "completed" : "streaming",
-    summary: getReasoningItemLines(item, "summary"),
+    summary,
     timestamp: event.timestamp,
   });
 }
@@ -667,7 +681,7 @@ function appendCodexPlanEntry(adapter: CodexBlockAdapter, event: AgentCodexNotif
     existing.count += 1;
     existing.sequenceEnd = event.sequence;
     existing.status = event.method === "item/completed" ? "completed" : existing.status;
-    existing.text += delta;
+    existing.text = appendBoundedText(existing.text, delta);
     existing.timestamp = event.timestamp;
     return;
   }
@@ -679,7 +693,7 @@ function appendCodexPlanEntry(adapter: CodexBlockAdapter, event: AgentCodexNotif
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
     status: event.method === "item/completed" ? "completed" : "streaming",
-    text: delta || asString(asRecord(event.params.item)?.text) || "",
+    text: truncateStoredText(delta || asString(asRecord(event.params.item)?.text) || ""),
     timestamp: event.timestamp,
   });
 }

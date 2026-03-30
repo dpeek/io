@@ -317,6 +317,112 @@ test("AgentTuiStore keeps active workers ahead of a short retained completed and
   ]);
 });
 
+test("AgentTuiStore bounds retained transcript blocks and large block payloads", () => {
+  const store = createAgentTuiStore({ maxBlocksPerSession: 3 });
+  const worker = createWorkerSession();
+
+  store.observe({
+    phase: "started",
+    sequence: 1,
+    session: worker,
+    timestamp: "2026-03-10T02:05:00.000Z",
+    type: "session",
+  });
+  store.observe({
+    code: "command",
+    data: { command: "tail -f output.log" },
+    format: "line",
+    itemId: "cmd-1",
+    sequence: 2,
+    session: worker,
+    timestamp: "2026-03-10T02:05:01.000Z",
+    type: "status",
+  });
+  store.observe({
+    code: "command-output",
+    data: {
+      lines: Array.from({ length: 300 }, (_, index) => `line-${index + 1}`),
+    },
+    format: "line",
+    itemId: "cmd-1",
+    sequence: 3,
+    session: worker,
+    timestamp: "2026-03-10T02:05:02.000Z",
+    type: "status",
+  });
+  store.observe({
+    code: "thread-started",
+    format: "line",
+    sequence: 4,
+    session: worker,
+    text: "Session started",
+    timestamp: "2026-03-10T02:05:03.000Z",
+    type: "status",
+  });
+  store.observe({
+    code: "turn-started",
+    format: "line",
+    sequence: 5,
+    session: worker,
+    text: "Turn started",
+    timestamp: "2026-03-10T02:05:04.000Z",
+    type: "status",
+  });
+
+  const snapshot = store.getSnapshot();
+  const blocks = snapshot.columns[0]?.blocks ?? [];
+  expect(blocks).toHaveLength(3);
+  expect(blocks[0]?.kind).toBe("lifecycle");
+  expect(blocks[1]).toMatchObject({
+    kind: "status",
+    text: "Session started",
+  });
+  expect(blocks[2]).toMatchObject({
+    kind: "status",
+    text: "Turn started",
+  });
+
+  const boundedStore = createAgentTuiStore();
+  boundedStore.observe({
+    phase: "started",
+    sequence: 1,
+    session: worker,
+    timestamp: "2026-03-10T02:06:00.000Z",
+    type: "session",
+  });
+  boundedStore.observe({
+    code: "command",
+    data: { command: "tail -f output.log" },
+    format: "line",
+    itemId: "cmd-2",
+    sequence: 2,
+    session: worker,
+    timestamp: "2026-03-10T02:06:01.000Z",
+    type: "status",
+  });
+  boundedStore.observe({
+    code: "command-output",
+    data: {
+      lines: Array.from({ length: 300 }, (_, index) => `line-${index + 1}`),
+    },
+    format: "line",
+    itemId: "cmd-2",
+    sequence: 3,
+    session: worker,
+    timestamp: "2026-03-10T02:06:02.000Z",
+    type: "status",
+  });
+  const boundedCommand = boundedStore
+    .getSnapshot()
+    .columns[0]?.blocks.find((entry) => entry.kind === "command");
+  expect(boundedCommand?.kind).toBe("command");
+  if (boundedCommand?.kind === "command") {
+    expect(boundedCommand.outputLines).toHaveLength(200);
+    expect(boundedCommand.outputLines[0]).toBe("line-101");
+    expect(boundedCommand.outputLines.at(-1)).toBe("line-300");
+  }
+});
+
 test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and finalization context inspectable", () => {
   const store = createAgentTuiStore();
   const supervisor = createSupervisorSession({ workspacePath: "/repo" });

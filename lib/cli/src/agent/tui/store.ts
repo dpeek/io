@@ -29,6 +29,7 @@ import {
   type AgentTuiBlock,
   type AgentTuiToolEntry,
 } from "./transcript.js";
+import { DEFAULT_MAX_BLOCKS_PER_SESSION, pruneBlocks } from "./transcript-bounds.js";
 
 const DEFAULT_MAX_EVENT_HISTORY = 128;
 
@@ -96,6 +97,7 @@ export interface AgentTuiStore {
 }
 
 export interface AgentTuiStoreOptions {
+  maxBlocksPerSession?: number;
   maxEventHistory?: number;
   maxRetainedTerminalWorkers?: number;
   removeFinalizedSessions?: boolean;
@@ -304,6 +306,7 @@ function buildColumnSnapshots(
 
 export function createAgentTuiStore(options: AgentTuiStoreOptions = {}): AgentTuiStore {
   const listeners = new Set<() => void>();
+  const maxBlocksPerSession = options.maxBlocksPerSession ?? DEFAULT_MAX_BLOCKS_PER_SESSION;
   const maxEventHistory = options.maxEventHistory ?? DEFAULT_MAX_EVENT_HISTORY;
   const maxRetainedTerminalWorkers = options.maxRetainedTerminalWorkers;
   const removeFinalizedSessions = options.removeFinalizedSessions ?? false;
@@ -387,6 +390,7 @@ export function createAgentTuiStore(options: AgentTuiStoreOptions = {}): AgentTu
         state.phase = event.phase;
         state.terminalSequence = isTerminalPhase(event.phase) ? event.sequence : undefined;
         appendBlocksForEvent(state, event);
+        pruneBlocks(state.blocks, maxBlocksPerSession);
         pushEventHistory(state, event, maxEventHistory);
         if (
           event.session.kind !== "supervisor" &&
@@ -422,6 +426,7 @@ export function createAgentTuiStore(options: AgentTuiStoreOptions = {}): AgentTu
       }
 
       appendBlocksForEvent(state, event);
+      pruneBlocks(state.blocks, maxBlocksPerSession);
       pushEventHistory(state, event, maxEventHistory);
       notify();
     },

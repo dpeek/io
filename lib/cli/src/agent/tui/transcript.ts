@@ -4,6 +4,13 @@ import {
   renderCodexNotificationEvent as renderCodexNotificationEventImpl,
 } from "./codex-event-stream.js";
 import { summarizeLinearToolCall } from "./linear-tool-format.js";
+import {
+  appendBoundedLines,
+  appendBoundedParts,
+  appendBoundedText,
+  compactTranscriptValue,
+  truncateStoredText,
+} from "./transcript-bounds.js";
 import type {
   AgentCodexNotificationEvent,
   AgentRawLineEvent,
@@ -467,8 +474,8 @@ function appendAgentMessageEntry(target: BlockTarget, event: AgentStatusEvent) {
   if (lastEntry?.kind === "agent-message" && lastEntry.itemId === event.itemId) {
     lastEntry.count += 1;
     lastEntry.sequenceEnd = event.sequence;
-    lastEntry.segments.push(text);
-    lastEntry.text += text;
+    appendBoundedParts(lastEntry.segments, [text]);
+    lastEntry.text = appendBoundedText(lastEntry.text, text);
     lastEntry.timestamp = event.timestamp;
     return;
   }
@@ -476,10 +483,10 @@ function appendAgentMessageEntry(target: BlockTarget, event: AgentStatusEvent) {
     count: 1,
     itemId: event.itemId,
     kind: "agent-message",
-    segments: [text],
+    segments: [truncateStoredText(text)],
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
-    text,
+    text: truncateStoredText(text),
     timestamp: event.timestamp,
   });
 }
@@ -494,7 +501,7 @@ function appendCommandOutputEntry(target: BlockTarget, event: AgentStatusEvent) 
     .find((entry) => entry.kind === "command" && (!event.itemId || entry.itemId === event.itemId));
   if (commandEntry?.kind === "command") {
     commandEntry.count += lines.length;
-    commandEntry.outputLines.push(...lines);
+    appendBoundedLines(commandEntry.outputLines, lines);
     commandEntry.sequenceEnd = event.sequence;
     commandEntry.timestamp = event.timestamp;
     return;
@@ -502,7 +509,7 @@ function appendCommandOutputEntry(target: BlockTarget, event: AgentStatusEvent) 
   const lastEntry = target.blocks.at(-1);
   if (lastEntry?.kind === "command-output") {
     lastEntry.count += lines.length;
-    lastEntry.lines.push(...lines);
+    appendBoundedLines(lastEntry.lines, lines);
     lastEntry.sequenceEnd = event.sequence;
     lastEntry.timestamp = event.timestamp;
     return;
@@ -510,7 +517,7 @@ function appendCommandOutputEntry(target: BlockTarget, event: AgentStatusEvent) 
   appendBlock(target, {
     count: lines.length,
     kind: "command-output",
-    lines,
+    lines: lines.map((line) => truncateStoredText(line)),
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
     timestamp: event.timestamp,
@@ -619,12 +626,14 @@ function appendToolStatusEntry(target: BlockTarget, event: AgentStatusEvent) {
           : "running";
 
   if (existing?.kind === "tool") {
-    existing.argumentsData = event.data?.arguments ?? existing.argumentsData;
-    existing.argumentsText = parsedToolText?.argumentsText ?? existing.argumentsText;
+    existing.argumentsData =
+      compactTranscriptValue(event.data?.arguments) ?? existing.argumentsData;
+    existing.argumentsText =
+      truncateStoredText(parsedToolText?.argumentsText ?? "") || existing.argumentsText;
     existing.count += 1;
-    existing.errorText = errorText ?? existing.errorText;
-    existing.resultData = resultData ?? existing.resultData;
-    existing.resultText = resultText ?? existing.resultText;
+    existing.errorText = errorText ? truncateStoredText(errorText) : existing.errorText;
+    existing.resultData = compactTranscriptValue(resultData) ?? existing.resultData;
+    existing.resultText = resultText ? truncateStoredText(resultText) : existing.resultText;
     existing.sequenceEnd = event.sequence;
     existing.status = status;
     existing.timestamp = event.timestamp;
@@ -632,14 +641,16 @@ function appendToolStatusEntry(target: BlockTarget, event: AgentStatusEvent) {
   }
 
   appendBlock(target, {
-    argumentsData: event.data?.arguments,
-    argumentsText: parsedToolText?.argumentsText,
+    argumentsData: compactTranscriptValue(event.data?.arguments),
+    argumentsText: parsedToolText?.argumentsText
+      ? truncateStoredText(parsedToolText.argumentsText)
+      : undefined,
     count: 1,
-    errorText,
+    errorText: errorText ? truncateStoredText(errorText) : undefined,
     itemId: event.itemId,
     kind: "tool",
-    resultData,
-    resultText,
+    resultData: compactTranscriptValue(resultData),
+    resultText: resultText ? truncateStoredText(resultText) : undefined,
     server,
     sequenceEnd: event.sequence,
     sequenceStart: event.sequence,
@@ -685,7 +696,7 @@ export function appendBlocksForEvent(target: BlockTarget, event: AgentSessionEve
       lastEntry.stream === event.stream
     ) {
       lastEntry.count += 1;
-      lastEntry.lines.push(event.line);
+      appendBoundedLines(lastEntry.lines, [event.line]);
       lastEntry.sequenceEnd = event.sequence;
       lastEntry.timestamp = event.timestamp;
       return;
@@ -694,7 +705,7 @@ export function appendBlocksForEvent(target: BlockTarget, event: AgentSessionEve
       count: 1,
       encoding: event.encoding,
       kind: "raw",
-      lines: [event.line],
+      lines: [truncateStoredText(event.line)],
       sequenceEnd: event.sequence,
       sequenceStart: event.sequence,
       stream: event.stream,
@@ -730,7 +741,7 @@ export function appendBlocksForEvent(target: BlockTarget, event: AgentSessionEve
   appendBlock(target, {
     code: event.code,
     count: 1,
-    data: event.data,
+    data: compactTranscriptValue(event.data) as Record<string, unknown> | undefined,
     format: event.format,
     itemId: event.itemId,
     kind: "status",
@@ -781,7 +792,7 @@ export function shouldUpdateStatusSummary(event: AgentStatusEvent) {
 export function createStatusSummary(event: AgentStatusEvent): AgentTuiStatusSummary {
   return {
     code: event.code,
-    data: event.data,
+    data: compactTranscriptValue(event.data) as Record<string, unknown> | undefined,
     format: event.format,
     itemId: event.itemId,
     text: formatStatusEventText(event),

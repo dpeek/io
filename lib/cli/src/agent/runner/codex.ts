@@ -55,8 +55,6 @@ export { toCodexNotificationEvent, type CodexSessionMessage } from "./codex-even
 type PendingTurnState = {
   inputRequired: boolean;
   lastEvent?: string;
-  stderr: string[];
-  stdout: string[];
 };
 
 class MessageQueue {
@@ -408,8 +406,6 @@ export class CodexAppServerRunner {
     const queue = new MessageQueue();
     const state: PendingTurnState = {
       inputRequired: false,
-      stderr: [],
-      stdout: [],
     };
     this.#log.info("session.starting", {
       issueIdentifier: options.issue.identifier,
@@ -419,7 +415,6 @@ export class CodexAppServerRunner {
     void readJsonLines(
       proc.stdout,
       (line) => {
-        state.stdout.push(line);
         try {
           const message = JSON.parse(line) as CodexSessionMessage;
           publish({
@@ -466,7 +461,6 @@ export class CodexAppServerRunner {
     void readJsonLines(
       proc.stderr,
       (line) => {
-        state.stderr.push(line);
         publish({
           encoding: "text",
           line,
@@ -586,8 +580,8 @@ export class CodexAppServerRunner {
         },
         prompt: options.prompt,
         sessionId: session.id,
-        stderr: state.stderr,
-        stdout: state.stdout,
+        stderr: [],
+        stdout: [],
         success: !state.inputRequired,
         threadId,
         turnId,

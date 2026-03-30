@@ -1352,11 +1352,8 @@ test("AgentService closes review tasks only after the review agent creates a fol
       once: true,
       repoRoot: root,
       runnerFactory: () => ({
-        run: async ({ issue, prompt, workspace }) => ({
-          issue,
-          prompt,
-          stderr: [],
-          stdout: [
+        run: async ({ issue, prompt, workspace }) => {
+          const stdoutLines = [
             JSON.stringify({
               method: "item/completed",
               params: {
@@ -1377,10 +1374,25 @@ test("AgentService closes review tasks only after the review agent creates a fol
                 },
               },
             }),
-          ],
-          success: true,
-          workspace,
-        }),
+          ];
+          const stdoutLog = resolve(workspace.path, "codex.stdout.jsonl");
+          await mkdir(workspace.path, { recursive: true });
+          await writeFile(stdoutLog, `${stdoutLines.join("\n")}\n`);
+          return {
+            issue,
+            logPaths: {
+              eventLog: resolve(workspace.path, "events.log"),
+              mainOutput: resolve(workspace.path, "output.log"),
+              stderrLog: resolve(workspace.path, "codex.stderr.log"),
+              stdoutLog,
+            },
+            prompt,
+            stderr: [],
+            stdout: [],
+            success: true,
+            workspace,
+          };
+        },
       }),
       trackerFactory: () => ({
         fetchCandidateIssues: async () => [issue],
@@ -3200,33 +3212,43 @@ test("AgentService uses review built-ins for review-routed issues", async () => 
       repoRoot: root,
       runnerFactory: () => ({
         run: async ({ issue, prompt, workspace }) => {
+          const stdoutLines = [
+            JSON.stringify({
+              method: "item/completed",
+              params: {
+                item: {
+                  arguments: { parentId: "OPE-167", title: "Next task" },
+                  error: null,
+                  result: {
+                    structuredContent: {
+                      issue: {
+                        identifier: "OPE-57",
+                        title: "Next task",
+                      },
+                    },
+                  },
+                  server: "linear",
+                  tool: "save_issue",
+                  type: "mcpToolCall",
+                },
+              },
+            }),
+          ];
+          const stdoutLog = resolve(workspace.path, "codex.stdout.jsonl");
+          await mkdir(workspace.path, { recursive: true });
+          await writeFile(stdoutLog, `${stdoutLines.join("\n")}\n`);
           capturedPrompt = prompt;
           return {
             issue,
+            logPaths: {
+              eventLog: resolve(workspace.path, "events.log"),
+              mainOutput: resolve(workspace.path, "output.log"),
+              stderrLog: resolve(workspace.path, "codex.stderr.log"),
+              stdoutLog,
+            },
             prompt,
             stderr: [],
-            stdout: [
-              JSON.stringify({
-                method: "item/completed",
-                params: {
-                  item: {
-                    arguments: { parentId: "OPE-167", title: "Next task" },
-                    error: null,
-                    result: {
-                      structuredContent: {
-                        issue: {
-                          identifier: "OPE-57",
-                          title: "Next task",
-                        },
-                      },
-                    },
-                    server: "linear",
-                    tool: "save_issue",
-                    type: "mcpToolCall",
-                  },
-                },
-              }),
-            ],
+            stdout: [],
             success: true,
             workspace,
           };

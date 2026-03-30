@@ -24,6 +24,11 @@ The new graph-backed workflow product shell now lives in `../../lib/cli/src/tui/
 - the default live store keeps the two most recent terminal worker sessions
   visible
 - finalized worker sessions are removed from the live store by default
+- live transcript state is bounded in memory: the store keeps a capped number
+  of blocks per session and truncates large block payloads such as raw output,
+  reasoning text, and tool payloads
+- raw Codex stdout/stderr are persisted to runtime log files and are no longer
+  retained in-memory for completed runs
 - attach mode exits when the retained worker session reaches a terminal phase
 
 ## Migration Boundary

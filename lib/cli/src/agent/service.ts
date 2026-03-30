@@ -1,4 +1,4 @@
-import { appendFile } from "node:fs/promises";
+import { appendFile, readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 
 import { createLogger, type Logger } from "@io/utils";
@@ -170,9 +170,9 @@ type LinearIssueCreateRecord = {
   title?: string;
 };
 
-function collectSuccessfulLinearIssueCreates(stdout: string[]) {
+function collectSuccessfulLinearIssueCreates(lines: Iterable<string>) {
   const createdIssues: LinearIssueCreateRecord[] = [];
-  for (const line of stdout) {
+  for (const line of lines) {
     let parsed: unknown;
     try {
       parsed = JSON.parse(line);
@@ -215,8 +215,17 @@ function collectSuccessfulLinearIssueCreates(stdout: string[]) {
   return createdIssues;
 }
 
-function didReviewCreateExpectedFollowUp(issue: AgentIssue, stdout: string[]) {
-  const createdIssues = collectSuccessfulLinearIssueCreates(stdout);
+async function didReviewCreateExpectedFollowUp(
+  issue: AgentIssue,
+  stdoutLogPath: string | undefined,
+) {
+  if (!stdoutLogPath) {
+    return false;
+  }
+  const stdoutLog = await readFile(stdoutLogPath, "utf8");
+  const createdIssues = collectSuccessfulLinearIssueCreates(
+    stdoutLog.split(/\r?\n/).filter(Boolean),
+  );
   if (!createdIssues.length) {
     return false;
   }
@@ -1255,7 +1264,7 @@ export class AgentService {
     }
 
     if (resolvedContext.selection.agent === "review") {
-      if (!didReviewCreateExpectedFollowUp(issue, result.stdout)) {
+      if (!(await didReviewCreateExpectedFollowUp(issue, result.logPaths?.stdoutLog))) {
         const reason = "review_follow_up_missing";
         const blockedSession = withSessionRuntime(
           session,
