@@ -161,6 +161,12 @@ import { runWorkflowArtifactWriteCommand } from "./workflow-artifact.js";
 import { runWorkflowDecisionWriteCommand } from "./workflow-decision.js";
 import { runAgentSessionAppendCommand } from "./workflow-session-history.js";
 import { runWorkflowMutationCommand } from "./workflow-authority.js";
+import { readWorkflowSessionFeed as readWorkflowSessionFeedResult } from "./workflow-session-feed.js";
+import type {
+  WorkflowSessionFeedReadQuery,
+  WorkflowSessionFeedReadResult,
+} from "./workflow-session-feed-contract.js";
+import { WorkflowMutationError } from "./workflow-mutation-helpers.js";
 import type { WorkflowReviewLiveRegistrationTarget } from "./workflow-live-transport.js";
 
 const webAppGraph = { ...core, ...workflow } as const;
@@ -503,6 +509,10 @@ export type WebAppAuthority = Omit<
     query: CommitQueueScopeQuery,
     options: WebAppAuthorityReadOptions,
   ): CommitQueueScopeResult;
+  readWorkflowSessionFeed(
+    query: WorkflowSessionFeedReadQuery,
+    options: WebAppAuthorityReadOptions,
+  ): WorkflowSessionFeedReadResult;
   resolveSavedQuery(
     input: WebAppAuthoritySavedQueryResolutionInput,
     options: WebAppAuthorityReadOptions,
@@ -4700,6 +4710,34 @@ export async function createWebAppAuthority(
     }
   }
 
+  function readWorkflowSessionFeed(
+    query: WorkflowSessionFeedReadQuery,
+    options: WebAppAuthorityReadOptions,
+  ): WorkflowSessionFeedReadResult {
+    const store = createReadableQueryStore(options);
+    const graph = createGraphClient(store, webAppGraph);
+
+    try {
+      return readWorkflowSessionFeedResult(graph, store, query);
+    } catch (error) {
+      if (
+        error instanceof WorkflowMutationError &&
+        error.code === "subject-not-found" &&
+        error.message.includes("project")
+      ) {
+        throw new WebAppAuthorityWorkflowReadError(404, "project-not-found", error.message);
+      }
+      if (
+        error instanceof WorkflowMutationError &&
+        error.code === "subject-not-found" &&
+        error.message.includes("branch")
+      ) {
+        throw new WebAppAuthorityWorkflowReadError(404, "branch-not-found", error.message);
+      }
+      throw error;
+    }
+  }
+
   function planWorkflowReviewLiveRegistration(
     cursor: string,
     options: WebAppAuthorityReadOptions,
@@ -5521,6 +5559,7 @@ export async function createWebAppAuthority(
     readCommitQueueScope,
     readPredicateValue,
     readProjectBranchScope,
+    readWorkflowSessionFeed,
     readSnapshot,
     rebuildRetainedWorkflowProjection,
     resolveSavedQuery,

@@ -68,7 +68,7 @@ function requireDecisionKindId(value: string): string {
   );
 }
 
-function buildWorkflowDecisionRecord(
+export function buildWorkflowDecisionRecord(
   entity: ReturnType<ProductGraphClient["decision"]["get"]>,
 ): WorkflowDecisionRecord {
   return {

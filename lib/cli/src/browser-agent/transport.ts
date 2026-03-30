@@ -1,7 +1,10 @@
+import type { AgentSessionAppendEvent } from "@io/graph-module-workflow";
+
 export const defaultBrowserAgentOrigin = "http://127.0.0.1:4317";
 export const browserAgentHealthPath = "/health";
 export const browserAgentLaunchPath = "/launch-session";
 export const browserAgentActiveSessionPath = "/active-session";
+export const browserAgentSessionEventsPath = "/session-events";
 
 export type CodexSessionKind = "planning" | "execution" | "review";
 
@@ -165,6 +168,7 @@ export interface BrowserAgentHealthResponse {
   readonly runtime: {
     readonly activeSessionLookupPath: string;
     readonly launchPath: string;
+    readonly sessionEventsPath: string;
     readonly startedAt: string;
     readonly status: "ready" | "unavailable";
     readonly statusMessage: string;
@@ -178,6 +182,22 @@ export type BrowserAgentTransportOptions = {
   readonly fetch?: FetchLike;
   readonly origin?: string;
   readonly signal?: AbortSignal;
+};
+
+export interface BrowserAgentSessionEventStreamRequest {
+  readonly attach: CodexSessionAttachHandle;
+  readonly sessionId: string;
+}
+
+export interface BrowserAgentSessionEventMessage {
+  readonly browserAgentSessionId: string;
+  readonly event: AgentSessionAppendEvent;
+  readonly sessionId: string;
+  readonly type: "event";
+}
+
+export type BrowserAgentSessionEventStreamOptions = BrowserAgentTransportOptions & {
+  readonly onEvent: (message: BrowserAgentSessionEventMessage) => void;
 };
 
 export class BrowserAgentTransportError extends Error {
@@ -240,6 +260,43 @@ async function requestBrowserAgentJson<TResponse>(
     throw readTransportError(response, payload, fallback);
   }
   return payload as TResponse;
+}
+
+async function readJsonLines<TMessage>(
+  response: Response,
+  onMessage: (message: TMessage) => void,
+): Promise<void> {
+  if (!response.body) {
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      if (line.length > 0) {
+        onMessage(JSON.parse(line) as TMessage);
+      }
+      newlineIndex = buffer.indexOf("\n");
+    }
+
+    if (done) {
+      break;
+    }
+  }
+
+  const line = buffer.trim();
+  if (line.length > 0) {
+    onMessage(JSON.parse(line) as TMessage);
+  }
 }
 
 export async function requestBrowserAgentHealth(
@@ -315,10 +372,38 @@ export async function requestBrowserAgentActiveSessionLookup(
   }
 }
 
+export async function observeBrowserAgentSessionEvents(
+  request: BrowserAgentSessionEventStreamRequest,
+  options: BrowserAgentSessionEventStreamOptions,
+): Promise<void> {
+  const fetchImpl = options.fetch ?? fetch;
+  const response = await fetchImpl(resolveBrowserAgentUrl(browserAgentSessionEventsPath, options), {
+    method: "POST",
+    headers: {
+      accept: "application/x-ndjson",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(request),
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const payload = await readTransportPayload(response);
+    throw readTransportError(
+      response,
+      payload,
+      "Browser-agent session event stream request failed",
+    );
+  }
+
+  await readJsonLines(response, options.onEvent);
+}
+
 export type BrowserAgentRuntimeProbe =
   | {
       readonly launchPath: string;
       readonly message: string;
+      readonly sessionEventsPath: string;
       readonly startedAt: string;
       readonly status: "ready";
     }
@@ -336,6 +421,7 @@ export async function probeBrowserAgentRuntime(
       return {
         launchPath: response.runtime.launchPath,
         message: response.runtime.statusMessage,
+        sessionEventsPath: response.runtime.sessionEventsPath,
         startedAt: response.runtime.startedAt,
         status: "ready",
       };

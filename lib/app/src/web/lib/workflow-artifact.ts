@@ -73,7 +73,7 @@ function requireArtifactKindId(value: string): string {
   );
 }
 
-function buildWorkflowArtifactRecord(
+export function buildWorkflowArtifactRecord(
   entity: ReturnType<ProductGraphClient["artifact"]["get"]>,
 ): WorkflowArtifactRecord {
   return {

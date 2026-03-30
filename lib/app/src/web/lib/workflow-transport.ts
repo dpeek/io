@@ -5,9 +5,18 @@ import type {
   ProjectBranchScopeResult,
 } from "@io/graph-module-workflow";
 
+import type {
+  WorkflowSessionFeedReadQuery,
+  WorkflowSessionFeedReadResult,
+} from "./workflow-session-feed-contract.js";
+
 export const webWorkflowReadPath = "/api/workflow-read";
 
-export const workflowReadRequestKinds = ["project-branch-scope", "commit-queue-scope"] as const;
+export const workflowReadRequestKinds = [
+  "project-branch-scope",
+  "commit-queue-scope",
+  "session-feed",
+] as const;
 
 export type WorkflowReadRequestKind = (typeof workflowReadRequestKinds)[number];
 
@@ -21,9 +30,15 @@ export type CommitQueueScopeWorkflowReadRequest = {
   readonly query: CommitQueueScopeQuery;
 };
 
+export type WorkflowSessionFeedWorkflowReadRequest = {
+  readonly kind: "session-feed";
+  readonly query: WorkflowSessionFeedReadQuery;
+};
+
 export type WorkflowReadRequest =
   | ProjectBranchScopeWorkflowReadRequest
-  | CommitQueueScopeWorkflowReadRequest;
+  | CommitQueueScopeWorkflowReadRequest
+  | WorkflowSessionFeedWorkflowReadRequest;
 
 export type ProjectBranchScopeWorkflowReadResponse = {
   readonly kind: "project-branch-scope";
@@ -35,16 +50,24 @@ export type CommitQueueScopeWorkflowReadResponse = {
   readonly result: CommitQueueScopeResult;
 };
 
+export type WorkflowSessionFeedWorkflowReadResponse = {
+  readonly kind: "session-feed";
+  readonly result: WorkflowSessionFeedReadResult;
+};
+
 export type WorkflowReadResponse =
   | ProjectBranchScopeWorkflowReadResponse
-  | CommitQueueScopeWorkflowReadResponse;
+  | CommitQueueScopeWorkflowReadResponse
+  | WorkflowSessionFeedWorkflowReadResponse;
 
 type WorkflowReadResponseFor<TRequest extends WorkflowReadRequest> =
   TRequest extends ProjectBranchScopeWorkflowReadRequest
     ? ProjectBranchScopeWorkflowReadResponse
     : TRequest extends CommitQueueScopeWorkflowReadRequest
       ? CommitQueueScopeWorkflowReadResponse
-      : never;
+      : TRequest extends WorkflowSessionFeedWorkflowReadRequest
+        ? WorkflowSessionFeedWorkflowReadResponse
+        : never;
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 

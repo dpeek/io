@@ -1,8 +1,10 @@
 "use client";
 
 import type {
+  AgentSessionAppendEvent,
   CommitQueueScopeCommitRow,
   CommitQueueScopeResult,
+  CommitQueueScopeSessionSummary,
   ProjectBranchScopeRepositoryObservation,
   ProjectBranchScopeResult,
 } from "@io/graph-module-workflow";
@@ -20,6 +22,7 @@ import type {
   CodexSessionLaunchSuccess,
 } from "@op/cli/browser-agent";
 import {
+  observeBrowserAgentSessionEvents,
   probeBrowserAgentRuntime,
   requestBrowserAgentActiveSessionLookup,
   requestBrowserAgentLaunch,
@@ -34,6 +37,12 @@ import {
 import { createWorkflowReviewLiveSync } from "../lib/workflow-review-live-sync.js";
 import { startWorkflowReviewRefreshLoop } from "../lib/workflow-review-refresh.js";
 import {
+  createWorkflowSessionFeedContract,
+  resolveWorkflowSessionFeedSelectionState,
+  type WorkflowSessionFeedReadResult,
+  type WorkflowSessionFeedSelectionState,
+} from "../lib/workflow-session-feed-contract.js";
+import {
   requestWorkflowRead,
   WorkflowReadClientError,
   type CommitQueueScopeWorkflowReadResponse,
@@ -41,12 +50,46 @@ import {
 } from "../lib/workflow-transport.js";
 import { useWebAuthSession } from "./auth-shell.js";
 import { useGraphRuntime } from "./graph-runtime-bootstrap.js";
+import {
+  appendWorkflowSessionLiveEvent,
+  createWorkflowSessionLiveEvent,
+  mergeWorkflowSessionTimelineEvents,
+  partitionWorkflowSessionLiveEvents,
+  reconcileWorkflowSessionLiveEvents,
+  type WorkflowSessionLiveEvent,
+} from "../lib/workflow-session-live.js";
 
 export type WorkflowReviewReadState =
   | { readonly status: "loading" }
   | {
       readonly branchBoard: ProjectBranchScopeWorkflowReadResponse["result"];
       readonly commitQueue?: CommitQueueScopeWorkflowReadResponse["result"];
+      readonly status: "ready";
+    }
+  | {
+      readonly code?: string;
+      readonly message: string;
+      readonly status: "error";
+    };
+
+export type WorkflowSessionFeedReadState =
+  | { readonly status: "loading" }
+  | {
+      readonly result: Extract<
+        WorkflowSessionFeedSelectionState,
+        { readonly kind: "missing-data" }
+      >;
+      readonly status: "missing-data";
+    }
+  | {
+      readonly result: Extract<
+        WorkflowSessionFeedSelectionState,
+        { readonly kind: "stale-selection" }
+      >;
+      readonly status: "stale-selection";
+    }
+  | {
+      readonly result: WorkflowSessionFeedReadResult;
       readonly status: "ready";
     }
   | {
@@ -80,6 +123,19 @@ type SessionActionRequestState = {
   readonly status: "failure" | "pending" | "success";
 };
 
+type SessionLiveState =
+  | {
+      readonly events: readonly WorkflowSessionLiveEvent[];
+      readonly status: "idle";
+    }
+  | {
+      readonly browserAgentSessionId: string;
+      readonly events: readonly WorkflowSessionLiveEvent[];
+      readonly message?: string;
+      readonly sessionId: string;
+      readonly status: "connecting" | "streaming" | "unavailable";
+    };
+
 function buildWorkflowHref(search: WorkflowRouteSearch): string {
   const params = new URLSearchParams();
   if (search.project) {
@@ -87,6 +143,12 @@ function buildWorkflowHref(search: WorkflowRouteSearch): string {
   }
   if (search.branch) {
     params.set("branch", search.branch);
+  }
+  if (search.commit) {
+    params.set("commit", search.commit);
+  }
+  if (search.session) {
+    params.set("session", search.session);
   }
   const query = params.toString();
   return query.length > 0 ? `/workflow?${query}` : "/workflow";
@@ -132,9 +194,16 @@ function formatRepositoryCommitSummary(row: CommitQueueScopeCommitRow): string {
   return fields.join(" | ");
 }
 
-function resolveSelectedCommitRow(commitQueue: CommitQueueScopeResult | undefined) {
+function resolveSelectedCommitRow(
+  commitQueue: CommitQueueScopeResult | undefined,
+  selectedCommitId?: string,
+) {
   if (!commitQueue || commitQueue.rows.length === 0) {
     return undefined;
+  }
+
+  if (selectedCommitId) {
+    return commitQueue.rows.find((row) => row.commit.id === selectedCommitId);
   }
 
   const activeCommitId =
@@ -169,6 +238,26 @@ function formatBrowserAgentRequestError(error: unknown, fallback: string): strin
     return error.message;
   }
   return fallback;
+}
+
+function resolveLiveSessionCandidate(input: {
+  readonly branchLookupState: SessionLookupState;
+  readonly commitLookupState: SessionLookupState;
+  readonly search: WorkflowRouteSearch;
+}) {
+  const lookupState = input.search.commit ? input.commitLookupState : input.branchLookupState;
+  if (lookupState.status !== "ready" || !lookupState.result.ok || !lookupState.result.found) {
+    return undefined;
+  }
+
+  if (input.search.session && lookupState.result.session.id !== input.search.session) {
+    return undefined;
+  }
+
+  return {
+    attach: lookupState.result.attach,
+    sessionId: lookupState.result.session.id,
+  };
 }
 
 export function createBranchSessionActionModel(input: {
@@ -273,10 +362,11 @@ export function createCommitSessionActionModel(input: {
   readonly commitQueue?: CommitQueueScopeResult;
   readonly lookupState: SessionLookupState;
   readonly runtime: BrowserAgentRuntimeProbe;
+  readonly selectedCommitId?: string;
   readonly selectedBranchState?: ProjectBranchScopeResult["rows"][number]["branch"]["state"];
 }): SessionActionModel {
   const description = "Start a commit-scoped execution session from the selected workflow commit.";
-  const selectedCommit = resolveSelectedCommitRow(input.commitQueue);
+  const selectedCommit = resolveSelectedCommitRow(input.commitQueue, input.selectedCommitId);
 
   if (input.authStatus !== "ready") {
     return {
@@ -784,6 +874,589 @@ function DetailField({ label, value }: { readonly label: string; readonly value:
   );
 }
 
+function formatEnumLabel(value: string): string {
+  return value.replaceAll("-", " ");
+}
+
+function formatBranchLatestSessionSummary(
+  session:
+    | CommitQueueScopeSessionSummary
+    | Extract<
+        WorkflowSessionFeedReadState,
+        { readonly status: "stale-selection" }
+      >["result"]["availableCommitIds"],
+): string {
+  if (!session || Array.isArray(session) || !("kind" in session)) {
+    return "No branch-scoped session summary recorded.";
+  }
+  return `${session.kind} / ${session.runtimeState} / ${session.sessionKey}`;
+}
+
+function formatSessionFeedSubjectLabel(
+  result: Extract<WorkflowSessionFeedReadResult, { readonly status: "ready" }>,
+): string {
+  return result.subject.commit
+    ? `${result.subject.branch.title} -> ${result.subject.commit.title}`
+    : result.subject.branch.title;
+}
+
+function formatSessionFeedFinalization(
+  finalization: Extract<
+    WorkflowSessionFeedReadResult,
+    { readonly status: "ready" }
+  >["finalization"],
+): { readonly detail: string; readonly label: string } {
+  switch (finalization.status) {
+    case "not-applicable":
+      return {
+        detail: "Branch-scoped sessions do not produce commit finalization state.",
+        label: "not applicable",
+      };
+    case "pending":
+      return {
+        detail:
+          "The session has produced retained output, but graph-backed finalization is still pending.",
+        label: "pending",
+      };
+    case "finalized":
+      return {
+        detail:
+          [
+            finalization.linearState,
+            finalization.commitSha ? `commit ${finalization.commitSha}` : undefined,
+            finalization.landedAt ? `landed ${finalization.landedAt}` : undefined,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .join(" | ") || "Finalization recorded.",
+        label: "finalized",
+      };
+    case "unknown":
+      return {
+        detail: "Finalization metadata is not yet materialized as graph-backed retained state.",
+        label: "unknown",
+      };
+  }
+}
+
+function formatSessionFeedHistory(
+  history: Extract<WorkflowSessionFeedReadResult, { readonly status: "ready" }>["history"],
+): { readonly detail: string; readonly label: string } {
+  switch (history.status) {
+    case "empty":
+      return {
+        detail: "No retained session events were persisted for this session yet.",
+        label: "empty",
+      };
+    case "complete":
+      return {
+        detail: `${history.persistedEventCount} retained events through sequence ${history.lastSequence}.`,
+        label: "complete",
+      };
+    case "partial":
+      return {
+        detail: `${history.persistedEventCount} retained events with ${formatEnumLabel(history.reason)}.`,
+        label: "partial",
+      };
+  }
+}
+
+function stringifyRecord(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+type WorkflowTimelineItem =
+  | {
+      readonly event: Extract<
+        AgentSessionAppendEvent,
+        { readonly type: "codex-notification" | "session" | "status" }
+      >;
+      readonly key: string;
+      readonly kind: "event";
+      readonly transient: boolean;
+    }
+  | {
+      readonly encoding: Extract<
+        AgentSessionAppendEvent,
+        { readonly type: "raw-line" }
+      >["encoding"];
+      readonly endSequence: number;
+      readonly key: string;
+      readonly kind: "transcript";
+      readonly lines: readonly string[];
+      readonly startSequence: number;
+      readonly stream: Extract<AgentSessionAppendEvent, { readonly type: "raw-line" }>["stream"];
+      readonly timestamp: string;
+      readonly transient: boolean;
+    };
+
+type WorkflowTimelineEntry = ReturnType<typeof mergeWorkflowSessionTimelineEvents>[number];
+
+function buildWorkflowTimelineItems(
+  events: readonly WorkflowTimelineEntry[],
+): readonly WorkflowTimelineItem[] {
+  const items: WorkflowTimelineItem[] = [];
+  let transcript:
+    | {
+        readonly encoding: Extract<
+          WorkflowTimelineItem,
+          { readonly kind: "transcript" }
+        >["encoding"];
+        endSequence: number;
+        readonly lines: string[];
+        readonly startSequence: number;
+        readonly stream: Extract<WorkflowTimelineItem, { readonly kind: "transcript" }>["stream"];
+        readonly timestamp: string;
+        readonly transient: boolean;
+      }
+    | undefined;
+
+  function flushTranscript() {
+    if (!transcript) {
+      return;
+    }
+    items.push({
+      encoding: transcript.encoding,
+      endSequence: transcript.endSequence,
+      key: `transcript:${transcript.startSequence}:${transcript.endSequence}`,
+      kind: "transcript",
+      lines: transcript.lines,
+      startSequence: transcript.startSequence,
+      stream: transcript.stream,
+      timestamp: transcript.timestamp,
+      transient: transcript.transient,
+    });
+    transcript = undefined;
+  }
+
+  for (const entry of events) {
+    const event = entry.event;
+    if (event.type === "raw-line") {
+      if (
+        transcript &&
+        transcript.stream === event.stream &&
+        transcript.encoding === event.encoding &&
+        transcript.endSequence === event.sequence - 1 &&
+        transcript.transient === entry.transient
+      ) {
+        transcript.lines.push(event.line);
+        transcript.endSequence = event.sequence;
+        continue;
+      }
+
+      flushTranscript();
+      transcript = {
+        encoding: event.encoding,
+        endSequence: event.sequence,
+        lines: [event.line],
+        startSequence: event.sequence,
+        stream: event.stream,
+        timestamp: event.timestamp,
+        transient: entry.transient,
+      };
+      continue;
+    }
+
+    flushTranscript();
+    items.push({
+      event,
+      key: `${event.type}:${event.sequence}`,
+      kind: "event",
+      transient: entry.transient,
+    });
+  }
+
+  flushTranscript();
+  return items;
+}
+
+function SessionTimelineItem({ item }: { readonly item: WorkflowTimelineItem }) {
+  if (item.kind === "transcript") {
+    return (
+      <div
+        className={`rounded-lg border px-3 py-3 ${
+          item.transient ? "border-primary/30 bg-primary/5 border-dashed" : "border-border/70"
+        }`}
+      >
+        <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+          <div className="font-medium">
+            {item.stream} transcript [{item.startSequence}-{item.endSequence}]
+          </div>
+          <div className="text-muted-foreground text-xs">{item.timestamp}</div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">{item.stream}</Badge>
+          <Badge variant="outline">{item.encoding}</Badge>
+          {item.transient ? <Badge variant="secondary">transient</Badge> : null}
+        </div>
+        <pre className="bg-muted/40 mt-3 overflow-x-auto rounded-md px-3 py-3 text-xs whitespace-pre-wrap">
+          {item.lines.join("\n")}
+        </pre>
+      </div>
+    );
+  }
+
+  const { event } = item;
+  const title =
+    event.type === "session"
+      ? `Session ${event.phase}`
+      : event.type === "status"
+        ? (event.text ?? event.code)
+        : event.method;
+  const detail =
+    event.type === "status"
+      ? event.text
+      : event.type === "codex-notification"
+        ? stringifyRecord(event.params)
+        : event.data
+          ? stringifyRecord(event.data)
+          : undefined;
+
+  return (
+    <div
+      className={`rounded-lg border px-3 py-3 ${
+        item.transient ? "border-primary/30 bg-primary/5 border-dashed" : "border-border/70"
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-1">
+          <div className="font-medium">{title}</div>
+          <div className="text-muted-foreground text-xs">
+            Sequence {event.sequence} at {event.timestamp}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">{event.type}</Badge>
+          {event.type === "session" ? <Badge variant="outline">{event.phase}</Badge> : null}
+          {event.type === "status" ? <Badge variant="outline">{event.code}</Badge> : null}
+          {item.transient ? <Badge variant="secondary">transient</Badge> : null}
+        </div>
+      </div>
+      {detail ? (
+        <pre className="bg-muted/40 mt-3 overflow-x-auto rounded-md px-3 py-3 text-xs whitespace-pre-wrap">
+          {detail}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
+function SessionResourcesPanel({
+  result,
+}: {
+  readonly result: Extract<WorkflowSessionFeedReadResult, { readonly status: "ready" }>;
+}) {
+  return (
+    <div className="grid gap-4">
+      <div className="border-border/70 rounded-lg border px-3 py-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="font-medium">Artifacts</div>
+          <Badge variant="secondary">{result.artifacts.length}</Badge>
+        </div>
+        {result.artifacts.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No retained artifacts attached.</p>
+        ) : (
+          <div className="space-y-3">
+            {result.artifacts.map((artifact) => (
+              <div
+                className="border-border/70 rounded-lg border border-dashed px-3 py-3"
+                key={artifact.id}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="font-medium">{artifact.title}</div>
+                  <Badge variant="outline">{artifact.kind}</Badge>
+                </div>
+                <div className="text-muted-foreground mt-1 text-xs">{artifact.createdAt}</div>
+                {artifact.bodyText ? (
+                  <pre className="bg-muted/40 mt-3 overflow-x-auto rounded-md px-3 py-3 text-xs whitespace-pre-wrap">
+                    {artifact.bodyText}
+                  </pre>
+                ) : artifact.blobId ? (
+                  <div className="text-muted-foreground mt-3 text-xs">Blob: {artifact.blobId}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="border-border/70 rounded-lg border px-3 py-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="font-medium">Decisions</div>
+          <Badge variant="secondary">{result.decisions.length}</Badge>
+        </div>
+        {result.decisions.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No retained decisions attached.</p>
+        ) : (
+          <div className="space-y-3">
+            {result.decisions.map((decision) => (
+              <div
+                className="border-border/70 rounded-lg border border-dashed px-3 py-3"
+                key={decision.id}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="font-medium">{decision.summary}</div>
+                  <Badge variant="outline">{decision.kind}</Badge>
+                </div>
+                <div className="text-muted-foreground mt-1 text-xs">{decision.createdAt}</div>
+                {decision.details ? (
+                  <p className="text-muted-foreground mt-3 text-sm">{decision.details}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SessionFeedPanel({
+  liveSessionState,
+  search,
+  sessionFeedState,
+}: {
+  readonly liveSessionState: SessionLiveState;
+  readonly search: WorkflowRouteSearch;
+  readonly sessionFeedState: WorkflowSessionFeedReadState;
+}) {
+  if (sessionFeedState.status === "loading") {
+    return (
+      <EmptyPanelBody
+        detail="Resolve the selected branch and commit context before the browser requests retained session history."
+        title="Loading session panel"
+      />
+    );
+  }
+
+  if (sessionFeedState.status === "missing-data") {
+    return (
+      <EmptyPanelBody detail={sessionFeedState.result.message} title="Session panel unavailable" />
+    );
+  }
+
+  if (sessionFeedState.status === "stale-selection") {
+    return (
+      <div className="flex h-full min-h-0 flex-col justify-center gap-3 rounded-lg border border-dashed px-4 py-6 text-center">
+        <p className="font-medium">Session selection is stale</p>
+        <p className="text-muted-foreground text-sm">{sessionFeedState.result.message}</p>
+        {sessionFeedState.result.availableCommitIds.length > 0 ? (
+          <p className="text-muted-foreground text-xs">
+            Visible commits: {sessionFeedState.result.availableCommitIds.join(", ")}
+          </p>
+        ) : null}
+        <a
+          className="text-sm underline underline-offset-2"
+          href={buildWorkflowHref({
+            branch: search.branch,
+            project: search.project,
+          })}
+        >
+          Clear stale session selection
+        </a>
+      </div>
+    );
+  }
+
+  if (sessionFeedState.status === "error") {
+    return (
+      <div className="border-destructive/20 bg-destructive/5 rounded-lg border px-4 py-4 text-sm">
+        <div className="font-medium">Session feed read failed</div>
+        <div className="mt-2">{sessionFeedState.message}</div>
+        {sessionFeedState.code ? <code className="mt-3 block">{sessionFeedState.code}</code> : null}
+      </div>
+    );
+  }
+
+  if (sessionFeedState.result.status === "no-session") {
+    return (
+      <div className="grid gap-3">
+        <EmptyPanelBody
+          detail={
+            sessionFeedState.result.query.subject.kind === "commit"
+              ? "No retained session is recorded for the selected workflow commit."
+              : "No retained branch-scoped session is recorded for the selected workflow branch."
+          }
+          title="No retained session"
+        />
+        {sessionFeedState.result.branchLatestSession ? (
+          <div className="border-border/70 rounded-lg border px-3 py-3 text-sm">
+            Branch latest session:{" "}
+            {formatBranchLatestSessionSummary(sessionFeedState.result.branchLatestSession)}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (sessionFeedState.result.status === "stale-selection") {
+    const clearSearch =
+      sessionFeedState.result.query.session.kind === "session-id"
+        ? {
+            branch: sessionFeedState.result.query.subject.branchId,
+            ...(sessionFeedState.result.query.subject.kind === "commit"
+              ? { commit: sessionFeedState.result.query.subject.commitId }
+              : {}),
+            project: sessionFeedState.result.query.projectId,
+          }
+        : {
+            branch: sessionFeedState.result.query.subject.branchId,
+            project: sessionFeedState.result.query.projectId,
+          };
+
+    return (
+      <div className="flex h-full min-h-0 flex-col justify-center gap-3 rounded-lg border border-dashed px-4 py-6 text-center">
+        <p className="font-medium">Pinned session is stale</p>
+        <p className="text-muted-foreground text-sm">
+          {sessionFeedState.result.reason === "session-not-found"
+            ? "The selected session is no longer visible in authoritative graph history."
+            : "The selected session no longer matches the current workflow subject."}
+        </p>
+        {sessionFeedState.result.branchLatestSession ? (
+          <p className="text-muted-foreground text-xs">
+            Branch latest session:{" "}
+            {formatBranchLatestSessionSummary(sessionFeedState.result.branchLatestSession)}
+          </p>
+        ) : null}
+        <a className="text-sm underline underline-offset-2" href={buildWorkflowHref(clearSearch)}>
+          Return to the latest subject session
+        </a>
+      </div>
+    );
+  }
+
+  const result = sessionFeedState.result;
+  const localLiveEvents =
+    liveSessionState.status !== "idle" && liveSessionState.sessionId === result.header.id
+      ? liveSessionState.events
+      : [];
+  const liveReconciliation = partitionWorkflowSessionLiveEvents(result.events, localLiveEvents);
+  const timelineEvents = mergeWorkflowSessionTimelineEvents({
+    authoritativeEvents: result.events,
+    localEvents: localLiveEvents,
+  });
+  const transientEventCount = timelineEvents.filter((event) => event.transient).length;
+  const pendingLiveEventCount = liveReconciliation.pendingEvents.length;
+  const conflictingSequenceLabels = [
+    ...new Set(liveReconciliation.conflictingEvents.map((event) => event.event.sequence)),
+  ];
+  const timelineItems = buildWorkflowTimelineItems(timelineEvents);
+  const finalization = formatSessionFeedFinalization(result.finalization);
+  const history = formatSessionFeedHistory(result.history);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-4 text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-lg font-semibold">{result.header.title}</div>
+          <div className="text-muted-foreground mt-1 font-mono text-xs">
+            {result.header.sessionKey}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge>{result.header.kind}</Badge>
+          <Badge variant="secondary">{formatEnumLabel(result.runtime.state)}</Badge>
+          <Badge variant="outline">{finalization.label}</Badge>
+          {conflictingSequenceLabels.length > 0 ? <Badge variant="outline">live drift</Badge> : null}
+          {transientEventCount > 0 ? (
+            <Badge variant="secondary">{transientEventCount} transient</Badge>
+          ) : null}
+          {search.session ? <Badge variant="outline">pinned session</Badge> : null}
+        </div>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        <DetailField label="Session id" value={result.header.id} />
+        <DetailField label="Subject" value={formatSessionFeedSubjectLabel(result)} />
+        <DetailField label="Started at" value={result.runtime.startedAt} />
+        <DetailField label="Ended at" value={result.runtime.endedAt ?? "Still running"} />
+        <DetailField label="History" value={history.detail} />
+        <DetailField label="Finalization" value={finalization.detail} />
+      </div>
+
+      {pendingLiveEventCount > 0 ? (
+        <div className="border-primary/20 bg-primary/5 rounded-lg border px-3 py-3 text-sm">
+          Showing {pendingLiveEventCount} locally seen update
+          {pendingLiveEventCount === 1 ? "" : "s"} until graph-backed session history catches up.
+        </div>
+      ) : null}
+
+      {conflictingSequenceLabels.length > 0 ? (
+        <div className="border-destructive/20 bg-destructive/5 rounded-lg border px-3 py-3 text-sm">
+          Local live reconciliation drifted from graph-backed history at sequence
+          {conflictingSequenceLabels.length === 1 ? "" : "s"}{" "}
+          {conflictingSequenceLabels.join(", ")}. Keeping the authoritative timeline visible and
+          marking the conflicting local update
+          {conflictingSequenceLabels.length === 1 ? "" : "s"} as transient.
+        </div>
+      ) : null}
+
+      {liveSessionState.status === "unavailable" && liveSessionState.message ? (
+        <div className="border-border/70 bg-muted/20 rounded-lg border px-3 py-3 text-sm">
+          {liveSessionState.message}
+        </div>
+      ) : null}
+
+      {search.commit || search.session ? (
+        <div className="flex flex-wrap gap-3 text-sm">
+          {search.commit ? (
+            <a
+              className="underline underline-offset-2"
+              href={buildWorkflowHref({
+                branch: result.query.subject.branchId,
+                project: result.query.projectId,
+                ...(search.session ? { session: search.session } : {}),
+              })}
+            >
+              View branch session feed
+            </a>
+          ) : null}
+          {search.session ? (
+            <a
+              className="underline underline-offset-2"
+              href={buildWorkflowHref({
+                branch: result.query.subject.branchId,
+                ...(result.query.subject.kind === "commit"
+                  ? { commit: result.query.subject.commitId }
+                  : {}),
+                project: result.query.projectId,
+              })}
+            >
+              Follow latest subject session
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,0.9fr)]">
+        <div className="min-h-0">
+          {result.history.status === "empty" ? (
+            <EmptyPanelBody
+              detail="This session exists in the graph, but no retained session events have been persisted yet."
+              title="No retained history"
+            />
+          ) : timelineItems.length === 0 ? (
+            <EmptyPanelBody
+              detail={`The retained session feed is degraded and no readable timeline entries are currently available. ${history.detail}`}
+              title="Retained history degraded"
+            />
+          ) : (
+            <div className="flex min-h-0 h-full flex-col gap-3 overflow-auto pr-1">
+              {timelineItems.map((item) => (
+                <SessionTimelineItem item={item} key={item.key} />
+              ))}
+            </div>
+          )}
+        </div>
+        <SessionResourcesPanel result={result} />
+      </div>
+    </div>
+  );
+}
+
 function LaunchMetadataFields({ result }: { readonly result: CodexSessionLaunchSuccess }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -953,14 +1626,18 @@ function CommitQueuePanel({
   commitLookupState,
   commitQueue,
   onTriggerCommitSession,
+  projectId,
+  search,
 }: {
   readonly commitAction: SessionActionModel;
   readonly commitActionState?: SessionActionRequestState;
   readonly commitLookupState: SessionLookupState;
   readonly commitQueue?: CommitQueueScopeResult;
   readonly onTriggerCommitSession: () => void;
+  readonly projectId?: string;
+  readonly search: WorkflowRouteSearch;
 }) {
-  const selectedCommit = resolveSelectedCommitRow(commitQueue);
+  const selectedCommit = resolveSelectedCommitRow(commitQueue, search.commit);
 
   if (!commitQueue) {
     return (
@@ -1002,7 +1679,12 @@ function CommitQueuePanel({
           const selected = row.commit.id === selectedCommit?.commit.id;
           const active = row.commit.id === commitQueue.branch.branch.activeCommitId;
           return (
-            <div
+            <a
+              href={buildWorkflowHref({
+                branch: commitQueue.branch.branch.id,
+                commit: row.commit.id,
+                project: projectId,
+              })}
               className={`rounded-lg border px-3 py-3 ${
                 selected ? "border-foreground/40 bg-muted/60" : "border-border/70"
               }`}
@@ -1023,7 +1705,7 @@ function CommitQueuePanel({
               <div className="text-muted-foreground mt-3 space-y-1 text-xs">
                 <div>{formatRepositoryCommitSummary(row)}</div>
               </div>
-            </div>
+            </a>
           );
         })}
       </div>
@@ -1056,11 +1738,13 @@ export function WorkflowReviewSurface({
   commitAction,
   commitActionState,
   commitLookupState,
+  liveSessionState = { events: [], status: "idle" },
   onTriggerBranchSession,
   onTriggerCommitSession,
   readState,
   runtime,
   search,
+  sessionFeedState = { status: "loading" },
   startupState,
 }: {
   readonly branchAction: SessionActionModel;
@@ -1069,11 +1753,13 @@ export function WorkflowReviewSurface({
   readonly commitAction: SessionActionModel;
   readonly commitActionState?: SessionActionRequestState;
   readonly commitLookupState: SessionLookupState;
+  readonly liveSessionState?: SessionLiveState;
   readonly onTriggerBranchSession: () => void;
   readonly onTriggerCommitSession: () => void;
   readonly readState: WorkflowReviewReadState;
   readonly runtime: BrowserAgentRuntimeProbe;
   readonly search: WorkflowRouteSearch;
+  readonly sessionFeedState?: WorkflowSessionFeedReadState;
   readonly startupState: WorkflowReviewStartupState;
 }) {
   const selectedBranchId =
@@ -1162,10 +1848,23 @@ export function WorkflowReviewSurface({
               commitLookupState={commitLookupState}
               commitQueue={readState.status === "ready" ? readState.commitQueue : undefined}
               onTriggerCommitSession={onTriggerCommitSession}
+              projectId={projectId}
+              search={search}
             />
           )}
         </PanelShell>
       </div>
+
+      <PanelShell
+        description="Inspect graph-backed session history, transcript blocks, artifacts, and decisions for the selected workflow subject."
+        title="Session panel"
+      >
+        <SessionFeedPanel
+          liveSessionState={liveSessionState}
+          search={search}
+          sessionFeedState={sessionFeedState}
+        />
+      </PanelShell>
 
       {startupState.kind !== "ready" || readState.status !== "ready" ? <RecoveryHint /> : null}
     </div>
@@ -1182,6 +1881,7 @@ export function WorkflowReviewPage({
   const runtime = useGraphRuntime();
   const auth = useWebAuthSession();
   const contract = useMemo(() => createWorkflowReviewStartupContract(search), [search]);
+  const sessionFeedContract = useMemo(() => createWorkflowSessionFeedContract(search), [search]);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const visibleProjects = useMemo(
     () =>
@@ -1222,6 +1922,13 @@ export function WorkflowReviewPage({
   const [commitLookupState, setCommitLookupState] = useState<SessionLookupState>({
     status: "idle",
   });
+  const [sessionFeedState, setSessionFeedState] = useState<WorkflowSessionFeedReadState>({
+    status: "loading",
+  });
+  const [sessionLiveState, setSessionLiveState] = useState<SessionLiveState>({
+    events: [],
+    status: "idle",
+  });
   const [branchActionStates, setBranchActionStates] = useState<
     Readonly<Record<string, SessionActionRequestState>>
   >({});
@@ -1256,7 +1963,9 @@ export function WorkflowReviewPage({
   );
   const branchActionState = selectedBranchId ? branchActionStates[selectedBranchId] : undefined;
   const selectedCommit =
-    readState.status === "ready" ? resolveSelectedCommitRow(readState.commitQueue) : undefined;
+    readState.status === "ready"
+      ? resolveSelectedCommitRow(readState.commitQueue, search.commit)
+      : undefined;
   const selectedCommitId = selectedCommit?.commit.id;
   const selectedProjectId =
     startupState.kind === "ready" || startupState.kind === "partial-data"
@@ -1275,11 +1984,21 @@ export function WorkflowReviewPage({
         commitQueue: readState.status === "ready" ? readState.commitQueue : undefined,
         lookupState: commitLookupState,
         runtime: runtimeState,
+        selectedCommitId: search.commit,
         selectedBranchState,
       }),
-    [auth.status, commitLookupState, readState, runtimeState, selectedBranchState],
+    [auth.status, commitLookupState, readState, runtimeState, search.commit, selectedBranchState],
   );
   const commitActionState = selectedCommitId ? commitActionStates[selectedCommitId] : undefined;
+  const liveSessionCandidate = useMemo(
+    () =>
+      resolveLiveSessionCandidate({
+        branchLookupState,
+        commitLookupState,
+        search,
+      }),
+    [branchLookupState, commitLookupState, search],
+  );
 
   useEffect(() => {
     if (!onSearchChange || !canonicalSearch) {
@@ -1552,6 +2271,185 @@ export function WorkflowReviewPage({
     };
   }, [refreshVersion, startupState]);
 
+  useEffect(() => {
+    if (startupState.kind !== "ready" || readState.status !== "ready") {
+      setSessionFeedState({ status: "loading" });
+      return;
+    }
+
+    const selectionState = resolveWorkflowSessionFeedSelectionState({
+      contract: sessionFeedContract,
+      selectedBranchId,
+      selectedProjectId,
+      visibleCommitIds: readState.commitQueue?.rows.map((row) => row.commit.id),
+    });
+
+    if (selectionState.kind === "missing-data") {
+      setSessionFeedState({
+        result: selectionState,
+        status: "missing-data",
+      });
+      return;
+    }
+
+    if (selectionState.kind === "stale-selection") {
+      setSessionFeedState({
+        result: selectionState,
+        status: "stale-selection",
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    setSessionFeedState({ status: "loading" });
+
+    void requestWorkflowRead(
+      {
+        kind: "session-feed",
+        query: selectionState.query,
+      },
+      {
+        signal: controller.signal,
+      },
+    )
+      .then((response) => {
+        if (!controller.signal.aborted) {
+          setSessionFeedState({
+            result: response.result,
+            status: "ready",
+          });
+        }
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const message =
+          error instanceof WorkflowReadClientError || error instanceof Error
+            ? error.message
+            : String(error);
+        setSessionFeedState({
+          ...(error instanceof WorkflowReadClientError && error.code ? { code: error.code } : {}),
+          message,
+          status: "error",
+        });
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    readState,
+    refreshVersion,
+    selectedBranchId,
+    selectedProjectId,
+    sessionFeedContract,
+    startupState,
+  ]);
+
+  useEffect(() => {
+    if (!liveSessionCandidate) {
+      setSessionLiveState((current) =>
+        current.status === "idle" ? current : { events: [], status: "idle" },
+      );
+      return;
+    }
+
+    const controller = new AbortController();
+    setSessionLiveState((current) =>
+      current.status !== "idle" &&
+      current.sessionId === liveSessionCandidate.sessionId &&
+      current.browserAgentSessionId === liveSessionCandidate.attach.browserAgentSessionId
+        ? current
+        : {
+            browserAgentSessionId: liveSessionCandidate.attach.browserAgentSessionId,
+            events: [],
+            sessionId: liveSessionCandidate.sessionId,
+            status: "connecting",
+          },
+    );
+
+    void observeBrowserAgentSessionEvents(
+      {
+        attach: liveSessionCandidate.attach,
+        sessionId: liveSessionCandidate.sessionId,
+      },
+      {
+        onEvent: (message) => {
+          setSessionLiveState((current) => {
+            if (current.status === "idle" || current.sessionId !== message.sessionId) {
+              return current;
+            }
+
+            return {
+              browserAgentSessionId: message.browserAgentSessionId,
+              events: appendWorkflowSessionLiveEvent(
+                current.events,
+                createWorkflowSessionLiveEvent(message),
+              ),
+              sessionId: message.sessionId,
+              status: "streaming",
+            };
+          });
+        },
+        signal: controller.signal,
+      },
+    ).catch((error) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      setSessionLiveState((current) => {
+        if (current.status === "idle" || current.sessionId !== liveSessionCandidate.sessionId) {
+          return current;
+        }
+
+        return {
+          ...current,
+          message: formatBrowserAgentRequestError(
+            error,
+            "Local live session updates unavailable. Showing graph-backed history only.",
+          ),
+          status: "unavailable",
+        };
+      });
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [liveSessionCandidate]);
+
+  useEffect(() => {
+    if (sessionFeedState.status !== "ready") {
+      return;
+    }
+    const result = sessionFeedState.result;
+    if (result.status !== "ready") {
+      return;
+    }
+
+    setSessionLiveState((current) => {
+      if (current.status === "idle" || current.sessionId !== result.header.id) {
+        return current;
+      }
+
+      const events = reconcileWorkflowSessionLiveEvents(result.events, current.events);
+      if (
+        events.length === current.events.length &&
+        events.every((event, index) => event === current.events[index])
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        events,
+      };
+    });
+  }, [sessionFeedState]);
+
   function updateBranchActionState(branchId: string, nextState: SessionActionRequestState) {
     setBranchActionStates((current) => ({
       ...current,
@@ -1720,11 +2618,13 @@ export function WorkflowReviewPage({
       commitAction={commitAction}
       commitActionState={commitActionState}
       commitLookupState={commitLookupState}
+      liveSessionState={sessionLiveState}
       onTriggerBranchSession={handleTriggerBranchSession}
       onTriggerCommitSession={handleTriggerCommitSession}
       readState={readState}
       runtime={runtimeState}
       search={search}
+      sessionFeedState={sessionFeedState}
       startupState={startupState}
     />
   );

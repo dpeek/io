@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { ValidationResult, Workflow } from "../agent/types.js";
+import { browserAgentSessionEventsPath } from "./transport.js";
 import {
   createBrowserAgentServer,
   parseBrowserAgentCliArgs,
@@ -88,6 +89,7 @@ describe("browser-agent server", () => {
       runtime: {
         activeSessionLookupPath: "/active-session",
         launchPath: "/launch-session",
+        sessionEventsPath: browserAgentSessionEventsPath,
         startedAt: "2026-03-26T02:00:00.000Z",
         status: "unavailable",
         statusMessage:
@@ -141,6 +143,20 @@ describe("browser-agent server", () => {
           ok: true,
           found: false,
         };
+      },
+      async observeSessionEvents(request, observer) {
+        calls.push(`stream:${request.sessionId}:${request.attach.browserAgentSessionId}`);
+        observer({
+          browserAgentSessionId: request.attach.browserAgentSessionId,
+          event: {
+            type: "session",
+            phase: "started",
+            sequence: 1,
+            timestamp: "2026-03-26T02:00:00.000Z",
+          },
+          sessionId: request.sessionId,
+          type: "event",
+        });
       },
     };
     const server = createBrowserAgentServer(createWorkflowResult(), {
@@ -202,5 +218,94 @@ describe("browser-agent server", () => {
       found: false,
     });
     expect(calls).toEqual(["launch:branch:project:1", "lookup:branch:project:1"]);
+  });
+
+  it("streams session events through the shared coordinator", async () => {
+    const coordinator: BrowserAgentLaunchCoordinator = {
+      async launchSession() {
+        throw new Error("not implemented");
+      },
+      async lookupActiveSession() {
+        return {
+          ok: true,
+          found: false,
+        };
+      },
+      async observeSessionEvents(request, observer) {
+        observer({
+          browserAgentSessionId: request.attach.browserAgentSessionId,
+          event: {
+            type: "session",
+            phase: "started",
+            sequence: 1,
+            timestamp: "2026-03-26T02:00:00.000Z",
+          },
+          sessionId: request.sessionId,
+          type: "event",
+        });
+        observer({
+          browserAgentSessionId: request.attach.browserAgentSessionId,
+          event: {
+            type: "status",
+            code: "ready",
+            format: "line",
+            sequence: 2,
+            text: "Running",
+            timestamp: "2026-03-26T02:00:01.000Z",
+          },
+          sessionId: request.sessionId,
+          type: "event",
+        });
+      },
+    };
+    const server = createBrowserAgentServer(createWorkflowResult(), {
+      coordinator,
+      now: () => new Date("2026-03-26T02:00:00.000Z"),
+    });
+
+    const response = await server.fetch(
+      new Request(`http://127.0.0.1:4317${browserAgentSessionEventsPath}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          attach: {
+            attachToken: "attach:1",
+            browserAgentSessionId: "browser-agent:1",
+            expiresAt: "2026-03-26T03:00:00.000Z",
+            transport: "browser-agent-http",
+          },
+          sessionId: "session:1",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe(
+      `${JSON.stringify({
+        browserAgentSessionId: "browser-agent:1",
+        event: {
+          type: "session",
+          phase: "started",
+          sequence: 1,
+          timestamp: "2026-03-26T02:00:00.000Z",
+        },
+        sessionId: "session:1",
+        type: "event",
+      })}\n${JSON.stringify({
+        browserAgentSessionId: "browser-agent:1",
+        event: {
+          type: "status",
+          code: "ready",
+          format: "line",
+          sequence: 2,
+          text: "Running",
+          timestamp: "2026-03-26T02:00:01.000Z",
+        },
+        sessionId: "session:1",
+        type: "event",
+      })}\n`,
+    );
   });
 });

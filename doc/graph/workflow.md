@@ -330,6 +330,10 @@ The stable failure codes exposed by the query contract are:
 
 ## Freshness And Rebuild Rules
 
+- the browser session feed contract now lives in
+  `../../lib/app/src/web/lib/workflow-session-feed-contract.ts` as the route-level
+  selection and read-shape seam that will back the later authority transport
+  without changing browser selection semantics
 - `createWorkflowProjectionIndex(graph, options?)` rebuilds the workflow read
   model from authoritative `WorkflowProject`, `WorkflowRepository`,
   `WorkflowBranch`, `WorkflowCommit`, `RepositoryBranch`, `RepositoryCommit`,
@@ -375,6 +379,129 @@ The stable failure codes exposed by the query contract are:
 - retained workflow projection durability does not change the source of truth:
   workflow, repository, and session graph facts remain authoritative, while
   retained projection rows are restart optimization only.
+
+## Browser Session Feed Contract
+
+The next browser-facing workflow read contract is the session feed for one
+selected branch or commit subject and one selected session. The route-level
+contract now lives in
+`../../lib/app/src/web/lib/workflow-session-feed-contract.ts`.
+
+The canonical query shape is:
+
+```ts
+type WorkflowSessionFeedSubject =
+  | { kind: "branch"; branchId: string }
+  | { kind: "commit"; branchId: string; commitId: string };
+
+type WorkflowSessionFeedSessionSelection =
+  | { kind: "latest-for-subject" }
+  | { kind: "session-id"; sessionId: string };
+
+interface WorkflowSessionFeedReadQuery {
+  projectId: string;
+  subject: WorkflowSessionFeedSubject;
+  session: WorkflowSessionFeedSessionSelection;
+}
+```
+
+The canonical result shape is:
+
+```ts
+interface WorkflowSessionFeedReadyResult {
+  status: "ready";
+  query: WorkflowSessionFeedReadQuery;
+  header: {
+    id: string;
+    title: string;
+    sessionKey: string;
+    kind: CommitQueueScopeSessionKind;
+  };
+  subject: {
+    projectId: string;
+    branch: WorkflowBranchSummary;
+    commit?: WorkflowCommitSummary;
+    repository?: WorkflowRepositorySummary;
+    repositoryBranch?: ProjectBranchScopeRepositoryObservation;
+    repositoryCommit?: RepositoryCommitSummary;
+  };
+  runtime: {
+    state: CommitQueueScopeSessionRuntimeState;
+    startedAt: string;
+    endedAt?: string;
+  };
+  finalization:
+    | { status: "not-applicable" }
+    | { status: "pending" }
+    | {
+        status: "finalized";
+        commitSha?: string;
+        finalizedAt?: string;
+        landedAt?: string;
+        linearState?: string;
+      }
+    | { status: "unknown"; reason: "graph-finalization-unavailable" };
+  history:
+    | { status: "empty" }
+    | { status: "complete"; persistedEventCount: number; lastSequence: number }
+    | {
+        status: "partial";
+        persistedEventCount: number;
+        lastSequence?: number;
+        reason: "event-gap" | "history-pending-append" | "transcript-truncated";
+      };
+  events: readonly AgentSessionAppendEvent[];
+  artifacts: readonly WorkflowArtifactRecord[];
+  decisions: readonly WorkflowDecisionRecord[];
+}
+
+type WorkflowSessionFeedReadResult =
+  | WorkflowSessionFeedReadyResult
+  | {
+      status: "no-session";
+      query: WorkflowSessionFeedReadQuery & {
+        session: { kind: "latest-for-subject" };
+      };
+      branchLatestSession?: CommitQueueScopeSessionSummary;
+    }
+  | {
+      status: "stale-selection";
+      query: WorkflowSessionFeedReadQuery & {
+        session: { kind: "session-id"; sessionId: string };
+      };
+      reason: "session-not-found" | "session-subject-mismatch" | "session-branch-mismatch";
+      branchLatestSession?: CommitQueueScopeSessionSummary;
+    };
+```
+
+Contract rules:
+
+- `/workflow` keeps project and branch selection from the existing workflow
+  review startup contract; the session feed adds optional `commit` and
+  `session` route selections on top of that branch selection
+- when `commit` is absent, the selected session subject is the selected branch
+- when `commit` is present, the selected session subject is that specific
+  commit on the already-selected branch
+- when `session` is absent, the feed reads `latest-for-subject`; it never
+  cross-falls back between branch-scoped and commit-scoped sessions
+- when `session` is present, the feed stays pinned to that session id and
+  returns `stale-selection` instead of silently switching to another session
+- if the configured `commit` is not visible in the selected branch commit
+  queue, the browser keeps the selection visible as stale state instead of
+  silently moving to the branch subject or another commit
+- `no-session` is the explicit empty state for a selected subject with no
+  retained session; callers keep the subject selection and show empty feed
+  chrome instead of substituting another subject's latest session
+- `history.status = "partial"` keeps the session header, subject summary,
+  runtime state, finalization state, retained artifacts, retained decisions,
+  and the persisted event subset visible while marking the feed degraded
+- branch-scoped sessions typically return `finalization.status =
+  "not-applicable"`; commit-scoped sessions may return `pending`, `finalized`,
+  or `unknown` when finalization metadata is not yet recoverable from retained
+  graph state
+- the browser may layer a matching local browser-agent event stream on top of
+  `events[]` as transient UI state, but only the graph-backed `events[]`
+  result is authoritative and reconnect always reconciles back to that order
 
 ## Field Conventions
 

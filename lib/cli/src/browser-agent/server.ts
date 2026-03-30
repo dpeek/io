@@ -4,10 +4,13 @@ import {
   browserAgentActiveSessionPath,
   browserAgentHealthPath,
   browserAgentLaunchPath,
+  browserAgentSessionEventsPath,
   codexSessionLaunchFailureCodes,
   type BrowserAgentActiveSessionLookupRequest,
   type BrowserAgentActiveSessionLookupResult,
   type BrowserAgentHealthResponse,
+  type BrowserAgentSessionEventMessage,
+  type BrowserAgentSessionEventStreamRequest,
   type CodexSessionLaunchFailure,
   type CodexSessionLaunchRequest,
   type CodexSessionLaunchResult,
@@ -24,6 +27,11 @@ export interface BrowserAgentLaunchCoordinator {
   lookupActiveSession(
     request: BrowserAgentActiveSessionLookupRequest,
   ): Promise<BrowserAgentActiveSessionLookupResult>;
+  observeSessionEvents(
+    request: BrowserAgentSessionEventStreamRequest,
+    observer: (message: BrowserAgentSessionEventMessage) => void,
+    signal: AbortSignal,
+  ): Promise<void>;
 }
 
 export interface BrowserAgentRuntimeContext {
@@ -79,6 +87,16 @@ function jsonResponse(payload: unknown, status = 200): Response {
       "cache-control": "no-store",
     },
   });
+}
+
+function streamingHeaders() {
+  return {
+    "access-control-allow-headers": "content-type",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-origin": "*",
+    "cache-control": "no-store",
+    "content-type": "application/x-ndjson",
+  };
 }
 
 function parsePort(value: string): number {
@@ -269,6 +287,40 @@ function parseActiveSessionLookupRequest(value: unknown): BrowserAgentActiveSess
   };
 }
 
+function parseAttachHandle(
+  value: unknown,
+  label: string,
+): BrowserAgentSessionEventStreamRequest["attach"] {
+  if (!isObjectRecord(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+  const transport = requireString(value.transport, `${label}.transport`);
+  if (transport !== "browser-agent-http") {
+    throw new Error(`${label}.transport must be "browser-agent-http".`);
+  }
+
+  return {
+    attachToken: requireString(value.attachToken, `${label}.attachToken`),
+    browserAgentSessionId: requireString(
+      value.browserAgentSessionId,
+      `${label}.browserAgentSessionId`,
+    ),
+    expiresAt: requireString(value.expiresAt, `${label}.expiresAt`),
+    transport,
+  };
+}
+
+function parseSessionEventStreamRequest(value: unknown): BrowserAgentSessionEventStreamRequest {
+  if (!isObjectRecord(value)) {
+    throw new Error("Session event stream request must be a JSON object.");
+  }
+
+  return {
+    attach: parseAttachHandle(value.attach, 'Session event stream request "attach"'),
+    sessionId: requireString(value.sessionId, 'Session event stream request "sessionId"'),
+  };
+}
+
 function createUnavailableLaunchFailure(message: string): CodexSessionLaunchFailure {
   return {
     code: "local-bridge-unavailable",
@@ -320,6 +372,61 @@ function isLaunchFailure(value: unknown): value is CodexSessionLaunchFailure {
   );
 }
 
+function createSessionEventStreamResponse(
+  coordinator: BrowserAgentLaunchCoordinator,
+  request: BrowserAgentSessionEventStreamRequest,
+  signal: AbortSignal,
+): Response {
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let closed = false;
+
+      const close = () => {
+        if (!closed) {
+          closed = true;
+          controller.close();
+        }
+      };
+
+      const fail = (error: unknown) => {
+        if (!closed) {
+          closed = true;
+          controller.error(error instanceof Error ? error : new Error(String(error)));
+        }
+      };
+
+      const abortListener = () => {
+        close();
+      };
+      signal.addEventListener("abort", abortListener, { once: true });
+
+      void coordinator
+        .observeSessionEvents(
+          request,
+          (message) => {
+            if (closed) {
+              return;
+            }
+            controller.enqueue(encoder.encode(`${JSON.stringify(message)}\n`));
+          },
+          signal,
+        )
+        .then(close)
+        .catch(fail)
+        .finally(() => {
+          signal.removeEventListener("abort", abortListener);
+        });
+    },
+  });
+
+  return new Response(stream, {
+    headers: streamingHeaders(),
+    status: 200,
+  });
+}
+
 export function createBrowserAgentServer(
   workflowResult: ValidationResult<Workflow>,
   dependencies: BrowserAgentServerDependencies = {},
@@ -356,6 +463,7 @@ export function createBrowserAgentServer(
           runtime: {
             activeSessionLookupPath: browserAgentActiveSessionPath,
             launchPath: browserAgentLaunchPath,
+            sessionEventsPath: browserAgentSessionEventsPath,
             startedAt: context.startedAt,
             status: context.status,
             statusMessage: context.statusMessage,
@@ -413,6 +521,36 @@ export function createBrowserAgentServer(
         try {
           return jsonResponse(
             await coordinator.lookupActiveSession(parseActiveSessionLookupRequest(body)),
+          );
+        } catch (error) {
+          return jsonResponse(
+            createUnavailableLaunchFailure(error instanceof Error ? error.message : String(error)),
+            503,
+          );
+        }
+      }
+
+      if (url.pathname === browserAgentSessionEventsPath) {
+        if (request.method !== "POST") {
+          return new Response("Method Not Allowed", {
+            status: 405,
+            headers: { allow: "POST" },
+          });
+        }
+        if (!coordinator || context.status !== "ready") {
+          return jsonResponse(createUnavailableLaunchFailure(context.statusMessage), 503);
+        }
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return errorResponse("Request body must be valid JSON.", 400);
+        }
+        try {
+          return createSessionEventStreamResponse(
+            coordinator,
+            parseSessionEventStreamRequest(body),
+            request.signal,
           );
         } catch (error) {
           return jsonResponse(

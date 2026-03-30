@@ -2,8 +2,12 @@ import { workflowReviewSyncScopeRequest } from "@io/graph-module-workflow";
 import { graphSyncScope } from "@io/graph-sync";
 
 import type { WorkflowReadRequest } from "./workflow-transport.js";
+import {
+  validateWorkflowSessionFeedRouteSearch,
+  type WorkflowSessionFeedRouteSearch,
+} from "./workflow-session-feed-contract.js";
 
-export type WorkflowRouteSearch = {
+export type WorkflowRouteSearch = WorkflowSessionFeedRouteSearch & {
   readonly branch?: string;
   readonly project?: string;
 };
@@ -131,7 +135,9 @@ function compareBranches(
 }
 
 export function validateWorkflowRouteSearch(search: Record<string, unknown>): WorkflowRouteSearch {
+  const sessionFeedSearch = validateWorkflowSessionFeedRouteSearch(search);
   return {
+    ...sessionFeedSearch,
     ...(normalizeSearchValue(search.project)
       ? { project: normalizeSearchValue(search.project) }
       : {}),
@@ -287,7 +293,12 @@ export function resolveWorkflowReviewStartupState(
 }
 
 function routeSearchMatches(current: WorkflowRouteSearch, next: WorkflowRouteSearch): boolean {
-  return current.project === next.project && current.branch === next.branch;
+  return (
+    current.project === next.project &&
+    current.branch === next.branch &&
+    current.commit === next.commit &&
+    current.session === next.session
+  );
 }
 
 export function resolveCanonicalWorkflowRouteSearch(
@@ -298,7 +309,9 @@ export function resolveCanonicalWorkflowRouteSearch(
     startupState.kind === "ready"
       ? {
           branch: startupState.selectedBranch?.id,
+          commit: current.commit,
           project: startupState.project.id,
+          session: current.session,
         }
       : startupState.kind === "partial-data" && startupState.reason === "project-has-no-branches"
         ? {

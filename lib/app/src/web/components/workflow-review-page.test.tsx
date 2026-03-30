@@ -5,10 +5,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { BrowserAgentRuntimeProbe } from "@op/cli/browser-agent";
 import type { WorkflowReviewStartupState } from "../lib/workflow-review-contract.js";
+import { createWorkflowSessionLiveEvent } from "../lib/workflow-session-live.js";
 import {
   createBranchSessionActionModel,
   createCommitSessionActionModel,
   WorkflowReviewSurface,
+  type WorkflowSessionFeedReadState,
   type WorkflowReviewReadState,
 } from "./workflow-review-page.js";
 
@@ -259,6 +261,7 @@ function createRuntimeState(
   return {
     launchPath: "/launch-session",
     message: "Browser-agent runtime ready for launch, attach, and active-session lookup.",
+    sessionEventsPath: "/session-events",
     startedAt: "2026-03-26T10:00:00.000Z",
     status: "ready",
     ...overrides,
@@ -283,6 +286,68 @@ function createCommitActionOverrides() {
     runtime: createRuntimeState(),
     selectedBranchState: "active",
   });
+}
+
+function createSessionFeedState(): WorkflowSessionFeedReadState {
+  return {
+    result: {
+      artifacts: [],
+      decisions: [],
+      events: [
+        {
+          type: "session",
+          phase: "started",
+          sequence: 1,
+          timestamp: "2026-03-26T02:00:00.000Z",
+        },
+        {
+          type: "status",
+          code: "ready",
+          format: "line",
+          sequence: 2,
+          text: "Running",
+          timestamp: "2026-03-26T02:00:01.000Z",
+        },
+      ],
+      finalization: {
+        status: "not-applicable",
+      },
+      header: {
+        id: "session:1",
+        kind: "planning",
+        sessionKey: "session:workflow-branch",
+        title: "Workflow runtime planning",
+      },
+      history: {
+        lastSequence: 2,
+        persistedEventCount: 2,
+        reason: "history-pending-append",
+        status: "partial",
+      },
+      query: {
+        projectId: "project-io",
+        session: {
+          kind: "latest-for-subject",
+        },
+        subject: {
+          branchId: "branch-1",
+          kind: "branch",
+        },
+      },
+      runtime: {
+        startedAt: "2026-03-26T02:00:00.000Z",
+        state: "running",
+      },
+      status: "ready",
+      subject: {
+        branch: createBranchBoard().rows[0]!.branch,
+        projectId: "project-io",
+        repository: createBranchBoard().repository,
+        repositoryBranch: createBranchBoard().rows[0]!.repositoryBranch,
+      },
+    },
+    status: "ready",
+  };
 }
 
 describe("workflow review page", () => {
@@ -917,5 +982,92 @@ describe("workflow review page", () => {
     expect(html).toContain("attach:commit:1");
     expect(html).toContain("session:workflow-commit");
     expect(html).toContain("Browser-agent session");
+  });
+
+  it("renders transient local live session events on top of authoritative history", () => {
+    const html = renderToStaticMarkup(
+      <WorkflowReviewSurface
+        branchAction={createBranchActionOverrides()}
+        branchActionState={undefined}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitActionOverrides()}
+        commitActionState={undefined}
+        commitLookupState={{ status: "idle" }}
+        liveSessionState={{
+          browserAgentSessionId: "browser-agent:1",
+          events: [
+            createWorkflowSessionLiveEvent({
+              browserAgentSessionId: "browser-agent:1",
+              event: {
+                type: "status",
+                code: "ready",
+                format: "line",
+                sequence: 3,
+                text: "Still streaming locally",
+                timestamp: "2026-03-26T02:00:02.000Z",
+              },
+              sessionId: "session:1",
+            }),
+          ],
+          sessionId: "session:1",
+          status: "streaming",
+        }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
+        readState={{
+          branchBoard: createBranchBoard(),
+          commitQueue: createCommitQueue(),
+          status: "ready",
+        }}
+        runtime={createRuntimeState()}
+        search={{ project: "project-io", branch: "branch-1" }}
+        sessionFeedState={createSessionFeedState()}
+        startupState={createReadyStartupState()}
+      />,
+    );
+
+    expect(html).toContain("1 transient");
+    expect(html).toContain(
+      "Showing 1 locally seen update until graph-backed session history catches up.",
+    );
+    expect(html).toContain("Still streaming locally");
+    expect(html).toContain("transient");
+  });
+
+  it("keeps the authoritative session feed visible when local live updates are unavailable", () => {
+    const html = renderToStaticMarkup(
+      <WorkflowReviewSurface
+        branchAction={createBranchActionOverrides()}
+        branchActionState={undefined}
+        branchLookupState={{ status: "idle" }}
+        commitAction={createCommitActionOverrides()}
+        commitActionState={undefined}
+        commitLookupState={{ status: "idle" }}
+        liveSessionState={{
+          browserAgentSessionId: "browser-agent:1",
+          events: [],
+          message: "Local live session updates unavailable. Showing graph-backed history only.",
+          sessionId: "session:1",
+          status: "unavailable",
+        }}
+        onTriggerBranchSession={() => {}}
+        onTriggerCommitSession={() => {}}
+        readState={{
+          branchBoard: createBranchBoard(),
+          commitQueue: createCommitQueue(),
+          status: "ready",
+        }}
+        runtime={createRuntimeState()}
+        search={{ project: "project-io", branch: "branch-1" }}
+        sessionFeedState={createSessionFeedState()}
+        startupState={createReadyStartupState()}
+      />,
+    );
+
+    expect(html).toContain("Workflow runtime planning");
+    expect(html).toContain(
+      "Local live session updates unavailable. Showing graph-backed history only.",
+    );
+    expect(html).toContain("Running");
   });
 });

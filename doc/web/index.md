@@ -231,6 +231,11 @@ Current editor interaction model:
   startup contract covering scoped bootstrap, route search selection, initial
   project inference, first-branch selection, and missing-data handling before
   richer browser workflow composition lands
+- `../../lib/app/src/web/lib/workflow-session-feed-contract.ts`: explicit
+  `/workflow` session-feed contract covering optional `commit` and `session`
+  route selection, the graph-backed session-feed read shape, and explicit
+  `no-session`, `stale-selection`, and partial-history states before the feed
+  panel is wired
 - `../../lib/app/src/web/components/explorer/index.ts`: explorer entrypoint for the
   graph and sync pages
 - `../../lib/app/src/web/components/explorer/`: graph explorer modules split by

@@ -241,6 +241,27 @@ The authoritative layer is required. The optional live layer is only useful if
 it reconciles with graph append acknowledgement and degrades cleanly when the
 local bridge disappears.
 
+The route-level session-feed selection model is now explicit before feed UI
+wiring begins:
+
+- the current workflow review branch selection remains the required base
+  selection for the feed
+- an optional `commit` route selection narrows the feed subject to one commit
+  on that branch; when `commit` is absent, the feed subject is the branch
+- an optional `session` route selection pins the feed to one session id; when
+  `session` is absent, the browser asks for the latest session for the selected
+  subject only
+- stale `commit` or `session` selections remain visible as degraded state; the
+  browser does not silently swap to another commit, another subject, or another
+  session
+- the graph-backed feed result is explicit about `no-session`,
+  `stale-selection`, and `history.status = "empty" | "partial" | "complete"`
+  so the route can render missing and degraded history without falling back to
+  local-only assumptions
+
+The executable route contract now lives in
+`lib/app/src/web/lib/workflow-session-feed-contract.ts`.
+
 ## Shipping Path
 
 ### Phase 1: Replace `/workflow` with a real workflow review screen
@@ -436,6 +457,19 @@ Recommended behavior:
 - local live push can paint events optimistically before graph acknowledgement
 - the UI marks locally seen but not yet acknowledged events as transient
 - on reconnect, the browser reconciles back to graph order
+
+The current browser proof now layers a local browser-agent event stream on top
+of the graph-backed session feed without changing authority:
+
+- the browser reads session history, artifacts, and decisions from the
+  graph-backed `session-feed` contract first
+- when the selected subject has a matching attached browser-agent session, the
+  page also tails the local `/session-events` stream for low-latency updates
+- locally seen events stay visually transient until the graph-backed feed
+  returns the same sequence in authoritative order
+- if the local stream drops or the browser-agent runtime is unavailable, the
+  page keeps rendering the authoritative feed and only loses the low-latency
+  overlay
 
 Acceptance criteria:
 

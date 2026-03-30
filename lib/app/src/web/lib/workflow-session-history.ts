@@ -543,7 +543,7 @@ function createAgentSessionEventValues(
   }
 }
 
-function hydratePersistedAppendEvent(
+export function hydratePersistedAppendEvent(
   entity: ReturnType<ProductGraphClient["agentSessionEvent"]["get"]>,
 ): AgentSessionAppendEvent {
   const type =

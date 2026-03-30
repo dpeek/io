@@ -27,6 +27,7 @@ import type {
   WebAuthorityCommandResult,
 } from "./authority.js";
 import type { WorkflowReviewLiveScopeRouter } from "./workflow-live-scope-router.js";
+import type { WorkflowSessionFeedReadQuery } from "./workflow-session-feed-contract.js";
 import {
   type WorkflowLiveRequestKind,
   type WorkflowLiveRequest,
@@ -430,6 +431,70 @@ function parseCommitQueueScopeQuery(value: unknown): CommitQueueScopeQuery {
   };
 }
 
+function parseWorkflowSessionFeedReadQuery(value: unknown): WorkflowSessionFeedReadQuery {
+  const query = requireWorkflowReadObject(value, 'Workflow read request "query"');
+  const subject = requireWorkflowReadObject(query.subject, 'Workflow read request "query.subject"');
+  const subjectKind = requireWorkflowReadString(
+    subject.kind,
+    'Workflow read request "query.subject.kind"',
+  );
+  if (subjectKind !== "branch" && subjectKind !== "commit") {
+    throw new RequestWorkflowReadError(
+      'Workflow read request "query.subject.kind" must be either "branch" or "commit".',
+    );
+  }
+
+  const session = requireWorkflowReadObject(query.session, 'Workflow read request "query.session"');
+  const sessionKind = requireWorkflowReadString(
+    session.kind,
+    'Workflow read request "query.session.kind"',
+  );
+  if (sessionKind !== "latest-for-subject" && sessionKind !== "session-id") {
+    throw new RequestWorkflowReadError(
+      'Workflow read request "query.session.kind" must be either "latest-for-subject" or "session-id".',
+    );
+  }
+
+  return {
+    projectId: requireWorkflowReadString(
+      query.projectId,
+      'Workflow read request "query.projectId"',
+    ),
+    session:
+      sessionKind === "latest-for-subject"
+        ? {
+            kind: "latest-for-subject",
+          }
+        : {
+            kind: "session-id",
+            sessionId: requireWorkflowReadString(
+              session.sessionId,
+              'Workflow read request "query.session.sessionId"',
+            ),
+          },
+    subject:
+      subjectKind === "commit"
+        ? {
+            branchId: requireWorkflowReadString(
+              subject.branchId,
+              'Workflow read request "query.subject.branchId"',
+            ),
+            commitId: requireWorkflowReadString(
+              subject.commitId,
+              'Workflow read request "query.subject.commitId"',
+            ),
+            kind: "commit",
+          }
+        : {
+            branchId: requireWorkflowReadString(
+              subject.branchId,
+              'Workflow read request "query.subject.branchId"',
+            ),
+            kind: "branch",
+          },
+  };
+}
+
 function parseWorkflowReadRequest(value: unknown): WorkflowReadRequest {
   const request = requireWorkflowReadObject(value, "Workflow read request");
   const kind = request.kind;
@@ -446,6 +511,13 @@ function parseWorkflowReadRequest(value: unknown): WorkflowReadRequest {
     return {
       kind: "project-branch-scope",
       query: parseProjectBranchScopeQuery(request.query),
+    };
+  }
+
+  if (kind === "session-feed") {
+    return {
+      kind: "session-feed",
+      query: parseWorkflowSessionFeedReadQuery(request.query),
     };
   }
 
@@ -579,10 +651,15 @@ function executeWorkflowReadRequest(
             kind: read.kind,
             result: authority.readProjectBranchScope(read.query, { authorization }),
           }
-        : {
-            kind: read.kind,
-            result: authority.readCommitQueueScope(read.query, { authorization }),
-          };
+        : read.kind === "commit-queue-scope"
+          ? {
+              kind: read.kind,
+              result: authority.readCommitQueueScope(read.query, { authorization }),
+            }
+          : {
+              kind: read.kind,
+              result: authority.readWorkflowSessionFeed(read.query, { authorization }),
+            };
 
     return Response.json(response, {
       headers: {

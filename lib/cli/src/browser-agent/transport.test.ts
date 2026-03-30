@@ -4,6 +4,8 @@ import {
   browserAgentActiveSessionPath,
   browserAgentHealthPath,
   browserAgentLaunchPath,
+  browserAgentSessionEventsPath,
+  observeBrowserAgentSessionEvents,
   probeBrowserAgentRuntime,
   requestBrowserAgentActiveSessionLookup,
   requestBrowserAgentHealth,
@@ -20,6 +22,7 @@ describe("browser-agent transport", () => {
       runtime: {
         activeSessionLookupPath: browserAgentActiveSessionPath,
         launchPath: browserAgentLaunchPath,
+        sessionEventsPath: browserAgentSessionEventsPath,
         startedAt: "2026-03-26T02:00:00.000Z",
         status: "ready",
         statusMessage: "Browser-agent runtime ready.",
@@ -166,6 +169,101 @@ describe("browser-agent transport", () => {
     );
 
     expect(response).toEqual(payload);
+  });
+
+  it("streams local session events from the browser-agent runtime", async () => {
+    const received: unknown[] = [];
+
+    await observeBrowserAgentSessionEvents(
+      {
+        attach: {
+          attachToken: "attach:1",
+          browserAgentSessionId: "browser-agent:1",
+          expiresAt: "2026-03-26T03:00:00.000Z",
+          transport: "browser-agent-http",
+        },
+        sessionId: "session:1",
+      },
+      {
+        fetch: async (input, init) => {
+          expect(input).toBe(`http://127.0.0.1:4317${browserAgentSessionEventsPath}`);
+          expect(init?.method).toBe("POST");
+          expect(JSON.parse(String(init?.body))).toEqual({
+            attach: {
+              attachToken: "attach:1",
+              browserAgentSessionId: "browser-agent:1",
+              expiresAt: "2026-03-26T03:00:00.000Z",
+              transport: "browser-agent-http",
+            },
+            sessionId: "session:1",
+          });
+
+          return new Response(
+            [
+              JSON.stringify({
+                browserAgentSessionId: "browser-agent:1",
+                event: {
+                  type: "session",
+                  phase: "started",
+                  sequence: 1,
+                  timestamp: "2026-03-26T02:00:00.000Z",
+                },
+                sessionId: "session:1",
+                type: "event",
+              }),
+              JSON.stringify({
+                browserAgentSessionId: "browser-agent:1",
+                event: {
+                  type: "status",
+                  code: "ready",
+                  format: "line",
+                  sequence: 2,
+                  text: "Running",
+                  timestamp: "2026-03-26T02:00:01.000Z",
+                },
+                sessionId: "session:1",
+                type: "event",
+              }),
+            ].join("\n"),
+            {
+              headers: {
+                "content-type": "application/x-ndjson",
+              },
+            },
+          );
+        },
+        onEvent: (message) => {
+          received.push(message);
+        },
+      },
+    );
+
+    expect(received).toEqual([
+      {
+        browserAgentSessionId: "browser-agent:1",
+        event: {
+          type: "session",
+          phase: "started",
+          sequence: 1,
+          timestamp: "2026-03-26T02:00:00.000Z",
+        },
+        sessionId: "session:1",
+        type: "event",
+      },
+      {
+        browserAgentSessionId: "browser-agent:1",
+        event: {
+          type: "status",
+          code: "ready",
+          format: "line",
+          sequence: 2,
+          text: "Running",
+          timestamp: "2026-03-26T02:00:01.000Z",
+        },
+        sessionId: "session:1",
+        type: "event",
+      },
+    ]);
   });
 
   it("reports explicit unavailable runtime state when the localhost bridge is down", async () => {
