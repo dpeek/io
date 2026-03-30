@@ -107,7 +107,10 @@ function deriveBranchStateAfterCommitLifecycle(
     : "ready";
 }
 
-function deriveBranchLifecycleAfterFinalization(graph: ProductGraphClient, branchId: string): {
+function deriveBranchLifecycleAfterFinalization(
+  graph: ProductGraphClient,
+  branchId: string,
+): {
   readonly activeCommitId?: string;
   readonly state: WorkflowBranchStateValue;
 } {

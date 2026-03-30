@@ -138,10 +138,21 @@ export function createQuerySurfaceRendererCompatibility(
   };
 }
 
-export const installedModuleQuerySurfaceRegistry = createInstalledModuleQuerySurfaceRegistry([
+/**
+ * Keep the current built-in installation path explicit until manifest-backed
+ * activation decides which module catalogs are active at runtime.
+ */
+export const builtInInstalledModuleQuerySurfaceCatalogs = [
   workflowQuerySurfaceCatalog,
   coreQuerySurfaceCatalog,
-]);
+] as const satisfies readonly ModuleQuerySurfaceCatalog[];
+
+export function createBuiltInInstalledModuleQuerySurfaceRegistry(): InstalledModuleQuerySurfaceRegistry {
+  return createInstalledModuleQuerySurfaceRegistry(builtInInstalledModuleQuerySurfaceCatalogs);
+}
+
+export const installedModuleQuerySurfaceRegistry =
+  createBuiltInInstalledModuleQuerySurfaceRegistry();
 
 export const installedModuleQueryEditorCatalog = createQueryEditorCatalogFromRegistry(
   installedModuleQuerySurfaceRegistry,

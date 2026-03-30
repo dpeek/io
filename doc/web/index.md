@@ -147,8 +147,10 @@ query mounting helpers.
 The current query-authoring proof now also includes a form-first editor
 foundation in `query-editor.tsx` and `query-editor.ts` that lets routes author
 source selection, typed filters, sort clauses, pagination defaults, and
-parameter definitions before execution or save flows land. The pure editor and
-saved-query helpers now also publish dedicated package exports:
+parameter definitions before execution or save flows land. That shared
+authoring path now reads from the installed multi-module query catalog, so core
+and workflow surfaces hydrate, reopen, and validate through the same consumer
+helpers. The pure editor and saved-query helpers now also publish dedicated package exports:
 `@io/app/web/query-editor` and `@io/app/web/saved-query`.
 
 Current editor interaction model:
@@ -281,6 +283,12 @@ Current editor interaction model:
   context changes invalidate the current page, and fails closed on stale
   pagination by resetting or refreshing instead of silently continuing with
   invalid cursors
+- `../../lib/app/src/web/lib/query-surface-registry.ts`: explicit built-in
+  workflow-plus-core query-surface installation seam that combines the package
+  root catalogs into one installed editor and runtime registry; the current
+  proof is intentionally limited to that hard-wired built-in list and does not
+  yet cover manifest-backed activation, runtime module toggling, or arbitrary
+  third-party module mixes
 - `../../lib/app/src/web/lib/query-editor.ts`: shared query-editor draft, query
   surface catalog, field-aware validation, and serialization helpers that keep
   inline drafts aligned with the generic serialized-query contract plus future
@@ -363,7 +371,15 @@ The current Branch 3 browser model stays fail closed.
   definitions, catalog versions, or saved-view container bindings, so the
   workbench renders an explicit recovery card instead of crashing or silently
   drifting to another query or renderer contract
+- the built-in multi-module proof now explicitly covers one shared installed
+  catalog, one shared editor source picker, and one shared saved-query
+  compatibility path across workflow and core surfaces, while still keeping
+  duplicate registrations and removed-surface failures explicit rather than
+  silently shadowing one module with another
 - the current proof anchors for those guarantees live in
+  `../../lib/app/src/web/lib/query-surface-registry.test.ts`,
+  `../../lib/app/src/web/components/query-editor.test.tsx`,
+  `../../lib/app/src/web/lib/saved-query.test.ts`,
   `../../lib/app/src/web/lib/query-container.test.ts`,
   `../../lib/app/src/web/lib/query-workbench.test.ts`, and
   `../../lib/app/src/web/components/query-workbench.test.tsx`

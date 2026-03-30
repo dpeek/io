@@ -14,6 +14,10 @@
 - core-owned identity, admission, share, locale, country, and currency schema
 - core-owned saved-query, saved-query-parameter, and saved-view schema plus
   typed durable-query helpers
+- the package-root `coreQuerySurfaceCatalog`,
+  `coreBuiltInQuerySurfaces`, `coreBuiltInQuerySurfaceIds`, and
+  `coreCatalogModuleReadScope` exports for the built-in core catalog scope and
+  saved-query library surfaces
 - core-specific browser defaults from `@io/graph-module-core/react-dom`
 
 ## What It Depends On
@@ -28,6 +32,25 @@
 - host-neutral React runtime contracts from `@io/graph-react`
 - the extracted `workflow:` module tree in `@io/graph-module-workflow`
 - module installation, activation, or runtime registry logic
+
+## Query Ownership
+
+- `core:savedQuery`, `core:savedQueryParameter`, and `core:savedView` are the
+  durable graph-owned product objects for saved-query and saved-view state
+- `coreQuerySurfaceCatalog` and the related `coreBuiltInQuerySurface*` exports
+  are module-authored metadata published from the package root
+- the initial reusable core query surfaces stay in core because they expose
+  core-owned product objects and shared module metadata rather than
+  workflow-local projections
+- saved queries store module, catalog, and surface ids plus versions so they
+  can bind to the core catalog or to workflow-local surfaces from
+  `@io/graph-module-workflow`
+
+Callers import the core catalog through the package root:
+
+```ts
+import { coreQuerySurfaceCatalog } from "@io/graph-module-core";
+```
 
 ## Browser Defaults
 

@@ -237,7 +237,7 @@ describe("@io/graph-module-core", () => {
     );
   });
 
-  it("publishes one bounded core-owned query surface for shared serialized-query dispatch", () => {
+  it("publishes bounded core-owned query surfaces for shared serialized-query dispatch", () => {
     expect(coreModuleId).toBe("core");
     expect(coreCatalogModuleReadScope).toEqual({
       kind: "module",
@@ -247,7 +247,7 @@ describe("@io/graph-module-core", () => {
     });
     expect(coreQuerySurfaceCatalog).toMatchObject({
       catalogId: "core:query-surfaces",
-      catalogVersion: "query-catalog:core:v1",
+      catalogVersion: "query-catalog:core:v2",
       moduleId: "core",
       surfaces: expect.any(Array),
     });
@@ -269,9 +269,131 @@ describe("@io/graph-module-core", () => {
           sourceKinds: ["saved", "inline"],
         },
       },
+      savedQueryLibrary: {
+        surfaceId: "core:saved-query-library",
+        surfaceVersion: "query-surface:core:saved-query-library:v1",
+        queryKind: "collection",
+        source: {
+          kind: "projection",
+          projectionId: "core:saved-query-library",
+        },
+        label: "Saved Query Library",
+        description: expect.any(String),
+        defaultPageSize: 25,
+        filters: [
+          {
+            fieldId: "ownerId",
+            kind: "entity-ref",
+            label: "Owner",
+            operators: ["eq"],
+          },
+          {
+            fieldId: "queryKind",
+            kind: "enum",
+            label: "Query Kind",
+            operators: ["eq", "in"],
+            options: [
+              { label: "Entity", value: "entity" },
+              { label: "Neighborhood", value: "neighborhood" },
+              { label: "Collection", value: "collection" },
+              { label: "Scope", value: "scope" },
+            ],
+          },
+          {
+            fieldId: "name",
+            kind: "text",
+            label: "Name",
+            operators: ["eq", "contains", "starts-with"],
+          },
+          {
+            fieldId: "surfaceModuleId",
+            kind: "text",
+            label: "Surface Module",
+            operators: ["eq"],
+          },
+        ],
+        ordering: [
+          {
+            fieldId: "updatedAt",
+            label: "Updated",
+            directions: ["asc", "desc"],
+          },
+          {
+            fieldId: "createdAt",
+            label: "Created",
+            directions: ["asc", "desc"],
+          },
+          {
+            fieldId: "name",
+            label: "Name",
+            directions: ["asc", "desc"],
+          },
+          {
+            fieldId: "queryKind",
+            label: "Query Kind",
+            directions: ["asc", "desc"],
+          },
+        ],
+        selections: [
+          {
+            fieldId: "name",
+            label: "Name",
+            defaultSelected: true,
+          },
+          {
+            fieldId: "queryKind",
+            label: "Query Kind",
+            defaultSelected: true,
+          },
+          {
+            fieldId: "surfaceModuleId",
+            label: "Surface Module",
+            defaultSelected: true,
+          },
+          {
+            fieldId: "surfaceId",
+            label: "Surface Id",
+          },
+          {
+            fieldId: "updatedAt",
+            label: "Updated",
+            defaultSelected: true,
+          },
+        ],
+        parameters: [
+          {
+            name: "owner-id",
+            label: "Owner",
+            type: "entity-ref",
+            required: true,
+          },
+          {
+            name: "query-kind",
+            label: "Query Kind",
+            type: "enum",
+          },
+          {
+            name: "name",
+            label: "Name",
+            type: "string",
+          },
+          {
+            name: "surface-module-id",
+            label: "Surface Module",
+            type: "string",
+          },
+        ],
+        renderers: {
+          compatibleRendererIds: ["core:list", "core:table"],
+          itemEntityIds: "required",
+          resultKind: "collection",
+          sourceKinds: ["saved", "inline"],
+        },
+      },
     });
     expect(coreBuiltInQuerySurfaceIds).toEqual({
       catalogScope: coreCatalogModuleReadScope.scopeId,
+      savedQueryLibrary: "core:saved-query-library",
     });
   });
 

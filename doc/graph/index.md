@@ -98,11 +98,12 @@ The workspace also publishes:
   curated re-export of kernel schema-authoring primitives
 - `@io/graph-module-core`: `../../lib/graph-module-core/src/index.ts`;
   canonical `core:` namespace assembly, built-in core scalars/entities/enums,
-  bootstrap inputs, colocated icon seeds, structured-value helpers,
-  locale/currency datasets, and other core-owned contracts
+  bootstrap inputs, graph-owned saved-query contracts, the built-in core
+  query-surface catalog metadata, colocated icon seeds, structured-value
+  helpers, locale/currency datasets, and other core-owned contracts
 - `@io/graph-module-workflow`: `../../lib/graph-module-workflow/src/index.ts`;
   canonical `workflow:` namespace assembly, built-in workflow/env-var/document
-  slices, and workflow-owned query/projection contracts
+  slices, plus workflow-owned query-surface and projection contracts
 - `@io/graph-bootstrap`: `../../lib/graph-bootstrap/src/index.ts`; additive
   schema bootstrap and convergent bootstrapped snapshots
 - `@io/graph-authority`: `../../lib/graph-authority/src/index.ts`; persisted

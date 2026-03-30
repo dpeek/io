@@ -612,13 +612,15 @@ describe("workflow authority", () => {
           },
         },
       });
-      expect(readProductGraph(authority, authorization).branch.get(fixture.branchId)).toMatchObject({
-        state: workflow.branchState.values.ready.id,
-        activeCommit: nextCommit.summary.id,
-      });
-      expect(readProductGraph(authority, authorization).commit.get(nextCommit.summary.id).state).toBe(
-        workflow.commitState.values.ready.id,
+      expect(readProductGraph(authority, authorization).branch.get(fixture.branchId)).toMatchObject(
+        {
+          state: workflow.branchState.values.ready.id,
+          activeCommit: nextCommit.summary.id,
+        },
       );
+      expect(
+        readProductGraph(authority, authorization).commit.get(nextCommit.summary.id).state,
+      ).toBe(workflow.commitState.values.ready.id);
     },
     workflowAuthorityTimeout,
   );

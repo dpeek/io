@@ -139,7 +139,7 @@ export function QueryWorkbench({
     catalog,
     rendererCapabilities,
     resolveSurfaceCompatibility: getInstalledModuleQuerySurfaceRendererCompatibility,
-    target: resolveQueryWorkbenchRouteTarget(search, store),
+    target: resolveQueryWorkbenchRouteTarget(search, store, catalog),
   });
   const [draft, setDraft] = useState<QueryEditorDraft>(() => {
     return initialState.hydrated?.draft ?? createQueryWorkbenchInitialDraft(catalog);
@@ -159,7 +159,7 @@ export function QueryWorkbench({
         catalog,
         rendererCapabilities,
         resolveSurfaceCompatibility: getInstalledModuleQuerySurfaceRendererCompatibility,
-        target: resolveQueryWorkbenchRouteTarget(search, store),
+        target: resolveQueryWorkbenchRouteTarget(search, store, catalog),
       }),
     [search, store],
   );

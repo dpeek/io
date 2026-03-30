@@ -1,5 +1,5 @@
+import { coreBuiltInQuerySurfaceIds } from "@io/graph-module-core";
 import {
-  serializedQueryVersion,
   validateSerializedQueryRequest,
   type QueryFilter,
   type QueryLiteral,
@@ -18,6 +18,7 @@ import {
   createQueryEditorDraft,
   hydrateQueryEditorDraft,
   QueryEditorHydrationError,
+  serializeQueryEditorDraft,
   type QueryEditorCatalog,
   type QueryEditorDraft,
 } from "./query-editor.js";
@@ -141,6 +142,44 @@ export type ResolvedQueryWorkbenchState = {
 };
 
 const defaultPreviewDataset = Object.freeze({
+  [coreBuiltInQuerySurfaceIds.savedQueryLibrary]: [
+    {
+      entityId: "saved-query:workflow-review",
+      key: "row:saved-query-workflow-review",
+      payload: {
+        createdAt: "2026-03-18",
+        name: "Workflow review board",
+        queryKind: "collection",
+        surfaceId: "workflow:project-branch-board",
+        surfaceModuleId: "workflow",
+        updatedAt: "2026-03-26",
+      },
+    },
+    {
+      entityId: "saved-query:catalog-bootstrap",
+      key: "row:saved-query-catalog-bootstrap",
+      payload: {
+        createdAt: "2026-03-17",
+        name: "Catalog bootstrap scope",
+        queryKind: "scope",
+        surfaceId: coreBuiltInQuerySurfaceIds.catalogScope,
+        surfaceModuleId: "core",
+        updatedAt: "2026-03-25",
+      },
+    },
+    {
+      entityId: "saved-query:core-library",
+      key: "row:saved-query-core-library",
+      payload: {
+        createdAt: "2026-03-16",
+        name: "Saved query library browser",
+        queryKind: "collection",
+        surfaceId: coreBuiltInQuerySurfaceIds.savedQueryLibrary,
+        surfaceModuleId: "core",
+        updatedAt: "2026-03-24",
+      },
+    },
+  ],
   "workflow:project-branch-board": [
     {
       entityId: "workflow-branch:1",
@@ -276,6 +315,7 @@ export function validateQueryWorkbenchRouteSearch(
 export function resolveQueryWorkbenchRouteTarget(
   search: QueryWorkbenchRouteSearch,
   store: Pick<QueryWorkbenchStore, "getQuery" | "getView">,
+  catalog: QueryEditorCatalog,
 ): QueryWorkbenchRouteTarget {
   if (
     (search.queryId || search.viewId) &&
@@ -341,16 +381,7 @@ export function resolveQueryWorkbenchRouteTarget(
   }
   return {
     kind: "draft",
-    request: {
-      query: {
-        indexId: "workflow:project-branch-board",
-        kind: "collection",
-        window: {
-          limit: 25,
-        },
-      },
-      version: serializedQueryVersion,
-    },
+    request: createInitialQueryWorkbenchRequest(catalog),
   };
 }
 
@@ -711,6 +742,10 @@ export async function executeQueryWorkbenchPreviewRequest(
 
 export function createQueryWorkbenchInitialDraft(catalog: QueryEditorCatalog): QueryEditorDraft {
   return createQueryEditorDraft(catalog);
+}
+
+function createInitialQueryWorkbenchRequest(catalog: QueryEditorCatalog): SerializedQueryRequest {
+  return serializeQueryEditorDraft(createQueryWorkbenchInitialDraft(catalog), catalog).request;
 }
 
 function readPersistedWorkbenchStore(

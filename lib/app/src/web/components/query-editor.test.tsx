@@ -68,6 +68,10 @@ describe("query editor component", () => {
     const html = renderToStaticMarkup(<QueryEditor catalog={catalog} initialDraft={draft} />);
 
     expect(html).toContain('data-query-editor-section="source"');
+    expect(html).toContain('value="workflow:project-branch-board"');
+    expect(html).toContain(">Workflow Branch Board</option>");
+    expect(html).toContain('value="core:saved-query-library"');
+    expect(html).toContain(">Saved Query Library</option>");
     expect(html).toContain('data-query-editor-section="filters"');
     expect(html).toContain('data-query-editor-section="sort"');
     expect(html).toContain('data-query-editor-section="parameters"');

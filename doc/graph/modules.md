@@ -15,19 +15,46 @@ in [`type-modules.md`](./type-modules.md).
 ## Public Entry Surfaces
 
 - `@io/graph-module-core`: `../../lib/graph-module-core/src/index.ts`;
-  canonical `core:` namespace assembly plus curated built-in core contracts
+  canonical `core:` namespace assembly plus curated built-in core contracts,
+  graph-owned saved-query records, and the package-root core query-surface
+  catalog exports
 - `@io/graph-module-core/react-dom`:
   `../../lib/graph-module-core/src/react-dom/index.ts`; core-owned browser
   defaults such as `GraphIcon`, structured-value editors, and tag-aware
   reference behavior; this replaces the former `@io/graph-react-dom` package
 - `@io/graph-module-workflow`: `../../lib/graph-module-workflow/src/index.ts`;
   canonical `workflow:` namespace assembly plus the workflow, env-var, and
-  document slice exports
+  document slice exports together with workflow-local query-surface and
+  projection metadata
 
 `@io/graph-module-core` owns the canonical `core:` namespace object plus the
-curated slice symbols that callers use directly.
+curated slice symbols that callers use directly, including the durable
+saved-query object types and the built-in core module query-surface catalog.
 `@io/graph-module-workflow` owns the `workflow` namespace object plus the
-workflow, env-var, and document slice symbols.
+workflow, env-var, and document slice symbols plus the workflow-local
+query-surface catalog.
+
+## Built-In Query Catalogs
+
+The current built-in query-catalog proof is split by owner:
+
+- `@io/graph-module-core` owns the durable `core:savedQuery`,
+  `core:savedQueryParameter`, and `core:savedView` graph objects plus the
+  package-root `coreQuerySurfaceCatalog` export for the bounded
+  `scope:core:catalog` surface and the reusable `core:saved-query-library`
+  collection surface
+- `@io/graph-module-workflow` owns the workflow-local
+  `workflowQuerySurfaceCatalog` export for the projection-backed branch board
+  and commit queue surfaces plus the `workflow:review-scope` scope surface
+- saved queries bind to module-owned surfaces by storing module, catalog, and
+  surface ids plus versions on the core-owned durable saved-query records
+- `lib/app/src/web/lib/query-surface-registry.ts` keeps the built-in
+  multi-module registry explicit through one shared workflow-plus-core catalog
+  installation list; there is no manifest-backed activation layer yet
+
+The initial saved-query library surface belongs in core rather than workflow
+because it exposes core-owned saved-query product records that any module may
+author against, not workflow-only projection rows or route-local UI state.
 
 ## Source Layout
 

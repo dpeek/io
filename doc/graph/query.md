@@ -49,8 +49,9 @@ What exists today:
   `executeSerializedQuery(...)` seam that normalizes serialized requests and
   routes the supported families through one registered executor dispatch seam
 - installed query-surface catalogs now include bounded workflow and core module
-  scope surfaces so the generic serialized-query registry is proven across
-  more than one module without opening arbitrary scans
+  scope surfaces plus the first reusable core saved-query library surface so
+  the generic serialized-query registry is proven across more than one module
+  without opening arbitrary scans
 - `../../lib/app/src/web/lib/registered-serialized-query-executors.ts` now owns
   the shipped bounded executor registrations for the two workflow projection
   collections plus the workflow and core module scopes, so authority no longer
@@ -64,6 +65,10 @@ What exists today:
 - `@io/graph-module-core` now ships the built-in `core:savedQuery`,
   `core:savedQueryParameter`, and `core:savedView` object types plus typed
   helpers for creating, updating, and traversing those graph-native records
+- `@io/graph-module-core` and `@io/graph-module-workflow` both publish their
+  built-in module query-surface catalogs from the package root so installed
+  registries can compose a bounded multi-module catalog without host-local
+  shadow definitions
 
 What does not exist yet:
 
@@ -72,6 +77,31 @@ What does not exist yet:
   objects
 - a full productized generic query container runtime and editor UI
 - a web query editor that can build, preview, save, and embed queries
+
+## Built-In Ownership Today
+
+The current built-in multi-module query-catalog story is:
+
+- `@io/graph-module-core` owns the durable graph objects:
+  `core:savedQuery`, `core:savedQueryParameter`, and `core:savedView`
+- those core-owned saved-query records store the bound `moduleId`,
+  `catalogId`, `catalogVersion`, `surfaceId`, and `surfaceVersion` so they can
+  point at any installed module-authored surface
+- `@io/graph-module-core` also exports `coreQuerySurfaceCatalog` from the
+  package root for the bounded `scope:core:catalog` proof surface plus the
+  reusable `core:saved-query-library` collection surface
+- `@io/graph-module-workflow` exports `workflowQuerySurfaceCatalog` from the
+  package root for the workflow-local projection-backed collection surfaces and
+  the `workflow:review-scope` scope surface
+- `lib/app/src/web/lib/query-surface-registry.ts` keeps an explicit built-in
+  catalog installation list for the workflow and core package-root catalogs and
+  combines them into one installed registry; manifest activation work is still
+  out of scope
+
+```ts
+import { coreQuerySurfaceCatalog } from "@io/graph-module-core";
+import { workflowQuerySurfaceCatalog } from "@io/graph-module-workflow";
+```
 
 ## Goals
 
@@ -603,6 +633,16 @@ The current registered executor set supports:
 - the two workflow `collection` surfaces above
 - the shipped workflow review `scope`
 - the shipped core catalog `scope`
+
+The first reusable core product surface is metadata-only for now:
+
+- `core:saved-query-library`: projection-backed `collection` metadata for
+  browsing core-owned saved queries by owner, query kind, name, and bound
+  surface module with explicit list/table renderer compatibility
+
+It lives in `../../lib/graph-module-core/src/query.ts` instead of workflow
+because it is the shared library view over `core:savedQuery` product objects,
+not a workflow-local route or projection.
 
 Unsupported collection or scope shapes fail closed with explicit
 `unsupported-query` responses; stale or mismatched registered surfaces fail

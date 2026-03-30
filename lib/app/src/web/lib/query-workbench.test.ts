@@ -1,13 +1,15 @@
 import { describe, expect, it } from "bun:test";
 
+import { coreBuiltInQuerySurfaceIds } from "@io/graph-module-core";
 import { serializedQueryVersion, type SerializedQueryRequest } from "@io/graph-client";
 
 import { createInstalledQueryEditorCatalog } from "../components/query-editor.js";
 import {
-  createQueryRendererCapabilityMap,
   builtInQueryRendererRegistry,
+  createQueryRendererCapabilityMap,
 } from "../components/query-renderers.js";
-import { createQueryEditorDraft } from "./query-editor.js";
+import { createQueryEditorCatalog, createQueryEditorDraft } from "./query-editor.js";
+import { getInstalledModuleQuerySurfaceRendererCompatibility } from "./query-surface-registry.js";
 import {
   QueryWorkbenchSaveError,
   createQueryWorkbenchBrowserStore,
@@ -29,15 +31,10 @@ import {
 const workflowBoardSurfaceVersion = "query-surface:workflow:project-branch-board:v1";
 const workflowCatalogId = "workflow:query-surfaces";
 const workflowCatalogVersion = "query-catalog:workflow:v1";
-const workflowBoardSurface = {
-  compatibleRendererIds: ["core:list", "core:table", "core:card-grid"],
-  itemEntityIds: "required",
-  queryKind: "collection",
-  resultKind: "collection",
-  sourceKinds: ["saved", "inline"],
-  surfaceId: "workflow:project-branch-board",
-  surfaceVersion: workflowBoardSurfaceVersion,
-} as const;
+const workflowBoardSurface = requireSurfaceCompatibility("workflow:project-branch-board");
+const coreSavedQueryLibrarySurface = requireSurfaceCompatibility(
+  coreBuiltInQuerySurfaceIds.savedQueryLibrary,
+);
 
 function readResolvedRequest(
   resolved: { readonly request: SerializedQueryRequest } | SerializedQueryRequest,
@@ -73,7 +70,10 @@ describe("query workbench route state", () => {
       params: "not-valid-params",
       queryId: "saved-query:1",
     });
-    expect(resolveQueryWorkbenchRouteTarget(search, createQueryWorkbenchMemoryStore())).toEqual({
+    const catalog = createInstalledQueryEditorCatalog();
+    expect(
+      resolveQueryWorkbenchRouteTarget(search, createQueryWorkbenchMemoryStore(), catalog),
+    ).toEqual({
       code: "invalid-params",
       kind: "invalid",
       message: "Route parameter overrides are invalid or stale.",
@@ -81,24 +81,61 @@ describe("query workbench route state", () => {
   });
 
   it("fails closed when route state references stale saved entries", () => {
+    const catalog = createInstalledQueryEditorCatalog();
     const store = createQueryWorkbenchMemoryStore();
 
-    expect(resolveQueryWorkbenchRouteTarget({ queryId: "saved-query:missing" }, store)).toEqual({
+    expect(
+      resolveQueryWorkbenchRouteTarget({ queryId: "saved-query:missing" }, store, catalog),
+    ).toEqual({
       code: "stale-query",
       kind: "invalid",
       message: 'Saved query "saved-query:missing" is no longer available.',
     });
 
-    expect(resolveQueryWorkbenchRouteTarget({ viewId: "saved-view:missing" }, store)).toEqual({
+    expect(
+      resolveQueryWorkbenchRouteTarget({ viewId: "saved-view:missing" }, store, catalog),
+    ).toEqual({
       code: "stale-view",
       kind: "invalid",
       message: 'Saved view "saved-view:missing" is no longer available.',
     });
 
-    expect(resolveQueryWorkbenchRouteTarget({ draft: "not-a-valid-draft" }, store)).toEqual({
+    expect(
+      resolveQueryWorkbenchRouteTarget({ draft: "not-a-valid-draft" }, store, catalog),
+    ).toEqual({
       code: "invalid-draft",
       kind: "invalid",
       message: "Draft preview state is invalid or stale.",
+    });
+  });
+
+  it("derives the blank workbench draft request from the provided catalog", () => {
+    const installedCatalog = createInstalledQueryEditorCatalog();
+    const coreSurface = installedCatalog.surfaces.find(
+      (surface) => surface.surfaceId === coreBuiltInQuerySurfaceIds.savedQueryLibrary,
+    );
+    const workflowSurface = installedCatalog.surfaces.find(
+      (surface) => surface.surfaceId === "workflow:project-branch-board",
+    );
+    if (!coreSurface || !workflowSurface) {
+      throw new Error("Expected installed workflow and core surfaces.");
+    }
+    const catalog = createQueryEditorCatalog([coreSurface, workflowSurface]);
+
+    expect(
+      resolveQueryWorkbenchRouteTarget({}, createQueryWorkbenchMemoryStore(), catalog),
+    ).toEqual({
+      kind: "draft",
+      request: {
+        query: {
+          indexId: coreBuiltInQuerySurfaceIds.savedQueryLibrary,
+          kind: "collection",
+          window: {
+            limit: 25,
+          },
+        },
+        version: serializedQueryVersion,
+      },
     });
   });
 });
@@ -377,8 +414,16 @@ describe("query workbench saves", () => {
       viewName: "Owner board view",
     });
 
-    const savedQueryTarget = resolveQueryWorkbenchRouteTarget({ queryId: savedQuery.id }, store);
-    const savedViewTarget = resolveQueryWorkbenchRouteTarget({ viewId: savedView.view.id }, store);
+    const savedQueryTarget = resolveQueryWorkbenchRouteTarget(
+      { queryId: savedQuery.id },
+      store,
+      catalog,
+    );
+    const savedViewTarget = resolveQueryWorkbenchRouteTarget(
+      { viewId: savedView.view.id },
+      store,
+      catalog,
+    );
     const params = decodeQueryWorkbenchParamOverrides(
       encodeQueryWorkbenchParamOverrides({ state: "ready" }),
     );
@@ -411,6 +456,132 @@ describe("query workbench saves", () => {
 
     expect(savedQueryPreview.items.map((item) => item.payload.title)).toEqual(["Query cards"]);
     expect(savedViewPreview.items.map((item) => item.payload.title)).toEqual(["Workflow shell"]);
+  });
+
+  it("reopens core saved-query-library queries and views through the same shared helpers", async () => {
+    const catalog = createInstalledQueryEditorCatalog();
+    const draft = createQueryEditorDraft(catalog, coreBuiltInQuerySurfaceIds.savedQueryLibrary);
+    const store = createQueryWorkbenchMemoryStore();
+    const rendererCapabilities = createQueryRendererCapabilityMap(builtInQueryRendererRegistry);
+
+    const savedQuery = saveQueryWorkbenchQuery({
+      catalog,
+      draft: {
+        ...draft,
+        filters: [
+          {
+            fieldId: "surfaceModuleId",
+            id: "filter:surface-module-id",
+            operator: "eq",
+            value: { kind: "param", name: "surface-module-id" },
+          },
+        ],
+        parameters: [
+          {
+            defaultValue: "core",
+            id: "param:surface-module-id",
+            label: "Surface Module",
+            name: "surface-module-id",
+            required: false,
+            type: "string",
+          },
+        ],
+      },
+      name: "Saved query library",
+      store,
+    });
+    const savedView = saveQueryWorkbenchView({
+      catalog,
+      draft: {
+        ...draft,
+        filters: [
+          {
+            fieldId: "surfaceModuleId",
+            id: "filter:surface-module-id",
+            operator: "eq",
+            value: { kind: "param", name: "surface-module-id" },
+          },
+        ],
+        parameters: [
+          {
+            defaultValue: "core",
+            id: "param:surface-module-id",
+            label: "Surface Module",
+            name: "surface-module-id",
+            required: false,
+            type: "string",
+          },
+        ],
+      },
+      queryName: "Saved query library view query",
+      rendererCapabilities,
+      spec: {
+        containerId: "saved-view-preview",
+        pagination: {
+          mode: "paged",
+          pageSize: 25,
+        },
+        refresh: {
+          mode: "manual",
+        },
+        renderer: {
+          rendererId: "core:table",
+        },
+      },
+      store,
+      surface: {
+        ...coreSavedQueryLibrarySurface,
+      },
+      viewName: "Saved query library view",
+    });
+
+    const savedQueryTarget = resolveQueryWorkbenchRouteTarget(
+      { queryId: savedQuery.id },
+      store,
+      catalog,
+    );
+    const savedViewTarget = resolveQueryWorkbenchRouteTarget(
+      { viewId: savedView.view.id },
+      store,
+      catalog,
+    );
+    const params = decodeQueryWorkbenchParamOverrides(
+      encodeQueryWorkbenchParamOverrides({ "surface-module-id": "workflow" }),
+    );
+    const resolver = createQueryWorkbenchSourceResolver(store);
+
+    expect(savedQueryTarget).toMatchObject({
+      kind: "saved-query",
+      query: expect.objectContaining({ id: savedQuery.id }),
+    });
+    expect(savedViewTarget).toMatchObject({
+      kind: "saved-view",
+      view: expect.objectContaining({ id: savedView.view.id }),
+    });
+
+    const resolvedSavedQuery = await resolver(
+      {
+        kind: "saved",
+        params,
+        queryId: savedQuery.id,
+      },
+      {},
+    );
+    const resolvedSavedView = await resolver(savedView.view.spec.query, {});
+    const savedQueryPreview = await executeQueryWorkbenchPreviewRequest(
+      readResolvedRequest(resolvedSavedQuery),
+    );
+    const savedViewPreview = await executeQueryWorkbenchPreviewRequest(
+      readResolvedRequest(resolvedSavedView),
+    );
+
+    expect(savedQueryPreview.items.map((item) => item.payload.name)).toEqual([
+      "Workflow review board",
+    ]);
+    expect(savedViewPreview.items.map((item) => item.payload.name)).toEqual([
+      "Catalog bootstrap scope",
+      "Saved query library browser",
+    ]);
   });
 });
 
@@ -520,6 +691,7 @@ describe("query workbench draft hydration", () => {
           queryId: "saved-query:stale-surface",
         },
         store,
+        catalog,
       ),
     });
 
@@ -566,6 +738,7 @@ describe("query workbench draft hydration", () => {
           queryId: "saved-query:stale-catalog",
         },
         store,
+        catalog,
       ),
     });
 
@@ -643,6 +816,7 @@ describe("query workbench draft hydration", () => {
           viewId: "saved-view:owner-board",
         },
         store,
+        catalog,
       ),
     });
 
@@ -698,6 +872,7 @@ describe("query workbench draft hydration", () => {
           viewId: saved.view.id,
         },
         store,
+        catalog,
       ),
     });
 
@@ -833,4 +1008,12 @@ function createMemoryStorage(): {
       entries.set(key, value);
     },
   };
+}
+
+function requireSurfaceCompatibility(surfaceId: string) {
+  const surface = getInstalledModuleQuerySurfaceRendererCompatibility(surfaceId);
+  if (!surface) {
+    throw new Error(`Expected installed surface compatibility for "${surfaceId}".`);
+  }
+  return surface;
 }
