@@ -294,6 +294,10 @@ A predicate capability should support three conceptual render modes:
 - `control`: the bare interactive input
 - `field`: the labeled field row with inline help and validation
 
+The host-neutral field resolver contract in `@io/graph-react` should model
+those modes directly. `editor` can remain as a compatibility alias for
+`control` while downstream renderers migrate.
+
 That allows:
 
 - dense collection cells and custom layouts to use the bare control

@@ -6,6 +6,8 @@ import { createGraphStore as createStore } from "@io/graph-kernel";
 import { core, coreGraphBootstrapOptions, defaultMoneyCurrencyKey } from "@io/graph-module-core";
 import {
   PredicateFieldEditor,
+  PredicateFieldControl,
+  PredicateField,
   PredicateFieldView,
   defaultWebFieldResolver,
 } from "@io/graph-module-core/react-dom";
@@ -16,6 +18,8 @@ import { kitchenSink } from "../fixtures/kitchen-sink.js";
 const requiredExports = [
   "GraphIcon",
   "FilterOperandEditor",
+  "PredicateField",
+  "PredicateFieldControl",
   "PredicateFieldEditor",
   "PredicateFieldView",
   "SvgMarkup",
@@ -24,6 +28,8 @@ const requiredExports = [
   "createWebFilterResolver",
   "defaultWebFieldResolver",
   "defaultWebFilterResolver",
+  "genericWebFieldCapabilities",
+  "genericWebFieldControlCapabilities",
   "genericWebFieldEditorCapabilities",
   "genericWebFieldViewCapabilities",
   "genericWebFilterOperandEditorCapabilities",
@@ -126,6 +132,8 @@ describe("@io/graph-module-core/react-dom", () => {
     const fields = createRecordFields();
 
     const colorView = defaultWebFieldResolver.resolveView(fields.accentColor);
+    const colorControl = defaultWebFieldResolver.resolveControl(fields.accentColor);
+    const colorField = defaultWebFieldResolver.resolveField(fields.accentColor);
     const colorEditor = defaultWebFieldResolver.resolveEditor(fields.accentColor);
     const moneyView = defaultWebFieldResolver.resolveView(fields.budget);
     const moneyEditor = defaultWebFieldResolver.resolveEditor(fields.budget);
@@ -149,6 +157,8 @@ describe("@io/graph-module-core/react-dom", () => {
     const tagsEditor = defaultWebFieldResolver.resolveEditor(fields.tags);
 
     expect(colorView.status).toBe("resolved");
+    expect(colorControl.status).toBe("resolved");
+    expect(colorField.status).toBe("resolved");
     expect(colorEditor.status).toBe("resolved");
     expect(moneyView.status).toBe("resolved");
     expect(moneyEditor.status).toBe("resolved");
@@ -176,6 +186,9 @@ describe("@io/graph-module-core/react-dom", () => {
     }
     if (colorEditor.status === "resolved") {
       expect(colorEditor.capability.kind).toBe("color");
+    }
+    if (colorField.status === "resolved") {
+      expect(colorField.capability.kind).toBe("color");
     }
     if (moneyView.status === "resolved") {
       expect(moneyView.capability.kind).toBe("money/amount");
@@ -248,6 +261,12 @@ describe("@io/graph-module-core/react-dom", () => {
     const colorEditorMarkup = renderToStaticMarkup(
       <PredicateFieldEditor predicate={fields.accentColor} />,
     );
+    const colorControlMarkup = renderToStaticMarkup(
+      <PredicateFieldControl predicate={fields.accentColor} />,
+    );
+    const colorFieldMarkup = renderToStaticMarkup(
+      <PredicateField predicate={fields.accentColor} />,
+    );
     const moneyViewMarkup = renderToStaticMarkup(<PredicateFieldView predicate={fields.budget} />);
     const moneyEditorMarkup = renderToStaticMarkup(
       <PredicateFieldEditor predicate={fields.budget} />,
@@ -302,8 +321,12 @@ describe("@io/graph-module-core/react-dom", () => {
     expect(colorViewMarkup).toContain('data-web-field-kind="color"');
     expect(colorViewMarkup).toContain('data-web-color-swatch="#2563eb"');
     expect(colorViewMarkup).toContain("#2563EB");
+    expect(colorControlMarkup).toContain('data-web-field-kind="color"');
+    expect(colorControlMarkup).toContain('value="#2563eb"');
     expect(colorEditorMarkup).toContain('data-web-field-kind="color"');
     expect(colorEditorMarkup).toContain('value="#2563eb"');
+    expect(colorFieldMarkup).toContain('data-web-field-mode="field"');
+    expect(colorFieldMarkup).toContain('data-web-field-kind="color"');
     expect(moneyViewMarkup).toContain('data-web-field-kind="money/amount"');
     expect(moneyViewMarkup).toContain("1250 USD");
     expect(moneyEditorMarkup).toContain('data-web-field-kind="money/amount"');

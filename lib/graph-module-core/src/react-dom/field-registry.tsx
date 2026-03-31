@@ -1,13 +1,13 @@
 import {
   formatPredicateValue,
   usePredicateField,
-  type PredicateFieldEditorCapability,
-  type PredicateFieldProps,
   type PredicateFieldViewCapability,
 } from "@io/graph-react";
 
 import { colorFieldViewCapability } from "./fields/color.js";
+import { CheckboxFieldEditor } from "./fields/checkbox.js";
 import { DurationFieldEditor, durationFieldViewCapability } from "./fields/duration.js";
+import { EnumComboboxEditor } from "./fields/enum-combobox.js";
 import { genericWebFieldEditorCapabilities as genericBaseWebFieldEditorCapabilities } from "./fields/index.js";
 import { markdownFieldViewCapability } from "./fields/markdown.js";
 import { MoneyFieldEditor, moneyFieldViewCapability } from "./fields/money.js";
@@ -19,9 +19,17 @@ import {
   EntityReferenceComboboxEditor,
   entityReferenceListViewCapability,
 } from "./fields/reference.js";
+import { DefaultFieldRow, getFieldState } from "./fields/shared.js";
 import { svgFieldViewCapability } from "./fields/svg.js";
+import { TextFieldEditor } from "./fields/text.js";
+import type {
+  PredicateFieldCapability,
+  PredicateFieldControlCapability,
+  PredicateFieldProps,
+} from "./resolver.js";
 
 type AnyFieldProps = PredicateFieldProps<any, any>;
+type AnyFieldControlCapability = PredicateFieldControlCapability<any, any>;
 
 function BooleanFieldView({ predicate }: AnyFieldProps) {
   const { value } = usePredicateField(predicate);
@@ -122,8 +130,31 @@ export const genericWebFieldViewCapabilities = [
   entityReferenceListViewCapability,
 ] satisfies readonly PredicateFieldViewCapability<any, any>[];
 
-/** Built-in browser field editor capabilities for the built-in core DOM layer. */
-export const genericWebFieldEditorCapabilities = [
+/**
+ * Wraps a bare control capability in the default browser field-row chrome.
+ * Field mode keeps using editor metadata for lookup until richer authored
+ * field-specific metadata lands.
+ */
+export function createDefaultWebFieldCapability(
+  capability: AnyFieldControlCapability,
+): PredicateFieldCapability<any, any> {
+  const ControlComponent = capability.Component;
+
+  function DefaultWebField(props: AnyFieldProps) {
+    const state = getFieldState(props);
+
+    return (
+      <DefaultFieldRow fieldKind={capability.kind} state={state}>
+        <ControlComponent {...props} mode="control" />
+      </DefaultFieldRow>
+    );
+  }
+
+  return { kind: capability.kind, Component: DefaultWebField };
+}
+
+/** Built-in browser field control capabilities for the built-in core DOM layer. */
+export const genericWebFieldControlCapabilities = [
   ...genericBaseWebFieldEditorCapabilities,
   { kind: "number/duration", Component: DurationFieldEditor },
   { kind: "number/quantity", Component: QuantityFieldEditor },
@@ -131,4 +162,26 @@ export const genericWebFieldEditorCapabilities = [
   { kind: "number/rate", Component: RateFieldEditor },
   { kind: "money/amount", Component: MoneyFieldEditor },
   { kind: "entity-reference-combobox", Component: EntityReferenceComboboxEditor },
-] satisfies readonly PredicateFieldEditorCapability<any, any>[];
+] satisfies readonly PredicateFieldControlCapability<any, any>[];
+
+const fieldCapabilityOverrides = [
+  { kind: "checkbox", Component: CheckboxFieldEditor },
+  { kind: "text", Component: TextFieldEditor },
+  { kind: "textarea", Component: TextFieldEditor },
+  { kind: "select", Component: EnumComboboxEditor },
+  { kind: "entity-reference-combobox", Component: EntityReferenceComboboxEditor },
+] satisfies readonly PredicateFieldCapability<any, any>[];
+const fieldCapabilityOverrideKinds = new Set(
+  fieldCapabilityOverrides.map((capability) => capability.kind),
+);
+
+/** Built-in browser field-row capabilities derived from the shipped control registry. */
+export const genericWebFieldCapabilities = [
+  ...fieldCapabilityOverrides,
+  ...genericWebFieldControlCapabilities
+    .filter((capability) => !fieldCapabilityOverrideKinds.has(capability.kind))
+    .map((capability) => createDefaultWebFieldCapability(capability)),
+] satisfies readonly PredicateFieldCapability<any, any>[];
+
+/** Compatibility alias while callers migrate from `editor` to `control`. */
+export const genericWebFieldEditorCapabilities = genericWebFieldControlCapabilities;

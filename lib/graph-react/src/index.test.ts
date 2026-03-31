@@ -4,6 +4,7 @@ import { type PredicateRef, GraphValidationError } from "@io/graph-client";
 import {
   defineDefaultEnumTypeModule,
   defineEnum,
+  defineScalar,
   defineType,
   defineValidatedStringTypeModule,
 } from "@io/graph-module";
@@ -47,6 +48,12 @@ const probeTextTypeModule = defineValidatedStringTypeModule({
   placeholder: "Probe item",
 });
 
+const probeOpaqueTextType = defineScalar({
+  values: { key: "probe:opaque-text", name: "Opaque Text" },
+  decode: (raw: string) => raw,
+  encode: (raw: string) => raw,
+});
+
 const item = defineType({
   values: { key: "probe:item", name: "Item" },
   fields: {
@@ -62,6 +69,10 @@ const item = defineType({
         },
       },
     }),
+    notes: {
+      cardinality: "one?",
+      range: probeOpaqueTextType,
+    },
     status: probeStatusTypeModule.field({
       cardinality: "one",
       meta: {
@@ -73,6 +84,7 @@ const item = defineType({
 
 const defs = {
   item,
+  opaqueText: probeOpaqueTextType,
   status: probeStatusType,
   text: probeTextTypeModule.type,
 } as const;
@@ -86,36 +98,93 @@ function createNameRef() {
   };
 }
 
+function createNotesRef() {
+  return {
+    notesRef: {
+      field: item.fields.notes,
+    } as unknown as PredicateRef<typeof item.fields.notes, typeof defs>,
+  };
+}
+
 const statusField = item.fields.status;
 
 describe("@io/graph-react", () => {
   it("keeps the default resolver host-neutral until a host provides capabilities", () => {
     const { nameRef } = createNameRef();
 
-    expect(defaultGraphFieldResolver.resolveView(nameRef)).toEqual({
+    expect(defaultGraphFieldResolver.resolveMode("view", nameRef)).toEqual({
       status: "unsupported",
       reason: "unsupported-display-kind",
       kind: "text",
     });
-    expect(defaultGraphFieldResolver.resolveEditor(nameRef)).toEqual({
+    expect(defaultGraphFieldResolver.resolveMode("control", nameRef)).toEqual({
+      status: "unsupported",
+      reason: "unsupported-editor-kind",
+      kind: "text",
+    });
+    expect(defaultGraphFieldResolver.resolveMode("field", nameRef)).toEqual({
+      status: "unsupported",
+      reason: "unsupported-editor-kind",
+      kind: "text",
+    });
+    expect(defaultGraphFieldResolver.resolveEditor(nameRef)).toEqual(
+      defaultGraphFieldResolver.resolveControl(nameRef),
+    );
+  });
+
+  it("resolves explicit field render modes once a host supplies them", () => {
+    const { nameRef } = createNameRef();
+    const resolver = createGraphFieldResolver({
+      view: [{ kind: "text", Component: () => null }],
+      editor: [{ kind: "text", Component: () => null }],
+      field: [{ kind: "text", Component: () => null }],
+    });
+
+    const view = resolver.resolveMode("view", nameRef);
+    const control = resolver.resolveMode("control", nameRef);
+    const field = resolver.resolveMode("field", nameRef);
+    const editor = resolver.resolveEditor(nameRef);
+
+    expect(view.status).toBe("resolved");
+    expect(control.status).toBe("resolved");
+    expect(field.status).toBe("resolved");
+    expect(editor.status).toBe("resolved");
+  });
+
+  it("keeps the editor alias scoped to control mode while field mode stays explicit", () => {
+    const { nameRef } = createNameRef();
+    const resolver = createGraphFieldResolver({
+      editor: [{ kind: "text", Component: () => null }],
+    });
+
+    expect(resolver.resolveControl(nameRef)).toMatchObject({
+      status: "resolved",
+    });
+    expect(resolver.resolveEditor(nameRef)).toMatchObject({
+      status: "resolved",
+    });
+    expect(resolver.resolveField(nameRef)).toEqual({
       status: "unsupported",
       reason: "unsupported-editor-kind",
       kind: "text",
     });
   });
 
-  it("resolves field capabilities once a host supplies them", () => {
-    const { nameRef } = createNameRef();
-    const resolver = createGraphFieldResolver({
-      view: [{ kind: "text", Component: () => null }],
-      editor: [{ kind: "text", Component: () => null }],
+  it("reports missing render-mode metadata per mode", () => {
+    const { notesRef } = createNotesRef();
+
+    expect(defaultGraphFieldResolver.resolveMode("view", notesRef)).toEqual({
+      status: "unsupported",
+      reason: "missing-display-kind",
     });
-
-    const view = resolver.resolveView(nameRef);
-    const editor = resolver.resolveEditor(nameRef);
-
-    expect(view.status).toBe("resolved");
-    expect(editor.status).toBe("resolved");
+    expect(defaultGraphFieldResolver.resolveMode("control", notesRef)).toEqual({
+      status: "unsupported",
+      reason: "missing-editor-kind",
+    });
+    expect(defaultGraphFieldResolver.resolveMode("field", notesRef)).toEqual({
+      status: "unsupported",
+      reason: "missing-editor-kind",
+    });
   });
 
   it("keeps the default filter resolver host-neutral until a host provides operand editors", () => {

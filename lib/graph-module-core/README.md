@@ -77,6 +77,32 @@ the `react-dom` subpath directly.
 Cross-package integration suites for this package live in
 `@io/graph-integration` so package-local tests can stay boundary-safe.
 
+## Field Renderer Boundary
+
+The browser field surface at `@io/graph-module-core/react-dom` is intentionally
+split across three render modes:
+
+- `PredicateFieldView`: resolves `view` mode for read-only record and cell
+  presentation
+- `PredicateFieldControl`: resolves `control` mode for dense inline editors
+- `PredicateField`: resolves `field` mode for the labeled row with shared
+  description and error chrome
+
+`PredicateFieldEditor` remains as a compatibility alias for
+`PredicateFieldControl`.
+
+When callers build a custom resolver with `createWebFieldResolver(...)`, they
+can supply all three capability sets explicitly. If they only supply
+`control` capabilities, the browser layer derives default `field` wrappers so
+existing editors can still render inside the shared row chrome.
+
+`PredicateFieldControl` and `PredicateField` also accept optional
+`controller` and `issues` props. That shared render state lets the same
+built-in editor run against controller-backed drafts while filtering
+validation issues by `controller.path`, so record, collection, and
+command-surface work can reuse one browser field path instead of rebuilding
+label and error plumbing per screen.
+
 ## Build Output
 
 Run `turbo build --filter=@io/graph-module-core` from the repo root, or

@@ -827,7 +827,7 @@ Rules:
 2. Components involved: mounted surface, surface host context, Branch 1 command
    or transaction path, browser sync runtime.
 3. Contract boundaries crossed:
-   - view/editor surface
+   - view/control/field surface
    - command or transaction dispatch
    - authoritative sync acknowledgement
 4. Authoritative write point: Branch 1 authority transaction application or

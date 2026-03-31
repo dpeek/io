@@ -9,6 +9,8 @@ import { OptionComboboxEditor } from "./option-combobox.js";
 import {
   addPredicateItem,
   clearPredicateValue,
+  DefaultFieldRow,
+  getFieldState,
   getPredicateFieldLabel,
   removePredicateItem,
   setPredicateValue,
@@ -17,16 +19,27 @@ import {
   validatePredicateClear,
   validatePredicateRemove,
   validatePredicateValue,
-  type AnyFieldProps,
+  type AnyRenderableFieldProps,
 } from "./shared.js";
 
 export function EnumComboboxEditor({
+  controller,
+  issues,
+  mode,
   onMutationError,
   onMutationSuccess,
   predicate,
-}: AnyFieldProps) {
+}: AnyRenderableFieldProps) {
   const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { value } = usePredicateField(predicate);
+  const state = getFieldState({
+    controller,
+    issues,
+    mode,
+    onMutationError,
+    onMutationSuccess,
+    predicate,
+  });
   const fieldLabel = getPredicateFieldLabel(predicate);
   const options = getPredicateEnumOptions(predicate).map((option) => ({
     id: option.id,
@@ -44,6 +57,7 @@ export function EnumComboboxEditor({
   const isEnum = predicate.rangeType ? isEnumType(predicate.rangeType) : false;
 
   function commitSelection(nextValue: string): void {
+    controller?.setTouched(true);
     if (predicate.field.cardinality === "many") {
       if (selectedIds.includes(nextValue)) return;
       performValidatedMutation(
@@ -63,6 +77,7 @@ export function EnumComboboxEditor({
   }
 
   function commitRemove(nextValue: string): void {
+    controller?.setTouched(true);
     if (predicate.field.cardinality !== "many") return;
     performValidatedMutation(
       callbacks,
@@ -72,6 +87,7 @@ export function EnumComboboxEditor({
   }
 
   function commitClear(): void {
+    controller?.setTouched(true);
     if (predicate.field.cardinality === "one") return;
     performValidatedMutation(
       callbacks,
@@ -84,9 +100,10 @@ export function EnumComboboxEditor({
     return <span data-web-field-status="unsupported">unsupported-editor-kind:select</span>;
   }
 
-  return (
+  const control = (
     <OptionComboboxEditor
       cardinality={predicate.field.cardinality}
+      invalid={state.invalid}
       fieldKind="option-combobox"
       fieldLabel={fieldLabel}
       onClear={commitClear}
@@ -96,5 +113,15 @@ export function EnumComboboxEditor({
       renderOption={(option) => option.label}
       selected={selected}
     />
+  );
+
+  if (mode !== "field") {
+    return control;
+  }
+
+  return (
+    <DefaultFieldRow fieldKind="select" state={state}>
+      {control}
+    </DefaultFieldRow>
   );
 }

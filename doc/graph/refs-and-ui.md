@@ -83,17 +83,22 @@ React package boundaries now split between the canonical host-neutral surface at
   `usePredicateRelatedEntities(...)` and `PredicateRelatedEntities`
 - mutation validation helpers
 - reference-policy readers such as `getPredicateEntityReferencePolicy(...)`
-- field and filter resolver primitives that still require host-supplied
+- render-mode-aware field resolver primitives for `view`, `control`, and
+  `field`, plus filter resolver primitives that still require host-supplied
   capabilities
 - generic synced-runtime provider, sync-state, and query hooks
 
 `@io/graph-module-core/react-dom` ships the current default DOM/browser layer
 from `../../lib/graph-module-core/src/react-dom/`:
 
-- default field view and editor capabilities
+- default field view, control, and field-row capabilities
+- browser field rows can now consume optional edit-session field controllers
+  plus shared path-scoped issue inputs so the same built-in editor can render
+  as either a dense bare control or a labeled field row with shared errors
 - default filter operand editors and filter resolvers
 - browser fallback rendering around `PredicateFieldView`,
-  `PredicateFieldEditor`, and `FilterOperandEditor`
+  `PredicateFieldControl`, `PredicateField`, the compatibility
+  `PredicateFieldEditor` alias, and `FilterOperandEditor`
 - `SvgMarkup` and `SvgPreview`
 - `GraphIcon`
 - structured-value editors and helpers for duration, money, quantity, range,
@@ -134,7 +139,15 @@ The current reference-policy helpers are intentionally small:
 
 `@io/graph-react` reads that policy through
 `getPredicateEntityReferencePolicy(...)` and uses it to infer the default
-entity-reference display and editor kinds.
+entity-reference display and editor kinds. The default DOM resolver now keeps
+that same metadata-driven lookup for both `control` and `field` mode, so the
+browser can resolve either the bare combobox or the default labeled field row
+without route-local branching. The representative browser field overrides now
+also consume the shared field render state (`mode`, optional controller-backed
+path context, and field-scoped issues) so custom rows such as text expansion,
+checkbox layout, and combobox-based pickers still render through the shared
+`@io/web/field` label, description, and error chrome instead of rebuilding
+that plumbing locally.
 `@io/graph-module-core/react-dom` now supplies the shared generic list view
 plus a shared Base UI entity-reference combobox editor for both single-value
 and collection relationships. That editor lives in its own module, uses the

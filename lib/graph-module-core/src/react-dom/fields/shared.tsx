@@ -1,4 +1,7 @@
 import {
+  collectValidationIssuesForPath,
+  getPredicateFieldMeta,
+  type EditSessionFieldController,
   formatPredicateValue,
   performValidatedMutation,
   usePersistedMutationCallbacks,
@@ -7,10 +10,34 @@ import {
   type MutationValidation,
   type PredicateFieldProps,
   type PredicateFieldViewCapability,
+  type ValidationIssue,
+  type ValidationIssueAggregate,
 } from "@io/graph-react";
+import { Field, FieldContent, FieldDescription, FieldError, FieldTitle } from "@io/web/field";
+import type { ReactNode } from "react";
 
 export type AnyFieldProps = PredicateFieldProps<any, any>;
 export type AnyPredicate = AnyFieldProps["predicate"];
+export type FieldRenderMode = "control" | "field";
+export type FieldRenderIssues = readonly ValidationIssue[] | ValidationIssueAggregate;
+export type AnyRenderableFieldProps = AnyFieldProps & {
+  controller?: EditSessionFieldController<unknown>;
+  issues?: FieldRenderIssues;
+  mode?: FieldRenderMode;
+};
+type FieldIssueMessage = { message?: string };
+type AnyFieldState = {
+  controller?: EditSessionFieldController<unknown>;
+  description?: string;
+  invalid: boolean;
+  issues: readonly FieldIssueMessage[];
+  label: string;
+};
+const emptyFieldIssues = Object.freeze([]) as readonly ValidationIssue[];
+
+function isValidationIssueAggregate(issues: FieldRenderIssues): issues is ValidationIssueAggregate {
+  return !Array.isArray(issues);
+}
 
 export const fieldActionClassName =
   "border-input bg-muted/30 text-foreground inline-flex items-center justify-center rounded-lg border px-2.5 py-1.5 text-xs font-medium transition hover:bg-muted";
@@ -143,6 +170,68 @@ export function getPredicateFieldLabel(predicate: AnyPredicate): string {
         };
       }
     ).meta?.label ?? "Reference"
+  );
+}
+
+export function getPredicateFieldDescription(predicate: AnyPredicate): string | undefined {
+  return (getPredicateFieldMeta(predicate.field) as { description?: string } | undefined)
+    ?.description;
+}
+
+export function collectFieldIssues({
+  controller,
+  issues,
+}: Pick<AnyRenderableFieldProps, "controller" | "issues">): readonly ValidationIssue[] {
+  if (!issues) {
+    return emptyFieldIssues;
+  }
+
+  if (Array.isArray(issues)) {
+    return controller ? collectValidationIssuesForPath(issues, controller.path) : issues;
+  }
+
+  if (!controller) {
+    return emptyFieldIssues;
+  }
+
+  return isValidationIssueAggregate(issues) ? issues.getPathIssues(controller.path) : issues;
+}
+
+export function getFieldState(props: AnyRenderableFieldProps): AnyFieldState {
+  const issues = collectFieldIssues(props);
+
+  return {
+    controller: props.controller,
+    description: getPredicateFieldDescription(props.predicate),
+    invalid: issues.length > 0,
+    issues,
+    label: getPredicateFieldLabel(props.predicate),
+  };
+}
+
+export function DefaultFieldRow({
+  children,
+  fieldKind,
+  state,
+}: {
+  children: ReactNode;
+  fieldKind: string;
+  state: AnyFieldState;
+}) {
+  return (
+    <Field
+      data-invalid={state.invalid || undefined}
+      data-web-field-kind={fieldKind}
+      data-web-field-mode="field"
+      data-web-field-touched={state.controller?.getSnapshot().touched || undefined}
+    >
+      <FieldContent>
+        <FieldTitle>{state.label}</FieldTitle>
+        {state.description ? <FieldDescription>{state.description}</FieldDescription> : null}
+        {children}
+        <FieldError errors={state.issues} />
+      </FieldContent>
+    </Field>
   );
 }
 

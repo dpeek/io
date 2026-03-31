@@ -136,6 +136,8 @@ const requiredGraphReactExports = [
 
 const requiredReactDomExports = [
   "FilterOperandEditor",
+  "PredicateField",
+  "PredicateFieldControl",
   "PredicateFieldEditor",
   "PredicateFieldView",
   "SvgMarkup",
@@ -144,6 +146,8 @@ const requiredReactDomExports = [
   "createWebFilterResolver",
   "defaultWebFieldResolver",
   "defaultWebFilterResolver",
+  "genericWebFieldCapabilities",
+  "genericWebFieldControlCapabilities",
   "genericWebFieldEditorCapabilities",
   "genericWebFieldViewCapabilities",
   "genericWebFilterOperandEditorCapabilities",

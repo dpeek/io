@@ -21,16 +21,27 @@ import { useEffect, useState } from "react";
 
 import {
   clearOrRejectRequiredValue,
+  DefaultFieldRow,
+  getFieldState,
   getPredicateFieldLabel,
   setPredicateValue,
   useFieldMutationCallbacks,
   validatePredicateValue,
-  type AnyFieldProps,
+  type AnyRenderableFieldProps,
 } from "./shared.js";
 
-export function TextFieldEditor({ onMutationError, onMutationSuccess, predicate }: AnyFieldProps) {
+export function TextFieldEditor(props: AnyRenderableFieldProps) {
+  const { controller, issues, mode, onMutationError, onMutationSuccess, predicate } = props;
   const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const { value } = usePredicateField(predicate);
+  const state = getFieldState({
+    controller,
+    issues,
+    mode,
+    onMutationError,
+    onMutationSuccess,
+    predicate,
+  });
   const editorKind = getPredicateEditorKind(predicate.field);
   const placeholder = getPredicateEditorPlaceholder(predicate.field);
   const parser = getPredicateEditorParser(predicate.field);
@@ -42,13 +53,14 @@ export function TextFieldEditor({ onMutationError, onMutationSuccess, predicate 
   const isTextarea = editorKind === "textarea";
   const isOptionalTextEditor = predicate.field.cardinality === "one?";
   const [draft, setDraft] = useState(committedValue);
-  const [isInvalid, setIsInvalid] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(!isOptionalTextEditor || committedValue !== "");
   const [shouldAutoFocus, setShouldAutoFocus] = useState(false);
+  const invalid = state.invalid || localError !== null;
 
   useEffect(() => {
     setDraft(committedValue);
-    setIsInvalid(false);
+    setLocalError(null);
     if (isOptionalTextEditor) {
       setShowEditor(committedValue !== "");
       setShouldAutoFocus(false);
@@ -56,16 +68,17 @@ export function TextFieldEditor({ onMutationError, onMutationSuccess, predicate 
   }, [committedValue, isOptionalTextEditor]);
 
   function applyDraft(nextValue: string): void {
+    controller?.setTouched(true);
     setDraft(nextValue);
 
     if (isOptionalTextEditor && nextValue === "") {
-      setIsInvalid(false);
+      setLocalError(null);
       return;
     }
 
     if (nextValue === "" && parser) {
       const cleared = clearOrRejectRequiredValue(predicate, callbacks);
-      setIsInvalid(!cleared);
+      setLocalError(cleared ? null : "Enter a valid value.");
       return;
     }
 
@@ -76,22 +89,24 @@ export function TextFieldEditor({ onMutationError, onMutationSuccess, predicate 
         () => validatePredicateValue(predicate, parsedValue),
         () => setPredicateValue(predicate, parsedValue),
       );
-      setIsInvalid(!committed);
+      setLocalError(committed ? null : "Enter a valid value.");
     } catch {
-      setIsInvalid(true);
+      setLocalError("Enter a valid value.");
     }
   }
 
   function handleShowEditor(): void {
+    controller?.setTouched(true);
     setShouldAutoFocus(true);
     setShowEditor(true);
     setDraft(committedValue);
-    setIsInvalid(false);
+    setLocalError(null);
   }
 
   function handleClear(): void {
+    controller?.setTouched(true);
     const cleared = clearOrRejectRequiredValue(predicate, callbacks);
-    setIsInvalid(!cleared);
+    setLocalError(cleared ? null : "Enter a valid value.");
     if (!cleared) return;
     setDraft("");
     setShowEditor(false);
@@ -99,17 +114,18 @@ export function TextFieldEditor({ onMutationError, onMutationSuccess, predicate 
   }
 
   function handleBlur(): void {
+    controller?.setTouched(true);
     if (!isOptionalTextEditor || draft !== "") return;
 
     const cleared = clearOrRejectRequiredValue(predicate, callbacks);
-    setIsInvalid(!cleared);
+    setLocalError(cleared ? null : "Enter a valid value.");
     if (!cleared) return;
     setShowEditor(false);
     setShouldAutoFocus(false);
   }
 
-  if (isOptionalTextEditor && !showEditor) {
-    return (
+  const control =
+    isOptionalTextEditor && !showEditor ? (
       <InputGroupButton
         aria-label={`Add ${fieldLabel}`}
         data-web-text-field-expand={predicate.field.key}
@@ -119,14 +135,10 @@ export function TextFieldEditor({ onMutationError, onMutationSuccess, predicate 
       >
         <PlusIcon className="size-3" />
       </InputGroupButton>
-    );
-  }
-
-  if (isTextarea) {
-    return (
+    ) : isTextarea ? (
       <InputGroup className="h-auto" data-web-text-field-state="expanded">
         <InputGroupTextarea
-          aria-invalid={isInvalid || undefined}
+          aria-invalid={invalid || undefined}
           autoFocus={shouldAutoFocus}
           className="min-h-28 resize-y"
           data-web-field-kind="textarea"
@@ -149,34 +161,45 @@ export function TextFieldEditor({ onMutationError, onMutationSuccess, predicate 
           </InputGroupAddon>
         ) : null}
       </InputGroup>
+    ) : (
+      <InputGroup data-web-text-field-state="expanded">
+        <InputGroupInput
+          aria-invalid={invalid || undefined}
+          autoComplete={autoComplete}
+          autoFocus={shouldAutoFocus}
+          data-web-field-kind="text"
+          inputMode={inputMode}
+          onBlur={handleBlur}
+          onChange={(event) => applyDraft(event.target.value)}
+          placeholder={placeholder}
+          type={inputType}
+          value={draft}
+        />
+        {isOptionalTextEditor ? (
+          <InputGroupButton
+            aria-label={`Clear ${fieldLabel}`}
+            data-web-text-field-clear={predicate.field.key}
+            onClick={handleClear}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <XIcon className="size-3" />
+          </InputGroupButton>
+        ) : null}
+      </InputGroup>
     );
+  const fieldErrors = localError ? [...state.issues, { message: localError }] : [...state.issues];
+
+  if (mode !== "field") {
+    return control;
   }
 
   return (
-    <InputGroup data-web-text-field-state="expanded">
-      <InputGroupInput
-        aria-invalid={isInvalid || undefined}
-        autoComplete={autoComplete}
-        autoFocus={shouldAutoFocus}
-        data-web-field-kind="text"
-        inputMode={inputMode}
-        onBlur={handleBlur}
-        onChange={(event) => applyDraft(event.target.value)}
-        placeholder={placeholder}
-        type={inputType}
-        value={draft}
-      />
-      {isOptionalTextEditor ? (
-        <InputGroupButton
-          aria-label={`Clear ${fieldLabel}`}
-          data-web-text-field-clear={predicate.field.key}
-          onClick={handleClear}
-          size="icon-xs"
-          variant="ghost"
-        >
-          <XIcon className="size-3" />
-        </InputGroupButton>
-      ) : null}
-    </InputGroup>
+    <DefaultFieldRow
+      fieldKind={editorKind === "textarea" ? "textarea" : "text"}
+      state={{ ...state, invalid, issues: fieldErrors }}
+    >
+      {control}
+    </DefaultFieldRow>
   );
 }

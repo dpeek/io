@@ -22,6 +22,8 @@ import {
 import {
   addPredicateItem,
   clearPredicateValue,
+  DefaultFieldRow,
+  getFieldState,
   getPredicateFieldLabel,
   removePredicateItem,
   setPredicateValue,
@@ -31,6 +33,7 @@ import {
   validatePredicateRemove,
   validatePredicateValue,
   type AnyFieldProps,
+  type AnyRenderableFieldProps,
 } from "./shared.js";
 
 type TagCreateGraphHandle = {
@@ -73,13 +76,24 @@ export const entityReferenceListViewCapability = {
 } satisfies PredicateFieldViewCapability<any, any>;
 
 export function EntityReferenceComboboxEditor({
+  controller,
+  issues,
+  mode,
   onMutationError,
   onMutationSuccess,
   predicate,
-}: AnyFieldProps) {
+}: AnyRenderableFieldProps) {
   const callbacks = useFieldMutationCallbacks({ onMutationError, onMutationSuccess });
   const runtime = useOptionalMutationRuntime() as EntityReferenceComboboxRuntime | null;
   const { value } = usePredicateField(predicate);
+  const state = getFieldState({
+    controller,
+    issues,
+    mode,
+    onMutationError,
+    onMutationSuccess,
+    predicate,
+  });
   const options = getPredicateEntityReferenceOptions(predicate).map(({ entity, id }) => ({
     id,
     keywords: [id],
@@ -108,6 +122,7 @@ export function EntityReferenceComboboxEditor({
     !!tagGraph;
 
   function commitSelection(nextValue: string): void {
+    controller?.setTouched(true);
     if (predicate.field.cardinality === "many") {
       if (selectedIds.has(nextValue)) return;
       performValidatedMutation(
@@ -127,6 +142,7 @@ export function EntityReferenceComboboxEditor({
   }
 
   function commitClear(): void {
+    controller?.setTouched(true);
     performValidatedMutation(
       callbacks,
       () => validatePredicateClear(predicate),
@@ -135,6 +151,7 @@ export function EntityReferenceComboboxEditor({
   }
 
   function createTagFromQuery(nextQuery: string): void {
+    controller?.setTouched(true);
     if (!canCreateTag || !tagGraph) return;
     const trimmedQuery = nextQuery.trim();
     if (trimmedQuery.length === 0) return;
@@ -171,11 +188,12 @@ export function EntityReferenceComboboxEditor({
     if (!committed || createdTagId.length === 0) return;
   }
 
-  return (
+  const control = (
     <OptionComboboxEditor
       cardinality={predicate.field.cardinality}
       fieldKind="entity-reference-combobox"
       fieldLabel={fieldLabel}
+      invalid={state.invalid}
       getCreateAction={({ matchingOptions, normalizedQuery, options: allOptions, query }) =>
         canCreateTag &&
         normalizedQuery.length > 0 &&
@@ -202,6 +220,7 @@ export function EntityReferenceComboboxEditor({
       onClear={commitClear}
       onCreate={createTagFromQuery}
       onRemove={(id) => {
+        controller?.setTouched(true);
         performValidatedMutation(
           callbacks,
           () => validatePredicateRemove(predicate, id),
@@ -224,5 +243,15 @@ export function EntityReferenceComboboxEditor({
       )}
       selected={selected}
     />
+  );
+
+  if (mode !== "field") {
+    return control;
+  }
+
+  return (
+    <DefaultFieldRow fieldKind="entity-reference-combobox" state={state}>
+      {control}
+    </DefaultFieldRow>
   );
 }

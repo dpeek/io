@@ -5,6 +5,8 @@ import { createGraphClient } from "@io/graph-client";
 import { createGraphStore as createStore } from "@io/graph-kernel";
 import { core, coreGraphBootstrapOptions, defaultMoneyCurrencyKey } from "@io/graph-module-core";
 import {
+  PredicateField,
+  PredicateFieldControl,
   PredicateFieldEditor,
   PredicateFieldView,
   defaultWebFieldResolver,
@@ -84,22 +86,30 @@ describe("@io/graph-module-core/react-dom generic field registry coverage", () =
     const fields = createRecordFields();
 
     const colorView = defaultWebFieldResolver.resolveView(fields.accentColor);
+    const colorControl = defaultWebFieldResolver.resolveControl(fields.accentColor);
     const colorEditor = defaultWebFieldResolver.resolveEditor(fields.accentColor);
+    const colorField = defaultWebFieldResolver.resolveField(fields.accentColor);
     const percentView = defaultWebFieldResolver.resolveView(fields.completion);
     const percentEditor = defaultWebFieldResolver.resolveEditor(fields.completion);
     const textView = defaultWebFieldResolver.resolveView(fields.headline);
+    const textControl = defaultWebFieldResolver.resolveControl(fields.headline);
     const textEditor = defaultWebFieldResolver.resolveEditor(fields.headline);
+    const textField = defaultWebFieldResolver.resolveField(fields.headline);
     const markdownView = defaultWebFieldResolver.resolveView(fields.details);
     const markdownEditor = defaultWebFieldResolver.resolveEditor(fields.details);
     const svgView = defaultWebFieldResolver.resolveView(fields.iconSvg);
     const svgEditor = defaultWebFieldResolver.resolveEditor(fields.iconSvg);
 
     expect(colorView.status).toBe("resolved");
+    expect(colorControl.status).toBe("resolved");
     expect(colorEditor.status).toBe("resolved");
+    expect(colorField.status).toBe("resolved");
     expect(percentView.status).toBe("resolved");
     expect(percentEditor.status).toBe("resolved");
     expect(textView.status).toBe("resolved");
+    expect(textControl.status).toBe("resolved");
     expect(textEditor.status).toBe("resolved");
+    expect(textField.status).toBe("resolved");
     expect(markdownView.status).toBe("resolved");
     expect(markdownEditor.status).toBe("resolved");
     expect(svgView.status).toBe("resolved");
@@ -110,6 +120,9 @@ describe("@io/graph-module-core/react-dom generic field registry coverage", () =
     }
     if (colorEditor.status === "resolved") {
       expect(colorEditor.capability.kind).toBe("color");
+    }
+    if (colorField.status === "resolved") {
+      expect(colorField.capability.kind).toBe("color");
     }
     if (percentView.status === "resolved") {
       expect(percentView.capability.kind).toBe("number/percent");
@@ -122,6 +135,9 @@ describe("@io/graph-module-core/react-dom generic field registry coverage", () =
     }
     if (textEditor.status === "resolved") {
       expect(textEditor.capability.kind).toBe("text");
+    }
+    if (textField.status === "resolved") {
+      expect(textField.capability.kind).toBe("text");
     }
     if (markdownView.status === "resolved") {
       expect(markdownView.capability.kind).toBe("markdown");
@@ -146,6 +162,9 @@ describe("@io/graph-module-core/react-dom generic field registry coverage", () =
     const colorEditorMarkup = renderToStaticMarkup(
       <PredicateFieldEditor predicate={fields.accentColor} />,
     );
+    const colorFieldMarkup = renderToStaticMarkup(
+      <PredicateField predicate={fields.accentColor} />,
+    );
     const percentViewMarkup = renderToStaticMarkup(
       <PredicateFieldView predicate={fields.completion} />,
     );
@@ -153,9 +172,13 @@ describe("@io/graph-module-core/react-dom generic field registry coverage", () =
       <PredicateFieldEditor predicate={fields.completion} />,
     );
     const textViewMarkup = renderToStaticMarkup(<PredicateFieldView predicate={fields.headline} />);
+    const textControlMarkup = renderToStaticMarkup(
+      <PredicateFieldControl predicate={fields.headline} />,
+    );
     const textEditorMarkup = renderToStaticMarkup(
       <PredicateFieldEditor predicate={fields.headline} />,
     );
+    const textFieldMarkup = renderToStaticMarkup(<PredicateField predicate={fields.headline} />);
     const markdownViewMarkup = renderToStaticMarkup(
       <PredicateFieldView predicate={fields.details} />,
     );
@@ -172,14 +195,21 @@ describe("@io/graph-module-core/react-dom generic field registry coverage", () =
     expect(colorViewMarkup).toContain("#2563EB");
     expect(colorEditorMarkup).toContain('data-web-field-kind="color"');
     expect(colorEditorMarkup).toContain('value="#2563eb"');
+    expect(colorFieldMarkup).toContain('data-web-field-mode="field"');
+    expect(colorFieldMarkup).toContain('data-web-field-kind="color"');
     expect(percentViewMarkup).toContain('data-web-field-kind="number/percent"');
     expect(percentViewMarkup).toContain("72.5%");
+    expect(textControlMarkup).toContain('data-web-field-kind="text"');
+    expect(textControlMarkup).toContain('value="KS-1"');
     expect(percentEditorMarkup).toContain('data-web-field-kind="number/percent"');
     expect(percentEditorMarkup).toContain("%");
     expect(textViewMarkup).toContain('data-web-field-kind="text"');
     expect(textViewMarkup).toContain("KS-1");
     expect(textEditorMarkup).toContain('data-web-field-kind="text"');
     expect(textEditorMarkup).toContain('value="KS-1"');
+    expect(textFieldMarkup).toContain('data-web-field-mode="field"');
+    expect(textFieldMarkup).toContain("Headline");
+    expect(textFieldMarkup).toContain('value="KS-1"');
     expect(markdownViewMarkup).toContain('data-web-field-kind="markdown"');
     expect(markdownViewMarkup).toContain("<strong>markdown</strong>");
     expect(markdownEditorMarkup).toContain('data-web-field-kind="markdown"');

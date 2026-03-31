@@ -11,6 +11,7 @@ import {
   ComboboxValue,
   useComboboxAnchor,
 } from "@io/web/combobox";
+import { Field, FieldContent, FieldDescription, FieldError, FieldTitle } from "@io/web/field";
 import { useDeferredValue, useState, type ReactNode } from "react";
 
 type HtmlProps = Record<string, string | undefined>;
@@ -94,8 +95,12 @@ function filterItem<TOption>(item: OptionComboboxItem<TOption>, query: string): 
 export function OptionComboboxEditor<TOption>({
   cardinality,
   emptySelectionMessage,
+  fieldDescription,
+  fieldErrors,
   fieldKind,
   fieldLabel,
+  invalid = false,
+  mode = "control",
   getCreateAction,
   getCreateItemProps,
   getOptionItemProps,
@@ -113,8 +118,12 @@ export function OptionComboboxEditor<TOption>({
 }: {
   cardinality: "many" | "one" | "one?";
   emptySelectionMessage?: ReactNode;
+  fieldDescription?: ReactNode;
+  fieldErrors?: readonly { message?: string }[];
   fieldKind: string;
   fieldLabel: string;
+  invalid?: boolean;
+  mode?: "control" | "field";
   getCreateAction?: (
     context: OptionComboboxCreateActionContext<TOption>,
   ) => OptionComboboxCreateAction | null;
@@ -196,8 +205,8 @@ export function OptionComboboxEditor<TOption>({
     );
   }
 
-  if (cardinality === "many") {
-    return (
+  const control =
+    cardinality === "many" ? (
       <div data-web-field-kind={fieldKind}>
         <Combobox<OptionComboboxItem<TOption>, true>
           autoHighlight
@@ -257,7 +266,11 @@ export function OptionComboboxEditor<TOption>({
                 </ComboboxChip>
               ))}
             </ComboboxValue>
-            <ComboboxChipsInput className="text-base" data-web-field-kind={`${fieldKind}-input`} />
+            <ComboboxChipsInput
+              aria-invalid={invalid || undefined}
+              className="text-base"
+              data-web-field-kind={`${fieldKind}-input`}
+            />
           </ComboboxChips>
           <ComboboxContent anchor={anchorRef}>
             <ComboboxEmpty>{noMatchesMessage}</ComboboxEmpty>
@@ -268,57 +281,74 @@ export function OptionComboboxEditor<TOption>({
           <div className="text-muted-foreground mt-2 text-sm">{emptySelectionMessage}</div>
         ) : null}
       </div>
+    ) : (
+      <div className="space-y-3" data-web-field-kind={fieldKind}>
+        <Combobox<OptionComboboxItem<TOption>>
+          autoHighlight
+          filter={filterItem}
+          isItemEqualToValue={itemsEqual}
+          itemToStringLabel={getSearchLabel}
+          itemToStringValue={getSearchValue}
+          items={items}
+          onInputValueChange={(nextQuery) => {
+            setQuery(nextQuery);
+          }}
+          onOpenChange={(open) => {
+            if (open) return;
+            resetQuery();
+          }}
+          onValueChange={(nextValue) => {
+            if (nextValue == null) {
+              if (cardinality === "one?") {
+                onClear();
+              }
+              resetQuery();
+              return;
+            }
+
+            if (isCreateAction(nextValue)) {
+              onCreate?.(nextValue.query);
+              resetQuery();
+              return;
+            }
+
+            onSelect(nextValue.id);
+            resetQuery();
+          }}
+          value={selectedItems[0] ?? null}
+        >
+          <ComboboxInput
+            aria-label={fieldLabel}
+            aria-invalid={invalid || undefined}
+            className="w-full"
+            data-web-field-kind={`${fieldKind}-input`}
+            placeholder={`Select ${fieldLabel.toLowerCase()}`}
+            showClear={cardinality === "one?"}
+          />
+          <ComboboxContent>
+            <ComboboxEmpty>{noMatchesMessage}</ComboboxEmpty>
+            <ComboboxList>{renderItem}</ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+      </div>
     );
+
+  if (mode !== "field") {
+    return control;
   }
 
   return (
-    <div className="space-y-3" data-web-field-kind={fieldKind}>
-      <Combobox<OptionComboboxItem<TOption>>
-        autoHighlight
-        filter={filterItem}
-        isItemEqualToValue={itemsEqual}
-        itemToStringLabel={getSearchLabel}
-        itemToStringValue={getSearchValue}
-        items={items}
-        onInputValueChange={(nextQuery) => {
-          setQuery(nextQuery);
-        }}
-        onOpenChange={(open) => {
-          if (open) return;
-          resetQuery();
-        }}
-        onValueChange={(nextValue) => {
-          if (nextValue == null) {
-            if (cardinality === "one?") {
-              onClear();
-            }
-            resetQuery();
-            return;
-          }
-
-          if (isCreateAction(nextValue)) {
-            onCreate?.(nextValue.query);
-            resetQuery();
-            return;
-          }
-
-          onSelect(nextValue.id);
-          resetQuery();
-        }}
-        value={selectedItems[0] ?? null}
-      >
-        <ComboboxInput
-          aria-label={fieldLabel}
-          className="w-full"
-          data-web-field-kind={`${fieldKind}-input`}
-          placeholder={`Select ${fieldLabel.toLowerCase()}`}
-          showClear={cardinality === "one?"}
-        />
-        <ComboboxContent>
-          <ComboboxEmpty>{noMatchesMessage}</ComboboxEmpty>
-          <ComboboxList>{renderItem}</ComboboxList>
-        </ComboboxContent>
-      </Combobox>
-    </div>
+    <Field
+      data-invalid={invalid || undefined}
+      data-web-field-kind={fieldKind}
+      data-web-field-mode="field"
+    >
+      <FieldContent>
+        <FieldTitle>{fieldLabel}</FieldTitle>
+        {fieldDescription ? <FieldDescription>{fieldDescription}</FieldDescription> : null}
+        {control}
+        <FieldError errors={fieldErrors} />
+      </FieldContent>
+    </Field>
   );
 }
