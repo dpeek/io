@@ -10,9 +10,15 @@ import {
 import {
   type EntityRef,
   fieldGroupMeta,
+  type FieldGroupRef,
   type GraphMutationValidationResult,
   type PredicateRef,
 } from "@io/graph-client";
+import type {
+  EditSessionController,
+  EditSessionFieldController,
+  EditSessionPath,
+} from "@io/graph-react";
 import type { MutableRefObject } from "react";
 
 import { isEdgeOutputValue } from "./create-draft-plan.js";
@@ -20,6 +26,7 @@ import {
   cloneDraftValue,
   getDraftValue,
   removeDraftItem,
+  sameLogicalValue,
   setDraftValue,
 } from "./create-draft-values.js";
 import { typePredicateId } from "./model.js";
@@ -35,6 +42,7 @@ type DraftControllerOptions = {
 
 export type DraftController = {
   fields: Record<string, unknown>;
+  session: EditSessionController<Record<string, unknown>>;
   getInput(): Record<string, unknown>;
 };
 
@@ -45,32 +53,111 @@ export function createDraftController({
   store,
   typeById,
 }: DraftControllerOptions): DraftController {
+  let committedInput = cloneDraftValue(initialInput);
   let currentInput = cloneDraftValue(initialInput);
+  const sessionListeners = new Set<() => void>();
   const listenersByPath = new Map<string, Set<() => void>>();
+  const touchedPaths = new Set<string>();
+  const fieldControllersByPath = new Map<string, EditSessionFieldController<unknown>>();
+  const fieldEntries: Array<{
+    field: EdgeOutput;
+    fieldName: string;
+    path: readonly string[];
+    pathKey: string;
+  }> = [];
   const draftSubjectId = `draft:${entry.id}`;
+  const submitCommitPolicy = { mode: "submit" } as const;
+
+  function pathKey(path: EditSessionPath): string {
+    return JSON.stringify([...path]);
+  }
 
   function readValue(path: readonly string[], fieldName: string, field: EdgeOutput): unknown {
     return getDraftValue(currentInput, path, fieldName, field);
   }
 
-  function subscribePath(pathLabel: string, listener: () => void): () => void {
-    const listeners = listenersByPath.get(pathLabel) ?? new Set<() => void>();
+  function readCommittedValue(
+    path: readonly string[],
+    fieldName: string,
+    field: EdgeOutput,
+  ): unknown {
+    return getDraftValue(committedInput, path, fieldName, field);
+  }
+
+  function subscribePath(pathKeyValue: string, listener: () => void): () => void {
+    const listeners = listenersByPath.get(pathKeyValue) ?? new Set<() => void>();
     listeners.add(listener);
-    listenersByPath.set(pathLabel, listeners);
+    listenersByPath.set(pathKeyValue, listeners);
 
     return () => {
       listeners.delete(listener);
-      if (listeners.size === 0) listenersByPath.delete(pathLabel);
+      if (listeners.size === 0) listenersByPath.delete(pathKeyValue);
     };
   }
 
-  function notifyPath(pathLabel: string): void {
-    listenersByPath.get(pathLabel)?.forEach((listener) => listener());
+  function notifyPaths(pathKeys: readonly string[]): void {
+    for (const pathKeyValue of new Set(pathKeys)) {
+      listenersByPath.get(pathKeyValue)?.forEach((listener) => listener());
+    }
+    sessionListeners.forEach((listener) => listener());
+  }
+
+  function fieldSnapshot(
+    path: readonly string[],
+    fieldName: string,
+    field: EdgeOutput,
+  ): {
+    committedValue: unknown;
+    draftValue: unknown;
+    dirty: boolean;
+    touched: boolean;
+  } {
+    const committedValue = readCommittedValue(path, fieldName, field);
+    const draftValue = readValue(path, fieldName, field);
+    const fullPath = [...path, fieldName];
+    return {
+      committedValue,
+      dirty: !sameLogicalValue(committedValue, draftValue),
+      draftValue,
+      touched: touchedPaths.has(pathKey(fullPath)),
+    };
+  }
+
+  function collectDirtyFieldPathKeys(): string[] {
+    return fieldEntries.flatMap((fieldEntry) =>
+      fieldSnapshot(fieldEntry.path, fieldEntry.fieldName, fieldEntry.field).dirty
+        ? [fieldEntry.pathKey]
+        : [],
+    );
+  }
+
+  function collectChangedFieldPathKeys(
+    currentValue: Record<string, unknown>,
+    nextValue: Record<string, unknown>,
+  ): string[] {
+    return fieldEntries.flatMap((fieldEntry) => {
+      const previousFieldValue = getDraftValue(
+        currentValue,
+        fieldEntry.path,
+        fieldEntry.fieldName,
+        fieldEntry.field,
+      );
+      const nextFieldValue = getDraftValue(
+        nextValue,
+        fieldEntry.path,
+        fieldEntry.fieldName,
+        fieldEntry.field,
+      );
+      return sameLogicalValue(previousFieldValue, nextFieldValue) ? [] : [fieldEntry.pathKey];
+    });
   }
 
   function applyMutation(path: readonly string[], fieldName: string, nextValue: unknown): void {
-    currentInput = setDraftValue(currentInput, path, fieldName, nextValue);
-    notifyPath([...path, fieldName].join("."));
+    const nextInput = setDraftValue(currentInput, path, fieldName, nextValue);
+    if (sameLogicalValue(currentInput, nextInput)) return;
+    const fullPath = [...path, fieldName];
+    currentInput = nextInput;
+    notifyPaths([pathKey(fullPath)]);
   }
 
   function validateMutation(
@@ -106,10 +193,111 @@ export function createDraftController({
     return rangeEntry ? rangeEntry.ids.map((id) => rangeEntry.getRef(id)) : [];
   }
 
-  function buildFields(
-    node: Record<string, unknown>,
-    path: string[] = [],
-  ): Record<string, unknown> {
+  function createFieldController(
+    path: readonly string[],
+    fieldName: string,
+    field: EdgeOutput,
+  ): EditSessionFieldController<unknown> {
+    const fullPath = Object.freeze([...path, fieldName]) as readonly string[];
+    const fullPathKey = pathKey(fullPath);
+    const controller = {
+      commit() {
+        const snapshot = fieldSnapshot(path, fieldName, field);
+        if (!snapshot.dirty) return false;
+        committedInput = setDraftValue(committedInput, path, fieldName, snapshot.draftValue);
+        notifyPaths([fullPathKey]);
+        return true;
+      },
+      commitPolicy: submitCommitPolicy,
+      getSnapshot() {
+        return fieldSnapshot(path, fieldName, field);
+      },
+      path: fullPath,
+      revert() {
+        const snapshot = fieldSnapshot(path, fieldName, field);
+        if (!snapshot.dirty) return false;
+        currentInput = setDraftValue(currentInput, path, fieldName, snapshot.committedValue);
+        notifyPaths([fullPathKey]);
+        return true;
+      },
+      setDraftValue(nextValue: unknown) {
+        applyMutation(path, fieldName, nextValue);
+      },
+      setTouched(nextTouched: boolean) {
+        const hadTouched = touchedPaths.has(fullPathKey);
+        if (hadTouched === nextTouched) return;
+        if (nextTouched) {
+          touchedPaths.add(fullPathKey);
+        } else {
+          touchedPaths.delete(fullPathKey);
+        }
+        notifyPaths([fullPathKey]);
+      },
+      subscribe(listener: () => void) {
+        return subscribePath(fullPathKey, listener);
+      },
+    } satisfies EditSessionFieldController<unknown>;
+
+    fieldEntries.push({ field, fieldName, path, pathKey: fullPathKey });
+    fieldControllersByPath.set(fullPathKey, controller);
+    return controller;
+  }
+
+  const session = {
+    commit() {
+      if (!session.getSnapshot().dirty) return false;
+      const dirtyPathKeys = collectDirtyFieldPathKeys();
+      committedInput = cloneDraftValue(currentInput);
+      notifyPaths(dirtyPathKeys);
+      return true;
+    },
+    defaultCommitPolicy: submitCommitPolicy,
+    getField(path: EditSessionPath) {
+      return fieldControllersByPath.get(pathKey(path));
+    },
+    getSnapshot() {
+      return {
+        committedValue: cloneDraftValue(committedInput),
+        draftValue: cloneDraftValue(currentInput),
+        dirty: !sameLogicalValue(committedInput, currentInput),
+        touched: touchedPaths.size > 0,
+      };
+    },
+    revert() {
+      if (!session.getSnapshot().dirty) return false;
+      const dirtyPathKeys = collectDirtyFieldPathKeys();
+      currentInput = cloneDraftValue(committedInput);
+      notifyPaths(dirtyPathKeys);
+      return true;
+    },
+    setDraftValue(nextValue: Record<string, unknown>) {
+      const nextInput = cloneDraftValue(nextValue);
+      if (sameLogicalValue(currentInput, nextInput)) return;
+      const changedPathKeys = collectChangedFieldPathKeys(currentInput, nextInput);
+      currentInput = nextInput;
+      notifyPaths(changedPathKeys);
+    },
+    setTouched(nextTouched: boolean) {
+      const changedPathKeys = fieldEntries
+        .filter((fieldEntry) => touchedPaths.has(fieldEntry.pathKey) !== nextTouched)
+        .map((fieldEntry) => fieldEntry.pathKey);
+      if (changedPathKeys.length === 0) return;
+      if (nextTouched) {
+        for (const pathKeyValue of changedPathKeys) touchedPaths.add(pathKeyValue);
+      } else {
+        for (const pathKeyValue of changedPathKeys) touchedPaths.delete(pathKeyValue);
+      }
+      notifyPaths(changedPathKeys);
+    },
+    subscribe(listener: () => void) {
+      sessionListeners.add(listener);
+      return () => {
+        sessionListeners.delete(listener);
+      };
+    },
+  } satisfies EditSessionController<Record<string, unknown>>;
+
+  function buildFields(node: Record<string, unknown>, path: string[] = []): FieldGroupRef<any> {
     const out: Record<string, unknown> = {};
     Object.defineProperty(out, fieldGroupMeta, {
       value: {
@@ -125,7 +313,7 @@ export function createDraftController({
     for (const [fieldName, value] of Object.entries(node)) {
       if (isEdgeOutputValue(value)) {
         const field = value;
-        const pathLabel = [...path, fieldName].join(".");
+        const fieldController = createFieldController(path, fieldName, field);
         const rangeType = typeById.get(field.range);
         const base = {
           batch<TResult>(fn: () => TResult) {
@@ -133,7 +321,7 @@ export function createDraftController({
           },
           field,
           get() {
-            return readValue(path, fieldName, field);
+            return fieldController.getSnapshot().draftValue;
           },
           listEntities() {
             return rangeType && isEntityType(rangeType) ? listEntities(typeId(rangeType)) : [];
@@ -147,7 +335,7 @@ export function createDraftController({
           },
           subjectId: draftSubjectId,
           subscribe(listener: () => void) {
-            return subscribePath(pathLabel, listener);
+            return fieldController.subscribe(listener);
           },
         };
 
@@ -234,13 +422,14 @@ export function createDraftController({
       out[fieldName] = buildFields(value as Record<string, unknown>, [...path, fieldName]);
     }
 
-    return out;
+    return out as FieldGroupRef<any>;
   }
 
   return {
     fields: buildFields(entry.typeDef.fields as Record<string, unknown>),
+    session,
     getInput() {
-      return cloneDraftValue(currentInput);
+      return session.getSnapshot().draftValue;
     },
   };
 }

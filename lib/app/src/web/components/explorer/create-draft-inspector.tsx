@@ -71,7 +71,7 @@ export function GenericCreateInspector({
 
   async function handleCreate(): Promise<void> {
     const currentEntry = entityEntryRef.current;
-    const input = controller.getInput();
+    const input = controller.session.getSnapshot().draftValue;
     const validation = currentEntry.validateCreate(input as never);
 
     if (!validation.ok) {

@@ -332,12 +332,33 @@ An edit session should own:
 
 Commit timing should be declarative.
 
+On the extracted `@io/graph-react` runtime surface, commit policy is shared
+metadata on `EditSessionController.defaultCommitPolicy` and
+`EditSessionFieldController.commitPolicy`, not a built-in scheduler. That keeps
+the edit-session layer host-neutral while still giving field renderers and
+surface composition one common contract for when they should call `commit()`.
+
 Useful modes are:
 
 - `immediate`
 - `blur`
 - `debounce`
 - `submit`
+
+The intended first-pass behavior for those modes is:
+
+- `immediate`: apply the draft mutation and commit it in the same interaction
+- `blur`: keep the field dirty while the control is active, then commit on blur
+- `debounce`: keep the field dirty until the debounce window expires, then
+  commit with the configured delay
+- `submit`: keep the session draft-backed until explicit submit or manual
+  commit
+
+The first in-repo proving ground stays intentionally narrow: the explorer
+generic create dialog currently exposes `{ mode: "submit" }` for both the
+session default and the generated field controllers. That documents the
+starting behavior for draft-backed create flows without forcing later update or
+inline-edit work into the same timing.
 
 Policies should be overridable at several levels:
 
@@ -353,6 +374,9 @@ hardcode its own persistence timing.
 The current create flow already demonstrates the intended direction: it builds
 predicate-shaped draft controllers that expose `get`, `set`, `add`, `remove`,
 and `validate*` methods while operating over an in-memory input object.
+The explorer generic create dialog is the first in-repo proving ground for
+backing those draft predicates with the shared edit-session and field-controller
+contracts.
 
 That same mechanism should back:
 
@@ -446,6 +470,17 @@ Owns host-neutral runtime contracts:
 - field-controller contracts
 - issue aggregation helpers
 - surface resolver primitives that stay free of DOM concerns
+
+The first explicit shared contract layer on that surface is:
+
+- `EditSessionController`
+- `EditSessionFieldController`
+- `EditSessionCommitPolicy`
+- `EditControllerSnapshot`
+- `ValidationIssue`
+- `PathValidationIssue`
+- `ScopedValidationIssue`
+- `aggregateValidationIssues(...)`
 
 ### `@io/graph-module-core/react-dom`
 
