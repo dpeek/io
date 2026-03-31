@@ -72,8 +72,8 @@ Issue:
 - State: {{ issue.state }}
 - Priority: {{ issue.priority }}
 - Labels: {{ issue.labels }}
-- Stream: {{ issue.streamIssueIdentifier }}
-- Feature: {{ issue.parentIssueIdentifier }}
+- Branch: {{ issue.streamIssueIdentifier }}
+- Commit: {{ issue.parentIssueIdentifier }}
 - Attempt: {{ attempt }}
 
 Run:

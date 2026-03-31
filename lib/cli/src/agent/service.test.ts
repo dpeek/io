@@ -281,7 +281,7 @@ test("normalizeLinearIssue leaves parent and stream fields empty for standalone 
     project: { slugId: "io" },
     state: { name: "In Review" },
     team: { id: "team-1" },
-    title: "Current Approach Stream",
+    title: "Current Approach Branch",
     updatedAt: "2024-01-01T00:00:00.000Z",
   });
 
@@ -348,7 +348,7 @@ test("LinearTrackerAdapter fetches parent stream state for child issue candidate
                 subIssueSortOrder: 12,
                 state: { name: "In Review" },
                 team: { id: "team-1" },
-                title: "Current Approach Stream",
+                title: "Current Approach Branch",
                 updatedAt: "2024-01-01T00:00:00.000Z",
               },
             ],
@@ -731,7 +731,7 @@ test("AgentService does not auto-run task issues while the parent stream is not 
       streamIssueId: "stream-1",
       streamIssueIdentifier: "OPE-121",
       streamIssueState: "In Review",
-      title: "Task issue",
+      title: "Session issue",
     });
     const service = new AgentService({
       once: true,
@@ -816,7 +816,7 @@ test("AgentService does not auto-run task issues while the stream is not In Prog
       priority: 0,
       state: "In Progress",
       streamIssueState: "Todo",
-      title: "Task issue",
+      title: "Session issue",
     });
     const service = new AgentService({
       once: true,
@@ -1150,7 +1150,7 @@ test("AgentService does not auto-run released feature leaves without task childr
       streamIssueId: "stream-1",
       streamIssueIdentifier: "OPE-121",
       streamIssueState: "In Progress",
-      title: "Feature issue",
+      title: "Commit issue",
     });
     const service = new AgentService({
       once: true,
@@ -1216,7 +1216,7 @@ test("AgentService moves successful task issues into Done after landing on the f
       id: "task-1",
       identifier: "OPE-58",
       priority: 0,
-      title: "Task issue",
+      title: "Session issue",
     });
     const service = new AgentService({
       once: true,
@@ -1302,7 +1302,7 @@ test("AgentService blocks task issues when execution-owned landing fails", async
       id: "task-1",
       identifier: "OPE-58",
       priority: 0,
-      title: "Task issue",
+      title: "Session issue",
     });
     const service = new AgentService({
       once: true,
@@ -1664,7 +1664,7 @@ test("AgentService proves the OPE-121 workflow by running only the leaf task", a
       labels: ["io", "agent"],
       priority: 0,
       state: "In Progress",
-      title: "Agent Stream",
+      title: "Agent Branch",
     });
     const featureIssue = createIssue({
       hasChildren: true,

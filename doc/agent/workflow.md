@@ -4,7 +4,7 @@
 
 This page is the entry point for workflow loading, issue routing, context
 assembly, and module-scoped doc selection. For the user-facing
-`Stream -> Feature -> Task` planning contract, start with
+`Branch -> Commit -> Session` planning contract, start with
 [Backlog Workflow](./backlog.md).
 
 ## Current Entry Model

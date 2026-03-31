@@ -263,7 +263,7 @@ test("repo config allows shared repo docs in stream issue descriptions without w
     priority: 3,
     projectSlug: "io",
     state: "Todo",
-    title: "Stream shared-doc refresh",
+    title: "Branch shared-doc refresh",
     updatedAt: "2024-01-01T00:00:00.000Z",
   };
 
@@ -449,8 +449,8 @@ test("resolveIssueContext uses review defaults for review-routed tasks", async (
     ]);
     expect(rendered).toContain("You are the IO Review Agent.");
     expect(rendered).toContain("LOCAL review review");
-    expect(rendered).toContain("Feature: OPE-77");
-    expect(rendered).toContain("Stream: OPE-70");
+    expect(rendered).toContain("Commit: OPE-77");
+    expect(rendered).toContain("Branch: OPE-70");
   } finally {
     await rm(root, { force: true, recursive: true });
   }

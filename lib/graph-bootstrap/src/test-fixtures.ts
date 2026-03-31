@@ -231,7 +231,7 @@ export const item = defineType({
 });
 
 export const task = defineType({
-  values: { key: "workflow:task", name: "Task", icon: graphIconSeeds.string.id },
+  values: { key: "workflow:task", name: "Session", icon: graphIconSeeds.string.id },
   fields: {
     ...core.node.fields,
     dueAt: {

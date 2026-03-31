@@ -19,7 +19,7 @@ export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
 
   return (
     <Section
-      title="Stream"
+      title="Branch"
       right={
         <Badge
           className={syncStatusClass(state.status)}

@@ -193,7 +193,7 @@ import { computed, defineComputed, defineType } from "@io/graph-module";
 ```ts
 export const task = defineType({
   key: "ops:task",
-  name: "Task",
+  name: "Session",
   fields: {
     title: stringTypeModule.field({ label: "Title" }),
     shortTitle: stringTypeModule.optionalField({ label: "Short title" }),

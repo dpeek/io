@@ -849,7 +849,7 @@ export const agentSessionStatusFormatTypeModule =
   defineDefaultEnumTypeModule(agentSessionStatusFormat);
 
 export const agentSessionStream = defineEnum({
-  values: { key: "workflow:agentSessionStream", name: "Agent Session Stream" },
+  values: { key: "workflow:agentSessionStream", name: "Agent Session Branch" },
   options: {
     stdout: {
       name: "Stdout",
@@ -961,7 +961,7 @@ export const agentSessionEvent = defineType({
     stream: agentSessionStreamTypeModule.field({
       cardinality: "one?",
       meta: {
-        label: "Stream",
+        label: "Branch",
         display: {
           kind: "badge",
         },

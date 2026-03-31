@@ -8,7 +8,7 @@ state, and the operator-facing session stream used by the TUI.
 
 ## Docs
 
-- [Backlog Workflow](./backlog.md): interactive `Stream -> Feature -> Task`
+- [Backlog Workflow](./backlog.md): interactive `Branch -> Commit -> Session`
   planning contract
 - [Review Workflow](./review.md): review-pass contract for landed task work and
   next-issue creation
@@ -38,7 +38,7 @@ state, and the operator-facing session stream used by the TUI.
 - Successful execution lands the task commit onto the feature branch and moves
   the task to `Done` in the current repo configuration through the shared
   workspace finalization coordinator.
-- Feature closure stays human-owned. When a feature moves to `Done`,
+- Commit closure stays human-owned. When a feature moves to `Done`,
   [workspace.ts](../../lib/cli/src/agent/workspace.ts) squashes the feature branch onto
   the stream branch, preserves recoverable state on conflicts, and cleans up the
   branch when finalization succeeds.

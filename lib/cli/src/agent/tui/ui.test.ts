@@ -655,10 +655,10 @@ test("buildAgentTuiRootComponentModel keeps workflow stream, task, blocker, and 
     "Selected: task OPE-188 | blocked | stream OPE-121 | feature OPE-174 | io/ope-174",
   ]);
   expect(model.columns.find((column) => column.id === streamWorker.id)?.title).toBe(
-    "Feature OPE-174 [waiting on finalization]",
+    "Commit OPE-174 [waiting on finalization]",
   );
   expect(model.columns.find((column) => column.id === blockedTask.id)?.title).toBe(
-    "Task OPE-188 [blocked]",
+    "Session OPE-188 [blocked]",
   );
   expect(streamContent).toContain("state: waiting on finalization");
   expect(streamContent).toContain("branch: io/ope-174");
