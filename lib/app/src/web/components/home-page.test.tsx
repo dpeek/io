@@ -103,6 +103,6 @@ describe("home page", () => {
     expect(html).toContain('href="/query"');
     expect(html).toContain("Use Query to author or reopen saved queries and views");
     expect(html).toContain("Open workflow");
-    expect(html).toContain("Review view proofs");
+    expect(html).toContain("Open views");
   });
 });

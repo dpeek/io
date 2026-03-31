@@ -14,6 +14,7 @@ import { getInstalledModuleQuerySurfaceRendererCompatibility } from "./query-sur
 import {
   QueryWorkbenchSaveError,
   createQueryWorkbenchBrowserStore,
+  createQueryWorkbenchInitialDraft,
   createQueryWorkbenchMemoryStore,
   createQueryWorkbenchPreviewRuntime,
   createQueryWorkbenchSourceResolver,
@@ -74,6 +75,36 @@ describe("query workbench route state", () => {
     });
   });
 
+  it("round-trips draft preview requests without relying on Buffer", () => {
+    const request = {
+      query: {
+        indexId: "workflow:project-branch-board",
+        kind: "collection",
+        window: { limit: 25 },
+      },
+      version: serializedQueryVersion,
+    } as const;
+    const globalBuffer = Object.getOwnPropertyDescriptor(globalThis, "Buffer");
+
+    Reflect.defineProperty(globalThis, "Buffer", {
+      configurable: true,
+      enumerable: globalBuffer?.enumerable ?? false,
+      value: undefined,
+      writable: true,
+    });
+
+    try {
+      const encoded = encodeQueryWorkbenchDraft(request);
+      expect(decodeQueryWorkbenchDraft(encoded)).toEqual({ request });
+    } finally {
+      if (globalBuffer) {
+        Reflect.defineProperty(globalThis, "Buffer", globalBuffer);
+      } else {
+        Reflect.deleteProperty(globalThis, "Buffer");
+      }
+    }
+  });
+
   it("preserves invalid route state so previews fail closed instead of falling back", () => {
     const search = validateQueryRouteSearch({
       draft: "not-a-valid-draft",
@@ -125,7 +156,7 @@ describe("query workbench route state", () => {
     });
   });
 
-  it("derives the blank workbench draft request from the provided catalog", () => {
+  it("treats a blank route as an uncommitted draft instead of issuing a preview request", () => {
     const installedCatalog = createInstalledQueryEditorCatalog();
     const coreSurface = installedCatalog.surfaces.find(
       (surface) => surface.surfaceId === coreBuiltInQuerySurfaceIds.savedQueryLibrary,
@@ -141,18 +172,25 @@ describe("query workbench route state", () => {
     expect(
       resolveQueryWorkbenchRouteTarget({}, createQueryWorkbenchMemoryStore(), catalog),
     ).toEqual({
-      kind: "draft",
-      request: {
-        query: {
-          indexId: coreBuiltInQuerySurfaceIds.savedQueryLibrary,
-          kind: "collection",
-          window: {
-            limit: 25,
-          },
-        },
-        version: serializedQueryVersion,
-      },
+      kind: "blank",
     });
+  });
+
+  it("seeds the initial installed workbench draft with an empty workflow project filter", () => {
+    const draft = createQueryWorkbenchInitialDraft(createInstalledQueryEditorCatalog());
+
+    expect(draft.surfaceId).toBe("workflow:project-branch-board");
+    expect(draft.filters).toEqual([
+      {
+        fieldId: "projectId",
+        id: draft.filters[0]?.id,
+        operator: "eq",
+        value: {
+          kind: "literal",
+          value: "",
+        },
+      },
+    ]);
   });
 });
 

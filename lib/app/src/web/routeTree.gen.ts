@@ -10,8 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkflowRouteImport } from './routes/workflow'
-import { Route as ViewsRouteImport } from './routes/views'
 import { Route as SyncRouteImport } from './routes/sync'
+import { Route as ScalarsRouteImport } from './routes/scalars'
 import { Route as QueryRouteImport } from './routes/query'
 import { Route as GraphRouteImport } from './routes/graph'
 import { Route as IndexRouteImport } from './routes/index'
@@ -21,14 +21,14 @@ const WorkflowRoute = WorkflowRouteImport.update({
   path: '/workflow',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ViewsRoute = ViewsRouteImport.update({
-  id: '/views',
-  path: '/views',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SyncRoute = SyncRouteImport.update({
   id: '/sync',
   path: '/sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScalarsRoute = ScalarsRouteImport.update({
+  id: '/scalars',
+  path: '/scalars',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QueryRoute = QueryRouteImport.update({
@@ -51,16 +51,16 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/graph': typeof GraphRoute
   '/query': typeof QueryRoute
+  '/scalars': typeof ScalarsRoute
   '/sync': typeof SyncRoute
-  '/views': typeof ViewsRoute
   '/workflow': typeof WorkflowRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/graph': typeof GraphRoute
   '/query': typeof QueryRoute
+  '/scalars': typeof ScalarsRoute
   '/sync': typeof SyncRoute
-  '/views': typeof ViewsRoute
   '/workflow': typeof WorkflowRoute
 }
 export interface FileRoutesById {
@@ -68,24 +68,31 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/graph': typeof GraphRoute
   '/query': typeof QueryRoute
+  '/scalars': typeof ScalarsRoute
   '/sync': typeof SyncRoute
-  '/views': typeof ViewsRoute
   '/workflow': typeof WorkflowRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/graph' | '/query' | '/sync' | '/views' | '/workflow'
+  fullPaths: '/' | '/graph' | '/query' | '/scalars' | '/sync' | '/workflow'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/graph' | '/query' | '/sync' | '/views' | '/workflow'
-  id: '__root__' | '/' | '/graph' | '/query' | '/sync' | '/views' | '/workflow'
+  to: '/' | '/graph' | '/query' | '/scalars' | '/sync' | '/workflow'
+  id:
+    | '__root__'
+    | '/'
+    | '/graph'
+    | '/query'
+    | '/scalars'
+    | '/sync'
+    | '/workflow'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GraphRoute: typeof GraphRoute
   QueryRoute: typeof QueryRoute
+  ScalarsRoute: typeof ScalarsRoute
   SyncRoute: typeof SyncRoute
-  ViewsRoute: typeof ViewsRoute
   WorkflowRoute: typeof WorkflowRoute
 }
 
@@ -98,18 +105,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkflowRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/views': {
-      id: '/views'
-      path: '/views'
-      fullPath: '/views'
-      preLoaderRoute: typeof ViewsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/sync': {
       id: '/sync'
       path: '/sync'
       fullPath: '/sync'
       preLoaderRoute: typeof SyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scalars': {
+      id: '/scalars'
+      path: '/scalars'
+      fullPath: '/scalars'
+      preLoaderRoute: typeof ScalarsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/query': {
@@ -140,8 +147,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GraphRoute: GraphRoute,
   QueryRoute: QueryRoute,
+  ScalarsRoute: ScalarsRoute,
   SyncRoute: SyncRoute,
-  ViewsRoute: ViewsRoute,
   WorkflowRoute: WorkflowRoute,
 }
 export const routeTree = rootRouteImport

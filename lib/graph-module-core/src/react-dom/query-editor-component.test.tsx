@@ -165,4 +165,46 @@ describe("query editor component", () => {
     expect(html).toContain("Page size must be a positive integer.");
     expect(html).toContain("After cursor");
   });
+
+  it("renders freeform text entry for entity-ref filters without enumerated options", () => {
+    const catalog = createQueryEditorCatalog([
+      {
+        defaultPageSize: 25,
+        fields: [
+          {
+            control: "entity-ref",
+            fieldId: "projectId",
+            filterOperators: ["eq"],
+            kind: "entity-ref",
+            label: "Project",
+          },
+        ],
+        label: "Workflow Branch Board",
+        queryKind: "collection",
+        sourceKind: "projection",
+        surfaceId: "workflow:project-branch-board",
+        surfaceVersion: "query-surface:workflow:project-branch-board:v1",
+      },
+    ]);
+    const draft = {
+      ...createQueryEditorDraft(catalog, "workflow:project-branch-board"),
+      filters: [
+        {
+          fieldId: "projectId",
+          id: "filter:project",
+          operator: "eq" as const,
+          value: {
+            kind: "literal" as const,
+            value: "project:io",
+          },
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(<QueryEditor catalog={catalog} initialDraft={draft} />);
+
+    expect(html).toContain('data-query-editor-control="entity-ref"');
+    expect(html).toContain('value="project:io"');
+    expect(html).toContain("<input");
+  });
 });

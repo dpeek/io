@@ -21,7 +21,7 @@ with Worker coverage in
 
 For local development, this is the default first-run path:
 
-1. run `io start`
+1. run `turbo dev`
 2. open the local web shell on its loopback origin
 3. click `Start locally`
 4. let the browser exchange one localhost-only bootstrap credential for a

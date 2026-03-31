@@ -22,7 +22,8 @@ describe("query workbench component", () => {
     expect(html).toContain("Results Panel");
     expect(html).toContain("Save query");
     expect(html).toContain("Save view");
-    expect(html).toContain('data-query-route-mount="draft-preview"');
+    expect(html).toContain("Preview pending");
+    expect(html).not.toContain('data-query-route-mount="draft-preview"');
   });
 
   it("renders a fail-closed state for invalid route drafts", () => {

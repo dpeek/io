@@ -176,6 +176,8 @@ function readPreviewModeLabel(
   routeTarget: ReturnType<typeof resolveQueryWorkbenchState>["target"],
 ): string {
   switch (routeTarget.kind) {
+    case "blank":
+      return "draft setup";
     case "draft":
       return "live draft";
     case "saved-query":
@@ -191,6 +193,8 @@ function readPreviewSelectionLabel(
   routeTarget: ReturnType<typeof resolveQueryWorkbenchState>["target"],
 ): string {
   switch (routeTarget.kind) {
+    case "blank":
+      return "Fill the draft to start previewing results.";
     case "draft":
       return "Current editor draft";
     case "saved-query":
@@ -321,7 +325,7 @@ export function QueryWorkbench({
   }
 
   const previewSpec = useMemo(() => {
-    if (routeTarget.kind === "invalid") {
+    if (routeTarget.kind === "blank" || routeTarget.kind === "invalid") {
       return undefined;
     }
     if (routeTarget.kind === "saved-view") {
@@ -601,7 +605,7 @@ export function QueryWorkbench({
               </FieldGroup>
               <div className="flex flex-wrap gap-2">
                 <Button
-                  disabled={isSaving}
+                  disabled={isSaving || !validation.ok}
                   onClick={() => {
                     void handleSaveQuery();
                   }}
@@ -611,7 +615,7 @@ export function QueryWorkbench({
                   {editingSavedQueryId ? "Update query" : "Save query"}
                 </Button>
                 <Button
-                  disabled={isSaving}
+                  disabled={isSaving || !validation.ok}
                   onClick={() => {
                     void handleSaveView();
                   }}
@@ -809,6 +813,17 @@ export function QueryWorkbench({
             <CardHeader>
               <CardTitle className="text-base">Preview unavailable</CardTitle>
               <CardDescription>{routeTarget.message}</CardDescription>
+            </CardHeader>
+          </Card>
+        ) : routeTarget.kind === "blank" ? (
+          <Card className="border-border/70 bg-card/95 border shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Preview pending</CardTitle>
+              <CardDescription>
+                Live results stay idle until the current draft validates and syncs into route state.
+                The default workflow board draft starts with an empty `projectId` filter so `/query`
+                does not issue unsupported preview requests on first load.
+              </CardDescription>
             </CardHeader>
           </Card>
         ) : previewSpec ? (

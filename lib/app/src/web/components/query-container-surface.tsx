@@ -289,12 +289,19 @@ export function QueryContainerSurface({
     [executePage, resolveSource, runtime],
   );
   const [value, setValue] = useState<QueryContainerRuntimeValue | undefined>(initialValue);
-  const resolvedValidation =
-    validation ??
-    validateQueryContainerSpec(spec, {
-      rendererCapabilities: createQueryRendererCapabilityMap(registry),
-      surface,
-    });
+  const rendererCapabilities = useMemo(
+    () => createQueryRendererCapabilityMap(registry),
+    [registry],
+  );
+  const resolvedValidation = useMemo(
+    () =>
+      validation ??
+      validateQueryContainerSpec(spec, {
+        rendererCapabilities,
+        surface,
+      }),
+    [rendererCapabilities, spec, surface, validation],
+  );
 
   useEffect(() => {
     setValue(initialValue);

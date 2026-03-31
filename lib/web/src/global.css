@@ -216,6 +216,86 @@
   }
 }
 
+@layer components {
+  .graph-markdown {
+    @apply text-foreground text-sm leading-7;
+  }
+
+  .graph-markdown > :first-child {
+    margin-top: 0;
+  }
+
+  .graph-markdown > :last-child {
+    margin-bottom: 0;
+  }
+
+  .graph-markdown h1 {
+    @apply mt-0 mb-3 text-2xl font-semibold tracking-tight;
+  }
+
+  .graph-markdown h2 {
+    @apply mt-6 mb-3 text-xl font-semibold tracking-tight;
+  }
+
+  .graph-markdown h3 {
+    @apply mt-5 mb-2 text-lg font-semibold tracking-tight;
+  }
+
+  .graph-markdown h4,
+  .graph-markdown h5,
+  .graph-markdown h6 {
+    @apply mt-4 mb-2 text-base font-semibold;
+  }
+
+  .graph-markdown p {
+    @apply my-3;
+  }
+
+  .graph-markdown a {
+    @apply text-primary underline underline-offset-4;
+  }
+
+  .graph-markdown strong {
+    @apply font-semibold;
+  }
+
+  .graph-markdown em {
+    @apply italic;
+  }
+
+  .graph-markdown ul {
+    @apply my-3 ml-6 list-disc;
+  }
+
+  .graph-markdown ol {
+    @apply my-3 ml-6 list-decimal;
+  }
+
+  .graph-markdown li {
+    @apply my-1;
+  }
+
+  .graph-markdown blockquote {
+    @apply text-muted-foreground border-border my-4 border-l-2 pl-4 italic;
+  }
+
+  .graph-markdown hr {
+    @apply border-border my-5 border-t;
+  }
+
+  .graph-markdown code {
+    @apply bg-muted rounded px-1.5 py-0.5 font-mono text-[0.9em];
+  }
+
+  .graph-markdown pre {
+    @apply bg-muted my-4 overflow-x-auto rounded-xl p-4;
+  }
+
+  .graph-markdown pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+}
+
 @keyframes spin-60 {
   0%,
   50% {

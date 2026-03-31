@@ -100,7 +100,7 @@ The first version should be a stdio MCP server launched by the existing CLI:
 
 - command: `io mcp graph`
 - default backend: the existing graph HTTP routes exposed by the Worker
-- expected local flow: run `io start`, then point an MCP-capable client at
+- expected local flow: run `turbo dev`, then point an MCP-capable client at
   `io mcp graph --url http://io.localhost:1355/`
 - explicit remote bearer-share flow:
   `io mcp graph --url <url> --bearer-token <token>`

@@ -25,7 +25,7 @@ const navigationItems = [
   { to: "/workflow", label: "Workflow", exact: false },
   { to: "/graph", label: "Graph", exact: false },
   { to: "/sync", label: "Sync", exact: false },
-  { to: "/views", label: "View Proofs", exact: false },
+  { to: "/scalars", label: "Scalars", exact: false },
 ] as const;
 
 function isItemActive(pathname: string, item: (typeof navigationItems)[number]): boolean {

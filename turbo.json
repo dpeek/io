@@ -15,7 +15,21 @@
       "outputs": [],
       "outputLogs": "errors-only"
     },
+    "dev:setup": {
+      "cache": false,
+      "outputs": []
+    },
+    "dev:setup:clean": {
+      "cache": false,
+      "outputs": []
+    },
     "dev": {
+      "dependsOn": ["dev:setup"],
+      "cache": false,
+      "persistent": true
+    },
+    "dev:clean": {
+      "dependsOn": ["dev:setup:clean"],
       "cache": false,
       "persistent": true
     }

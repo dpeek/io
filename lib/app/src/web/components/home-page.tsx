@@ -79,7 +79,7 @@ export function HomePageStateView({
 
           <p className="text-muted-foreground text-sm">
             Role bindings and authorization remain graph-owned. Use Query to author or reopen saved
-            queries and views; `/views` stays focused on proof-only renderer review.
+            queries and views, and use Views to browse shared predicate editors and displays.
           </p>
 
           <div className="flex flex-wrap gap-2">
@@ -93,7 +93,7 @@ export function HomePageStateView({
               Open graph
             </Button>
             <Button nativeButton={false} render={<Link to="/views" />} variant="outline">
-              Review view proofs
+              Open views
             </Button>
             <Button
               nativeButton={false}

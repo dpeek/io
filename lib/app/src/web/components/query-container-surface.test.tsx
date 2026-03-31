@@ -1,11 +1,26 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { serializedQueryVersion } from "@io/graph-client";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
+import { JSDOM } from "jsdom";
+import { act } from "react";
 
 import type { QueryContainerRuntimeValue, QueryContainerSpec } from "../lib/query-container.js";
-import { QueryContainerSurfaceView } from "./query-container-surface.js";
+import { QueryContainerSurface, QueryContainerSurfaceView } from "./query-container-surface.js";
 import { createListRendererBinding } from "./query-renderers.js";
+
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
+type DomGlobals = {
+  readonly HTMLElement?: typeof globalThis.HTMLElement;
+  readonly Event?: typeof globalThis.Event;
+  readonly document?: Document;
+  readonly navigator?: Navigator;
+  readonly window?: Window & typeof globalThis;
+};
 
 const baseSpec = {
   containerId: "query-surface",
@@ -66,7 +81,72 @@ function createValue(kind: "ready" | "stale" | "refreshing" | "error"): QueryCon
   };
 }
 
+function installDom(): {
+  readonly cleanup: () => void;
+  readonly container: HTMLElement;
+} {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>");
+  const previous: DomGlobals = {
+    document: globalThis.document,
+    Event: globalThis.Event,
+    HTMLElement: globalThis.HTMLElement,
+    navigator: globalThis.navigator,
+    window: globalThis.window,
+  };
+
+  Object.assign(globalThis, {
+    document: dom.window.document,
+    Event: dom.window.Event,
+    HTMLElement: dom.window.HTMLElement,
+    navigator: dom.window.navigator,
+    window: dom.window as unknown as Window & typeof globalThis,
+  });
+
+  const container = dom.window.document.createElement("div");
+  dom.window.document.body.append(container);
+
+  return {
+    cleanup() {
+      dom.window.close();
+      Object.assign(globalThis, previous);
+    },
+    container,
+  };
+}
+
+async function waitFor<T>(callback: () => T | Promise<T>, timeoutMs = 5_000): Promise<T> {
+  const startedAt = Date.now();
+  let lastError: unknown;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      return await callback();
+    } catch (error) {
+      lastError = error;
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error(String(lastError ?? "Timed out waiting for condition."));
+}
+
 describe("query container surface", () => {
+  let dom: ReturnType<typeof installDom> | undefined;
+
+  beforeEach(() => {
+    dom = installDom();
+  });
+
+  afterEach(() => {
+    dom?.cleanup();
+    dom = undefined;
+  });
+
   it("renders shared stale and refreshing chrome around renderer output", () => {
     const staleHtml = renderToStaticMarkup(
       <QueryContainerSurfaceView
@@ -102,5 +182,44 @@ describe("query container surface", () => {
     expect(html).toContain('data-query-container-state="error"');
     expect(html).toContain("boom");
     expect(html).not.toContain('data-query-renderer="core:list"');
+  });
+
+  it("does not retry failed loads on every rerender", async () => {
+    if (!dom) {
+      throw new Error("Expected DOM fixture.");
+    }
+
+    let root: Root | undefined;
+    let executionCount = 0;
+
+    try {
+      root = createRoot(dom.container);
+      await act(async () => {
+        root?.render(
+          <QueryContainerSurface
+            executePage={async () => {
+              executionCount += 1;
+              throw Object.assign(new Error("boom"), { code: "failed" as const });
+            }}
+            spec={baseSpec}
+            title="Query surface"
+          />,
+        );
+      });
+
+      await waitFor(() => {
+        expect(dom?.container.textContent).toContain("boom");
+      });
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      expect(executionCount).toBe(1);
+    } finally {
+      await act(async () => {
+        root?.unmount();
+      });
+    }
   });
 });

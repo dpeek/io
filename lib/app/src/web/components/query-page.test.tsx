@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import type { QueryResultPage, SerializedQueryRequest } from "@io/graph-client";
+import {
+  serializedQueryVersion,
+  type QueryResultPage,
+  type SerializedQueryRequest,
+} from "@io/graph-client";
 import { createRoot, type Root } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { act, useState } from "react";
 
+import { encodeQueryWorkbenchDraft } from "../lib/query-workbench.js";
 import { createGraphBackedSavedQueryRepository } from "../lib/saved-query.js";
 import type { QueryRouteSearch } from "../lib/query-route-state.js";
 import { createExampleRuntime } from "../lib/example-runtime.js";
@@ -223,16 +228,50 @@ describe("query page", () => {
 
         await waitFor(() => {
           expect(domFixture.container.textContent).toContain("Results Panel");
-          expect(
-            domFixture.container.querySelector('[data-query-renderer="core:list"]'),
-          ).not.toBeNull();
-        });
-        await waitFor(() => {
-          expect(domFixture.container.textContent).toContain("Preview 25 #1");
+          expect(domFixture.container.textContent).toContain("Preview pending");
         });
 
         await waitFor(() => {
           expect(domFixture.container.querySelector("[data-query-editor]")).not.toBeNull();
+          expect(domFixture.container.textContent).toContain(
+            '"projectId" requires a non-empty string value.',
+          );
+        });
+
+        await act(async () => {
+          root?.unmount();
+        });
+        root = undefined;
+
+        await render({
+          draft: encodeQueryWorkbenchDraft({
+            query: {
+              filter: {
+                fieldId: "projectId",
+                op: "eq",
+                value: {
+                  kind: "literal",
+                  value: "project:io",
+                },
+              },
+              indexId: "workflow:project-branch-board",
+              kind: "collection",
+              window: {
+                limit: 25,
+              },
+            },
+            version: serializedQueryVersion,
+          }),
+        });
+
+        await waitFor(() => {
+          expect(readRouteState(domFixture.container).draft).toBeString();
+        });
+
+        await waitFor(() => {
+          expect(
+            domFixture.container.querySelector('[data-query-renderer="core:list"]'),
+          ).not.toBeNull();
           expect(domFixture.container.textContent).toContain("Preview 25 #1");
         });
 

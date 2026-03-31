@@ -1017,15 +1017,18 @@ Current proof status:
   reopen selection, parameter overrides, and route-addressable preview
   renderer/page-size state
 - `../../lib/app/src/web/lib/query-workbench.ts` now focuses on draft preview
-  serialization, shared saved-source resolution with parameter overrides, and
-  the shared preview-runtime helper that resolves saved queries before
-  executing through `/api/query`
+  serialization, browser-safe base64url route encoding, shared saved-source
+  resolution with parameter overrides, and the shared preview-runtime helper
+  that resolves saved queries before executing through `/api/query`
 - the current `/query` route now uses that shared workbench path to:
   preview inline drafts in a real query container, mount a dedicated results
   panel beside the editor, reopen saved queries or saved views from route
   state, rehydrate the form editor from those saved definitions, update the
   active saved ids without losing query identity, carry preview
-  renderer/page-size state through the route, apply parameter overrides, and
+  renderer/page-size state through the route, apply parameter overrides, keep
+  the initial workflow branch-board draft local-only until a required
+  `projectId` filter is filled so first load does not hammer `/api/query` with
+  unsupported requests, and
   fail closed when a saved query, saved view, route draft, or saved-route
   parameter override becomes invalid or stale, including current-catalog
   hydration failures when a previously saved surface definition, catalog

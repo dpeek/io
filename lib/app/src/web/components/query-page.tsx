@@ -71,7 +71,7 @@ function QueryPageView({ children }: { readonly children: ReactNode }) {
           <p className="text-muted-foreground max-w-3xl text-sm leading-6">
             Author inline queries, reopen graph-backed saved queries or views through explicit route
             state, and inspect live results beside the editor through the shared query-container
-            runtime. `/views` stays focused on proof-only renderer review.
+            runtime.
           </p>
         </div>
       </div>

@@ -60,9 +60,11 @@ Use these repo scripts:
 - `bun run auth:migrations:apply:remote`
 
 Local development now also applies pending auth-store migrations automatically
-when `io start` runs. That uses the same `lib/app/out/wrangler` persistence
-directory as the Vite Cloudflare plugin so the Worker and the migration
-command point at the same local D1 database.
+when `turbo dev` runs `@io/app`. That uses the same `lib/app/out/wrangler`
+persistence directory as the Vite Cloudflare plugin so the Worker and the
+migration command point at the same local D1 database. For a clean local
+bootstrap, `turbo dev:clean --filter=@io/app` deletes `lib/app/out` before
+re-applying migrations and starting the dev runtime.
 
 Expected flow for future Better Auth schema changes:
 

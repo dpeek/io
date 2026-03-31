@@ -16,7 +16,11 @@
     "auth:migrations:generate": "better-auth generate --config auth.ts",
     "build": "vite build",
     "check": "oxlint --type-aware --type-check --fix src auth.ts vite.config.ts --ignore-pattern '**/*.test.ts' && oxfmt && bun test",
-    "dev": "portless io vite dev"
+    "clean": "rm -rf out",
+    "dev": "portless io vite dev",
+    "dev:clean": "portless io vite dev",
+    "dev:setup": "bun run auth:migrations:apply:local",
+    "dev:setup:clean": "rm -rf out && bun run auth:migrations:apply:local"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

@@ -692,6 +692,17 @@ function FilterValueEditor({
   switch (field.control) {
     case "enum":
     case "entity-ref":
+      if (!field.options?.length) {
+        return (
+          <Input
+            data-query-editor-control={field.control}
+            onChange={(event) => {
+              onChange({ kind: "literal", value: event.target.value });
+            }}
+            value={typeof value.value === "string" ? value.value : ""}
+          />
+        );
+      }
       return (
         <NativeSelect
           data-query-editor-control={field.control}

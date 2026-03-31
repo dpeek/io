@@ -1,11 +1,13 @@
 import {
+  addQueryEditorFilter,
   createQueryEditorDraft,
   hydrateQueryEditorDraft,
   QueryEditorHydrationError,
-  serializeQueryEditorDraft,
+  updateQueryEditorFilter,
   type QueryEditorCatalog,
   type QueryEditorDraft,
 } from "@io/graph-module-core/react-dom/query-editor";
+import { workflowBuiltInQuerySurfaceIds } from "@io/graph-module-workflow";
 import {
   validateSerializedQueryRequest,
   type QueryLiteral,
@@ -58,6 +60,9 @@ export type QueryWorkbenchStore = {
 };
 
 export type QueryWorkbenchRouteTarget =
+  | {
+      readonly kind: "blank";
+    }
   | {
       readonly kind: "draft";
       readonly parameterDefinitions?: readonly QueryParameterDefinition[];
@@ -189,7 +194,7 @@ export function decodeQueryWorkbenchParamOverrides(
 export function resolveQueryWorkbenchRouteTarget(
   search: QueryRouteSearch,
   store: Pick<QueryWorkbenchStore, "getQuery" | "getView">,
-  catalog: QueryEditorCatalog,
+  _catalog: QueryEditorCatalog,
 ): QueryWorkbenchRouteTarget {
   if (
     (search.queryId || search.viewId) &&
@@ -255,8 +260,7 @@ export function resolveQueryWorkbenchRouteTarget(
     };
   }
   return {
-    kind: "draft",
-    request: createInitialQueryWorkbenchRequest(catalog),
+    kind: "blank",
   };
 }
 
@@ -265,7 +269,7 @@ export function hydrateQueryWorkbenchDraft(input: {
   readonly target: QueryWorkbenchRouteTarget;
 }): HydratedQueryWorkbenchDraft | undefined {
   const { catalog, target } = input;
-  if (target.kind === "invalid") {
+  if (target.kind === "blank" || target.kind === "invalid") {
     return undefined;
   }
   if (target.kind === "draft") {
@@ -308,7 +312,7 @@ export function resolveQueryWorkbenchState(input: {
   readonly target: QueryWorkbenchRouteTarget;
 }): ResolvedQueryWorkbenchState {
   const { catalog, rendererCapabilities, resolveSurfaceCompatibility, target } = input;
-  if (target.kind === "invalid") {
+  if (target.kind === "blank" || target.kind === "invalid") {
     return { target };
   }
   if (target.kind === "saved-query") {
@@ -606,11 +610,40 @@ export function createQueryWorkbenchPreviewRuntime(
 }
 
 export function createQueryWorkbenchInitialDraft(catalog: QueryEditorCatalog): QueryEditorDraft {
-  return createQueryEditorDraft(catalog);
+  const workflowBoardDraft = createWorkflowBoardInitialDraft(catalog);
+  return workflowBoardDraft ?? createQueryEditorDraft(catalog);
 }
 
-function createInitialQueryWorkbenchRequest(catalog: QueryEditorCatalog): SerializedQueryRequest {
-  return serializeQueryEditorDraft(createQueryWorkbenchInitialDraft(catalog), catalog).request;
+function createWorkflowBoardInitialDraft(
+  catalog: QueryEditorCatalog,
+): QueryEditorDraft | undefined {
+  const workflowBoardSurface = catalog.surfaces.find(
+    (surface) => surface.surfaceId === workflowBuiltInQuerySurfaceIds.projectBranchBoard,
+  );
+  if (!workflowBoardSurface) {
+    return undefined;
+  }
+
+  const baseDraft = createQueryEditorDraft(catalog, workflowBoardSurface.surfaceId);
+  const seededDraft = addQueryEditorFilter(baseDraft, catalog);
+  const projectFilter = seededDraft.filters[0];
+  if (!projectFilter) {
+    return baseDraft;
+  }
+
+  return updateQueryEditorFilter(
+    seededDraft,
+    projectFilter.id,
+    {
+      fieldId: "projectId",
+      operator: "eq",
+      value: {
+        kind: "literal",
+        value: "",
+      },
+    },
+    catalog,
+  );
 }
 
 function readPersistedWorkbenchStore(
@@ -667,15 +700,75 @@ function compareSavedEntries(
 }
 
 function encodeWorkbenchValue(value: unknown): string {
-  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+  return encodeWorkbenchUtf8Base64Url(JSON.stringify(value));
 }
 
 function decodeWorkbenchValue(value: string): unknown {
   try {
-    return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    return JSON.parse(decodeWorkbenchUtf8Base64Url(value));
   } catch {
     return undefined;
   }
+}
+
+function encodeWorkbenchUtf8Base64Url(value: string): string {
+  const buffer = readWorkbenchBufferApi();
+  if (buffer) {
+    return buffer.from(value, "utf8").toString("base64url");
+  }
+  if (typeof btoa !== "function") {
+    throw new Error("Base64url encoding is unavailable in this runtime.");
+  }
+  return encodeBytesAsBase64Url(new TextEncoder().encode(value));
+}
+
+function decodeWorkbenchUtf8Base64Url(value: string): string {
+  const buffer = readWorkbenchBufferApi();
+  if (buffer) {
+    return buffer.from(value, "base64url").toString("utf8");
+  }
+  if (typeof atob !== "function") {
+    throw new Error("Base64url decoding is unavailable in this runtime.");
+  }
+  return new TextDecoder().decode(decodeBase64UrlToBytes(value));
+}
+
+function encodeBytesAsBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function decodeBase64UrlToBytes(value: string): Uint8Array {
+  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+type WorkbenchBufferEncoding = "base64url" | "utf8";
+
+type WorkbenchBufferApi = {
+  from(
+    value: string,
+    encoding: WorkbenchBufferEncoding,
+  ): {
+    toString(encoding: WorkbenchBufferEncoding): string;
+  };
+};
+
+function readWorkbenchBufferApi(): WorkbenchBufferApi | undefined {
+  const candidate = (globalThis as { Buffer?: Partial<WorkbenchBufferApi> }).Buffer;
+  if (!candidate || typeof candidate.from !== "function") {
+    return undefined;
+  }
+  return candidate as WorkbenchBufferApi;
 }
 
 function readQueryWorkbenchDraftRouteState(

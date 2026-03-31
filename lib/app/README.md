@@ -30,8 +30,13 @@ was extracted into `@op/cli`.
 
 ## Dev
 
-Run `turbo dev --filter=@io/app` from the repo root, or `bun run dev` in this
-package, to start the web app through Turbo and the app-local Vite runtime.
+Run `turbo dev` from the repo root, or `bun run dev` in this package, to apply
+local auth-store migrations and then start the app-local Vite runtime through
+`portless io vite dev`.
+
+Run `turbo dev:clean --filter=@io/app`, or `bun run dev:clean` in this package,
+to delete `lib/app/out`, recreate the local persisted Worker state, and then
+start the same dev runtime.
 
 ## Validation
 

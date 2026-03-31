@@ -84,11 +84,13 @@ credential into a normal Better Auth session, then the browser continues
 through the existing `GET /api/bootstrap` and `POST /api/access/activate`
 seams.
 
-For developers, this is the default local first-run path: `io start`, open the
-localhost web shell, then click `Start locally` once. That one click should end
-in the same Better Auth-backed browser session model as every other auth path,
-plus writable graph access when the local flow can determine one safe outcome.
-Use the email auth entry instead when you want the more production-like path.
+For developers, this is the default local first-run path: `turbo dev`, open the
+localhost web shell, then click `Start locally` once. Use
+`turbo dev:clean --filter=@io/app` when you need to discard the persisted local
+Worker state under `lib/app/out` first. That one click should end in the same
+Better Auth-backed browser session model as every other auth path, plus
+writable graph access when the local flow can determine one safe outcome. Use
+the email auth entry instead when you want the more production-like path.
 
 Stable contract anchors:
 
@@ -209,12 +211,12 @@ Current shared query-authoring coverage:
   `../../lib/app/index.html`: app-local Vite, Worker, and SPA entry config for
   the shipped web runtime
 - `../../lib/app/src/web/routes/`: top-level pages including the primary
-  query-authoring route at `/query`, the proof-only review route at `/views`,
+  query-authoring route at `/query`, the predicate-view browser at `/views`,
   `workflow`, `sync`, and the graph explorer routes
 - `../../lib/app/src/web/components/home-page.tsx`: session-aware landing page that
   keeps the signed-out auth entry flow and the signed-in bootstrap summary in
   one place while promoting `/query` as the primary signed-in authoring entry
-  point and demoting `/views` to an explicit proof-review destination
+  point while keeping `/views` available as a focused predicate-view browser
 - `../../lib/app/src/web/components/auth-shell.tsx`: principal-bootstrap consumer
   hook, signed-out localhost onboarding entrypoint, sign-in/sign-out chrome,
   provisional create-account form, and the gate that keeps graph surfaces from
@@ -242,9 +244,11 @@ Current shared query-authoring coverage:
   principal-scoped graph-backed saved-query/view library into the shared
   workbench, and keeps the dedicated query-authoring surface plus side-by-side
   live results panel separate from the lower-level editor helpers
-- `../../lib/app/src/web/components/views-page.tsx`: `/views` proof-only review
-  surface that keeps the disposable predicate/editor coverage fixture plus the
-  reusable query renderer proof explicit after the `/query` authoring cutover
+- `../../lib/app/src/web/components/views-page.tsx`: `/views` predicate-family
+  browser that keeps the route focused on shared predicate displays and editors
+- `../../lib/app/src/web/components/views-catalog.ts`: local `/views` fixture
+  catalog that seeds isolated in-memory predicate examples for each family and
+  powers per-example reset
 - `../../lib/app/src/web/components/query-route-mount.tsx`: shared route composition
   seam that lets routes mount one query container through common page chrome
   instead of route-local wiring
