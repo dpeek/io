@@ -848,6 +848,16 @@ The renderer owns:
 - how one item or row is visually presented
 - optional item-level affordances such as open, select, archive, or inspect
 
+Current built-in table behavior:
+
+- collection-surface bindings first prefer authored fields, then default-selected
+  query-surface selections, then ordering and filter metadata before falling
+  back to active payload keys
+- the shared `core:table` renderer treats those inferred fields as the primary
+  columns instead of prepending debug-first key/entity columns
+- page-local row selection stays renderer-owned so later collection or
+  selection-scoped command surfaces can layer on the same table path
+
 ### Where query containers will be used
 
 The platform should support query containers in:

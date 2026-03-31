@@ -2,25 +2,17 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { serializedQueryVersion } from "@io/graph-client";
 import { createRoot, type Root } from "react-dom/client";
-import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 import { act } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import type { QueryContainerRuntimeValue, QueryContainerSpec } from "../lib/query-container.js";
 import { QueryContainerSurface, QueryContainerSurfaceView } from "./query-container-surface.js";
-import { createListRendererBinding } from "./query-renderers.js";
+import { createListRendererBinding, createTableRendererBinding } from "./query-renderers.js";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
-
-type DomGlobals = {
-  readonly HTMLElement?: typeof globalThis.HTMLElement;
-  readonly Event?: typeof globalThis.Event;
-  readonly document?: Document;
-  readonly navigator?: Navigator;
-  readonly window?: Window & typeof globalThis;
-};
 
 const baseSpec = {
   containerId: "query-surface",
@@ -44,7 +36,24 @@ const baseSpec = {
   }),
 } as const satisfies QueryContainerSpec;
 
-function createValue(kind: "ready" | "stale" | "refreshing" | "error"): QueryContainerRuntimeValue {
+const tableSpec = {
+  ...baseSpec,
+  renderer: createTableRendererBinding([
+    {
+      fieldId: "title",
+      label: "Title",
+    },
+    {
+      fieldId: "state",
+      kind: "enum",
+      label: "State",
+    },
+  ]),
+} as const satisfies QueryContainerSpec;
+
+function createValue(
+  kind: "ready" | "stale" | "refreshing" | "error" | "paginated",
+): QueryContainerRuntimeValue {
   const result = {
     kind: "collection" as const,
     freshness: {
@@ -61,7 +70,9 @@ function createValue(kind: "ready" | "stale" | "refreshing" | "error"): QueryCon
         },
       },
     ],
-    ...(kind === "stale" || kind === "refreshing" ? { nextCursor: "cursor:2" } : {}),
+    ...(kind === "stale" || kind === "refreshing" || kind === "paginated"
+      ? { nextCursor: "cursor:2" }
+      : {}),
   };
 
   return {
@@ -77,27 +88,47 @@ function createValue(kind: "ready" | "stale" | "refreshing" | "error"): QueryCon
           ? { kind: "stale", nextCursor: "cursor:2", result }
           : kind === "refreshing"
             ? { kind: "refreshing", nextCursor: "cursor:2", result }
-            : { kind: "ready", result },
+            : kind === "paginated"
+              ? { kind: "paginated", nextCursor: "cursor:2", result }
+              : { kind: "ready", result },
   };
 }
+
+type DomGlobals = {
+  readonly HTMLElement?: typeof globalThis.HTMLElement;
+  readonly Event?: typeof globalThis.Event;
+  readonly MouseEvent?: typeof globalThis.MouseEvent;
+  readonly PointerEvent?: typeof globalThis.PointerEvent;
+  readonly document?: Document;
+  readonly navigator?: Navigator;
+  readonly window?: Window & typeof globalThis;
+};
 
 function installDom(): {
   readonly cleanup: () => void;
   readonly container: HTMLElement;
 } {
-  const dom = new JSDOM("<!doctype html><html><body></body></html>");
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", {
+    url: "http://io.localhost:8787/query",
+  });
   const previous: DomGlobals = {
     document: globalThis.document,
     Event: globalThis.Event,
     HTMLElement: globalThis.HTMLElement,
+    MouseEvent: globalThis.MouseEvent,
+    PointerEvent: globalThis.PointerEvent,
     navigator: globalThis.navigator,
     window: globalThis.window,
   };
+  const pointerEvent =
+    dom.window.PointerEvent ?? class PointerEvent extends dom.window.MouseEvent {};
 
   Object.assign(globalThis, {
     document: dom.window.document,
     Event: dom.window.Event,
     HTMLElement: dom.window.HTMLElement,
+    MouseEvent: dom.window.MouseEvent,
+    PointerEvent: pointerEvent,
     navigator: dom.window.navigator,
     window: dom.window as unknown as Window & typeof globalThis,
   });
@@ -216,6 +247,166 @@ describe("query container surface", () => {
       });
 
       expect(executionCount).toBe(1);
+    } finally {
+      await act(async () => {
+        root?.unmount();
+      });
+    }
+  });
+
+  it("renders table columns as the primary entity fields instead of debug key columns", () => {
+    const html = renderToStaticMarkup(
+      <QueryContainerSurfaceView
+        spec={tableSpec}
+        title="Query surface"
+        value={createValue("paginated")}
+      />,
+    );
+
+    expect(html).toContain('data-query-renderer="core:table"');
+    expect(html).toContain("Title");
+    expect(html).toContain("State");
+    expect(html).toContain("Select rows to stage collection actions.");
+    expect(html).toContain("More rows available.");
+    expect(html).not.toContain(">Key</th>");
+    expect(html).not.toContain(">Entity</th>");
+  });
+
+  it("updates the page-local table selection state when a row is selected", async () => {
+    if (!dom) {
+      throw new Error("Expected DOM fixture.");
+    }
+
+    let root: Root | undefined;
+    try {
+      root = createRoot(dom.container);
+      await act(async () => {
+        root?.render(
+          <QueryContainerSurfaceView
+            spec={tableSpec}
+            title="Query surface"
+            value={createValue("paginated")}
+          />,
+        );
+      });
+
+      const rowCheckbox = dom.container.querySelectorAll<HTMLElement>('[role="checkbox"]')[1];
+      if (!rowCheckbox) {
+        throw new Error("Expected row checkbox.");
+      }
+
+      await act(async () => {
+        rowCheckbox.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(dom.container.textContent).toContain("1 selected on this page");
+      expect(
+        dom.container.querySelector('[data-slot="table-row"][data-state="selected"]'),
+      ).not.toBeNull();
+    } finally {
+      await act(async () => {
+        root?.unmount();
+      });
+    }
+  });
+
+  it("surfaces active table rows through the shared renderer activation callback", async () => {
+    if (!dom) {
+      throw new Error("Expected DOM fixture.");
+    }
+
+    let activatedKey = "";
+    let root: Root | undefined;
+    try {
+      root = createRoot(dom.container);
+      await act(async () => {
+        root?.render(
+          <QueryContainerSurfaceView
+            activeItemKey="row:1"
+            onActivateItem={(item) => {
+              activatedKey = item.key;
+            }}
+            spec={tableSpec}
+            title="Query surface"
+            value={createValue("paginated")}
+          />,
+        );
+      });
+
+      const row = dom.container.querySelector<HTMLElement>('[data-query-result-item="row:1"]');
+      if (!row) {
+        throw new Error("Expected query result row.");
+      }
+
+      expect(row.getAttribute("data-query-result-state")).toBe("active");
+
+      await act(async () => {
+        row.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(activatedKey).toBe("row:1");
+    } finally {
+      await act(async () => {
+        root?.unmount();
+      });
+    }
+  });
+
+  it("renders row and selection affordances without treating action clicks as row activation", async () => {
+    if (!dom) {
+      throw new Error("Expected DOM fixture.");
+    }
+
+    let activatedKey = "";
+    let root: Root | undefined;
+    try {
+      root = createRoot(dom.container);
+      await act(async () => {
+        root?.render(
+          <QueryContainerSurfaceView
+            affordances={{
+              renderRowActions: (item) => (
+                <button data-row-command={item.key} type="button">
+                  Mark blocked
+                </button>
+              ),
+              renderSelectionActions: (selection) => (
+                <button data-selection-command={selection.keys.join(",")} type="button">
+                  Archive selected
+                </button>
+              ),
+            }}
+            onActivateItem={(item) => {
+              activatedKey = item.key;
+            }}
+            spec={tableSpec}
+            title="Query surface"
+            value={createValue("paginated")}
+          />,
+        );
+      });
+
+      const rowAction = dom.container.querySelector<HTMLElement>('[data-row-command="row:1"]');
+      if (!rowAction) {
+        throw new Error("Expected row command affordance.");
+      }
+
+      await act(async () => {
+        rowAction.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(activatedKey).toBe("");
+
+      const rowCheckbox = dom.container.querySelectorAll<HTMLElement>('[role="checkbox"]')[1];
+      if (!rowCheckbox) {
+        throw new Error("Expected row checkbox.");
+      }
+
+      await act(async () => {
+        rowCheckbox.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(dom.container.querySelector('[data-selection-command="row:1"]')).not.toBeNull();
     } finally {
       await act(async () => {
         root?.unmount();

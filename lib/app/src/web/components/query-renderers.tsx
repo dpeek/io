@@ -3,8 +3,10 @@
 import type { QueryResultItem, QueryResultPage, ReadQuery } from "@io/graph-client";
 import { Badge } from "@io/web/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
+import { Checkbox } from "@io/web/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@io/web/table";
-import type { ComponentType } from "react";
+import { cn } from "@io/web/utils";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 import type {
   QueryCardRendererDefinition,
@@ -31,10 +33,27 @@ const defaultCardGridRendererDefinition = {
   card: {},
 } as const satisfies QueryRendererBindingDefinition;
 
+const tableColumnFallbackFieldIds = [
+  "title",
+  "name",
+  "label",
+  "status",
+  "state",
+  "summary",
+  "owner",
+  "updatedAt",
+  "createdAt",
+] as const;
+
+const syntheticRowColumnFieldId = "__row";
+
 export type QueryRendererViewProps = {
+  readonly activeItemKey?: string;
+  readonly affordances?: QueryRendererAffordanceSet;
   readonly container: QueryContainerSpec;
   readonly isRefreshing: boolean;
   readonly isStale: boolean;
+  readonly onActivateItem?: (item: QueryResultItem) => void;
   readonly pagination: {
     readonly hasNextPage: boolean;
     readonly mode: "paged" | "infinite";
@@ -46,6 +65,16 @@ export type QueryRendererViewProps = {
     QueryContainerState,
     { readonly kind: "ready" | "paginated" | "stale" | "refreshing" }
   >;
+};
+
+export type QueryRendererSelectionState = {
+  readonly items: readonly QueryResultItem[];
+  readonly keys: readonly string[];
+};
+
+export type QueryRendererAffordanceSet = {
+  readonly renderRowActions?: (item: QueryResultItem) => ReactNode;
+  readonly renderSelectionActions?: (selection: QueryRendererSelectionState) => ReactNode;
 };
 
 export type QueryRendererDefinition = {
@@ -89,6 +118,23 @@ function readPayloadKeys(items: readonly QueryResultItem[]): readonly string[] {
     }
   }
   return [...keys];
+}
+
+function sortTableFieldIds(fieldIds: readonly string[]): readonly string[] {
+  return [...fieldIds].sort((left, right) => {
+    const leftIndex = tableColumnFallbackFieldIds.indexOf(
+      left as (typeof tableColumnFallbackFieldIds)[number],
+    );
+    const rightIndex = tableColumnFallbackFieldIds.indexOf(
+      right as (typeof tableColumnFallbackFieldIds)[number],
+    );
+    const leftRank = leftIndex === -1 ? Number.POSITIVE_INFINITY : leftIndex;
+    const rightRank = rightIndex === -1 ? Number.POSITIVE_INFINITY : rightIndex;
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+    return left.localeCompare(right);
+  });
 }
 
 function readPrimaryValue(
@@ -166,7 +212,16 @@ function resolveTableRendererColumns(
 ): readonly QueryTableRendererColumnDefinition[] {
   const definition = container.renderer.definition;
   if (!definition || definition.kind !== "table" || definition.columns.length === 0) {
-    return readPayloadKeys(result.items).map((fieldId) => ({ fieldId }));
+    const inferredFieldIds = sortTableFieldIds(readPayloadKeys(result.items));
+    if (inferredFieldIds.length === 0) {
+      return [
+        {
+          fieldId: syntheticRowColumnFieldId,
+          label: result.items.some((item) => item.entityId) ? "Entity" : "Row",
+        },
+      ];
+    }
+    return inferredFieldIds.map((fieldId) => ({ fieldId }));
   }
   return definition.columns;
 }
@@ -179,6 +234,19 @@ function resolveCardFields(
     return definition.fields;
   }
   return readPayloadKeys([item]).map((fieldId) => ({ fieldId }));
+}
+
+function formatTableRendererValue(
+  value: unknown,
+  kind: QueryTableRendererColumnDefinition["kind"] | undefined,
+): string {
+  if (kind === "boolean" && typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  if (kind === "boolean-list" && Array.isArray(value)) {
+    return value.map((entry) => (entry ? "Yes" : "No")).join(", ");
+  }
+  return formatRendererValue(value);
 }
 
 export function createListRendererBinding(
@@ -296,31 +364,126 @@ function CardGridRenderer({ container, result }: QueryRendererViewProps) {
   );
 }
 
-function TableRenderer({ container, result }: QueryRendererViewProps) {
+function TableRenderer({
+  activeItemKey,
+  affordances,
+  container,
+  onActivateItem,
+  pagination,
+  result,
+}: QueryRendererViewProps) {
   const columns = resolveTableRendererColumns(container, result);
-  const showEntityId = result.items.some((item) => item.entityId);
+  const visibleKeys = result.items.map((item) => item.key);
+  const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
+
+  useEffect(() => {
+    setSelectedKeys((current) => {
+      const next = current.filter((key) => visibleKeys.includes(key));
+      return next.length === current.length ? current : next;
+    });
+  }, [visibleKeys]);
+
+  const areAllVisibleRowsSelected =
+    visibleKeys.length > 0 && visibleKeys.every((key) => selectedKeys.includes(key));
+  const selectedCount = selectedKeys.length;
+  const selectedItems = result.items.filter((item) => selectedKeys.includes(item.key));
+  const hasRowActions = Boolean(affordances?.renderRowActions);
+  const selectionActions =
+    selectedCount > 0
+      ? affordances?.renderSelectionActions?.({
+          items: selectedItems,
+          keys: selectedKeys,
+        })
+      : null;
+
+  function toggleRowSelection(rowKey: string, checked: boolean) {
+    setSelectedKeys((current) =>
+      checked
+        ? current.includes(rowKey)
+          ? current
+          : [...current, rowKey]
+        : current.filter((key) => key !== rowKey),
+    );
+  }
+
+  function toggleVisibleRows(checked: boolean) {
+    setSelectedKeys(checked ? visibleKeys : []);
+  }
 
   return (
     <div
       className="border-border/70 overflow-hidden rounded-xl border"
       data-query-renderer="core:table"
     >
+      <div className="bg-muted/30 text-muted-foreground flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>
+            {selectedCount > 0
+              ? `${selectedCount} selected on this page`
+              : "Select rows to stage collection actions."}
+          </span>
+          {selectionActions}
+        </div>
+        <span>
+          {pagination.hasNextPage
+            ? "More rows available."
+            : pagination.mode === "infinite"
+              ? "No more rows in this result set."
+              : "End of current page."}
+        </span>
+      </div>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Key</TableHead>
-            {showEntityId ? <TableHead>Entity</TableHead> : null}
+            <TableHead className="w-10">
+              <Checkbox
+                aria-label="Select all visible rows"
+                checked={areAllVisibleRowsSelected}
+                onCheckedChange={(nextChecked) => {
+                  toggleVisibleRows(nextChecked === true);
+                }}
+              />
+            </TableHead>
             {columns.map((column) => (
               <TableHead key={column.fieldId}>{column.label ?? column.fieldId}</TableHead>
             ))}
+            {hasRowActions ? <TableHead className="w-1">Actions</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
           {result.items.map((item) => (
-            <TableRow key={item.key}>
-              <TableCell className="font-medium">{item.key}</TableCell>
-              {showEntityId ? <TableCell>{item.entityId ?? "—"}</TableCell> : null}
-              {columns.map((column) => (
+            <TableRow
+              className={cn(
+                "transition-colors",
+                onActivateItem ? "cursor-pointer" : undefined,
+                activeItemKey === item.key ? "bg-muted/50" : undefined,
+              )}
+              data-query-result-item={item.key}
+              data-query-result-state={activeItemKey === item.key ? "active" : undefined}
+              data-state={selectedKeys.includes(item.key) ? "selected" : undefined}
+              key={item.key}
+              onClick={() => {
+                onActivateItem?.(item);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") {
+                  return;
+                }
+                event.preventDefault();
+                onActivateItem?.(item);
+              }}
+              tabIndex={onActivateItem ? 0 : undefined}
+            >
+              <TableCell className="w-10">
+                <Checkbox
+                  aria-label={`Select ${item.entityId ?? item.key}`}
+                  checked={selectedKeys.includes(item.key)}
+                  onCheckedChange={(nextChecked) => {
+                    toggleRowSelection(item.key, nextChecked === true);
+                  }}
+                />
+              </TableCell>
+              {columns.map((column, index) => (
                 <TableCell
                   className={
                     column.align === "center"
@@ -331,11 +494,41 @@ function TableRenderer({ container, result }: QueryRendererViewProps) {
                   }
                   key={`${item.key}:${column.fieldId}`}
                 >
-                  {hasRenderableText(readFieldValue(item, column.fieldId))
-                    ? formatRendererValue(readFieldValue(item, column.fieldId))
-                    : (column.emptyLabel ?? "—")}
+                  {column.fieldId === syntheticRowColumnFieldId ? (
+                    <span className="font-medium">{item.entityId ?? item.key}</span>
+                  ) : hasRenderableText(readFieldValue(item, column.fieldId)) ? (
+                    <div className={index === 0 ? "space-y-1" : undefined}>
+                      <div className={index === 0 ? "font-medium" : undefined}>
+                        {formatTableRendererValue(
+                          readFieldValue(item, column.fieldId),
+                          column.kind,
+                        )}
+                      </div>
+                      {index === 0 && item.entityId ? (
+                        <div className="text-muted-foreground text-[11px]">{item.entityId}</div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    (column.emptyLabel ?? "—")
+                  )}
                 </TableCell>
               ))}
+              {hasRowActions ? (
+                <TableCell className="w-1">
+                  <div
+                    className="flex justify-end"
+                    data-query-row-actions={item.key}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                  >
+                    {affordances?.renderRowActions?.(item)}
+                  </div>
+                </TableCell>
+              ) : null}
             </TableRow>
           ))}
         </TableBody>

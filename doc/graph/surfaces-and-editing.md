@@ -231,6 +231,22 @@ In practice:
 This keeps the read plane centered on one serialized-query stack while letting
 the higher-level collection surface focus on actions and editing semantics.
 
+Current proving-ground browser support is intentionally narrower than the full
+authored contract:
+
+- `CollectionSurfaceSpec.commandSurfaces` may now drive row-scoped
+  `subject.kind = "entity"` actions and page-local `subject.kind = "selection"`
+  actions on the shared `core:table` renderer
+- table selection still stays renderer-owned and page-local; the collection
+  host consumes the selected row set rather than re-owning checkbox state
+- the proving surface currently expects inputless command bindings plus
+  `postSuccess` behaviors limited to `refresh` and `openCreatedEntity`
+- `scope`-subject commands, route-level command registries, and richer dialog
+  or sheet input composition remain future host work
+
+That keeps the first proving ground mechanically credible without pretending
+the broader module-host command registry is already finished.
+
 ### Command Surface
 
 `GraphCommandSpec` should stay focused on execution, policy, touched

@@ -155,7 +155,25 @@ execution or save flows land. That shared authoring path now reads from the
 installed multi-module query catalog, so core and workflow surfaces hydrate,
 reopen, and validate through the same consumer helpers. App/web keeps the
 built-in installation seam in `query-surface-registry.ts` and the saved-query
-helpers in `@io/app/web/saved-query`.
+helpers in `@io/app/web/saved-query`. The proof-only `/views` route now also
+includes the first generic collection-browser composition over the authored
+collection mount, proving that query-backed record selection can open shared
+detail editing, mount authored row and selection command affordances, and
+launch the existing generic create flow from one surface.
+
+Current proving-ground command guardrails:
+
+- collection command affordances resolve from
+  `CollectionSurfaceSpec.commandSurfaces`, but the current browser proof still
+  binds those keys through app-local command handlers instead of a general
+  module-host registry
+- row actions require `GraphCommandSurfaceSpec.subject.kind = "entity"` and
+  selection actions require `subject.kind = "selection"`
+- table checkbox state remains renderer-owned and page-local; the collection
+  host layers command buttons onto that selection model instead of duplicating
+  it
+- the current proof path only supports inputless actions plus `postSuccess`
+  behaviors limited to `refresh` and `openCreatedEntity`
 
 Current editor interaction model:
 

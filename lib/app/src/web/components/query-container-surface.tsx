@@ -21,11 +21,16 @@ import { requestSerializedQuery } from "../lib/query-transport.js";
 import {
   builtInQueryRendererRegistry,
   createQueryRendererCapabilityMap,
+  type QueryRendererAffordanceSet,
+  type QueryRendererViewProps,
   type QueryRendererRegistry,
 } from "./query-renderers.js";
 
 type QueryContainerSurfaceBaseProps = {
+  readonly activeItemKey?: QueryRendererViewProps["activeItemKey"];
+  readonly affordances?: QueryRendererAffordanceSet;
   readonly description?: string;
+  readonly onActivateItem?: QueryRendererViewProps["onActivateItem"];
   readonly registry?: QueryRendererRegistry;
   readonly spec: QueryContainerSpec;
   readonly surface?: QuerySurfaceRendererCompatibility;
@@ -43,6 +48,7 @@ export type QueryContainerSurfaceProps = QueryContainerSurfaceBaseProps & {
   readonly executePage?: QueryContainerPageExecutor;
   readonly initialValue?: QueryContainerRuntimeValue;
   readonly loadOptions?: QueryContainerRuntimeLoadOptions;
+  readonly onValueChange?: (value: QueryContainerRuntimeValue | undefined) => void;
   readonly resolveSource?: QueryContainerSourceResolver;
   readonly runtime?: QueryContainerRuntimeController;
 };
@@ -128,7 +134,10 @@ function renderStateSummary(value: QueryContainerRuntimeValue) {
 }
 
 export function QueryContainerSurfaceView({
+  activeItemKey,
+  affordances,
   description,
+  onActivateItem,
   onPaginate,
   onRefresh,
   registry = builtInQueryRendererRegistry,
@@ -247,9 +256,12 @@ export function QueryContainerSurfaceView({
           </div>
         ) : null}
         <Renderer
+          activeItemKey={activeItemKey}
+          affordances={affordances}
           container={spec}
           isRefreshing={isRefreshing}
           isStale={isStale}
+          onActivateItem={onActivateItem}
           pagination={{
             hasNextPage,
             mode: paginationMode,
@@ -265,10 +277,14 @@ export function QueryContainerSurfaceView({
 }
 
 export function QueryContainerSurface({
+  activeItemKey,
+  affordances,
   description,
   executePage,
   initialValue,
   loadOptions,
+  onActivateItem,
+  onValueChange,
   registry = builtInQueryRendererRegistry,
   resolveSource,
   runtime,
@@ -308,6 +324,10 @@ export function QueryContainerSurface({
   }, [initialValue, spec]);
 
   useEffect(() => {
+    onValueChange?.(value);
+  }, [onValueChange, value]);
+
+  useEffect(() => {
     if (!resolvedValidation.ok) {
       return;
     }
@@ -326,7 +346,10 @@ export function QueryContainerSurface({
 
   return (
     <QueryContainerSurfaceView
+      activeItemKey={activeItemKey}
+      affordances={affordances}
       description={description}
+      onActivateItem={onActivateItem}
       onPaginate={() => {
         if (!resolvedValidation.ok) {
           return;

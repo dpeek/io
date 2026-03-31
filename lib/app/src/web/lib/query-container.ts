@@ -9,6 +9,7 @@ import {
   type ReadQuery,
   type SerializedQueryRequest,
 } from "@io/graph-client";
+import type { QuerySurfaceFieldKind } from "@io/graph-projection";
 
 export const queryContainerPaginationModeValues = ["paged", "infinite"] as const;
 
@@ -68,6 +69,7 @@ export type QueryContainerQuerySource = SavedQueryContainerSource | InlineQueryC
 export type QueryRendererFieldDefinition = {
   readonly emptyLabel?: string;
   readonly fieldId: string;
+  readonly kind?: QuerySurfaceFieldKind;
   readonly label?: string;
 };
 

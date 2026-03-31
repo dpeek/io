@@ -220,6 +220,7 @@ describe("query page", () => {
               runtime={runtime as unknown as GraphRuntime}
             />,
           );
+          await new Promise((resolve) => setTimeout(resolve, 0));
         });
       }
 

@@ -92,7 +92,7 @@ export function HomePageStateView({
             <Button nativeButton={false} render={<Link to="/graph" />} variant="outline">
               Open graph
             </Button>
-            <Button nativeButton={false} render={<Link to="/views" />} variant="outline">
+            <Button nativeButton={false} render={<Link to="/scalars" />} variant="outline">
               Open views
             </Button>
             <Button
