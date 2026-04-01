@@ -22,11 +22,14 @@ shared env/log/process helpers.
 - `./agent/review.md`
 - `./agent/cli.md`
 - `./agent/tui.md`
+- `./agent/browser-first-workflow-v1-plan.md`
 - `./graph/index.md`
 - `./graph/surfaces-and-editing.md`
 - `./integration.md`
 - `./graph/computed.md`
 - `./graph/mcp.md`
+- `./graph/package-formalization.md`
+- `./graph/query.md`
 - `./graph/storage.md`
 - `./graph/retained-records.md`
 - `./tui/index.md`
@@ -48,6 +51,8 @@ shared env/log/process helpers.
 - `./agent/cli.md`: current `io agent ...` and `io mcp ...` command surface
 - `./agent/index.md`: agent runtime overview, scheduler layout, and operator surfaces
 - `./agent/tui.md`: operator-facing TUI layout and retained runtime display
+- `./agent/browser-first-workflow-v1-plan.md`: narrowed browser-first workflow
+  milestone plan for the first browser-launched session
 - `./graph/index.md`: graph workspace layout including the root `@io/app/graph`
   surface, extracted `lib/graph-*` packages, adapters, taxonomies, and
   focused subdocs
@@ -57,6 +62,11 @@ shared env/log/process helpers.
   dedicated downstream `@io/graph-integration` package
 - `./graph/computed.md`: proposed computed-value layer for lazy, memoized, read-only graph derivations
 - `./graph/mcp.md`: current graph MCP read surface, opt-in writes, and the remaining command roadmap
+- `./graph/package-formalization.md`: comprehensive source-to-package map,
+  target public APIs, naming rules, and extraction plan for semantic graph and
+  collaborative UI primitives
+- `./graph/query.md`: serialized query, saved-query, saved-view, query-container,
+  and live-refresh model
 - `./graph/storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,
   retained-history model, and secret side-storage split
 - `./graph/retained-records.md`: proposed retained-record boundary for data

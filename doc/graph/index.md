@@ -60,6 +60,9 @@ compose shared `@io/web` primitives rather than duplicate browser chrome.
   visibility, typed business methods, and secrets
 - [`computed.md`](./computed.md): proposed computed-value layer for lazy,
   memoized derived reads over predicate-slot subscriptions
+- [`package-formalization.md`](./package-formalization.md): comprehensive
+  source-to-package map, target public APIs, and naming rules for the graph,
+  query, live-collaboration, and surface runtime split
 - [`runtime.md`](./runtime.md): schema authoring, id maps, bootstrap, store
   behavior, and persisted authority helpers
 - [`validation.md`](./validation.md): local and authoritative validation

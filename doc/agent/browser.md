@@ -8,6 +8,14 @@ Codex execution in a separate local runtime.
 
 This proposal is grounded in the current repository state on 2026-03-26.
 
+Shipping note on 2026-04-01:
+
+- the narrowed first browser milestone now lives in
+  [Browser-First Workflow V1 Plan](./browser-first-workflow-v1-plan.md)
+- this proposal remains useful for the long-lived browser-agent and graph
+  authority split, but the new plan is the current delivery target for the
+  first browser-launched workflow session
+
 ## Recommendation
 
 Ship the browser as the main workflow control service, but do it on top of
