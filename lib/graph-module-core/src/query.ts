@@ -1,5 +1,6 @@
 import {
   createProjectionDependencyKey,
+  defineModuleReadScopeRegistration,
   defineModuleQuerySurfaceCatalog,
   defineModuleQuerySurfaceSpec,
   defineModuleReadScopeDefinition,
@@ -16,6 +17,14 @@ export const coreCatalogModuleReadScope = defineModuleReadScopeDefinition({
   moduleId: coreModuleId,
   scopeId: "scope:core:catalog",
   definitionHash: "scope-def:core:catalog:v1",
+});
+
+export const coreCatalogModuleReadScopeRegistration = defineModuleReadScopeRegistration({
+  definition: coreCatalogModuleReadScope,
+  fallback: {
+    definitionChanged: "scope-changed",
+    policyChanged: "policy-changed",
+  },
 });
 
 const coreSavedQueryLibraryProjectionId = "core:saved-query-library";

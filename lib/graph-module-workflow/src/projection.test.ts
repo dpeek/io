@@ -12,6 +12,8 @@ import {
   projectBranchBoardProjectionDependencyKey,
   workflowReviewDependencyKeys,
   workflowReviewModuleReadScope,
+  workflowReviewModuleReadScopeRegistration,
+  workflowReviewRetainedProjectionProviderRegistration,
   workflowReviewScopeDependencyKey,
 } from "./projection.js";
 import { agentSession, branch } from "./type.js";
@@ -82,5 +84,34 @@ describe("workflow review invalidation contracts", () => {
         touchedTypeIds: [resolvedTypeId(core.principal)],
       }),
     ).toBeUndefined();
+  });
+
+  it("publishes the shared workflow review scope and retained projection registrations", () => {
+    expect(workflowReviewModuleReadScopeRegistration).toEqual({
+      definition: workflowReviewModuleReadScope,
+      fallback: {
+        definitionChanged: "scope-changed",
+        policyChanged: "policy-changed",
+      },
+    });
+    expect(workflowReviewRetainedProjectionProviderRegistration).toEqual({
+      providerId: "provider:workflow:review",
+      scopeDefinitions: [workflowReviewModuleReadScope],
+      projections: [projectBranchBoardProjection, branchCommitQueueProjection],
+      recovery: {
+        missing: "rebuild",
+        incompatible: "rebuild",
+        stale: "rebuild",
+      },
+      invalidation: {
+        deliveryKind: "cursor-advanced",
+        dependencyKeys: workflowReviewDependencyKeys,
+        affectedProjectionIds: [
+          projectBranchBoardProjection.projectionId,
+          branchCommitQueueProjection.projectionId,
+        ],
+        affectedScopeIds: [workflowReviewModuleReadScope.scopeId],
+      },
+    });
   });
 });

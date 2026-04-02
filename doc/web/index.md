@@ -124,6 +124,17 @@ browser component can be reused by non-graph screens without importing graph
 types, move it to `@io/web`. If it is deciding how a graph predicate validates,
 mutates, or previews, leave that code in `graph` even when the surrounding
 chrome comes from `@io/web`.
+The same ownership rule applies to
+`../../lib/app/src/web/lib/branch3-registrations.ts`: app/web installs the
+active named read scopes and retained projection runtime callbacks for the
+Worker authority there, while `@io/graph-projection`, `@io/graph-sync`, and
+the built-in module packages keep the shared contracts and module-authored
+registrations. The current Worker authority now consumes that seam directly
+for scope planning, retained-projection hydration, and invalidation fan-out
+instead of branching on workflow-review-specific composition inside
+`authority.ts`. The browser sync proof selector now reads that same installed
+scope list, so adding the current core catalog proof did not require another
+workflow-style branch in the route plumbing.
 
 The current `POST /api/commands`, `POST /api/query`, `POST /api/workflow-read`,
 and `POST /api/workflow-live` routes are part of that same package boundary.
@@ -302,9 +313,9 @@ Current shared query-authoring coverage:
   browser-visible transactions. The current proof now also surfaces the
   retained base cursor plus active retained-history policy so fallback causes
   stay legible to operators. It lets operators switch between explicit
-  whole-graph recovery and the first named
-  `workflow` review scope, inspect delivered scope metadata, and trigger
-  scoped refreshes over the shared `/api/sync` transport contract
+  whole-graph recovery plus the installed `workflow` review and `core` catalog
+  scopes, inspect delivered scope metadata, and trigger scoped refreshes over
+  the shared `/api/sync` transport contract
 - `../../lib/app/src/web/components/app-shell.tsx`: shared shell and navigation
 - `../../lib/web/src/markdown.tsx`: shared markdown renderer with Bun-first and
   `react-markdown` fallback behavior reused by graph field views and previews

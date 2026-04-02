@@ -72,8 +72,8 @@ function SyncPageSurface({
             <div className="space-y-1">
               <CardTitle>Scoped Sync Proof</CardTitle>
               <CardDescription>
-                Exercise whole-graph recovery and the first named module scope over the current
-                `/api/sync` transport.
+                Exercise whole-graph recovery plus the installed workflow review and core catalog
+                module scopes over the current `/api/sync` transport.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -157,9 +157,9 @@ function SyncPageSurface({
           </div>
 
           <p className="text-muted-foreground text-xs">
-            The workflow-review scope keeps whole-graph sync available as the explicit recovery path
-            when the scoped cursor reports `scope-changed`, `policy-changed`, or other fallback-only
-            incremental results.
+            Each registered module scope keeps whole-graph sync available as the explicit recovery
+            path when a scoped cursor reports `scope-changed`, `policy-changed`, or another
+            fallback-only incremental result.
           </p>
         </CardContent>
       </Card>

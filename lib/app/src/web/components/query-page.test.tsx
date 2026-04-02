@@ -115,6 +115,7 @@ function requireButton(container: HTMLElement, text: string): HTMLButtonElement 
 async function click(element: HTMLElement): Promise<void> {
   await act(async () => {
     element.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
 

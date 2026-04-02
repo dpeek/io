@@ -195,6 +195,22 @@ export function isIncrementalSyncFallbackReason(
   );
 }
 
+export const moduleSyncScopeFallbackReasons = [
+  "scope-changed",
+  "policy-changed",
+] as const satisfies readonly IncrementalSyncFallbackReason[];
+
+export type ModuleSyncScopeFallbackReason = (typeof moduleSyncScopeFallbackReasons)[number];
+
+export function isModuleSyncScopeFallbackReason(
+  value: unknown,
+): value is ModuleSyncScopeFallbackReason {
+  return (
+    typeof value === "string" &&
+    (moduleSyncScopeFallbackReasons as readonly string[]).includes(value)
+  );
+}
+
 /**
  * Successful incremental delivery after a previously issued cursor.
  *

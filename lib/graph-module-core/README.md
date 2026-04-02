@@ -18,8 +18,8 @@
   typed durable-query helpers
 - the package-root `coreQuerySurfaceCatalog`,
   `coreBuiltInQuerySurfaces`, `coreBuiltInQuerySurfaceIds`, and
-  `coreCatalogModuleReadScope` exports for the built-in core catalog scope and
-  saved-query library surfaces
+  `coreCatalogModuleReadScope`, `coreCatalogModuleReadScopeRegistration`
+  exports for the built-in core catalog scope and saved-query library surfaces
 - core-specific browser defaults from `@io/graph-module-core/react-dom`
 
 ## What It Depends On
@@ -52,6 +52,13 @@ Callers import the core catalog through the package root:
 
 ```ts
 import { coreManifest, coreQuerySurfaceCatalog } from "@io/graph-module-core";
+```
+
+The same package root also publishes the current shared Branch 3 registration
+for that scope:
+
+```ts
+import { coreCatalogModuleReadScopeRegistration } from "@io/graph-module-core";
 ```
 
 ## Browser Defaults

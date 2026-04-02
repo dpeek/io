@@ -16,7 +16,12 @@ import {
 } from "@io/graph-client";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
 import { defineSecretField, defineType } from "@io/graph-module";
-import { core, coreBuiltInQuerySurfaceIds, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import {
+  core,
+  coreBuiltInQuerySurfaceIds,
+  coreCatalogModuleReadScope,
+  coreGraphBootstrapOptions,
+} from "@io/graph-module-core";
 import { workflow } from "@io/graph-module-workflow";
 import {
   type RetainedWorkflowProjectionState,
@@ -295,6 +300,11 @@ function createBearerAuthorizationContext(
 }
 
 const workflowModuleScope = workflowReviewSyncScopeRequest;
+const coreCatalogScope = {
+  kind: "module",
+  moduleId: coreCatalogModuleReadScope.moduleId,
+  scopeId: coreCatalogModuleReadScope.scopeId,
+} as const;
 
 function updateScopedCursor(cursor: string, updates: Record<string, string>): string {
   if (!cursor.startsWith("scope:")) {
@@ -1028,14 +1038,14 @@ describe("web authority", () => {
       load() {
         return backingStorage.storage.load();
       },
-      loadWorkflowProjection() {
-        return backingStorage.storage.loadWorkflowProjection();
+      loadRetainedProjection() {
+        return backingStorage.storage.loadRetainedProjection();
       },
       replaceRetainedDocuments(retainedDocuments) {
         return backingStorage.storage.replaceRetainedDocuments(retainedDocuments);
       },
-      replaceWorkflowProjection(projection) {
-        return backingStorage.storage.replaceWorkflowProjection(projection);
+      replaceRetainedProjection(projection) {
+        return backingStorage.storage.replaceRetainedProjection(projection);
       },
       inspectSecrets() {
         return backingStorage.storage.inspectSecrets();
@@ -1258,14 +1268,14 @@ describe("web authority", () => {
       load() {
         return backingStorage.storage.load();
       },
-      loadWorkflowProjection() {
-        return backingStorage.storage.loadWorkflowProjection();
+      loadRetainedProjection() {
+        return backingStorage.storage.loadRetainedProjection();
       },
       replaceRetainedDocuments(retainedDocuments) {
         return backingStorage.storage.replaceRetainedDocuments(retainedDocuments);
       },
-      replaceWorkflowProjection(projection) {
-        return backingStorage.storage.replaceWorkflowProjection(projection);
+      replaceRetainedProjection(projection) {
+        return backingStorage.storage.replaceRetainedProjection(projection);
       },
       inspectSecrets() {
         return backingStorage.storage.inspectSecrets();
@@ -2918,7 +2928,7 @@ describe("web authority", () => {
 
     const restarted = await createTestWebAppAuthority({
       ...storage.storage,
-      async loadWorkflowProjection() {
+      async loadRetainedProjection() {
         return null;
       },
     });
@@ -3012,7 +3022,7 @@ describe("web authority", () => {
 
     const restarted = await createTestWebAppAuthority({
       ...storage.storage,
-      async loadWorkflowProjection() {
+      async loadRetainedProjection() {
         return {
           ...projection,
           checkpoints: projection.checkpoints.map((checkpoint) =>
@@ -3155,6 +3165,101 @@ describe("web authority", () => {
         (operation) => operation.op === "assert" && operation.edge.s === envVarId,
       ),
     ).toBe(false);
+  });
+
+  it("plans the core catalog module scope through the same registry seam", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const { authority, fixture } =
+      await createTestWebAppAuthorityWithWorkflowFixture(authorization);
+
+    const total = authority.createTotalSyncPayload({
+      authorization,
+      scope: coreCatalogScope,
+    });
+
+    expect(total).toMatchObject({
+      mode: "total",
+      scope: {
+        kind: "module",
+        moduleId: coreCatalogScope.moduleId,
+        scopeId: coreCatalogScope.scopeId,
+        definitionHash: coreCatalogModuleReadScope.definitionHash,
+        policyFilterVersion: `policy:${webAppPolicyVersion}`,
+      },
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(total.cursor).toContain("moduleId=core");
+    expect(total.snapshot.edges.some((edge) => edge.s === core.node.values.id)).toBe(true);
+    expect(total.snapshot.edges.some((edge) => edge.s === fixture.branchId)).toBe(false);
+
+    const scopeChangedCursor = updateScopedCursor(total.cursor, {
+      scopeId: "scope:core:missing",
+    });
+    const policyChangedCursor = updateScopedCursor(total.cursor, {
+      policyFilterVersion: "policy:999",
+    });
+
+    const scopeChanged = authority.getIncrementalSyncResult(scopeChangedCursor, {
+      authorization,
+      scope: coreCatalogScope,
+    });
+    const policyChanged = authority.getIncrementalSyncResult(policyChangedCursor, {
+      authorization,
+      scope: coreCatalogScope,
+    });
+
+    expect(scopeChanged).toMatchObject({
+      mode: "incremental",
+      fallbackReason: "scope-changed",
+      scope: total.scope,
+      after: scopeChangedCursor,
+    });
+    expect(policyChanged).toMatchObject({
+      mode: "incremental",
+      fallbackReason: "policy-changed",
+      scope: total.scope,
+      after: policyChangedCursor,
+    });
+  });
+
+  it("fails closed for uninstalled scope planners and keeps whole-graph recovery explicit", async () => {
+    const authorization = createAuthorityAuthorizationContext();
+    const { authority, fixture } =
+      await createTestWebAppAuthorityWithWorkflowFixture(authorization);
+    const envVarId = await createEnvVar(
+      authority,
+      authorization,
+      {
+        description: "Whole-graph recovery should still include this env var.",
+        name: "OPENAI_API_KEY",
+      },
+      "tx:create-env-var:missing-scoped-planner-recovery",
+    );
+
+    expect(() =>
+      authority.createTotalSyncPayload({
+        authorization,
+        scope: {
+          kind: "module",
+          moduleId: workflowModuleScope.moduleId,
+          scopeId: "scope:workflow:missing",
+        },
+      }),
+    ).toThrow('Scope "scope:workflow:missing" was not found for module "workflow".');
+
+    const recovered = authority.createTotalSyncPayload({ authorization });
+
+    expect(recovered).toMatchObject({
+      mode: "total",
+      scope: {
+        kind: "graph",
+      },
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(recovered.snapshot.edges.some((edge) => edge.s === fixture.branchId)).toBe(true);
+    expect(recovered.snapshot.edges.some((edge) => edge.s === envVarId)).toBe(true);
   });
 
   it("returns explicit scope and policy fallbacks for stale scoped cursors", async () => {

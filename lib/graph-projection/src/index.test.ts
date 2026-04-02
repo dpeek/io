@@ -4,22 +4,32 @@ import { createModuleSyncScope, graphSyncScope } from "@io/graph-sync";
 
 import {
   type DependencyKey,
+  createRegisteredModuleReadScope,
+  createRegisteredModuleReadScopeRequest,
   createDependencyKey,
   createModuleReadScope,
   createModuleReadScopeRequest,
   createProjectionDependencyKey,
   createScopeDependencyKey,
+  defineModuleReadScopeRegistration,
+  defineModuleReadScopeRegistry,
   defineInvalidationEvent,
   defineModuleQuerySurfaceCatalog,
   defineModuleQuerySurfaceSpec,
   defineModuleReadScopeDefinition,
   defineProjectionCatalog,
   defineProjectionSpec,
+  defineRetainedProjectionProviderRegistration,
+  defineRetainedProjectionProviderRegistry,
   findRetainedProjectionRecord,
+  findModuleReadScopeRegistration,
+  findRetainedProjectionProviderByProjectionId,
   isDependencyKey,
   isInvalidationEventCompatibleWithTarget,
   isRetainedProjectionMetadataCompatible,
+  listRetainedProjectionProvidersForScope,
   matchesModuleReadScope,
+  matchesModuleReadScopeRegistration,
   matchesModuleReadScopeRequest,
 } from "./index.js";
 
@@ -74,6 +84,49 @@ describe("graph projection contracts", () => {
         definition,
       ),
     ).toBe(false);
+  });
+
+  it("defines named module scope registrations with explicit fallback behavior", () => {
+    const registration = defineModuleReadScopeRegistration({
+      definition: defineModuleReadScopeDefinition({
+        kind: "module",
+        moduleId: "workflow",
+        scopeId: "scope:workflow:review",
+        definitionHash: "scope-def:workflow:review:v1",
+      }),
+      fallback: {
+        definitionChanged: "scope-changed",
+        policyChanged: "policy-changed",
+      },
+    });
+
+    const requestedScope = createRegisteredModuleReadScopeRequest(registration);
+    const deliveredScope = createRegisteredModuleReadScope(registration, "policy:0");
+    const registry = defineModuleReadScopeRegistry([registration]);
+
+    expect(requestedScope).toEqual({
+      kind: "module",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
+    });
+    expect(deliveredScope).toEqual({
+      kind: "module",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
+      definitionHash: "scope-def:workflow:review:v1",
+      policyFilterVersion: "policy:0",
+    });
+    expect(matchesModuleReadScopeRegistration(requestedScope, registration)).toBe(true);
+    expect(findModuleReadScopeRegistration(registry, deliveredScope)).toEqual(registration);
+
+    expect(() =>
+      defineModuleReadScopeRegistry([
+        registration,
+        {
+          ...registration,
+        },
+      ]),
+    ).toThrow("definition must not contain duplicate values.");
   });
 
   it("validates projection metadata and catalog uniqueness", () => {
@@ -299,6 +352,78 @@ describe("graph projection contracts", () => {
     );
   });
 
+  it("defines retained projection providers for scope lookup and invalidation targeting", () => {
+    const reviewScope = defineModuleReadScopeDefinition({
+      kind: "module",
+      moduleId: "workflow",
+      scopeId: "scope:workflow:review",
+      definitionHash: "scope-def:workflow:review:v1",
+    });
+    const projectBranchBoard = defineProjectionSpec({
+      projectionId: "workflow:project-branch-board",
+      kind: "collection-index",
+      definitionHash: "projection-def:workflow:project-branch-board:v1",
+      sourceScopeKinds: ["module"],
+      dependencyKeys: [
+        createProjectionDependencyKey("workflow:project-branch-board"),
+        createScopeDependencyKey(reviewScope.scopeId),
+      ],
+      rebuildStrategy: "full",
+      visibilityMode: "policy-filtered",
+    });
+    const branchCommitQueue = defineProjectionSpec({
+      projectionId: "workflow:branch-commit-queue",
+      kind: "collection-index",
+      definitionHash: "projection-def:workflow:branch-commit-queue:v1",
+      sourceScopeKinds: ["module"],
+      dependencyKeys: [
+        createProjectionDependencyKey("workflow:branch-commit-queue"),
+        createScopeDependencyKey(reviewScope.scopeId),
+      ],
+      rebuildStrategy: "full",
+      visibilityMode: "policy-filtered",
+    });
+    const provider = defineRetainedProjectionProviderRegistration({
+      providerId: "provider:workflow:review",
+      scopeDefinitions: [reviewScope],
+      projections: [projectBranchBoard, branchCommitQueue],
+      recovery: {
+        missing: "rebuild",
+        incompatible: "rebuild",
+        stale: "rebuild",
+      },
+      invalidation: {
+        deliveryKind: "cursor-advanced",
+        dependencyKeys: [
+          createScopeDependencyKey(reviewScope.scopeId),
+          createProjectionDependencyKey(projectBranchBoard.projectionId),
+          createProjectionDependencyKey(branchCommitQueue.projectionId),
+        ],
+        affectedProjectionIds: [projectBranchBoard.projectionId, branchCommitQueue.projectionId],
+        affectedScopeIds: [reviewScope.scopeId],
+      },
+    });
+    const registry = defineRetainedProjectionProviderRegistry([provider]);
+
+    expect(
+      listRetainedProjectionProvidersForScope(registry, requestedScopeFor(reviewScope)),
+    ).toEqual([provider]);
+    expect(
+      findRetainedProjectionProviderByProjectionId(registry, branchCommitQueue.projectionId),
+    ).toEqual(provider);
+
+    expect(() =>
+      defineRetainedProjectionProviderRegistry([
+        provider,
+        {
+          ...provider,
+          providerId: "provider:workflow:review-v2",
+          projections: [projectBranchBoard],
+        },
+      ]),
+    ).toThrow("projectionId must not contain duplicate values.");
+  });
+
   it("detects retained projection definitionHash compatibility explicitly", () => {
     const records = [
       {
@@ -342,3 +467,15 @@ describe("graph projection contracts", () => {
     });
   });
 });
+
+function requestedScopeFor(definition: { readonly moduleId: string; readonly scopeId: string }): {
+  readonly kind: "module";
+  readonly moduleId: string;
+  readonly scopeId: string;
+} {
+  return {
+    kind: "module",
+    moduleId: definition.moduleId,
+    scopeId: definition.scopeId,
+  };
+}

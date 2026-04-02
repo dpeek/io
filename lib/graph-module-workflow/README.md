@@ -12,7 +12,7 @@
 - workflow command contracts and summary/result types, including retained
   session append, artifact-write, and decision-write surfaces
 - workflow projection metadata, read-scope contracts, dependency-key planning,
-  and invalidation helpers
+  invalidation helpers, and shared Branch 3 registrations
 - workflow query-surface catalogs for planner, saved-query, editor, and
   renderer registration
 - retained workflow projection checkpoint and row types
@@ -65,6 +65,16 @@ Callers import workflow query-surface metadata through the package root:
 
 ```ts
 import { workflowManifest, workflowQuerySurfaceCatalog } from "@io/graph-module-workflow";
+```
+
+The same package root is also the canonical place to import the current shared
+Branch 3 registrations:
+
+```ts
+import {
+  workflowReviewModuleReadScopeRegistration,
+  workflowReviewRetainedProjectionProviderRegistration,
+} from "@io/graph-module-workflow";
 ```
 
 ## Build Output

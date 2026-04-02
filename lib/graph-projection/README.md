@@ -1,8 +1,9 @@
 # Graph Projection
 
 `@io/graph-projection` is the shared Branch 3 contract boundary for projection
-metadata, retained projection compatibility, module read-scope definitions, and
-live invalidation targeting.
+metadata, retained projection compatibility, named module read-scope
+registrations, retained projection provider registrations, and live
+invalidation targeting.
 
 ## Read This First
 
@@ -12,7 +13,8 @@ live invalidation targeting.
 
 ## What It Owns
 
-- module read-scope definition contracts and sync-scope interop helpers
+- module read-scope definition and registration contracts plus sync-scope
+  interop helpers
 - projection kinds, rebuild strategies, visibility modes, and catalog helpers
 - module query-surface catalog contracts for filters, ordering, selections,
   parameters, renderer compatibility, and versioned registration metadata
@@ -20,6 +22,8 @@ live invalidation targeting.
 - invalidation delivery, event, and target contracts
 - retained projection checkpoint and row metadata contracts
 - retained projection compatibility and lookup helpers
+- retained projection provider registration contracts for lookup, recovery, and
+  invalidation targeting
 
 ## What It Does Not Own
 
@@ -33,8 +37,8 @@ live invalidation targeting.
 ## Package Relationships
 
 - `@io/graph-sync` owns transport-facing sync scopes and payload/session
-  contracts. This package depends on it only to materialize and compare the
-  shared module scope proof.
+  contracts plus the shared module-scope fallback vocabulary. This package
+  depends on it to materialize and compare the shared module scope proof.
 - `@io/graph-authority` owns authoritative write orchestration, durable state,
   and policy-aware replay. It may consume these contracts, but retained
   projection persistence remains authority- or host-owned.
@@ -47,6 +51,9 @@ live invalidation targeting.
   `{ projectionId, definitionHash }` pairs are the compatibility boundary for
   retained rows and checkpoints. Incompatible retained state should rebuild, not
   silently coerce.
+- `ModuleReadScopeRegistration.fallback` is the explicit fail-closed boundary
+  for named scope drift. Scope-definition changes and policy-filter changes are
+  not inferred from caller behavior.
 - `ModuleQuerySurfaceCatalog.catalogVersion` and
   `ModuleQuerySurfaceSpec.surfaceVersion` are the compatibility boundary for
   installed planner/editor/view-binding metadata. Incompatible saved-query or
@@ -55,6 +62,10 @@ live invalidation targeting.
 - Retained checkpoint and row records are rebuildable caches, not source of
   truth. If they are missing, stale, or incompatible, callers discard and
   rebuild from authoritative facts.
+- `RetainedProjectionProviderRegistration.recovery` is the explicit retained
+  fallback contract. The current shared mode is `rebuild`, so callers repair
+  provider state by rebuilding from authoritative facts instead of mutating
+  incompatible retained rows in place.
 - `InvalidationEvent` delivery is a freshness signal. Events may be duplicated
   or broader than the exact changed rows, but they must never require consumers
   to inspect unauthorized raw facts.
@@ -64,12 +75,15 @@ live invalidation targeting.
 `@io/graph-projection` exposes a single public entrypoint from `./src/index.ts`.
 Everything intended for consumers is re-exported from the package root.
 
-- module read-scope definitions and sync-scope matching helpers
+- module read-scope definitions, registrations, registries, and sync-scope
+  matching helpers
 - projection kinds, specs, and catalog helpers
 - query-surface specs and catalog helpers
 - dependency-key constants, types, and constructors
 - invalidation delivery/event/target contracts and matching helpers
 - retained projection metadata/checkpoint/row contracts plus lookup helpers
+- retained projection provider registrations, registries, and scope/projection
+  lookup helpers
 
 ## Build Output
 

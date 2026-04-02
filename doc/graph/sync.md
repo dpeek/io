@@ -58,15 +58,38 @@ That first scoped proof is now defined from one shared graph-owned seam:
 
 - `../../lib/graph-projection/src/index.ts`, consumed as
   `@io/graph-projection`, exports the public Branch 3
-  `ModuleReadScopeDefinition`, `ProjectionSpec`, `DependencyKey`,
-  `InvalidationEvent`, and retained projection compatibility helpers
+  `ModuleReadScopeDefinition`, `ModuleReadScopeRegistration`,
+  `RetainedProjectionProviderRegistration`, `ProjectionSpec`,
+  `DependencyKey`, `InvalidationEvent`, and retained projection
+  compatibility helpers
+- `../../lib/graph-sync/src/contracts.ts`, consumed as `@io/graph-sync`,
+  exports the shared `moduleSyncScopeFallbackReasons` vocabulary used by named
+  scope registrations to fail closed on `scope-changed` and
+  `policy-changed`
 - `../../lib/graph-module-workflow/src/projection.ts` owns the canonical
-  `workflowReviewModuleReadScope`, `workflowReviewSyncScopeRequest`, and the
-  first workflow projection descriptors plus the explicit
+  `workflowReviewModuleReadScope`, `workflowReviewModuleReadScopeRegistration`,
+  `workflowReviewRetainedProjectionProviderRegistration`,
+  `workflowReviewSyncScopeRequest`, and the first workflow projection
+  descriptors plus the explicit
   `compileWorkflowReviewScopeDependencyKeys(...)`,
   `compileWorkflowReviewWriteDependencyKeys(...)`, and
   `createWorkflowReviewInvalidationEvent(...)` helpers for
   `project-branch-board` and `branch-commit-queue`
+- `../../lib/graph-module-core/src/query.ts` owns the canonical
+  `coreCatalogModuleReadScopeRegistration` for the built-in core catalog scope
+- `../../lib/app/src/web/lib/branch3-registrations.ts` is the current host
+  installation seam that binds those shared registrations to one app-owned
+  registry of named scope planners plus retained projection runtime callbacks.
+  The current workflow review scope and core catalog scope both dispatch
+  through that seam. Retained workflow projection rebuild, live-registration
+  dependency-key resolution, and invalidation fan-out now stay attached to the
+  installed workflow registration there instead of branching again inside
+  `authority.ts`. The core catalog scope uses the same installation path but
+  intentionally stops at scoped bootstrap and refresh; it does not add a
+  second retained projection or live invalidation proof yet. Requests for an
+  uninstalled scope fail closed with an explicit 404 from `/api/sync`, and
+  asking that seam for a retained projection provider on a scope that does not
+  install one is also an explicit error instead of a silent whole-graph widen.
 
 The first live invalidation proof is intentionally conservative:
 
@@ -137,15 +160,18 @@ Stable delivery rules:
   its own authority-issued tokens internally, but downstream callers should
   only persist them, compare them for equality, and echo them back
 
-### First Scoped Proof
+### Scoped proofs
 
-The current end-to-end proof is intentionally narrow and explicit:
+The current end-to-end proof stays narrow, but it now has two registered
+module examples instead of one bespoke path:
 
-1. the browser requests
-   `scopeKind=module&moduleId=workflow&scopeId=scope:workflow:review`
-2. the web authority returns a scoped total payload with explicit
-   `completeness`, `freshness`, `definitionHash`, `policyFilterVersion`, and
-   an opaque scoped cursor
+1. the browser requests either
+   `scopeKind=module&moduleId=workflow&scopeId=scope:workflow:review` or
+   `scopeKind=module&moduleId=core&scopeId=scope:core:catalog`
+2. the web authority resolves that request through the installed registration
+   seam and returns a scoped total payload with explicit `completeness`,
+   `freshness`, `definitionHash`, `policyFilterVersion`, and an opaque scoped
+   cursor
 3. later scoped refreshes must reuse that same requested scope; if the planned
    scope hash or policy version no longer matches, the authority returns an
    incremental fallback with `transactions: []` plus `scope-changed` or
@@ -153,10 +179,33 @@ The current end-to-end proof is intentionally narrow and explicit:
 4. the client keeps the existing scoped cache readable but stale, records the
    fallback reason, and recovers with a new whole-graph total request
    `scopeKind=graph`; recovery is never a silent incremental widen
+5. if the requested scope is no longer installed at all, `/api/sync` returns a
+   404 for that module/scope pair and callers recover by explicitly requesting
+   `scopeKind=graph`; missing planner registrations are not treated as an
+   implicit graph scope
 
 That flow is the baseline proof covered today across shared sync validation,
-client apply behavior, HTTP client transport, and the durable `/api/sync`
-browser route.
+client apply behavior, HTTP client transport, the durable `/api/sync` browser
+route, and the browser sync inspector.
+
+What this proves:
+
+- the authority can install more than one named module scope through one
+  registry and planning seam
+- the browser proof selector can mount those installed scopes without a
+  scope-specific branch in the sync route plumbing
+- a scope without retained projections can still bootstrap and refresh through
+  the same planner contract as a scope that has them
+- retained workflow projection rebuild and restart recovery still route through
+  that installed registration seam, so missing or incompatible retained state
+  rebuilds from authoritative facts without changing the requested scope
+
+Still out of scope:
+
+- generic compilation of arbitrary user-authored scopes
+- cross-module planner federation
+- a second live invalidation path beyond workflow review
+- projection-specific rebuild hooks for scopes that do not need them yet
 
 The current live workflow proof layers on top of that scoped sync baseline:
 

@@ -20,7 +20,9 @@ import {
 import {
   createModuleSyncScope,
   createModuleSyncScopeRequest,
+  moduleSyncScopeFallbackReasons,
   type ModuleSyncScope,
+  type ModuleSyncScopeFallbackReason,
   type ModuleSyncScopeRequest,
   type SyncScope,
   type SyncScopeRequest,
@@ -133,6 +135,16 @@ export interface ModuleReadScopeDefinition {
   readonly definitionHash: string;
 }
 
+export interface ModuleReadScopeRegistration<
+  Definition extends ModuleReadScopeDefinition = ModuleReadScopeDefinition,
+> {
+  readonly definition: Definition;
+  readonly fallback: {
+    readonly definitionChanged: ModuleSyncScopeFallbackReason;
+    readonly policyChanged: ModuleSyncScopeFallbackReason;
+  };
+}
+
 /**
  * Declarative contract for a rebuildable projection surface.
  *
@@ -215,6 +227,32 @@ export type RetainedProjectionRecordLookupResult<T extends RetainedProjectionMet
       readonly projectionId: string;
       readonly expectedDefinitionHash: string;
     };
+
+export const retainedProjectionRecoveryModes = ["rebuild"] as const;
+
+export type RetainedProjectionRecoveryMode = (typeof retainedProjectionRecoveryModes)[number];
+
+export interface RetainedProjectionInvalidationTarget {
+  readonly deliveryKind: InvalidationDeliveryKind;
+  readonly dependencyKeys: readonly DependencyKey[];
+  readonly affectedProjectionIds?: readonly string[];
+  readonly affectedScopeIds?: readonly string[];
+}
+
+export interface RetainedProjectionProviderRegistration<
+  ScopeDefinition extends ModuleReadScopeDefinition = ModuleReadScopeDefinition,
+  Projection extends ProjectionSpec = ProjectionSpec,
+> {
+  readonly providerId: string;
+  readonly scopeDefinitions: readonly ScopeDefinition[];
+  readonly projections: readonly Projection[];
+  readonly recovery: {
+    readonly missing: RetainedProjectionRecoveryMode;
+    readonly incompatible: RetainedProjectionRecoveryMode;
+    readonly stale: RetainedProjectionRecoveryMode;
+  };
+  readonly invalidation?: RetainedProjectionInvalidationTarget;
+}
 
 export const moduleQuerySurfaceQueryKinds = ["collection", "scope"] as const;
 
@@ -643,6 +681,57 @@ function freezeInvalidationDelivery(delivery: InvalidationDelivery): Invalidatio
   return Object.freeze({ ...delivery });
 }
 
+function freezeModuleReadScopeRegistrationFallback(
+  fallback: ModuleReadScopeRegistration["fallback"],
+): ModuleReadScopeRegistration["fallback"] {
+  assertKnownValue(
+    moduleSyncScopeFallbackReasons,
+    fallback.definitionChanged,
+    "fallback.definitionChanged",
+  );
+  assertKnownValue(
+    moduleSyncScopeFallbackReasons,
+    fallback.policyChanged,
+    "fallback.policyChanged",
+  );
+
+  return Object.freeze({ ...fallback });
+}
+
+function freezeRetainedProjectionInvalidationTarget(
+  invalidation: RetainedProjectionInvalidationTarget,
+): RetainedProjectionInvalidationTarget {
+  assertKnownValue(
+    invalidationDeliveryKinds,
+    invalidation.deliveryKind,
+    "invalidation.deliveryKind",
+  );
+  if (invalidation.dependencyKeys.length === 0) {
+    throw new TypeError("invalidation.dependencyKeys must not be empty.");
+  }
+
+  assertUniqueValues(invalidation.dependencyKeys, "invalidation.dependencyKeys");
+  for (const dependencyKey of invalidation.dependencyKeys) {
+    assertDependencyKey(dependencyKey, "invalidation.dependencyKeys");
+  }
+
+  const affectedProjectionIds = freezeOptionalUniqueValues(
+    invalidation.affectedProjectionIds,
+    "invalidation.affectedProjectionIds",
+  );
+  const affectedScopeIds = freezeOptionalUniqueValues(
+    invalidation.affectedScopeIds,
+    "invalidation.affectedScopeIds",
+  );
+
+  return Object.freeze({
+    ...invalidation,
+    dependencyKeys: Object.freeze([...invalidation.dependencyKeys]),
+    ...(affectedProjectionIds ? { affectedProjectionIds } : {}),
+    ...(affectedScopeIds ? { affectedScopeIds } : {}),
+  });
+}
+
 /**
  * Normalize a dependency key to the canonical `<kind>:<value>` form.
  *
@@ -696,6 +785,40 @@ export function defineModuleReadScopeDefinition<const T extends ModuleReadScopeD
   return Object.freeze({ ...definition });
 }
 
+export function defineModuleReadScopeRegistration<const T extends ModuleReadScopeRegistration>(
+  registration: T,
+): Readonly<T> {
+  const definition = defineModuleReadScopeDefinition(registration.definition);
+  const fallback = freezeModuleReadScopeRegistrationFallback(registration.fallback);
+
+  return Object.freeze({
+    ...registration,
+    definition,
+    fallback,
+  });
+}
+
+export function defineModuleReadScopeRegistry<
+  const T extends readonly ModuleReadScopeRegistration[],
+>(registrations: T): Readonly<T> {
+  if (registrations.length === 0) {
+    throw new TypeError("Module read-scope registry must not be empty.");
+  }
+
+  const normalized = registrations.map((registration) =>
+    defineModuleReadScopeRegistration(registration),
+  ) as unknown as T;
+  assertUniqueValues(
+    normalized.map(
+      (registration) =>
+        `${registration.definition.moduleId}:${registration.definition.scopeId}:${registration.definition.definitionHash}`,
+    ),
+    "definition",
+  );
+
+  return Object.freeze(normalized) as Readonly<T>;
+}
+
 export function createModuleReadScopeRequest(
   definition: ModuleReadScopeDefinition,
 ): ModuleSyncScopeRequest {
@@ -738,6 +861,35 @@ export function matchesModuleReadScope(
     scope.moduleId === definition.moduleId &&
     scope.scopeId === definition.scopeId &&
     scope.definitionHash === definition.definitionHash
+  );
+}
+
+export function createRegisteredModuleReadScopeRequest(
+  registration: ModuleReadScopeRegistration,
+): ModuleSyncScopeRequest {
+  return createModuleReadScopeRequest(registration.definition);
+}
+
+export function createRegisteredModuleReadScope(
+  registration: ModuleReadScopeRegistration,
+  policyFilterVersion: string,
+): ModuleSyncScope {
+  return createModuleReadScope(registration.definition, policyFilterVersion);
+}
+
+export function matchesModuleReadScopeRegistration(
+  scope: SyncScope | SyncScopeRequest,
+  registration: ModuleReadScopeRegistration,
+): boolean {
+  return matchesModuleReadScopeRequest(scope, registration.definition);
+}
+
+export function findModuleReadScopeRegistration<T extends ModuleReadScopeRegistration>(
+  registrations: readonly T[],
+  scope: SyncScope | SyncScopeRequest,
+): T | undefined {
+  return registrations.find((registration) =>
+    matchesModuleReadScopeRegistration(scope, registration),
   );
 }
 
@@ -946,4 +1098,95 @@ export function defineProjectionCatalog<const T extends readonly ProjectionSpec[
   assertUniqueValues(projectionIds, "projectionId");
 
   return Object.freeze([...projections]) as Readonly<T>;
+}
+
+export function defineRetainedProjectionProviderRegistration<
+  const T extends RetainedProjectionProviderRegistration,
+>(registration: T): Readonly<T> {
+  assertNonEmptyString(registration.providerId, "providerId");
+  if (registration.scopeDefinitions.length === 0) {
+    throw new TypeError("scopeDefinitions must not be empty.");
+  }
+  if (registration.projections.length === 0) {
+    throw new TypeError("projections must not be empty.");
+  }
+
+  const scopeDefinitions = registration.scopeDefinitions.map((definition) =>
+    defineModuleReadScopeDefinition(definition),
+  ) as T["scopeDefinitions"];
+  assertUniqueValues(
+    scopeDefinitions.map(
+      (definition) => `${definition.moduleId}:${definition.scopeId}:${definition.definitionHash}`,
+    ),
+    "scopeDefinitions",
+  );
+
+  const projections = defineProjectionCatalog(registration.projections) as T["projections"];
+  const recovery = registration.recovery;
+  assertKnownValue(retainedProjectionRecoveryModes, recovery.missing, "recovery.missing");
+  assertKnownValue(retainedProjectionRecoveryModes, recovery.incompatible, "recovery.incompatible");
+  assertKnownValue(retainedProjectionRecoveryModes, recovery.stale, "recovery.stale");
+  const invalidation = registration.invalidation
+    ? freezeRetainedProjectionInvalidationTarget(registration.invalidation)
+    : undefined;
+
+  return Object.freeze({
+    ...registration,
+    scopeDefinitions: Object.freeze([...scopeDefinitions]) as T["scopeDefinitions"],
+    projections,
+    recovery: Object.freeze({ ...recovery }),
+    ...(invalidation ? { invalidation } : {}),
+  });
+}
+
+export function defineRetainedProjectionProviderRegistry<
+  const T extends readonly RetainedProjectionProviderRegistration[],
+>(registrations: T): Readonly<T> {
+  if (registrations.length === 0) {
+    throw new TypeError("Retained projection provider registry must not be empty.");
+  }
+
+  const normalized = registrations.map((registration) =>
+    defineRetainedProjectionProviderRegistration(registration),
+  ) as unknown as T;
+  assertUniqueValues(
+    normalized.map((registration) => registration.providerId),
+    "providerId",
+  );
+  assertUniqueValues(
+    normalized.flatMap((registration) =>
+      registration.projections.map((projection) => projection.projectionId),
+    ),
+    "projectionId",
+  );
+
+  return Object.freeze(normalized) as Readonly<T>;
+}
+
+export function matchesRetainedProjectionProviderScope(
+  registration: RetainedProjectionProviderRegistration,
+  scope: SyncScope | SyncScopeRequest | ModuleReadScopeDefinition,
+): boolean {
+  return registration.scopeDefinitions.some((definition) =>
+    matchesModuleReadScopeRequest(scope, definition),
+  );
+}
+
+export function listRetainedProjectionProvidersForScope<
+  T extends RetainedProjectionProviderRegistration,
+>(
+  registrations: readonly T[],
+  scope: SyncScope | SyncScopeRequest | ModuleReadScopeDefinition,
+): readonly T[] {
+  return registrations.filter((registration) =>
+    matchesRetainedProjectionProviderScope(registration, scope),
+  );
+}
+
+export function findRetainedProjectionProviderByProjectionId<
+  T extends RetainedProjectionProviderRegistration,
+>(registrations: readonly T[], projectionId: string): T | undefined {
+  return registrations.find((registration) =>
+    registration.projections.some((projection) => projection.projectionId === projectionId),
+  );
 }

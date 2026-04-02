@@ -166,7 +166,7 @@ export function createInMemoryTestWebAppAuthorityStorage(
           },
         };
       },
-      async loadWorkflowProjection(): Promise<RetainedWorkflowProjectionState | null> {
+      async loadRetainedProjection(): Promise<RetainedWorkflowProjectionState | null> {
         return persistedWorkflowProjection
           ? clonePersistedValue(persistedWorkflowProjection)
           : null;
@@ -188,7 +188,7 @@ export function createInMemoryTestWebAppAuthorityStorage(
           });
         }
       },
-      async replaceWorkflowProjection(
+      async replaceRetainedProjection(
         projection: RetainedWorkflowProjectionState | null,
       ): Promise<void> {
         persistedWorkflowProjection = projection ? clonePersistedValue(projection) : null;
@@ -206,8 +206,8 @@ export function createInMemoryTestWebAppAuthorityStorage(
       },
       async commit(input, options): Promise<void> {
         writeState(input);
-        persistedWorkflowProjection = options?.projection
-          ? clonePersistedValue(options.projection)
+        persistedWorkflowProjection = options?.retainedProjection
+          ? clonePersistedValue(options.retainedProjection)
           : null;
         if (options?.secretWrite) {
           persistedSecrets.set(options.secretWrite.secretId, toSecretRecord(options.secretWrite));
@@ -218,8 +218,8 @@ export function createInMemoryTestWebAppAuthorityStorage(
       },
       async persist(input, options): Promise<void> {
         writeState(input);
-        persistedWorkflowProjection = options?.projection
-          ? clonePersistedValue(options.projection)
+        persistedWorkflowProjection = options?.retainedProjection
+          ? clonePersistedValue(options.retainedProjection)
           : null;
         persistedSecrets = pruneSecretRecordMap(persistedSecrets, {
           liveSecretIds: collectLiveSecretIds(input.snapshot),

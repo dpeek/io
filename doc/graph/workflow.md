@@ -254,6 +254,33 @@ Use it for:
 Do not use it as the primary navigation model for the first browser-launched
 session.
 
+Current scoped review-sync notes:
+
+- review-scope registrations compile to
+  `scope:workflow:review`,
+  `projection:workflow:project-branch-board`, and
+  `projection:workflow:branch-commit-queue`
+- any accepted write that touches a workflow entity type conservatively emits
+  that full dependency-key set, even when only one workflow projection may have
+  changed
+- `createWorkflowReviewInvalidationEvent(...)` currently emits only
+  `cursor-advanced` delivery with the workflow review scope id and both
+  workflow projection ids attached; direct scoped deltas stay out of scope for
+  the current proof
+- `compileWorkflowReviewScopeDependencyKeys()` is the shared dependency-key
+  planner used by the first live registration proof, so the authority and
+  router agree on the scope and projection fan-out set
+- the current web proof delivers those invalidations through
+  `workflow-review-pull`, so callers react by scoped `/api/sync` re-pull, and
+  only re-register from their current scoped cursor when a pull reports
+  `active: false`
+- the same package-root surface now also exports
+  `workflowReviewModuleReadScopeRegistration` and
+  `workflowReviewRetainedProjectionProviderRegistration`, so the host installs
+  workflow review through the shared Branch 3 registration seam instead of
+  editing hard-coded scope/projection branches in
+  `../../lib/app/src/web/lib/authority.ts`
+
 ### Primary retained-session read
 
 The workflow session feed is part of the core v1 contract.

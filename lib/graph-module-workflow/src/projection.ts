@@ -2,12 +2,14 @@ import {
   createModuleReadScopeRequest,
   createProjectionDependencyKey,
   createScopeDependencyKey,
+  defineModuleReadScopeRegistration,
   defineInvalidationEvent,
   defineModuleQuerySurfaceCatalog,
   defineModuleQuerySurfaceSpec,
   defineModuleReadScopeDefinition,
   defineProjectionCatalog,
   defineProjectionSpec,
+  defineRetainedProjectionProviderRegistration,
   type DependencyKey,
   type InvalidationEvent,
   type ModuleQuerySurfaceSpec,
@@ -57,6 +59,14 @@ export const workflowReviewModuleReadScope = defineModuleReadScopeDefinition({
   moduleId: workflowModuleId,
   scopeId: "scope:workflow:review",
   definitionHash: "scope-def:workflow:review:v1",
+});
+
+export const workflowReviewModuleReadScopeRegistration = defineModuleReadScopeRegistration({
+  definition: workflowReviewModuleReadScope,
+  fallback: {
+    definitionChanged: "scope-changed",
+    policyChanged: "policy-changed",
+  },
 });
 
 export const workflowReviewSyncScopeRequest = createModuleReadScopeRequest(
@@ -172,6 +182,24 @@ export const projectionCatalog = defineProjectionCatalog([
   projectBranchBoardProjection,
   branchCommitQueueProjection,
 ] as const);
+
+export const workflowReviewRetainedProjectionProviderRegistration =
+  defineRetainedProjectionProviderRegistration({
+    providerId: "provider:workflow:review",
+    scopeDefinitions: [workflowReviewModuleReadScope],
+    projections: projectionCatalog,
+    recovery: {
+      missing: "rebuild",
+      incompatible: "rebuild",
+      stale: "rebuild",
+    },
+    invalidation: {
+      deliveryKind: "cursor-advanced",
+      dependencyKeys: workflowReviewDependencyKeys,
+      affectedProjectionIds: workflowReviewInvalidationProjectionIds,
+      affectedScopeIds: workflowReviewAffectedScopeIds,
+    },
+  });
 
 export const projectionMetadata = Object.freeze({
   projectBranchBoard: projectBranchBoardProjection,

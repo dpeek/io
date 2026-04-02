@@ -47,6 +47,7 @@ import {
   coreBuiltInQuerySurfaceIds,
   coreBuiltInQuerySurfaces,
   coreCatalogModuleReadScope,
+  coreCatalogModuleReadScopeRegistration,
   coreModuleId,
   coreQuerySurfaceCatalog,
 } from "./query.js";
@@ -70,6 +71,7 @@ const requiredExports = [
   "coreBuiltInQuerySurfaceIds",
   "coreBuiltInQuerySurfaces",
   "coreCatalogModuleReadScope",
+  "coreCatalogModuleReadScopeRegistration",
   "coreManifest",
   "coreModuleId",
   "coreQuerySurfaceCatalog",
@@ -246,6 +248,13 @@ describe("@io/graph-module-core", () => {
       moduleId: "core",
       scopeId: "scope:core:catalog",
       definitionHash: "scope-def:core:catalog:v1",
+    });
+    expect(coreCatalogModuleReadScopeRegistration).toEqual({
+      definition: coreCatalogModuleReadScope,
+      fallback: {
+        definitionChanged: "scope-changed",
+        policyChanged: "policy-changed",
+      },
     });
     expect(coreQuerySurfaceCatalog).toMatchObject({
       catalogId: "core:query-surfaces",
@@ -462,6 +471,7 @@ describe("@io/graph-module-core", () => {
       "coreBuiltInQuerySurfaceIds",
       "coreBuiltInQuerySurfaces",
       "coreCatalogModuleReadScope",
+      "coreCatalogModuleReadScopeRegistration",
       "coreManifest",
       "coreModuleId",
       "coreQuerySurfaceCatalog",
@@ -484,6 +494,9 @@ describe("@io/graph-module-core", () => {
     expect(moduleExports.core).toBe(canonicalCore);
     expect(moduleExports.coreModuleId).toBe(coreModuleId);
     expect(moduleExports.coreCatalogModuleReadScope).toBe(coreCatalogModuleReadScope);
+    expect(moduleExports.coreCatalogModuleReadScopeRegistration).toBe(
+      coreCatalogModuleReadScopeRegistration,
+    );
     expect(moduleExports.coreManifest).toBe(coreManifest);
     expect(moduleExports.coreQuerySurfaceCatalog).toBe(coreQuerySurfaceCatalog);
     expect(moduleExports.coreBuiltInQuerySurfaces).toBe(coreBuiltInQuerySurfaces);

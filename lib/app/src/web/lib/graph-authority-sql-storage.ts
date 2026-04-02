@@ -285,7 +285,7 @@ function pruneRetainedTransactionRows(
 function rewritePersistedState(
   sql: DurableObjectSqlStorageLike,
   input: DurableAuthorityPersistInput,
-  projection?: RetainedWorkflowProjectionState,
+  retainedProjection?: RetainedWorkflowProjectionState,
 ): void {
   const now = new Date().toISOString();
   const existingMeta = readGraphMetaRow(sql, defaultRetainedHistoryPolicy);
@@ -300,7 +300,7 @@ function rewritePersistedState(
     input.retainedRecords ?? [],
     headCursor(input.writeHistory),
   );
-  replaceWorkflowProjectionRows(sql, projection);
+  replaceWorkflowProjectionRows(sql, retainedProjection);
   pruneOrphanedSecretValues(sql, input.snapshot);
   writeGraphMetaRow(sql, {
     cursorPrefix: input.writeHistory.cursorPrefix,
@@ -317,7 +317,7 @@ function applyCommittedTransaction(
   sql: DurableObjectSqlStorageLike,
   input: DurableAuthorityCommitInput,
   secretWrite?: WebAppAuthoritySecretWrite,
-  projection?: RetainedWorkflowProjectionState,
+  retainedProjection?: RetainedWorkflowProjectionState,
 ): void {
   if (input.result.replayed) return;
 
@@ -392,7 +392,7 @@ function applyCommittedTransaction(
     upsertSecretValue(sql, secretWrite, now);
   }
   replacePersistedRetainedRecordRows(sql, input.retainedRecords ?? [], input.result.cursor);
-  replaceWorkflowProjectionRows(sql, projection);
+  replaceWorkflowProjectionRows(sql, retainedProjection);
   pruneOrphanedSecretValues(sql, input.snapshot);
   if ((existingMeta?.historyRetainedFromSeq ?? 0) < input.writeHistory.baseSequence) {
     pruneRetainedTransactionRows(sql, input.writeHistory.baseSequence);
@@ -431,7 +431,7 @@ export function createSqliteDurableObjectAuthorityStorage(
         expectedSchemaVersion: durableObjectAuthoritySchemaVersion,
       });
     },
-    async loadWorkflowProjection(): Promise<RetainedWorkflowProjectionState | null> {
+    async loadRetainedProjection(): Promise<RetainedWorkflowProjectionState | null> {
       const meta = readGraphMetaRow(state.storage.sql, defaultRetainedHistoryPolicy);
       if (!meta) {
         return null;
@@ -444,7 +444,7 @@ export function createSqliteDurableObjectAuthorityStorage(
         replaceRetainedDocumentRows(state.storage.sql, retainedDocuments, meta?.headCursor);
       });
     },
-    async replaceWorkflowProjection(
+    async replaceRetainedProjection(
       projection: RetainedWorkflowProjectionState | null,
     ): Promise<void> {
       await runStorageTransaction(state.storage, () => {
@@ -470,13 +470,13 @@ export function createSqliteDurableObjectAuthorityStorage(
           state.storage.sql,
           input,
           options?.secretWrite,
-          options?.projection,
+          options?.retainedProjection,
         );
       });
     },
     async persist(input, options): Promise<void> {
       await runStorageTransaction(state.storage, () => {
-        rewritePersistedState(state.storage.sql, input, options?.projection);
+        rewritePersistedState(state.storage.sql, input, options?.retainedProjection);
       });
     },
   };

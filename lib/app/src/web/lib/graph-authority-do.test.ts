@@ -26,7 +26,12 @@ import {
   type GraphWriteTransaction,
 } from "@io/graph-kernel";
 import { defineSecretField, defineType } from "@io/graph-module";
-import { core, coreBuiltInQuerySurfaceIds, coreGraphBootstrapOptions } from "@io/graph-module-core";
+import {
+  core,
+  coreBuiltInQuerySurfaceIds,
+  coreCatalogModuleReadScope,
+  coreGraphBootstrapOptions,
+} from "@io/graph-module-core";
 import { workflow, workflowBuiltInQuerySurfaceIds } from "@io/graph-module-workflow";
 import {
   projectionMetadata,
@@ -68,6 +73,11 @@ setDefaultTimeout(20_000);
 const productGraph = { ...core, ...workflow } as const;
 const envVarSecretPredicateId = edgeId(workflow.envVar.fields.secret);
 const workflowModuleScope = workflowReviewSyncScopeRequest;
+const coreCatalogScope = {
+  kind: "module",
+  moduleId: coreCatalogModuleReadScope.moduleId,
+  scopeId: coreCatalogModuleReadScope.scopeId,
+} as const;
 const hiddenCursorProbe = defineType({
   values: { key: "test:hiddenCursorProbe", name: "Hidden Cursor Probe" },
   fields: {
@@ -847,7 +857,7 @@ async function readSyncPayload(
   durableObject: WebGraphAuthorityDurableObject,
   after?: string,
   authorization: AuthorizationContext = testAuthorityAuthorization,
-  scope?: typeof workflowModuleScope,
+  scope?: typeof workflowModuleScope | typeof coreCatalogScope,
 ): Promise<SyncPayload> {
   const url = new URL("https://graph-authority.local/api/sync");
   if (after) url.searchParams.set("after", after);
@@ -3054,6 +3064,73 @@ describe("web graph authority durable object", () => {
     ).toBe(true);
   });
 
+  it("serves the core catalog scope through the same durable sync route seam", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const fixture = await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+    const total = await readSyncPayload(
+      durableObject,
+      undefined,
+      testAuthorityAuthorization,
+      coreCatalogScope,
+    );
+
+    if (total.mode !== "total") {
+      throw new Error("Expected a scoped total sync payload.");
+    }
+
+    expect(total).toMatchObject({
+      scope: {
+        kind: "module",
+        moduleId: coreCatalogScope.moduleId,
+        scopeId: coreCatalogScope.scopeId,
+        definitionHash: coreCatalogModuleReadScope.definitionHash,
+        policyFilterVersion: `policy:${webAppPolicyVersion}`,
+      },
+      completeness: "complete",
+      freshness: "current",
+    });
+    if (!total.snapshot) {
+      throw new Error("Expected the scoped total payload to include a snapshot.");
+    }
+    expect(total.snapshot.edges.some((edge) => edge.s === core.node.values.id)).toBe(true);
+    expect(total.snapshot.edges.some((edge) => edge.s === fixture.branchId)).toBe(false);
+
+    await authority.executeCommand(
+      {
+        kind: "workflow-mutation",
+        input: {
+          action: "createCommit",
+          branchId: fixture.branchId,
+          title: "Core catalog out-of-scope write",
+          commitKey: "commit:durable-core-catalog-out-of-scope-write",
+          order: 0,
+          state: "ready",
+        },
+      },
+      {
+        authorization: testAuthorityAuthorization,
+      },
+    );
+
+    const incremental = await readSyncPayload(
+      durableObject,
+      total.cursor,
+      testAuthorityAuthorization,
+      coreCatalogScope,
+    );
+
+    expect(incremental).toMatchObject({
+      mode: "incremental",
+      scope: total.scope,
+      after: total.cursor,
+      transactions: [],
+    });
+    expect(incremental.fallbackReason).toBeUndefined();
+    expect(incremental.cursor).not.toBe(incremental.after);
+  });
+
   it("returns scoped fallback from the durable sync route and keeps whole-graph recovery explicit", async () => {
     const { state } = createSqliteDurableObjectState();
     const durableObject = createTestDurableObject(state);
@@ -3117,6 +3194,91 @@ describe("web graph authority durable object", () => {
     });
     expect(recovered.snapshot?.edges.some((edge) => edge.s === fixture.branchId)).toBe(true);
     expect(recovered.snapshot?.edges.some((edge) => edge.s === envVarWrite.result)).toBe(true);
+  });
+
+  it("returns core scoped fallback from the durable sync route and keeps whole-graph recovery explicit", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const fixture = await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+    const scopedTotal = await readSyncPayload(
+      durableObject,
+      undefined,
+      testAuthorityAuthorization,
+      coreCatalogScope,
+    );
+
+    if (scopedTotal.mode !== "total") {
+      throw new Error("Expected a scoped total sync payload.");
+    }
+
+    expect(scopedTotal.snapshot?.edges.some((edge) => edge.s === core.node.values.id)).toBe(true);
+    expect(scopedTotal.snapshot?.edges.some((edge) => edge.s === fixture.branchId)).toBe(false);
+
+    const staleCursor = updateScopedCursor(scopedTotal.cursor, {
+      scopeId: "scope:core:missing",
+    });
+    const fallback = await readSyncPayload(
+      durableObject,
+      staleCursor,
+      testAuthorityAuthorization,
+      coreCatalogScope,
+    );
+
+    expect(fallback).toMatchObject({
+      mode: "incremental",
+      scope: scopedTotal.scope,
+      after: staleCursor,
+      cursor: scopedTotal.cursor,
+      fallbackReason: "scope-changed",
+      completeness: "complete",
+      freshness: "current",
+      transactions: [],
+    });
+
+    const recovered = await readSyncPayload(durableObject, undefined, testAuthorityAuthorization);
+
+    expect(recovered).toMatchObject({
+      mode: "total",
+      scope: {
+        kind: "graph",
+      },
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(recovered.snapshot?.edges.some((edge) => edge.s === core.node.values.id)).toBe(true);
+    expect(recovered.snapshot?.edges.some((edge) => edge.s === fixture.branchId)).toBe(true);
+  });
+
+  it("fails closed for missing scoped registrations over the durable sync route and leaves whole-graph bootstrap available", async () => {
+    const { state } = createSqliteDurableObjectState();
+    const durableObject = createTestDurableObject(state);
+    const authority = await getDurableAuthority<WebAppAuthority>(durableObject);
+    const fixture = await createTestWorkflowFixture(authority, testAuthorityAuthorization);
+    const response = await durableObject.fetch(
+      createAuthorizedRequest(
+        "https://graph-authority.local/api/sync?scopeKind=module&moduleId=workflow&scopeId=scope%3Aworkflow%3Amissing",
+        {},
+        testAuthorityAuthorization,
+      ),
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      error: 'Scope "scope:workflow:missing" was not found for module "workflow".',
+    });
+
+    const recovered = await readSyncPayload(durableObject, undefined, testAuthorityAuthorization);
+
+    expect(recovered).toMatchObject({
+      mode: "total",
+      scope: {
+        kind: "graph",
+      },
+      completeness: "complete",
+      freshness: "current",
+    });
+    expect(recovered.snapshot?.edges.some((edge) => edge.s === fixture.branchId)).toBe(true);
   });
 
   it("proves two principals receive different sync payloads and direct-read outcomes for the same entity", async () => {
@@ -5039,14 +5201,14 @@ describe("web graph authority durable object", () => {
               load() {
                 return storage.load();
               },
-              loadWorkflowProjection() {
-                return storage.loadWorkflowProjection();
+              loadRetainedProjection() {
+                return storage.loadRetainedProjection();
               },
               replaceRetainedDocuments(retainedDocuments) {
                 return storage.replaceRetainedDocuments(retainedDocuments);
               },
-              replaceWorkflowProjection(projection) {
-                return storage.replaceWorkflowProjection(projection);
+              replaceRetainedProjection(projection) {
+                return storage.replaceRetainedProjection(projection);
               },
               inspectSecrets() {
                 return storage.inspectSecrets();
