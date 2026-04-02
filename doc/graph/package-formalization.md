@@ -621,13 +621,19 @@ const installedCatalogs = [coreQuerySurfaceCatalog, workflowQuerySurfaceCatalog]
 const installedSurfaces = createInstalledQuerySurfaceRegistry(installedCatalogs);
 
 const executorRegistry = createQueryExecutorRegistry(installedSurfaces, [
-  ...createCoreQueryExecutorRegistrations(coreDependencies),
-  ...createWorkflowQueryExecutorRegistrations(workflowDependencies),
+  ...createCoreQueryExecutorRegistrations(
+    coreDependencies,
+    installedSurfaces.surfaces.filter((surface) => surface.moduleId === "core"),
+  ),
+  ...createWorkflowQueryExecutorRegistrations(
+    workflowDependencies,
+    installedSurfaces.surfaces.filter((surface) => surface.moduleId === "workflow"),
+  ),
 ]);
 ```
 
 That keeps module ownership on module packages and limits app ownership to one
-question: which modules are installed right now?
+question: which modules are installed and active right now?
 
 ## Cross-Package Integration
 

@@ -1,5 +1,3 @@
-import { coreQuerySurfaceCatalog } from "@io/graph-module-core";
-import { workflowQuerySurfaceCatalog } from "@io/graph-module-workflow";
 import type { ModuleQuerySurfaceCatalog } from "@io/graph-projection";
 import {
   createInstalledQuerySurfaceRegistry,
@@ -12,8 +10,41 @@ import {
   type QuerySurfaceRendererCompatibility,
 } from "@io/graph-query";
 
+import {
+  getBuiltInInstalledModuleContributionResolutions,
+  resolveActiveInstalledModuleContributionResolutions,
+  type InstalledModuleContributionResolution,
+} from "./installed-module-runtime.js";
+
 export type InstalledModuleQuerySurface = InstalledQuerySurface;
 export type InstalledModuleQuerySurfaceRegistry = InstalledQuerySurfaceRegistry;
+
+export function resolveInstalledModuleQuerySurfaceCatalogs(
+  resolutions: readonly InstalledModuleContributionResolution[],
+): readonly ModuleQuerySurfaceCatalog[] {
+  const catalogs: ModuleQuerySurfaceCatalog[] = [];
+
+  for (const { manifest, record } of resolveActiveInstalledModuleContributionResolutions(
+    resolutions,
+  )) {
+    const moduleCatalogs = manifest.runtime.querySurfaceCatalogs;
+    if (!moduleCatalogs || moduleCatalogs.length === 0) {
+      throw new TypeError(
+        `Active installed module "${record.moduleId}" does not publish any query-surface catalogs.`,
+      );
+    }
+
+    catalogs.push(...moduleCatalogs);
+  }
+
+  if (catalogs.length === 0) {
+    throw new TypeError(
+      "Activation-driven query-surface catalog composition produced no active installed catalogs.",
+    );
+  }
+
+  return Object.freeze([...catalogs]);
+}
 
 export function createInstalledModuleQuerySurfaceRegistry(
   catalogs: readonly ModuleQuerySurfaceCatalog[],
@@ -35,15 +66,18 @@ export function createQueryEditorCatalogFromRegistry(
 }
 
 /**
- * Keep the current built-in installation path explicit until manifest-backed
- * activation decides which module catalogs are active at runtime.
+ * Compose the shipped built-in query-surface catalogs from the same manifest
+ * contribution and activation state seam that later installed-module work will
+ * reuse.
  *
- * This stays lazy because the Cloudflare dev worker scans entry exports during
- * startup, and eager catalog materialization can observe partially initialized
- * workspace modules.
+ * Keep this available as a getter because the Cloudflare dev worker scans
+ * entry exports during startup, and some startup-sensitive paths need to defer
+ * catalog materialization until workspace modules finish initializing.
  */
 export function getBuiltInInstalledModuleQuerySurfaceCatalogs(): readonly ModuleQuerySurfaceCatalog[] {
-  return [workflowQuerySurfaceCatalog, coreQuerySurfaceCatalog];
+  return resolveInstalledModuleQuerySurfaceCatalogs(
+    getBuiltInInstalledModuleContributionResolutions(),
+  );
 }
 
 export const builtInInstalledModuleQuerySurfaceCatalogs =
@@ -82,3 +116,4 @@ export function getInstalledModuleQuerySurfaceRendererCompatibility(
 }
 
 export { createQuerySurfaceRendererCompatibility };
+export { getBuiltInInstalledModuleContributionResolutions };

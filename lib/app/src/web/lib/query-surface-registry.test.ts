@@ -1,20 +1,52 @@
 import { describe, expect, it } from "bun:test";
 
-import { coreBuiltInQuerySurfaceIds } from "@io/graph-module-core";
+import { defineInstalledModuleRecord, type InstalledModuleRecord } from "@io/graph-authority";
+import type { GraphModuleManifest } from "@io/graph-module";
+import { coreBuiltInQuerySurfaceIds, coreManifest } from "@io/graph-module-core";
+import { workflowManifest } from "@io/graph-module-workflow";
 
 import {
   createBuiltInInstalledModuleQuerySurfaceRegistry,
   createInstalledModuleQuerySurfaceRegistry,
   createQueryEditorCatalogFromRegistry,
   createQuerySurfaceRendererCompatibility,
+  getBuiltInInstalledModuleContributionResolutions,
   getBuiltInInstalledModuleQuerySurfaceCatalogs,
   getInstalledModuleQuerySurfaceRegistry,
   getInstalledModuleQuerySurface,
+  resolveInstalledModuleQuerySurfaceCatalogs,
 } from "./query-surface-registry.js";
 
+function createInstalledRecordFromManifest(
+  manifest: GraphModuleManifest,
+  overrides?: Partial<InstalledModuleRecord>,
+): Readonly<InstalledModuleRecord> {
+  const activation = overrides?.activation;
+  return defineInstalledModuleRecord({
+    moduleId: manifest.moduleId,
+    version: manifest.version,
+    bundleDigest: `test:${manifest.moduleId}:${manifest.version}`,
+    source: manifest.source,
+    compatibility: manifest.compatibility,
+    installState: "installed",
+    activation: {
+      desired: "active",
+      status: "active",
+      changedAt: "2026-04-02T00:00:00.000Z",
+      ...activation,
+    },
+    grantedPermissionKeys: [],
+    installedAt: "2026-04-02T00:00:00.000Z",
+    updatedAt: "2026-04-02T00:00:00.000Z",
+    ...overrides,
+  });
+}
+
 describe("query surface registry", () => {
-  it("installs the explicit built-in workflow and core catalogs into one shared registry", () => {
+  it("composes the active built-in workflow and core catalogs into one shared registry", () => {
     const registry = createBuiltInInstalledModuleQuerySurfaceRegistry();
+    const builtInInstalledModuleContributionResolutions =
+      getBuiltInInstalledModuleContributionResolutions();
     const builtInInstalledModuleQuerySurfaceCatalogs =
       getBuiltInInstalledModuleQuerySurfaceCatalogs();
     const surface = getInstalledModuleQuerySurface(registry, "workflow:project-branch-board");
@@ -62,6 +94,21 @@ describe("query surface registry", () => {
       "default:list",
       "default:table",
       "default:card-grid",
+    ]);
+    expect(
+      builtInInstalledModuleContributionResolutions.map((resolution) => ({
+        activation: resolution.record.activation.status,
+        moduleId: resolution.manifest.moduleId,
+      })),
+    ).toEqual([
+      {
+        activation: "active",
+        moduleId: "workflow",
+      },
+      {
+        activation: "active",
+        moduleId: "core",
+      },
     ]);
     expect(builtInInstalledModuleQuerySurfaceCatalogs.map((catalog) => catalog.catalogId)).toEqual([
       "workflow:query-surfaces",
@@ -119,6 +166,57 @@ describe("query surface registry", () => {
       "name",
       "surface-module-id",
     ]);
+  });
+
+  it("excludes inactive module catalogs from activation-driven composition", () => {
+    const catalogs = resolveInstalledModuleQuerySurfaceCatalogs([
+      {
+        manifest: workflowManifest,
+        record: createInstalledRecordFromManifest(workflowManifest),
+      },
+      {
+        manifest: coreManifest,
+        record: createInstalledRecordFromManifest(coreManifest, {
+          activation: {
+            desired: "inactive",
+            status: "inactive",
+            changedAt: "2026-04-02T00:00:00.000Z",
+          },
+        }),
+      },
+    ]);
+
+    expect(catalogs.map((catalog) => catalog.catalogId)).toEqual(["workflow:query-surfaces"]);
+  });
+
+  it("fails closed when an active module does not publish query-surface catalogs", () => {
+    expect(() =>
+      resolveInstalledModuleQuerySurfaceCatalogs([
+        {
+          manifest: {
+            ...workflowManifest,
+            runtime: {},
+          },
+          record: createInstalledRecordFromManifest(workflowManifest),
+        },
+      ]),
+    ).toThrow('Active installed module "workflow" does not publish any query-surface catalogs.');
+  });
+
+  it("fails closed when installed activation drifts from the current manifest identity", () => {
+    expect(() =>
+      resolveInstalledModuleQuerySurfaceCatalogs([
+        {
+          manifest: workflowManifest,
+          record: createInstalledRecordFromManifest(workflowManifest, {
+            version: "0.0.2",
+            bundleDigest: "test:workflow:0.0.2",
+          }),
+        },
+      ]),
+    ).toThrow(
+      'Installed module "workflow" does not match the current manifest identity or compatibility.',
+    );
   });
 
   it("projects installed workflow and core surfaces into one editor catalog and renderer views", () => {

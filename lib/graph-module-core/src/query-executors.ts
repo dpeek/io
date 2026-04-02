@@ -1,18 +1,43 @@
 import type { QueryResultPage } from "@io/graph-client";
 
-import { coreBuiltInQuerySurfaces } from "./query.js";
+import { coreBuiltInQuerySurfaces, type CoreBuiltInQuerySurfaceSpec } from "./query.js";
 
-export type CoreQueryExecutorDependencies<ReadOptions> = {
+export type CoreQueryExecutorDependencies<_ReadOptions> = {
   readonly executeModuleScopeQuery: (context: any) => QueryResultPage;
   readonly unsupported: (message: string) => Error;
 };
 
-type CoreQueryExecutorRegistration<ReadOptions> = {
+type CoreInstalledQuerySurface = Pick<
+  CoreBuiltInQuerySurfaceSpec,
+  "queryKind" | "surfaceId" | "surfaceVersion"
+>;
+
+type CoreQueryExecutorRegistration<_ReadOptions> = {
   readonly execute: (context: any) => QueryResultPage;
   readonly queryKind: "scope";
   readonly surfaceId: string;
   readonly surfaceVersion: string;
 };
+
+const defaultCoreInstalledQuerySurfaces = Object.freeze([
+  coreBuiltInQuerySurfaces.catalogScope,
+  coreBuiltInQuerySurfaces.savedQueryLibrary,
+] satisfies readonly CoreInstalledQuerySurface[]);
+
+function getInstalledCoreScopeSurface(
+  surfaces: readonly CoreInstalledQuerySurface[],
+  surfaceId: string,
+): Pick<CoreQueryExecutorRegistration<never>, "surfaceId" | "surfaceVersion"> | undefined {
+  const surface = surfaces.find(
+    (candidate) => candidate.queryKind === "scope" && candidate.surfaceId === surfaceId,
+  );
+  return surface
+    ? {
+        surfaceId: surface.surfaceId,
+        surfaceVersion: surface.surfaceVersion,
+      }
+    : undefined;
+}
 
 function createCoreModuleScopeExecutor<ReadOptions>(
   surface: Pick<CoreQueryExecutorRegistration<ReadOptions>, "surfaceId" | "surfaceVersion">,
@@ -36,6 +61,12 @@ function createCoreModuleScopeExecutor<ReadOptions>(
 
 export function createCoreQueryExecutorRegistrations<ReadOptions>(
   dependencies: CoreQueryExecutorDependencies<ReadOptions>,
+  installedSurfaces: readonly CoreInstalledQuerySurface[] = defaultCoreInstalledQuerySurfaces,
 ): readonly CoreQueryExecutorRegistration<ReadOptions>[] {
-  return [createCoreModuleScopeExecutor(coreBuiltInQuerySurfaces.catalogScope, dependencies)];
+  const catalogScope = getInstalledCoreScopeSurface(
+    installedSurfaces,
+    coreBuiltInQuerySurfaces.catalogScope.surfaceId,
+  );
+
+  return catalogScope ? [createCoreModuleScopeExecutor(catalogScope, dependencies)] : [];
 }

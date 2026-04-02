@@ -345,12 +345,13 @@ Current shared query-authoring coverage:
   pagination by resetting or refreshing instead of silently continuing with
   invalid cursors
 - `../../lib/app/src/web/lib/query-surface-registry.ts`: explicit built-in
-  workflow-plus-core query-surface installation seam that combines the package
-  root catalogs into one installed editor and runtime registry, then projects
-  that registry into `installedModuleQueryEditorCatalog` for the shared editor
-  surface; the current proof is intentionally limited to that hard-wired
-  built-in list and does not yet cover manifest-backed activation, runtime
-  module toggling, or arbitrary third-party module mixes
+  workflow-plus-core query-surface installation seam that resolves built-in
+  manifest activation records through each manifest's
+  `runtime.querySurfaceCatalogs`, then combines the active contributions into
+  one installed editor and runtime registry and projects that registry into
+  `installedModuleQueryEditorCatalog` for the shared editor surface; the
+  current proof is intentionally limited to shipped built-ins and does not yet
+  cover runtime module toggling or arbitrary third-party module mixes
 - `../../lib/app/src/web/lib/query-route-state.ts`: explicit `/query` route-state
   contract covering draft previews, saved query or view reopen selection,
   parameter overrides, and route-addressable preview renderer/page-size state

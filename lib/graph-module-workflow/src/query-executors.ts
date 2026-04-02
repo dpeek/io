@@ -9,20 +9,28 @@ import {
   type ProjectBranchScopeResult,
 } from "./query.js";
 import { projectBranchScopeOrderFieldValues } from "./query.js";
-import { workflowBuiltInQuerySurfaces } from "./projection.js";
+import {
+  workflowBuiltInQuerySurfaces,
+  type WorkflowBuiltInQuerySurfaceSpec,
+} from "./projection.js";
 
-export type WorkflowQueryExecutorDependencies<ReadOptions> = {
+export type WorkflowQueryExecutorDependencies<_ReadOptions> = {
   readonly executeModuleScopeQuery: (context: any) => QueryResultPage;
   readonly readCommitQueueScope: (
     query: CommitQueueScopeQuery,
-    options: ReadOptions,
+    options: _ReadOptions,
   ) => CommitQueueScopeResult;
   readonly readProjectBranchScope: (
     query: ProjectBranchScopeQuery,
-    options: ReadOptions,
+    options: _ReadOptions,
   ) => ProjectBranchScopeResult;
   readonly unsupported: (message: string) => Error;
 };
+
+type WorkflowInstalledQuerySurface = Pick<
+  WorkflowBuiltInQuerySurfaceSpec,
+  "queryKind" | "surfaceId" | "surfaceVersion"
+>;
 
 type WorkflowQueryExecutorRegistration<_ReadOptions> = {
   readonly execute: (context: any) => QueryResultPage;
@@ -30,6 +38,28 @@ type WorkflowQueryExecutorRegistration<_ReadOptions> = {
   readonly surfaceId: string;
   readonly surfaceVersion: string;
 };
+
+const defaultWorkflowInstalledQuerySurfaces = Object.freeze([
+  workflowBuiltInQuerySurfaces.projectBranchBoard,
+  workflowBuiltInQuerySurfaces.branchCommitQueue,
+  workflowBuiltInQuerySurfaces.reviewScope,
+] satisfies readonly WorkflowInstalledQuerySurface[]);
+
+function getInstalledWorkflowSurface(
+  surfaces: readonly WorkflowInstalledQuerySurface[],
+  input: Pick<WorkflowQueryExecutorRegistration<never>, "queryKind" | "surfaceId">,
+): Pick<WorkflowQueryExecutorRegistration<never>, "surfaceId" | "surfaceVersion"> | undefined {
+  const surface = surfaces.find(
+    (candidate) =>
+      candidate.queryKind === input.queryKind && candidate.surfaceId === input.surfaceId,
+  );
+  return surface
+    ? {
+        surfaceId: surface.surfaceId,
+        surfaceVersion: surface.surfaceVersion,
+      }
+    : undefined;
+}
 
 function requireStringQueryLiteral(
   value: unknown,
@@ -308,12 +338,19 @@ function createWorkflowModuleScopeExecutor<ReadOptions>(
 
 export function createWorkflowQueryExecutorRegistrations<ReadOptions>(
   dependencies: WorkflowQueryExecutorDependencies<ReadOptions>,
+  installedSurfaces: readonly WorkflowInstalledQuerySurface[] = defaultWorkflowInstalledQuerySurfaces,
 ): readonly WorkflowQueryExecutorRegistration<ReadOptions>[] {
-  return [
-    {
+  const registrations: WorkflowQueryExecutorRegistration<ReadOptions>[] = [];
+
+  const projectBranchBoardSurface = getInstalledWorkflowSurface(installedSurfaces, {
+    queryKind: "collection",
+    surfaceId: workflowBuiltInQuerySurfaces.projectBranchBoard.surfaceId,
+  });
+  if (projectBranchBoardSurface) {
+    registrations.push({
       queryKind: "collection",
-      surfaceId: workflowBuiltInQuerySurfaces.projectBranchBoard.surfaceId,
-      surfaceVersion: workflowBuiltInQuerySurfaces.projectBranchBoard.surfaceVersion,
+      surfaceId: projectBranchBoardSurface.surfaceId,
+      surfaceVersion: projectBranchBoardSurface.surfaceVersion,
       execute({ normalizedRequest, options, pageCursor }) {
         return mapWorkflowProjectBranchCollectionResult(
           dependencies.readProjectBranchScope(
@@ -326,11 +363,18 @@ export function createWorkflowQueryExecutorRegistrations<ReadOptions>(
           ),
         );
       },
-    },
-    {
+    });
+  }
+
+  const branchCommitQueueSurface = getInstalledWorkflowSurface(installedSurfaces, {
+    queryKind: "collection",
+    surfaceId: workflowBuiltInQuerySurfaces.branchCommitQueue.surfaceId,
+  });
+  if (branchCommitQueueSurface) {
+    registrations.push({
       queryKind: "collection",
-      surfaceId: workflowBuiltInQuerySurfaces.branchCommitQueue.surfaceId,
-      surfaceVersion: workflowBuiltInQuerySurfaces.branchCommitQueue.surfaceVersion,
+      surfaceId: branchCommitQueueSurface.surfaceId,
+      surfaceVersion: branchCommitQueueSurface.surfaceVersion,
       execute({ normalizedRequest, options, pageCursor }) {
         return mapWorkflowCommitQueueCollectionResult(
           dependencies.readCommitQueueScope(
@@ -343,7 +387,16 @@ export function createWorkflowQueryExecutorRegistrations<ReadOptions>(
           ),
         );
       },
-    },
-    createWorkflowModuleScopeExecutor(workflowBuiltInQuerySurfaces.reviewScope, dependencies),
-  ];
+    });
+  }
+
+  const reviewScopeSurface = getInstalledWorkflowSurface(installedSurfaces, {
+    queryKind: "scope",
+    surfaceId: workflowBuiltInQuerySurfaces.reviewScope.surfaceId,
+  });
+  if (reviewScopeSurface) {
+    registrations.push(createWorkflowModuleScopeExecutor(reviewScopeSurface, dependencies));
+  }
+
+  return registrations;
 }

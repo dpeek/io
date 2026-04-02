@@ -48,9 +48,10 @@ The current built-in query-catalog proof is split by owner:
   and commit queue surfaces plus the `workflow:review-scope` scope surface
 - saved queries bind to module-owned surfaces by storing module, catalog, and
   surface ids plus versions on the core-owned durable saved-query records
-- `lib/app/src/web/lib/query-surface-registry.ts` keeps the built-in
-  multi-module registry explicit through one shared workflow-plus-core catalog
-  installation list; there is no manifest-backed activation layer yet
+- `lib/app/src/web/lib/query-surface-registry.ts` now composes the shipped
+  workflow-plus-core registry from built-in manifest activation records and the
+  manifests' `runtime.querySurfaceCatalogs`, so the query runtime follows the
+  installed-module contribution seam instead of a fixed catalog list
 
 The initial saved-query library surface belongs in core rather than workflow
 because it exposes core-owned saved-query product records that any module may

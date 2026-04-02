@@ -53,9 +53,10 @@ What exists today:
   the generic serialized-query registry is proven across more than one module
   without opening arbitrary scans
 - `../../lib/app/src/web/lib/registered-serialized-query-executors.ts` now owns
-  the shipped bounded executor registrations for the two workflow projection
-  collections plus the workflow and core module scopes, so authority no longer
-  carries hard-coded workflow surface dispatch branches
+  the activation-driven executor composition seam that derives shipped bounded
+  registrations from the installed workflow and core surface catalogs, so
+  authority no longer carries hard-coded workflow surface dispatch branches or
+  fixed built-in executor spreads in the main path
 - authority-owned workflow reads rebuild from authoritative graph state and
   expose `projectionCursor`, `projectedAt`, pagination, and fail-closed
   `projection-stale` semantics
@@ -93,14 +94,15 @@ The current built-in multi-module query-catalog story is:
 - `@io/graph-module-workflow` exports `workflowQuerySurfaceCatalog` from the
   package root for the workflow-local projection-backed collection surfaces and
   the `workflow:review-scope` scope surface
-- `lib/app/src/web/lib/query-surface-registry.ts` keeps an explicit built-in
-  catalog installation list for the workflow and core package-root catalogs and
-  combines them into one installed registry; manifest activation work is still
-  out of scope
+- `lib/app/src/web/lib/query-surface-registry.ts` now resolves the shipped
+  built-in workflow and core catalogs from built-in manifest activation records
+  and each manifest's `runtime.querySurfaceCatalogs`, so installed registry
+  composition follows the installed-module contribution seam and still fails
+  closed when a built-in module goes inactive or drifts from its manifest
 
 ```ts
-import { coreQuerySurfaceCatalog } from "@io/graph-module-core";
-import { workflowQuerySurfaceCatalog } from "@io/graph-module-workflow";
+import { coreManifest } from "@io/graph-module-core";
+import { workflowManifest } from "@io/graph-module-workflow";
 ```
 
 ## Goals
@@ -1019,8 +1021,9 @@ Current proof status:
 - `../../lib/graph-module-core/src/react-dom/query-editor-component.tsx` now
   mounts that draft model through typed source, filter, sort, pagination, and
   parameter sections
-- `../../lib/app/src/web/lib/query-surface-registry.ts` now keeps the
-  built-in workflow-plus-core installation seam and publishes
+- `../../lib/app/src/web/lib/query-surface-registry.ts` now composes the
+  built-in workflow-plus-core registry from built-in manifest activation state
+  and publishes
   `installedModuleQueryEditorCatalog` for app/web consumers
 - `../../lib/app/src/web/lib/query-route-state.ts` now defines the explicit
   `/query` route-search contract for draft previews, saved query or view

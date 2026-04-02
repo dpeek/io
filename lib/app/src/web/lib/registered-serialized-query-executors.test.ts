@@ -1,23 +1,29 @@
 import { describe, expect, it } from "bun:test";
 
+import { defineInstalledModuleRecord, type InstalledModuleRecord } from "@io/graph-authority";
 import type { NormalizedQueryRequest, QueryResultPage } from "@io/graph-client";
+import type { GraphModuleManifest } from "@io/graph-module";
 import {
   coreBuiltInQuerySurfaceIds,
   type CoreBuiltInQuerySurfaceSpec,
+  coreManifest,
 } from "@io/graph-module-core";
 import {
   type CommitQueueScopeQuery,
   type CommitQueueScopeResult,
   type ProjectBranchScopeQuery,
   type ProjectBranchScopeResult,
+  workflowManifest,
   workflowBuiltInQuerySurfaceIds,
   type WorkflowBuiltInQuerySurfaceSpec,
 } from "@io/graph-module-workflow";
 import { resolveCollectionQueryExecutor, resolveScopeQueryExecutor } from "@io/graph-query";
 
 import {
+  createInstalledModuleQuerySurfaceRegistry,
   getInstalledModuleQuerySurfaceRegistry,
   getInstalledModuleQuerySurface,
+  resolveInstalledModuleQuerySurfaceCatalogs,
 } from "./query-surface-registry.js";
 import { createWebAppSerializedQueryExecutorRegistry } from "./registered-serialized-query-executors.js";
 
@@ -34,6 +40,31 @@ const normalizedMetadata = {
 } as const;
 
 const installedModuleQuerySurfaceRegistry = getInstalledModuleQuerySurfaceRegistry();
+
+function createInstalledRecordFromManifest(
+  manifest: GraphModuleManifest,
+  overrides?: Partial<InstalledModuleRecord>,
+): Readonly<InstalledModuleRecord> {
+  const activation = overrides?.activation;
+  return defineInstalledModuleRecord({
+    moduleId: manifest.moduleId,
+    version: manifest.version,
+    bundleDigest: `test:${manifest.moduleId}:${manifest.version}`,
+    source: manifest.source,
+    compatibility: manifest.compatibility,
+    installState: "installed",
+    activation: {
+      desired: "active",
+      status: "active",
+      changedAt: "2026-04-02T00:00:00.000Z",
+      ...activation,
+    },
+    grantedPermissionKeys: [],
+    installedAt: "2026-04-02T00:00:00.000Z",
+    updatedAt: "2026-04-02T00:00:00.000Z",
+    ...overrides,
+  });
+}
 
 function createCollectionRequest(
   query: Extract<NormalizedQueryRequest["query"], { readonly kind: "collection" }>,
@@ -379,5 +410,86 @@ describe("registered serialized query executors", () => {
     ).toThrow(
       `Scope query "${coreBuiltInQuerySurfaceIds.catalogScope}" does not support windowed pagination.`,
     );
+  });
+
+  it("only composes executors for surfaces from active installed modules", () => {
+    const surfaceRegistry = createInstalledModuleQuerySurfaceRegistry(
+      resolveInstalledModuleQuerySurfaceCatalogs([
+        {
+          manifest: workflowManifest,
+          record: createInstalledRecordFromManifest(workflowManifest),
+        },
+        {
+          manifest: coreManifest,
+          record: createInstalledRecordFromManifest(coreManifest, {
+            activation: {
+              desired: "inactive",
+              status: "inactive",
+              changedAt: "2026-04-02T00:00:00.000Z",
+            },
+          }),
+        },
+      ]),
+    );
+    const registry = createWebAppSerializedQueryExecutorRegistry<string>(
+      {
+        executeModuleScopeQuery() {
+          return createScopePage();
+        },
+        readCommitQueueScope() {
+          throw new Error("Commit-queue executor should not run in this composition test.");
+        },
+        readProjectBranchScope() {
+          throw new Error("Project-branch executor should not run in this composition test.");
+        },
+        unsupported(message) {
+          return new Error(message);
+        },
+      },
+      { surfaceRegistry },
+    );
+
+    expect(
+      registry.collectionExecutors.has(workflowBuiltInQuerySurfaceIds.projectBranchBoard),
+    ).toBe(true);
+    expect(registry.collectionExecutors.has(workflowBuiltInQuerySurfaceIds.branchCommitQueue)).toBe(
+      true,
+    );
+    expect(registry.scopeExecutors.has(workflowBuiltInQuerySurfaceIds.reviewScope)).toBe(true);
+    expect(registry.scopeExecutors.has(coreBuiltInQuerySurfaceIds.catalogScope)).toBe(false);
+    expect(registry.collectionExecutors.has(coreBuiltInQuerySurfaceIds.savedQueryLibrary)).toBe(
+      false,
+    );
+  });
+
+  it("fails closed when an installed surface has no executor contribution", () => {
+    const registry = createWebAppSerializedQueryExecutorRegistry<string>({
+      executeModuleScopeQuery() {
+        return createScopePage();
+      },
+      readCommitQueueScope() {
+        throw new Error("Commit-queue executor should not run for missing registrations.");
+      },
+      readProjectBranchScope() {
+        throw new Error("Project-branch executor should not run for missing registrations.");
+      },
+      unsupported(message) {
+        return new Error(message);
+      },
+    });
+
+    const resolution = resolveCollectionQueryExecutor(registry, {
+      kind: "collection",
+      indexId: coreBuiltInQuerySurfaceIds.savedQueryLibrary,
+    });
+
+    expect(resolution).toMatchObject({
+      ok: false,
+      code: "missing-executor",
+      queryKind: "collection",
+      surface: {
+        surfaceId: coreBuiltInQuerySurfaceIds.savedQueryLibrary,
+      },
+    });
   });
 });
