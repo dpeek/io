@@ -42,5 +42,6 @@ export {
 export * from "./type.js";
 export * from "./reference.js";
 export * from "./contracts.js";
+export * from "./manifest.js";
 export * from "./enum.js";
 export * from "./string.js";

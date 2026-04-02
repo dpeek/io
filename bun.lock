@@ -204,6 +204,7 @@
       "dependencies": {
         "@io/graph-authority": "workspace:*",
         "@io/graph-kernel": "workspace:*",
+        "@io/graph-projection": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.3.9",

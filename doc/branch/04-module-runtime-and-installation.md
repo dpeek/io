@@ -162,23 +162,54 @@ type SchemaNamespaceFragment = unknown; // owned by Branch 1
 type ProjectionRegistration = unknown; // owned by Branch 3
 type ConnectorRegistration = unknown; // owned by Branch 5
 
-export type ModuleSourceKind = "builtin" | "local" | "git" | "remote";
+export type ModuleSourceKind = "built-in" | "local";
 
-export type ModuleInstallState =
-  | "discovered"
-  | "installing"
-  | "active"
-  | "upgrade-pending"
-  | "uninstalling"
-  | "inactive"
-  | "failed";
+export interface ModuleSource {
+  readonly kind: ModuleSourceKind;
+  readonly specifier: string;
+  readonly exportName: string;
+}
+
+export type ModuleInstallState = "installing" | "installed" | "uninstalling" | "failed";
 
 export interface ModuleCompatibility {
   readonly graph: string;
-  readonly authority?: string;
-  readonly webHost?: string;
-  readonly agentHost?: string;
+  readonly runtime: string;
 }
+
+export type ModuleDesiredActivation = "active" | "inactive";
+
+export type ModuleActivationStatus =
+  | "activating"
+  | "active"
+  | "deactivating"
+  | "inactive"
+  | "failed";
+
+export interface ModuleActivationFailure {
+  readonly stage: "install" | "activate" | "deactivate" | "rebuild" | "uninstall";
+  readonly code: string;
+  readonly message: string;
+  readonly observedAt: string;
+}
+
+export type ModuleActivationState =
+  | {
+      readonly desired: "active";
+      readonly status: "activating" | "active";
+      readonly changedAt: string;
+    }
+  | {
+      readonly desired: "inactive";
+      readonly status: "deactivating" | "inactive";
+      readonly changedAt: string;
+    }
+  | {
+      readonly desired: ModuleDesiredActivation;
+      readonly status: "failed";
+      readonly changedAt: string;
+      readonly failure: ModuleActivationFailure;
+    };
 
 export type ModulePermissionKey = string;
 
@@ -303,7 +334,8 @@ export interface ModuleMigrationDescriptor {
 export interface ModuleInstallRequest {
   readonly moduleId: string;
   readonly version?: string;
-  readonly sourceLocator?: string;
+  readonly sourceSpecifier?: string;
+  readonly sourceExportName?: string;
   readonly setup?: Readonly<Record<string, unknown>>;
   readonly grantKeys?: readonly ModulePermissionKey[];
 }
@@ -381,20 +413,17 @@ export interface ModuleMigrationContext {
 export interface InstalledModuleRecord {
   readonly moduleId: string;
   readonly version: string;
-  readonly sourceKind: ModuleSourceKind;
-  readonly sourceLocator: string;
   readonly bundleDigest: string;
-  readonly state: ModuleInstallState;
+  readonly source: ModuleSource;
+  readonly compatibility: ModuleCompatibility;
+  readonly installState: ModuleInstallState;
+  readonly activation: ModuleActivationState;
   // Stable subset of declared permission keys backed by active approved
   // ModulePermissionApprovalRecord rows.
-  readonly grantedPermissions: readonly ModulePermissionKey[];
+  readonly grantedPermissionKeys: readonly ModulePermissionKey[];
   readonly installedAt?: string;
   readonly updatedAt: string;
-  readonly lastSuccessfulMigration?: string;
-  readonly lastError?: {
-    readonly code: string;
-    readonly message: string;
-  };
+  readonly lastSuccessfulMigrationVersion?: string;
 }
 
 export interface ModuleInstallResult {
@@ -424,13 +453,17 @@ export interface ModuleUninstallResult {
 - `GraphModuleBundle`: the loadable package surface. It contains the manifest
   plus the concrete contributions the runtime can activate.
 - `InstalledModuleRecord`: the authoritative graph-local state. It captures
-  which module version is active, from which source, with which permission
-  grants, and with which failure status.
+  which module version is installed, how that bundle is linked, which
+  compatibility channels were accepted, which permission keys are granted, and
+  whether activation currently targets `active`, `inactive`, or a failed
+  transition.
 - `ModuleMigration`: the executable forward-migration hook between versions.
 
 ### Identifiers
 
 - `manifest.id` is the stable module identifier across versions.
+- `source.specifier` and `source.exportName` are the stable source linkage used
+  to resolve the intended built-in package export or local module entrypoint.
 - `ModulePermissionRequest.key` is the stable manifest-scoped permission
   identifier reused by install plans, approval review, durable grants, and
   revocation.
@@ -441,23 +474,29 @@ export interface ModuleUninstallResult {
 
 ### Lifecycle states
 
-- `discovered`: the runtime can load the bundle, but the graph has not
-  installed it.
-- `installing`: compatibility checks passed and authoritative activation is in
-  progress.
-- `active`: the installed version is authoritative and its registrations are
-  live.
-- `upgrade-pending`: a newer compatible bundle exists, but migration has not
-  completed.
+Install-state vocabulary:
+
+- `installing`: the authority has accepted the install intent and is applying
+  schema, permission, or migration work.
+- `installed`: the ledger row is authoritative for one installed bundle,
+  regardless of whether activation currently targets `active` or `inactive`.
 - `uninstalling`: deactivation or cleanup is in progress.
-- `inactive`: the graph intentionally has the module disabled.
-- `failed`: the graph remembers the install intent, but activation or rebuild
-  failed.
+- `failed`: the authority keeps the install intent and bundle identity, but the
+  latest install, activation, rebuild, or uninstall attempt failed.
+
+Activation-state vocabulary:
+
+- desired `active` pairs with observed status `activating`, `active`, or
+  `failed`
+- desired `inactive` pairs with observed status `deactivating`, `inactive`, or
+  `failed`
+- `failed` always carries explicit failure metadata so rebuild logic can tell
+  whether install, activation, deactivation, rebuild, or uninstall failed
 
 ### Relationships
 
-- one `InstalledModuleRecord` points to exactly one active `(moduleId,
-version, bundleDigest)` tuple
+- one `InstalledModuleRecord` points to exactly one `(moduleId, version,
+  bundleDigest, source.specifier, source.exportName)` tuple
 - one `ModuleManifest` may declare zero or more contributions, but every
   declared key must resolve to a bundle export when activated
 - `installMode: "system"` marks modules that bootstrap the graph itself and may
@@ -489,8 +528,7 @@ version, bundleDigest)` tuple
 - Outputs: manifest plus contribution records.
 - Failure shape: import error, missing declared export, duplicate contribution
   key, or digest mismatch.
-- Stability: `stable` for `builtin` and `local`, `future` for `git` and
-  `remote`.
+- Stability: `stable` for `built-in` and `local`.
 
 ### `ModulePermissionRequest`
 
@@ -623,7 +661,7 @@ The runtime splits authoritative install state from rebuildable host
 registrations.
 
 ```text
-[Module Catalog: builtin/local]
+[Module Catalog: built-in/local]
                |
                v
      [Install Coordinator]
@@ -665,14 +703,17 @@ registrations.
 
 - Local to deployment: bundle discovery, digesting, and code loading.
 - Remote to graph authority: install decision, state transition, schema apply,
-  migration execution, and active-version record.
+  migration execution, and authoritative installed-module record.
 
 ### Current repo mapping
 
-- `lib/app/src/graph/runtime/contracts.ts` already provides root-safe
-  `ModulePermissionRequest`, `ObjectViewSpec`, `WorkflowSpec`, and
-  `GraphCommandSpec`.
-- `lib/app/src/graph/modules/` already provides built-in schema slices.
+- `@io/graph-authority` already provides root-safe
+  `ModulePermissionRequest`, `ModulePermissionApprovalRecord`, and
+  `InstalledModuleRecord`.
+- `@io/graph-module` already provides root-safe `ObjectViewSpec`,
+  `WorkflowSpec`, and `GraphCommandSpec`.
+- `@io/graph-module-core` and `@io/graph-module-workflow` already provide the
+  built-in schema and catalog slices.
 - `lib/app/src/web/lib/authority.ts` currently hardcodes `{ ...core, ...pkm, ...ops }`
   into one runtime graph. Branch 4 replaces that hardcoded assembly with a
   registry built from installed module records.
@@ -690,9 +731,12 @@ own fact storage itself.
 - `io_module_install`
   - one row per `(graph, module_id)`
   - fields: `module_id`, `version`, `install_mode`, `source_kind`,
-    `source_locator`, `bundle_digest`, `state`, `config_json`,
-    `installed_at`, `updated_at`, `disabled_at`, `last_error_code`,
-    `last_error_message`
+    `source_specifier`, `source_export_name`, `bundle_digest`,
+    `compatibility_json`, `install_state`, `activation_desired`,
+    `activation_status`, `granted_permission_keys_json`, `config_json`,
+    `installed_at`, `updated_at`, `last_successful_migration_version`,
+    `failure_stage`, `last_error_code`, `last_error_message`,
+    `last_error_observed_at`
 - `io_module_permission_grant`
   - one authoritative current-state row per declared permission key
   - fields: `module_id`, `permission_key`, `kind`, `status`, `request_json`,
@@ -713,7 +757,8 @@ own fact storage itself.
 
 ### Derived versus authoritative storage
 
-- authoritative storage says which version is active
+- authoritative storage says which bundle is installed and which activation
+  target or observed status currently applies
 - derived runtime registries are rebuilt from authoritative rows plus the
   currently loadable bundle
 - setup secrets are not stored in module control-plane tables; they go through
@@ -723,11 +768,12 @@ own fact storage itself.
 ### Rebuild rules
 
 - on process start, load all `io_module_install` rows
-- resolve each active row against the module catalog
+- resolve each row whose desired activation is `active` against the module
+  catalog
 - verify `bundle_digest` and manifest id/version match
 - rebuild runtime registries from scratch
 - if the bundle is missing or invalid, leave the install row authoritative but
-  transition the runtime to `failed` rather than silently dropping the module
+  transition activation to `failed` rather than silently dropping the module
 
 ### Migration expectations
 
@@ -825,7 +871,9 @@ own fact storage itself.
    `io_module_permission_grant`, and any module-owned graph writes from schema
    apply or migrations.
    Failure or fallback behavior: if any phase fails, the module never becomes
-   publicly active; state is recorded as `failed` with error metadata.
+   publicly active; the ledger row keeps the bundle identity and records
+   `install_state = failed` or `activation_status = failed` with failure
+   metadata.
 
 2. Upgrade an installed module to a newer compatible version.
    Initiator: operator or automated rollout.
@@ -844,8 +892,9 @@ own fact storage itself.
    connector runtimes, graph authority.
    Contract boundaries crossed: uninstall request, confirmation, deactivation,
    optional cleanup.
-   Authoritative write point: `io_module_install.state = inactive` or removal
-   of the row after explicit cleanup confirmation.
+   Authoritative write point: `io_module_install.activation_desired = inactive`
+   plus `io_module_install.activation_status = inactive`, or removal of the row
+   after explicit cleanup confirmation.
    Failure or fallback behavior: default stable behavior is deactivation only;
    module-owned data remains intact unless an explicit cleanup path is chosen.
 
@@ -856,7 +905,7 @@ own fact storage itself.
    Contract boundaries crossed: authoritative read of installed rows and local
    bundle resolution.
    Authoritative write point: none unless rebuild detects missing or invalid
-   bundles and writes a `failed` state.
+   bundles and writes `activation_status = failed`.
    Failure or fallback behavior: graph facts remain authoritative; only the
    affected module surface is withheld from activation.
 

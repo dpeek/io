@@ -5,6 +5,7 @@ import {
   type CollectionSurfacePresentationHints,
   type CollectionSurfacePresentationKind,
   type CollectionSurfaceSourceSpec,
+  defineGraphModuleManifest,
   defineDefaultEnumTypeModule,
   defineEnum,
   defineReferenceField,
@@ -14,6 +15,8 @@ import {
   defineType,
   defineValidatedStringTypeModule,
   existingEntityReferenceField,
+  type GraphModuleManifest,
+  type GraphModuleManifestSource,
   type GraphCommandExecution,
   type GraphCommandSpec,
   type GraphCommandSurfaceSpec,
@@ -311,6 +314,12 @@ void ({
   savedView: "probe:savedView",
 } satisfies CollectionSurfaceSourceSpec);
 
+void ({
+  kind: "local",
+  specifier: "./modules/probe.ts",
+  exportName: "manifest",
+} satisfies GraphModuleManifestSource);
+
 const probeCommandSurfaceScope: GraphCommandSurfaceScope = "collection";
 void probeCommandSurfaceScope;
 
@@ -493,3 +502,68 @@ void ({
   ],
   commands: ["probe:save"],
 } satisfies WorkflowSpec);
+
+const probeManifest = defineGraphModuleManifest({
+  moduleId: "probe.contract",
+  version: "0.0.1",
+  source: {
+    kind: "local",
+    specifier: "./modules/probe-contract.ts",
+    exportName: "manifest",
+  },
+  compatibility: {
+    graph: "graph-schema:v1",
+    runtime: "graph-runtime:v1",
+  },
+  runtime: {
+    schemas: [
+      {
+        key: "probe.contract",
+        namespace: {
+          entity: probeEntityType,
+        },
+      },
+    ],
+    commands: [
+      {
+        key: "probe:save",
+        label: "Save probe",
+        execution: "optimisticVerify",
+        input: {
+          name: "Probe",
+        },
+        output: {
+          itemId: "probe-1",
+        },
+      },
+    ],
+    workflows: [
+      {
+        key: "probe:workflow",
+        label: "Probe workflow",
+        description: "Review a probe entity.",
+        subjects: [probeEntityType.values.key],
+        steps: [
+          {
+            key: "review",
+            title: "Review",
+            objectView: "probe:view",
+          },
+          {
+            key: "save",
+            title: "Save",
+            command: "probe:save",
+          },
+        ],
+      },
+    ],
+    activationHooks: [
+      {
+        key: "probe.contract.activate",
+        stage: "activate",
+      },
+    ],
+  },
+});
+
+void (probeManifest satisfies GraphModuleManifest);

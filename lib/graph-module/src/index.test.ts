@@ -8,15 +8,21 @@ import {
 } from "@io/graph-kernel";
 
 import {
+  defineGraphModuleManifest,
   defineDefaultEnumTypeModule,
   defineEnum,
-  defineSecretField,
   defineType,
+  defineSecretField,
   defineValidatedStringTypeModule,
   existingEntityReferenceField,
   existingEntityReferenceFieldMeta,
   readDefinitionIconId,
 } from "./index.js";
+import {
+  defineModuleQuerySurfaceCatalog,
+  defineModuleQuerySurfaceSpec,
+  defineModuleReadScopeDefinition,
+} from "@io/graph-projection";
 
 const secretHandle = defineType({
   values: { key: "probe:secretHandle", name: "Secret Handle" },
@@ -199,5 +205,165 @@ describe("@io/graph-module", () => {
     expect(readDefinitionIconId({ id: "seed:icon:domain" })).toBe("seed:icon:domain");
     expect(readDefinitionIconId({ id: "" })).toBeUndefined();
     expect(readDefinitionIconId(undefined)).toBeUndefined();
+  });
+
+  it("defines built-in and local module manifests through one shared contract", () => {
+    const probeScope = defineModuleReadScopeDefinition({
+      kind: "module",
+      moduleId: "probe.local",
+      scopeId: "scope:probe:local",
+      definitionHash: "scope-def:probe:local:v1",
+    });
+
+    const probeCatalog = defineModuleQuerySurfaceCatalog({
+      catalogId: "probe.local:query-surfaces",
+      catalogVersion: "query-catalog:probe.local:v1",
+      moduleId: "probe.local",
+      surfaces: [
+        defineModuleQuerySurfaceSpec({
+          surfaceId: probeScope.scopeId,
+          surfaceVersion: "query-surface:probe.local:scope:v1",
+          label: "Probe Scope",
+          queryKind: "scope",
+          source: {
+            kind: "scope",
+            scopeId: probeScope.scopeId,
+          },
+        }),
+      ],
+    });
+
+    const localManifest = defineGraphModuleManifest({
+      moduleId: "probe.local",
+      version: "0.0.1",
+      source: {
+        kind: "local",
+        specifier: "./modules/probe-local.ts",
+        exportName: "manifest",
+      },
+      compatibility: {
+        graph: "graph-schema:v1",
+        runtime: "graph-runtime:v1",
+      },
+      runtime: {
+        schemas: [
+          {
+            key: "probe.local",
+            namespace: {
+              status,
+            },
+          },
+        ],
+        commands: [
+          {
+            key: "probe.local:save",
+            label: "Save probe",
+            execution: "serverOnly",
+            input: undefined,
+            output: undefined,
+          },
+        ],
+        readScopes: [probeScope],
+        querySurfaceCatalogs: [probeCatalog],
+        activationHooks: [
+          {
+            key: "probe.local.activate",
+            stage: "activate",
+          },
+        ],
+      },
+    });
+
+    const builtInManifest = defineGraphModuleManifest({
+      moduleId: "probe.builtin",
+      version: "0.0.1",
+      source: {
+        kind: "built-in",
+        specifier: "@io/probe-module",
+        exportName: "probeManifest",
+      },
+      compatibility: {
+        graph: "graph-schema:v1",
+        runtime: "graph-runtime:v1",
+      },
+      runtime: {
+        schemas: [
+          {
+            key: "probe.builtin",
+            namespace: {
+              secretHandle,
+            },
+          },
+        ],
+      },
+    });
+
+    expect(localManifest).toMatchObject({
+      moduleId: "probe.local",
+      source: {
+        kind: "local",
+        specifier: "./modules/probe-local.ts",
+        exportName: "manifest",
+      },
+      runtime: {
+        readScopes: [probeScope],
+        querySurfaceCatalogs: [probeCatalog],
+      },
+    });
+    expect(builtInManifest).toMatchObject({
+      moduleId: "probe.builtin",
+      source: {
+        kind: "built-in",
+        specifier: "@io/probe-module",
+        exportName: "probeManifest",
+      },
+    });
+    expect(Object.isFrozen(localManifest.runtime.readScopes!)).toBe(true);
+    expect(Object.isFrozen(localManifest.runtime.querySurfaceCatalogs!)).toBe(true);
+  });
+
+  it("fails closed when manifests are incomplete or internally inconsistent", () => {
+    expect(() =>
+      defineGraphModuleManifest({
+        moduleId: "probe.empty",
+        version: "0.0.1",
+        source: {
+          kind: "local",
+          specifier: "./modules/probe-empty.ts",
+          exportName: "manifest",
+        },
+        compatibility: {
+          graph: "graph-schema:v1",
+          runtime: "graph-runtime:v1",
+        },
+        runtime: {},
+      }),
+    ).toThrow("runtime must declare at least one contribution.");
+
+    expect(() =>
+      defineGraphModuleManifest({
+        moduleId: "probe.local",
+        version: "0.0.1",
+        source: {
+          kind: "local",
+          specifier: "./modules/probe-local.ts",
+          exportName: "manifest",
+        },
+        compatibility: {
+          graph: "graph-schema:v1",
+          runtime: "graph-runtime:v1",
+        },
+        runtime: {
+          readScopes: [
+            defineModuleReadScopeDefinition({
+              kind: "module",
+              moduleId: "probe.other",
+              scopeId: "scope:probe:other",
+              definitionHash: "scope-def:probe:other:v1",
+            }),
+          ],
+        },
+      }),
+    ).toThrow('runtime.readScopes "scope:probe:other" must use moduleId "probe.local".');
   });
 });

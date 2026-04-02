@@ -56,6 +56,7 @@ import {
   resolveTypeDefinitionIconId,
 } from "./icon/resolve.js";
 import { unknownIconSeed } from "./icon/seed.js";
+import { coreManifest } from "./index.js";
 import * as moduleExports from "./index.js";
 
 const requiredExports = [
@@ -69,6 +70,7 @@ const requiredExports = [
   "coreBuiltInQuerySurfaceIds",
   "coreBuiltInQuerySurfaces",
   "coreCatalogModuleReadScope",
+  "coreManifest",
   "coreModuleId",
   "coreQuerySurfaceCatalog",
   "iconReferenceField",
@@ -397,6 +399,32 @@ describe("@io/graph-module-core", () => {
     });
   });
 
+  it("publishes a built-in manifest for the canonical core module", () => {
+    expect(coreManifest).toMatchObject({
+      moduleId: "core",
+      version: "0.0.1",
+      source: {
+        kind: "built-in",
+        specifier: "@io/graph-module-core",
+        exportName: "coreManifest",
+      },
+      compatibility: {
+        graph: "graph-schema:v1",
+        runtime: "graph-runtime:v1",
+      },
+      runtime: {
+        schemas: [
+          {
+            key: "core",
+            namespace: canonicalCore,
+          },
+        ],
+        querySurfaceCatalogs: [coreQuerySurfaceCatalog],
+        readScopes: [coreCatalogModuleReadScope],
+      },
+    });
+  });
+
   it("freezes the shared secret-handle contract on the canonical core namespace", () => {
     expect(canonicalCore.secretHandle.values).toMatchObject({
       key: "core:secretHandle",
@@ -434,6 +462,7 @@ describe("@io/graph-module-core", () => {
       "coreBuiltInQuerySurfaceIds",
       "coreBuiltInQuerySurfaces",
       "coreCatalogModuleReadScope",
+      "coreManifest",
       "coreModuleId",
       "coreQuerySurfaceCatalog",
       "node",
@@ -455,6 +484,7 @@ describe("@io/graph-module-core", () => {
     expect(moduleExports.core).toBe(canonicalCore);
     expect(moduleExports.coreModuleId).toBe(coreModuleId);
     expect(moduleExports.coreCatalogModuleReadScope).toBe(coreCatalogModuleReadScope);
+    expect(moduleExports.coreManifest).toBe(coreManifest);
     expect(moduleExports.coreQuerySurfaceCatalog).toBe(coreQuerySurfaceCatalog);
     expect(moduleExports.coreBuiltInQuerySurfaces).toBe(coreBuiltInQuerySurfaces);
     expect(moduleExports.coreBuiltInQuerySurfaceIds).toBe(coreBuiltInQuerySurfaceIds);

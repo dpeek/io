@@ -9,6 +9,9 @@ fixtures that exercise multiple graph packages together.
   graph violations through test-only imports
 - shared integration fixtures such as the kitchen-sink schema and bootstrapped
   test graph helpers
+- installed-module contract proof coverage that walks authored manifests,
+  planner targets, installed-module ledger rows, and fail-closed lifecycle
+  planning through public package entrypoints only
 - guardrails that fail the workspace on cross-package relative `src/` imports
 
 ## What It Does Not Own

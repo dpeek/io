@@ -56,6 +56,104 @@ The initial saved-query library surface belongs in core rather than workflow
 because it exposes core-owned saved-query product records that any module may
 author against, not workflow-only projection rows or route-local UI state.
 
+## Built-In Module Manifests
+
+Built-in and local modules now share one authored manifest contract from
+`@io/graph-module`.
+
+Current manifest identity fields:
+
+- `moduleId`
+- `version`
+- `source.kind`, where the first source kinds are `built-in` and `local`
+- `source.specifier`
+- `source.exportName`
+
+Current compatibility fields:
+
+- `compatibility.graph`
+- `compatibility.runtime`
+
+Current declared runtime contribution vocabulary:
+
+- `schemas`
+- `querySurfaceCatalogs`
+- `commands`
+- `commandSurfaces`
+- `objectViews`
+- `recordSurfaces`
+- `collectionSurfaces`
+- `workflows`
+- `readScopes`
+- `projections`
+- `activationHooks`
+
+`@io/graph-module-core` now exports `coreManifest`, and
+`@io/graph-module-workflow` now exports `workflowManifest`. Those built-in
+manifests keep source metadata explicit while staying narrowly definition-time:
+they declare schema namespaces plus the current read-scope, projection,
+query-surface, and command contribution metadata, but they do not implement
+activation planning or runtime composition.
+
+The authoritative installed-module ledger now lives alongside module-permission
+approval contracts in `../../lib/graph-authority/src/contracts.ts`.
+`@io/graph-module` continues to own authored manifests only; install lifecycle
+and activation state now belong to the authority/runtime layer.
+
+The first lifecycle-planning contract is now explicit in
+`@io/graph-authority`:
+
+- `InstalledModuleTarget` is the planner-facing manifest identity plus concrete
+  `bundleDigest`.
+- `InstalledModuleRuntimeExpectation` is the current graph/runtime contract
+  plus the accepted source kinds.
+- `validateInstalledModuleCompatibility(...)` compares target, runtime
+  expectation, and optional installed row, then reports whether the planner is
+  dealing with a new install, the current bundle, or an explicit replacement.
+- `planInstalledModuleLifecycle(...)` defines fail-closed `install`,
+  `activate`, `deactivate`, and `update` behavior, including pending, success,
+  and failure ledger states plus recovery expectations.
+- in-flight rows such as `installing`, `uninstalling`, `activating`, and
+  `deactivating` are intentionally rejected until later runtime work adds
+  resume or takeover behavior.
+
+## Manifest To Installed-Module Contract
+
+The shipped Branch 4 contract now has one explicit path from authored manifest
+metadata to authoritative installed-module planning:
+
+- `defineGraphModuleManifest(...)` validates and freezes the authored manifest
+  in `@io/graph-module`. This is the definition-time seam for both built-in and
+  local modules.
+- installers and planners derive `InstalledModuleTarget` from the manifest's
+  `moduleId`, `version`, `source`, and `compatibility` fields plus one concrete
+  `bundleDigest`.
+- the authority persists `InstalledModuleRecord` by carrying that target
+  identity forward together with install state, activation state, granted
+  permission keys, timestamps, and the last successful migration version.
+- `validateInstalledModuleCompatibility(...)` is the fail-closed comparison seam
+  between one authored target, the current runtime expectation, and any
+  existing installed row.
+- `planInstalledModuleLifecycle(...)` is the fail-closed planner seam consumed
+  by downstream activation-driven composition work. It only produces `install`,
+  `activate`, `deactivate`, or `update` plans when the manifest-derived target,
+  runtime expectation, and installed row line up explicitly.
+- cross-package proof coverage for that end-to-end contract now lives in
+  `../../lib/graph-integration/src/module-installation-contract.test.ts`.
+
+## Current Limits
+
+The shipped contract is intentionally narrower than the later activation work:
+
+- authored manifests stay declarative; bundle discovery, installer UX, and
+  registry composition are still separate work
+- `activationHooks` remain metadata only; hook invocation order, rollback, and
+  retry orchestration are not part of the current contract
+- in-flight or partially repaired installed rows fail closed instead of being
+  resumed, auto-healed, or guessed through
+- local-module activation proof and polished installer UX remain deferred to
+  later Branch 4 and Branch 7 work
+
 ## Source Layout
 
 - `../../lib/graph-module-core/src/core.ts`: namespace assembly entrypoint for

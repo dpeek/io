@@ -16,7 +16,7 @@ import {
   envVarNamePattern,
   envVarSchema,
 } from "./env-var.js";
-import { workflow as canonicalWorkflow } from "./index.js";
+import { workflow as canonicalWorkflow, workflowManifest } from "./index.js";
 import * as workflowExports from "./index.js";
 import {
   artifactWriteCommand,
@@ -257,6 +257,7 @@ describe("workflow module entry surfaces", () => {
   it("keeps workflow explicit while core lives in @io/graph-module-core", () => {
     expectNamedExports(workflowExports, [
       "workflow",
+      "workflowManifest",
       ...requiredWorkflowExports,
       ...requiredEnvVarExports,
       ...requiredDocumentExports,
@@ -284,5 +285,41 @@ describe("workflow module entry surfaces", () => {
     expect(canonicalWorkflow.decision.values.key).toBe(decision.values.key);
     expect(canonicalWorkflow.contextBundle.values.key).toBe(contextBundle.values.key);
     expect(canonicalWorkflow.contextBundleEntry.values.key).toBe(contextBundleEntry.values.key);
+  });
+
+  it("publishes a built-in manifest for the canonical workflow module", () => {
+    expect(workflowManifest).toMatchObject({
+      moduleId: "workflow",
+      version: "0.0.1",
+      source: {
+        kind: "built-in",
+        specifier: "@io/graph-module-workflow",
+        exportName: "workflowManifest",
+      },
+      compatibility: {
+        graph: "graph-schema:v1",
+        runtime: "graph-runtime:v1",
+      },
+      runtime: {
+        schemas: [
+          {
+            key: "workflow",
+            namespace: canonicalWorkflow,
+          },
+        ],
+        commands: [
+          workflowMutationCommand,
+          agentSessionAppendCommand,
+          artifactWriteCommand,
+          decisionWriteCommand,
+        ],
+        querySurfaceCatalogs: [workflowExports.workflowQuerySurfaceCatalog],
+        readScopes: [workflowExports.workflowReviewModuleReadScope],
+        projections: [
+          workflowExports.projectBranchBoardProjection,
+          workflowExports.branchCommitQueueProjection,
+        ],
+      },
+    });
   });
 });

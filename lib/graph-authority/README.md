@@ -18,7 +18,8 @@ authoritative graph behavior.
 - authority-side replication filtering and read-authorizer contracts
 - authority-side validation helpers and validators
 - graph-owned authorization evaluation and share/admission/capability contracts
-- browser/bootstrap principal summary contracts and module-permission approvals
+- browser/bootstrap principal summary contracts, module-permission approvals,
+  and installed-module ledger state
 
 ## What It Does Not Own
 
@@ -61,7 +62,8 @@ helpers.
   `AuthoritativeGraphWriteSession`, `ReplicationReadAuthorizer`
 - graph-owned policy contracts: `AuthorizationContext`, `AdmissionPolicy`,
   `CapabilityGrant`, `ShareGrant`, `PrincipalRoleBinding`, `GraphCommandPolicy`,
-  `WebPrincipalBootstrapPayload`, `ModulePermissionApprovalRecord`
+  `WebPrincipalBootstrapPayload`, `ModulePermissionApprovalRecord`,
+  `InstalledModuleRecord`
 - server-only persistence helpers from `@io/graph-authority/server`:
   `createJsonPersistedAuthoritativeGraph`,
   `createJsonPersistedAuthoritativeGraphStorage`
@@ -73,6 +75,31 @@ Run `turbo build --filter=@io/graph-authority` from the repo root, or
 Run `turbo check --filter=@io/graph-authority` from the repo root, or
 `bun run check` in this package, to lint, format, type-check, and execute the
 package-local Bun tests.
+
+## Installed Module Ledger
+
+`@io/graph-authority` now owns the authoritative installed-module ledger
+contract used by later install planning and runtime rebuild work.
+
+- `InstalledModuleRecord` captures module identity, version, digest, source
+  linkage, compatibility metadata, granted permission keys, and timestamps.
+- `InstalledModuleTarget` and `InstalledModuleRuntimeExpectation` are the
+  planner-facing inputs derived from one manifest plus one concrete bundle
+  digest and the current runtime contract.
+- `installState` records whether the ledger row is `installing`, `installed`,
+  `uninstalling`, or `failed`.
+- `activation` separately records the desired activation target plus the
+  observed activation status so a module can stay installed while `inactive` or
+  activation-`failed`.
+- `defineInstalledModuleRecord(...)` validates and freezes that ledger row so
+  browser-safe consumers can fail closed on malformed install state.
+- `validateInstalledModuleCompatibility(...)` compares a planner target against
+  the installed row and current runtime expectations, then reports whether the
+  target is a fresh install, the current bundle, or an explicit replacement.
+- `planInstalledModuleLifecycle(...)` turns that compatibility result into one
+  of four contract-level plans: `install`, `activate`, `deactivate`, or
+  `update`. In-flight or incomplete rows fail closed with recovery guidance
+  instead of being guessed through.
 
 ## Package Boundary
 

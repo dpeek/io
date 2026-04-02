@@ -11,6 +11,8 @@ schemas.
 - Read `./src/reference.ts` for existing-entity relationship helpers.
 - Read `./src/contracts.ts` for pure command, command-surface, object-view,
   record-surface, collection-surface, and workflow descriptors.
+- Read `./src/manifest.ts` for the shared built-in/local module manifest
+  contract, source metadata, and declared runtime contribution vocabulary.
 
 ## Naming
 
@@ -49,7 +51,7 @@ schemas.
 - secret-field authoring helpers
 - pure authored contracts such as `GraphCommandSpec`,
   `GraphCommandSurfaceSpec`, `ObjectViewSpec`, `RecordSurfaceSpec`,
-  `CollectionSurfaceSpec`, and `WorkflowSpec`
+  `CollectionSurfaceSpec`, `WorkflowSpec`, and `GraphModuleManifest`
 - generic packaged defaults such as `defineDefaultEnumTypeModule(...)` and
   `defineValidatedStringTypeModule(...)`
 
@@ -70,7 +72,8 @@ schemas.
 - freeze reference or secret-backed fields with `defineReferenceField(...)`,
   `existingEntityReferenceField(...)`, or `defineSecretField(...)`
 - attach pure object-view, record-surface, collection-surface, command-surface,
-  workflow, and command descriptors beside authored module slices
+  workflow, command, and module-manifest descriptors beside authored module
+  slices
 
 ## Layering
 
@@ -93,11 +96,46 @@ Everything intended for consumers is re-exported from the package root.
 - reference helpers: `defineReferenceField`, `existingEntityReferenceField`,
   `existingEntityReferenceFieldMeta`, and `defineSecretField`
 - pure authored contracts: `GraphCommandSpec`, `GraphCommandSurfaceSpec`,
-  `ObjectViewSpec`, `RecordSurfaceSpec`, `CollectionSurfaceSpec`, and
-  `WorkflowSpec`
+  `ObjectViewSpec`, `RecordSurfaceSpec`, `CollectionSurfaceSpec`,
+  `WorkflowSpec`, `GraphModuleManifest`, and `defineGraphModuleManifest`
+
+## Module Manifests
+
+Use `GraphModuleManifest` and `defineGraphModuleManifest(...)` for the first
+shared authored manifest contract across built-in and local modules.
+
+Current manifest identity and compatibility fields:
+
+- `moduleId`
+- `version`
+- `source.kind`, where the first source kinds are `built-in` and `local`
+- `source.specifier`
+- `source.exportName`
+- `compatibility.graph`
+- `compatibility.runtime`
+
+Current declared runtime contribution vocabulary:
+
+- `schemas`
+- `querySurfaceCatalogs`
+- `commands`
+- `commandSurfaces`
+- `objectViews`
+- `recordSurfaces`
+- `collectionSurfaces`
+- `workflows`
+- `readScopes`
+- `projections`
+- `activationHooks`
+
+The manifest helper validates these declarations fail closed. Empty runtime
+blocks, duplicate contribution identities, blank source metadata, and module-id
+mismatches between the manifest and declared query catalogs or read scopes all
+throw at definition time.
 
 This package intentionally stops at definition-time authoring. Runtime module
-management belongs to later layers.
+management, including the authoritative installed-module ledger and activation
+state contract, lives in `@io/graph-authority`.
 
 ## Build Output
 

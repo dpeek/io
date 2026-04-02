@@ -4,6 +4,9 @@ import type {
   AdmissionPolicy,
   AuthenticatedSession,
   AuthSubjectRef,
+  InstalledModuleRecord,
+  InstalledModuleRuntimeExpectation,
+  InstalledModuleTarget,
   AuthorizationContext,
   CapabilityGrant,
   GraphCommandPolicy,
@@ -186,6 +189,81 @@ const approvedModulePermissionRecord = {
   ],
 } satisfies ModulePermissionApprovalRecord;
 
+const workflowModuleTarget = {
+  moduleId: "workflow",
+  version: "0.0.1",
+  bundleDigest: "sha256:workflow-v1",
+  source: {
+    kind: "built-in",
+    specifier: "@io/graph-module-workflow",
+    exportName: "workflowManifest",
+  },
+  compatibility: {
+    graph: "graph-schema:v1",
+    runtime: "graph-runtime:v1",
+  },
+} satisfies InstalledModuleTarget;
+
+const workflowRuntimeExpectation = {
+  graph: "graph-schema:v1",
+  runtime: "graph-runtime:v1",
+  supportedSourceKinds: ["built-in", "local"],
+} satisfies InstalledModuleRuntimeExpectation;
+
+const activeBuiltInModuleRecord = {
+  moduleId: "workflow",
+  version: "0.0.1",
+  bundleDigest: "sha256:workflow-v1",
+  source: {
+    kind: "built-in",
+    specifier: "@io/graph-module-workflow",
+    exportName: "workflowManifest",
+  },
+  compatibility: {
+    graph: "graph-schema:v1",
+    runtime: "graph-runtime:v1",
+  },
+  installState: "installed",
+  activation: {
+    desired: "active",
+    status: "active",
+    changedAt: "2026-04-02T00:00:00.000Z",
+  },
+  grantedPermissionKeys: [readDocumentPermission.key],
+  installedAt: "2026-04-02T00:00:00.000Z",
+  updatedAt: "2026-04-02T00:00:00.000Z",
+  lastSuccessfulMigrationVersion: "0.0.1",
+} satisfies InstalledModuleRecord;
+
+const failedLocalModuleRecord = {
+  moduleId: "customer.local",
+  version: "0.3.0",
+  bundleDigest: "sha256:customer-local-v3",
+  source: {
+    kind: "local",
+    specifier: "./modules/customer-local.ts",
+    exportName: "customerLocalManifest",
+  },
+  compatibility: {
+    graph: "graph-schema:v1",
+    runtime: "graph-runtime:v1",
+  },
+  installState: "failed",
+  activation: {
+    desired: "active",
+    status: "failed",
+    changedAt: "2026-04-02T01:00:00.000Z",
+    failure: {
+      stage: "rebuild",
+      code: "bundle-unavailable",
+      message: "The local module bundle could not be resolved during rebuild.",
+      observedAt: "2026-04-02T01:00:00.000Z",
+    },
+  },
+  grantedPermissionKeys: [],
+  updatedAt: "2026-04-02T01:00:00.000Z",
+} satisfies InstalledModuleRecord;
+
 void authorizationContext;
 void admissionPolicy;
 void commandPolicy;
@@ -201,3 +279,7 @@ void webPrincipalBootstrapPayload;
 void readDocumentPermission;
 void saveDocumentPermission;
 void approvedModulePermissionRecord;
+void workflowModuleTarget;
+void workflowRuntimeExpectation;
+void activeBuiltInModuleRecord;
+void failedLocalModuleRecord;

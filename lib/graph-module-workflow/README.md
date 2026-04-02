@@ -6,6 +6,8 @@
 ## What It Owns
 
 - the canonical `workflow` namespace assembly
+- the built-in `workflowManifest` authored through the shared graph-module
+  manifest contract
 - workflow entity, enum, and type definitions
 - workflow command contracts and summary/result types, including retained
   session append, artifact-write, and decision-write surfaces
@@ -62,7 +64,7 @@ runtime code consume this package; they do not extend it.
 Callers import workflow query-surface metadata through the package root:
 
 ```ts
-import { workflowQuerySurfaceCatalog } from "@io/graph-module-workflow";
+import { workflowManifest, workflowQuerySurfaceCatalog } from "@io/graph-module-workflow";
 ```
 
 ## Build Output

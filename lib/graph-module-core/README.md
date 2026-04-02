@@ -6,6 +6,8 @@
 ## What It Owns
 
 - the canonical `core` namespace assembly
+- the built-in `coreManifest` authored through the shared graph-module manifest
+  contract
 - built-in core scalar, enum, entity, dataset, and helper contracts
 - `coreGraphBootstrapOptions`
 - colocated core icon seeds and shared icon-resolution helpers
@@ -49,7 +51,7 @@
 Callers import the core catalog through the package root:
 
 ```ts
-import { coreQuerySurfaceCatalog } from "@io/graph-module-core";
+import { coreManifest, coreQuerySurfaceCatalog } from "@io/graph-module-core";
 ```
 
 ## Browser Defaults
