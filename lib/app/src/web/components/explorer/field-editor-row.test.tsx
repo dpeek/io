@@ -7,7 +7,7 @@ import { defineType } from "@io/graph-module";
 import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { PredicateRow } from "./field-editor-row.js";
+import { PredicateRow } from "../field-editor-row.js";
 
 const rowItem = defineType({
   values: { key: "test:rowItem", name: "Row Item" },

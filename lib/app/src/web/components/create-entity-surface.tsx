@@ -5,17 +5,37 @@ import { DialogClose, DialogFooter, DialogHeader, DialogTitle } from "@io/web/di
 import { XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { flattenPredicateRefs } from "./catalog.js";
-import { createEntityDraftController } from "./create-draft-controller.js";
-import { buildCreateDefaults, buildCreatePlan } from "./create-draft-plan.js";
-import { collectValidationMessages, collectValidationMessagesByPath } from "./helpers.js";
+import { buildDraftEntitySurfacePlan } from "./entity-surface-plan.js";
+import { buildEntitySurfaceFieldRows } from "./entity-surface.js";
+import { createEntityDraftController } from "./explorer/create-draft-controller.js";
+import { buildCreateDefaults, buildCreatePlan } from "./explorer/create-draft-plan.js";
+import { collectValidationMessages, collectValidationMessagesByPath } from "./explorer/helpers.js";
+import { explorerNamespace } from "./explorer/model.js";
+import type {
+  EntityCatalogEntry,
+  ExplorerRuntime,
+  FieldValidationMessage,
+} from "./explorer/model.js";
+import { describeSyncError } from "./explorer/sync.js";
+import { EmptyState } from "./explorer/ui.js";
 import { InspectorFieldSection } from "./inspector.js";
-import { explorerNamespace } from "./model.js";
-import type { EntityCatalogEntry, ExplorerRuntime, FieldValidationMessage } from "./model.js";
-import { describeSyncError } from "./sync.js";
-import { EmptyState } from "./ui.js";
 
-export function GenericCreateInspector({
+function ValidationSummary({ message }: { message: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <div
+      className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100"
+      data-explorer-create-error="true"
+    >
+      {message}
+    </div>
+  );
+}
+
+export function CreateEntitySurface({
   entityEntry,
   entityEntryById,
   onCreated,
@@ -46,7 +66,7 @@ export function GenericCreateInspector({
     () => new Map(Object.values(explorerNamespace).map((typeDef) => [typeId(typeDef), typeDef])),
     [],
   );
-  const createPlan = useMemo(() => buildCreatePlan(entityEntry), [entityEntry.id]);
+  const createPlan = useMemo(() => buildCreatePlan(entityEntry), [entityEntry]);
   const controller = useMemo(
     () =>
       createEntityDraftController({
@@ -56,20 +76,20 @@ export function GenericCreateInspector({
         store: runtime.store,
         typeById,
       }),
-    [entityEntry.id, runtime.store, typeById],
+    [entityEntry, runtime.store, typeById],
   );
-  const predicateRows = useMemo(
+  const surfacePlan = useMemo(
     () =>
-      new Map(flattenPredicateRefs(controller.fields).map((row) => [row.pathLabel, row.predicate])),
-    [controller],
+      buildDraftEntitySurfacePlan(
+        controller.fields,
+        createPlan.clientFields.map((field) => field.pathLabel),
+        { mode: "edit" },
+      ),
+    [controller.fields, createPlan.clientFields],
   );
   const fieldRows = useMemo(
-    () =>
-      createPlan.clientFields.flatMap((field) => {
-        const predicate = predicateRows.get(field.pathLabel);
-        return predicate ? [{ pathLabel: field.pathLabel, predicate }] : [];
-      }),
-    [createPlan.clientFields, predicateRows],
+    () => buildEntitySurfaceFieldRows(surfacePlan.rows),
+    [surfacePlan.rows],
   );
   const visibleFieldPaths = useMemo(
     () => new Set(fieldRows.map((row) => row.pathLabel)),
@@ -119,7 +139,11 @@ export function GenericCreateInspector({
 
   if (!createPlan.supported) {
     return (
-      <div className="flex max-h-full min-h-0 flex-col">
+      <div
+        className="flex max-h-full min-h-0 flex-col"
+        data-create-entity-surface={entityEntry.id}
+        data-entity-surface="create"
+      >
         <DialogHeader className="border-border/60 flex-row items-center justify-between gap-3 border-b px-4 py-3">
           <DialogTitle className="text-base font-semibold">{createLabel}</DialogTitle>
           <DialogClose
@@ -153,7 +177,11 @@ export function GenericCreateInspector({
   }
 
   return (
-    <div className="flex max-h-full min-h-0 flex-col">
+    <div
+      className="flex max-h-full min-h-0 flex-col"
+      data-create-entity-surface={entityEntry.id}
+      data-entity-surface="create"
+    >
       <DialogHeader className="border-border/60 flex-row items-center justify-between gap-3 border-b px-4 py-3">
         <DialogTitle className="text-base font-semibold">{createLabel}</DialogTitle>
         <DialogClose
@@ -176,15 +204,7 @@ export function GenericCreateInspector({
             rows={fieldRows}
             validationMessagesByPath={submitValidationMessagesByPath}
           />
-
-          {submitError ? (
-            <div
-              className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100"
-              data-explorer-create-error="true"
-            >
-              {submitError}
-            </div>
-          ) : null}
+          <ValidationSummary message={submitError} />
         </div>
       </div>
 

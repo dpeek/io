@@ -48,11 +48,11 @@ export type EntitySurfacePlan<P = unknown> = {
   rows: readonly EntitySurfaceRowPlan<P>[];
 };
 
-type LiveEntitySurfaceRowCandidate =
+type EntitySurfaceRowCandidate<P = unknown> =
   | {
       kind: "predicate";
       pathLabel: string;
-      predicate: AnyPredicateRef;
+      predicate: P;
       predicateId: string;
     }
   | {
@@ -101,7 +101,7 @@ function getDefaultChrome(role: EntitySurfaceRowRole): EntitySurfaceRowChrome {
 }
 
 function resolveLiveEntityRowRole(
-  candidate: LiveEntitySurfaceRowCandidate,
+  candidate: EntitySurfaceRowCandidate,
   mode: EntitySurfaceMode,
 ): EntitySurfaceRowRole {
   if (candidate.kind === "value") return "hidden";
@@ -121,11 +121,26 @@ function resolveLiveEntityRowRole(
   return "body";
 }
 
-function planLiveEntitySurfaceRow(
-  candidate: LiveEntitySurfaceRowCandidate,
+function resolveDraftEntityRowRole(
+  candidate: EntitySurfaceRowCandidate,
   mode: EntitySurfaceMode,
-): EntitySurfaceRowPlan<AnyPredicateRef> {
-  const role = resolveLiveEntityRowRole(candidate, mode);
+): EntitySurfaceRowRole {
+  if (candidate.kind === "value") return "hidden";
+  if (candidate.predicateId === namePredicateId) {
+    return mode === "view" ? "title" : "body";
+  }
+  return "body";
+}
+
+function planEntitySurfaceRow<P>(
+  candidate: EntitySurfaceRowCandidate<P>,
+  mode: EntitySurfaceMode,
+  resolveRole: (
+    candidate: EntitySurfaceRowCandidate<P>,
+    mode: EntitySurfaceMode,
+  ) => EntitySurfaceRowRole,
+): EntitySurfaceRowPlan<P> {
+  const role = resolveRole(candidate, mode);
   const base = {
     chrome: getDefaultChrome(role),
     pathLabel: candidate.pathLabel,
@@ -147,27 +162,21 @@ function planLiveEntitySurfaceRow(
   };
 }
 
-export function buildLiveEntitySurfacePlan(
-  entity: AnyEntityRef,
+function buildEntitySurfacePlan<P>(
+  candidates: readonly EntitySurfaceRowCandidate<P>[],
   options: {
     mode?: EntitySurfaceMode;
   } = {},
-): EntitySurfacePlan<AnyPredicateRef> {
+  resolveRole: (
+    candidate: EntitySurfaceRowCandidate<P>,
+    mode: EntitySurfaceMode,
+  ) => EntitySurfaceRowRole,
+): EntitySurfacePlan<P> {
   const mode = options.mode ?? "view";
-  const candidates: LiveEntitySurfaceRowCandidate[] = [
-    { kind: "value", pathLabel: "id" },
-    ...flattenPredicateRefs(entity.fields as Record<string, unknown>).map((row) => ({
-      kind: "predicate" as const,
-      pathLabel: row.pathLabel,
-      predicate: row.predicate,
-      predicateId: row.predicate.predicateId,
-    })),
-  ];
-
   const rows = candidates
     .map((candidate, index) => ({
       index,
-      row: planLiveEntitySurfaceRow(candidate, mode),
+      row: planEntitySurfaceRow(candidate, mode, resolveRole),
     }))
     .sort(
       (left, right) =>
@@ -179,4 +188,50 @@ export function buildLiveEntitySurfacePlan(
     mode,
     rows,
   };
+}
+
+export function buildLiveEntitySurfacePlan(
+  entity: AnyEntityRef,
+  options: {
+    mode?: EntitySurfaceMode;
+  } = {},
+): EntitySurfacePlan<AnyPredicateRef> {
+  const candidates: EntitySurfaceRowCandidate<AnyPredicateRef>[] = [
+    { kind: "value", pathLabel: "id" },
+    ...flattenPredicateRefs(entity.fields as Record<string, unknown>).map((row) => ({
+      kind: "predicate" as const,
+      pathLabel: row.pathLabel,
+      predicate: row.predicate,
+      predicateId: row.predicate.predicateId,
+    })),
+  ];
+
+  return buildEntitySurfacePlan(candidates, options, resolveLiveEntityRowRole);
+}
+
+export function buildDraftEntitySurfacePlan(
+  fields: Record<string, unknown>,
+  visiblePathLabels: readonly string[],
+  options: {
+    mode?: EntitySurfaceMode;
+  } = {},
+): EntitySurfacePlan<AnyPredicateRef> {
+  const predicateByPath = new Map(
+    flattenPredicateRefs(fields).map((row) => [row.pathLabel, row.predicate]),
+  );
+  const candidates = visiblePathLabels.flatMap((pathLabel) => {
+    const predicate = predicateByPath.get(pathLabel);
+    return predicate
+      ? [
+          {
+            kind: "predicate" as const,
+            pathLabel,
+            predicate,
+            predicateId: predicate.predicateId,
+          },
+        ]
+      : [];
+  });
+
+  return buildEntitySurfacePlan(candidates, options, resolveDraftEntityRowRole);
 }

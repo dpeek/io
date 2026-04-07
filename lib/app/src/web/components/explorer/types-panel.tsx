@@ -11,10 +11,10 @@ import {
   getExplorerTypeLabel,
   resolveDisplayedDefinitionIconId,
 } from "./helpers.js";
-import { InspectorFieldSection, InspectorShell } from "./inspector.js";
 import { keyPredicateId, typeIconPredicateId } from "./model.js";
 import type { AnyEntityRef, ExplorerClient, ExplorerRuntime, TypeCatalogEntry } from "./model.js";
 import { Badge, DebugDisclosure, DebugValue, EmptyState, ListButton, Section } from "./ui.js";
+import { InspectorFieldSection, InspectorShell } from "../inspector.js";
 
 export function TypeListItem({
   active,

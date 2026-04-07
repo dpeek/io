@@ -11,8 +11,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { CreateEntitySurface } from "./create-entity-surface.js";
 import { buildEntityCatalog } from "./explorer/catalog.js";
-import { GenericCreateInspector } from "./explorer/create-draft.js";
 import type { EntityCatalogEntry, ExplorerRuntime } from "./explorer/model.js";
 import { useExplorerSyncSnapshot } from "./explorer/sync.js";
 import { useOptionalGraphRuntime } from "./graph-runtime-bootstrap.js";
@@ -114,7 +114,7 @@ export function EntityCreateButton({
         className="top-4 left-1/2 flex max-h-[calc(100svh-2rem)] w-full max-w-5xl -translate-x-1/2 translate-y-0 flex-col overflow-hidden p-0 sm:max-w-5xl"
         showCloseButton={false}
       >
-        <GenericCreateInspector
+        <CreateEntitySurface
           entityEntry={entityEntry}
           entityEntryById={entityEntryById}
           key={`${entityEntry.id}:${createSession}`}

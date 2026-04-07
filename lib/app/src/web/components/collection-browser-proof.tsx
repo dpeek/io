@@ -60,7 +60,7 @@ const branchBoardCollection = {
   },
   title: "Workflow Branch Board",
   description:
-    "Authored collection proof with shared table selection, command-driven row or selection actions, record detail, and the existing generic branch create flow.",
+    "Authored collection proof with shared table selection, command-driven row or selection actions, shared entity detail, and the existing generic branch create flow.",
   commandSurfaces: [
     "views:workflow-branch-board:mark-blocked",
     "views:workflow-branch-board:archive-selection",

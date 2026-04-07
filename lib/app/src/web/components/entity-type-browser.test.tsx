@@ -75,6 +75,9 @@ describe("entity type browser", () => {
     expect(html).toContain("Workflow backlog");
     expect(html).toContain("Branch");
     expect(html).toContain("Branch key");
+    expect(html).toContain('data-entity-surface="entity"');
+    expect(html).toContain('data-entity-surface-mode="edit"');
+    expect(html).toContain('data-entity-surface-mode-toggle="true"');
     expect(html).toContain('data-entity-type-list-scroll="');
     expect(html).toContain("-mx-4");
     expect(html).toContain("rounded-none");

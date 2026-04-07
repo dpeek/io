@@ -1,19 +1,27 @@
 "use client";
 
+import { GraphIcon } from "@io/graph-module-core/react-dom";
 import { ScrollArea } from "@io/web/scroll-area";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCreateButton, EntityCreateRuntimeProvider } from "./entity-create-button.js";
+import { EntitySurface, resolveEntityPreviewIconId } from "./entity-surface.js";
 import { buildEntityCatalog } from "./explorer/catalog.js";
-import { EntityInspector, EntityListItem } from "./explorer/entities.js";
-import { postSecretFieldMutation } from "./explorer/helpers.js";
+import { usePredicateSlotValue } from "./explorer/field-editor.js";
+import {
+  getEntityLabel,
+  getUntitledEntityLabel,
+  postSecretFieldMutation,
+} from "./explorer/helpers.js";
 import type {
+  AnyEntityRef,
   EntityCatalogEntry,
   ExplorerRuntime,
   SubmitSecretFieldMutation,
 } from "./explorer/model.js";
+import { typePredicateId } from "./explorer/model.js";
 import { useExplorerSyncSnapshot } from "./explorer/sync.js";
-import { EmptyState, Section } from "./explorer/ui.js";
+import { EmptyState, ListButton, Section } from "./explorer/ui.js";
 import { useGraphRuntime } from "./graph-runtime-bootstrap.js";
 
 function resolveEntityTypeEntry(
@@ -25,6 +33,50 @@ function resolveEntityTypeEntry(
     throw new Error(`Entity type "${typeId}" is not available in the explorer catalog.`);
   }
   return typeEntry;
+}
+
+function EntityListItem({
+  active,
+  className,
+  entity,
+  onSelect,
+  props,
+  store,
+  typeEntry,
+}: {
+  active: boolean;
+  className?: string;
+  entity: AnyEntityRef;
+  onSelect: () => void;
+  props?: Record<string, string>;
+  store: ExplorerRuntime["store"];
+  typeEntry: EntityCatalogEntry;
+}) {
+  const iconSlotValue = usePredicateSlotValue(
+    store,
+    entity.id,
+    typeEntry.iconPredicateId ?? typePredicateId,
+  );
+  const iconId = resolveEntityPreviewIconId(entity.id, iconSlotValue, typeEntry);
+  const title = getEntityLabel(entity, getUntitledEntityLabel(typeEntry.name));
+
+  return (
+    <ListButton
+      active={active}
+      className={className}
+      onClick={onSelect}
+      props={{ "data-explorer-item-entity": entity.id, ...props }}
+    >
+      <div className="flex items-start gap-3">
+        {typeof iconId === "string" && iconId.length > 0 ? (
+          <GraphIcon className="text-muted-foreground size-8" iconId={iconId} />
+        ) : null}
+        <div className="space-y-1">
+          <div className="text-sm font-medium">{title}</div>
+        </div>
+      </div>
+    </ListButton>
+  );
 }
 
 export function EntityTypeBrowserSurface({
@@ -136,10 +188,10 @@ export function EntityTypeBrowserSurface({
         <div className="min-h-0">
           {selectedEntity ? (
             <ScrollArea className="h-full pr-1">
-              <EntityInspector
+              <EntitySurface
+                defaultMode="edit"
                 entity={selectedEntity}
                 runtime={runtime}
-                store={runtime.store}
                 submitSecretField={submitSecretField}
                 typeEntry={typeEntry}
               />

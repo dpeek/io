@@ -8,7 +8,6 @@ import {
   getDefinitionDisplayLabel,
   resolveDisplayedDefinitionIconId,
 } from "./helpers.js";
-import { type InspectorFieldRow, InspectorFieldSection, InspectorShell } from "./inspector.js";
 import { compiledCardinalityIdByLiteral, predicateIconPredicateId } from "./model.js";
 import type {
   AnyEntityRef,
@@ -18,6 +17,7 @@ import type {
   TypeCatalogEntry,
 } from "./model.js";
 import { Badge, DebugDisclosure, DebugValue, DefinitionCheck, Section } from "./ui.js";
+import { type InspectorFieldRow, InspectorFieldSection, InspectorShell } from "../inspector.js";
 
 export function PredicateInspector({
   client,

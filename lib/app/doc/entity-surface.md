@@ -1,14 +1,14 @@
 ---
 name: App entity surface
 description: "App-owned interactive entity-surface boundary above readonly record surfaces."
-last_updated: 2026-04-07
+last_updated: 2026-04-08
 ---
 
 # App entity surface
 
 ## Read this when
 
-- you are changing the explorer entity inspector or generic create dialog
+- you are changing app-owned interactive entity detail or create surfaces
 - you need the ownership split between app-owned entity surfaces and
   `@io/graph-surface`
 - you need the intended adapter path from `RecordSurfaceSpec` into an
@@ -25,29 +25,36 @@ stay in `@io/graph-module` and `@io/graph-surface`.
 
 ## Current landing in tree
 
+- `../src/web/components/entity-surface.tsx`: exported live-entity wrapper
+  used by app-owned record/detail hosts
+- `../src/web/components/create-entity-surface.tsx`: exported draft-backed
+  create wrapper used by the generic app create dialog
 - `../src/web/components/entity-surface-plan.ts`: live-entity row planning,
   row roles, row chrome, and explicit `view | edit` mode
-- `../src/web/components/explorer/entities.tsx`: current `EntityInspector`
-  host that consumes the live-entity plan
-- `../src/web/components/explorer/inspector.tsx`: shared inspector shell and
-  section renderer that reuses `RecordSurfaceLayout` and
+- `../src/web/components/inspector.tsx`: shared inspector shell and section
+  renderer that reuses `RecordSurfaceLayout` and
   `RecordSurfaceSectionView`
-- `../src/web/components/explorer/field-editor-row.tsx`: mode-aware row body,
-  widget selection, and validation placement
+- `../src/web/components/field-editor-row.tsx`: mode-aware row body, widget
+  selection, and validation placement
 - `../src/web/components/explorer/create-draft-plan.ts`: create-draft field
   eligibility and defaults
 - `../src/web/components/explorer/create-draft-controller.ts`: draft adapter
   over `@io/graph-react`
-- `../src/web/components/explorer/create-draft-inspector.tsx`: current draft
-  host that injects submit-time validation by path
+- `../src/web/components/entity-type-browser.tsx` and
+  `../src/web/components/collection-browser-surface.tsx`: app-owned detail
+  flows that now render the live surface directly
+- `../src/web/components/entity-create-button.tsx`: app-owned create entry
+  that now renders the shared draft surface directly
 
-## Intended exported family
+## Exported family
 
-- `EntitySurface`: live-entity wrapper
-- `CreateEntitySurface`: draft-backed create wrapper
+- `EntitySurface`: live-entity wrapper for app-owned interactive detail
+- `CreateEntitySurface`: draft-backed create wrapper for app-owned create flows
 - both wrappers should share one planner and one row/body renderer
-- `EntityInspector` and `GenericCreateInspector` are the current hosts, not
-  the long-term boundary
+- future app-owned interactive record/detail work should import these wrappers
+  directly
+- do not add inspector-local or route-specific record/detail hosts beside this
+  family
 
 ## Responsibilities
 
@@ -91,9 +98,10 @@ whether the current dialog is supported. `createEntityDraftController(...)`
 adapts app catalog lookups into the shared draft controller from
 `@io/graph-react`.
 
-`GenericCreateInspector` is the current create host. The intended
-`CreateEntitySurface` should absorb that behavior rather than pushing
-draft-session or submit-validation concerns into `@io/graph-surface`.
+`CreateEntitySurface` is the current generic create host. It keeps the
+dialog-specific shell in app/web while reusing the same shared field/body path
+as `EntitySurface`, rather than pushing draft-session or submit-validation
+concerns into `@io/graph-surface`.
 
 ## Boundary against readonly record surfaces
 
@@ -102,7 +110,7 @@ draft-session or submit-validation concerns into `@io/graph-surface`.
 - `resolveRecordSurfaceBinding(...)` stays a readonly lookup adapter over field
   values and related collections
 - `RecordSurfaceMount*` stays the shared readonly shell for browse-only record
-  layouts
+  layouts; it is not a competing app-owned detail API
 - app-owned entity surfaces may reuse `RecordSurfaceLayout` or
   `RecordSurfaceSectionView` chrome, but interactive behavior stays above the
   binding layer

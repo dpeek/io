@@ -21,8 +21,8 @@ import { ScrollArea } from "@io/web/scroll-area";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCreateButton, EntityCreateRuntimeProvider } from "./entity-create-button.js";
+import { EntitySurface } from "./entity-surface.js";
 import { buildEntityCatalog } from "./explorer/catalog.js";
-import { EntityInspector } from "./explorer/entities.js";
 import { postSecretFieldMutation } from "./explorer/helpers.js";
 import type {
   EntityCatalogEntry,
@@ -248,10 +248,10 @@ export function CollectionBrowserSurface({
           <div className="min-h-0">
             {selectedEntity ? (
               <ScrollArea className="h-full pr-1">
-                <EntityInspector
+                <EntitySurface
+                  defaultMode="edit"
                   entity={selectedEntity}
                   runtime={runtime}
-                  store={runtime.store}
                   submitSecretField={submitSecretField}
                   typeEntry={typeEntry}
                 />

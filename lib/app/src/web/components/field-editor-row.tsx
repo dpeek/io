@@ -19,7 +19,7 @@ import type {
   EntitySurfaceMode,
   EntitySurfaceModeValue,
   EntitySurfaceValidationPlacementPolicy,
-} from "../entity-surface-plan.js";
+} from "./entity-surface-plan.js";
 import {
   collectFieldValidationMessages,
   describePredicateValue,
@@ -27,11 +27,15 @@ import {
   getEntityLabel,
   getFieldLabel,
   statusBadgeClass,
-} from "./helpers.js";
-import { iconTypeId } from "./model.js";
-import type { AnyPredicateRef, FieldValidationMessage, MutationCallbacks } from "./model.js";
-import { ExplorerSyncContext } from "./sync.js";
-import { Badge } from "./ui.js";
+} from "./explorer/helpers.js";
+import { iconTypeId } from "./explorer/model.js";
+import type {
+  AnyPredicateRef,
+  FieldValidationMessage,
+  MutationCallbacks,
+} from "./explorer/model.js";
+import { ExplorerSyncContext } from "./explorer/sync.js";
+import { Badge } from "./explorer/ui.js";
 
 type PredicateRowDisplay = "compact" | "default";
 
@@ -524,7 +528,6 @@ export function PredicateRow({
             <FieldIssueBadge
               invalid={mergedValidationMessages.length > 0}
               issueLabel={issueLabel}
-              statusTone={status.tone}
             />
           </div>
         </div>

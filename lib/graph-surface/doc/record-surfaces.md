@@ -1,7 +1,7 @@
 ---
 name: Graph surface record surfaces
 description: "Readonly record-surface binding and ObjectView adaptation in @io/graph-surface."
-last_updated: 2026-04-07
+last_updated: 2026-04-08
 ---
 
 # Graph surface record surfaces
@@ -110,9 +110,13 @@ The adapter intentionally drops related items it cannot map.
 `RecordSurfaceSpec` is still the durable authored contract. It names fields,
 sections, title or subtitle lookups, and related collection keys. This package
 binds that structure to readonly values through `RecordSurfaceLookup`.
+`RecordSurfaceMount*` is the browser shell for that same readonly layer; it is
+not a second app-owned detail or create API.
 
 Interactive entity screens sit above that layer in `@io/app`:
 
+- app-owned interactive record/detail entrypoints should use `EntitySurface`
+  or `CreateEntitySurface`
 - app-owned surfaces resolve live predicate refs or draft fields, rather than
   routing edit behavior through `resolveRecordSurfaceBinding(...)`
 - app-owned row planning decides title, body, meta, or hidden roles plus label
@@ -128,6 +132,9 @@ explicit `view | edit` mode.
 ## Practical rules
 
 - Treat record surfaces here as readonly runtime bindings.
+- If app-owned product work needs interactive record/detail UI, route it
+  through `EntitySurface` or `CreateEntitySurface` and reuse this package only
+  for readonly binding or shared shell chrome.
 - Prefer host-supplied `renderField(...)` or the `columns` option when a
   product surface needs different row chrome or single-column density without
   forking the shared section shell.

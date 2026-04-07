@@ -10,7 +10,7 @@ import type {
   EntitySurfaceMode,
   EntitySurfaceModeValue,
   EntitySurfaceValidationPlacementPolicy,
-} from "../entity-surface-plan.js";
+} from "./entity-surface-plan.js";
 import { PredicateRow, SecretFieldEditor } from "./field-editor.js";
 import type {
   AnyPredicateRef,
@@ -18,8 +18,8 @@ import type {
   FieldValidationMessage,
   MutationCallbacks,
   SubmitSecretFieldMutation,
-} from "./model.js";
-import { Badge } from "./ui.js";
+} from "./explorer/model.js";
+import { Badge } from "./explorer/ui.js";
 
 export type InspectorFieldRow = {
   customEditor?: (callbacks: MutationCallbacks) => ReactNode;

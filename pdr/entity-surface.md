@@ -5,10 +5,10 @@ Last Updated: 2026-04-07
 
 ## Must Read
 
-- `../lib/app/src/web/components/explorer/entities.tsx`
-- `../lib/app/src/web/components/explorer/inspector.tsx`
-- `../lib/app/src/web/components/explorer/field-editor-row.tsx`
-- `../lib/app/src/web/components/explorer/create-draft-inspector.tsx`
+- `../lib/app/src/web/components/entity-surface.tsx`
+- `../lib/app/src/web/components/inspector.tsx`
+- `../lib/app/src/web/components/field-editor-row.tsx`
+- `../lib/app/src/web/components/create-entity-surface.tsx`
 - `../lib/app/src/web/components/explorer/create-draft-controller.ts`
 - `../lib/app/src/web/components/explorer/create-draft-plan.ts`
 - `../lib/graph-surface/src/react-dom/record-surface-mount.tsx`
@@ -92,15 +92,16 @@ Current delivered scope:
   - mode-aware label, description, display, and validation chrome
   - external validation-message injection by field path alongside row-local
     mutation failures
-- explorer field sections can now opt into one-column rendering without
-  forking shared section chrome
-- explorer `EntityInspector` now consumes that planner instead of owning the
-  ordering rules inline
+- the shared shell and section path now lives in
+  `../lib/app/src/web/components/inspector.tsx` instead of explorer-local
+  composition
+- exported `EntitySurface` and `CreateEntitySurface` wrappers now live in
+  `../lib/app/src/web/components/` and share that row/body layer
+- app-owned record/detail flows now consume those wrappers directly instead of
+  explorer-local record/detail hosts
 
 Still deferred:
 
-- the shared `EntitySurface` and `CreateEntitySurface` wrappers
-- the create-draft migration onto the same planner and body renderer
 - the broader explorer cleanup items such as removing the debug panel
 
 Recommended internal shape:
@@ -232,7 +233,7 @@ Example:
   - mode-specific overrides for labels, descriptions, validation, and
     title/meta roles
 - Extract a pure row-planning helper from
-  `lib/app/src/web/components/explorer/entities.tsx` that works over a shared
+  `lib/app/src/web/components/entity-surface-plan.ts` that works over a shared
   subject shape and:
   - flattens predicate refs in authored order
   - classifies system fields
@@ -243,8 +244,8 @@ Example:
   - assigns row roles and chrome defaults for `name`, body fields, and meta
     fields
 - Refactor `PredicateRow` in
-  `lib/app/src/web/components/explorer/field-editor-row.tsx` so rendering mode
-  is explicit:
+  `lib/app/src/web/components/field-editor-row.tsx` so rendering mode is
+  explicit:
   - `view` prefers field views
   - `edit` prefers field editors when writable
   - readonly and secret-backed fallbacks keep working

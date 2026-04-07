@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { InspectorFieldSection } from "./inspector.js";
+import { InspectorFieldSection } from "../inspector.js";
 
 describe("inspector field section", () => {
   it("routes injected validation messages by field path and supports one-column layout", () => {

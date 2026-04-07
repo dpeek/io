@@ -137,6 +137,20 @@ describe("collection browser proof", () => {
         return title;
       });
 
+      await waitFor(() => {
+        const toggle = dom?.container.querySelector<HTMLElement>(
+          '[data-entity-surface-mode-toggle="true"]',
+        );
+        if (!toggle) {
+          throw new Error("Expected the shared entity-surface mode toggle.");
+        }
+        return toggle;
+      });
+
+      if (dom.container.querySelector('[data-explorer-debug-toggle="entity"]')) {
+        throw new Error("Expected shared entity detail to replace the old explorer debug panel.");
+      }
+
       const backlogRow = await waitFor(() => {
         const row = queryByText(dom!.container, "[data-query-result-item]", "Workflow backlog");
         if (!row) {

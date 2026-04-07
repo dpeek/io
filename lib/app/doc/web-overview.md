@@ -1,7 +1,7 @@
 ---
 name: App web overview
 description: "Current app-owned browser and Worker runtime map for @io/app."
-last_updated: 2026-04-07
+last_updated: 2026-04-08
 ---
 
 # App web overview
@@ -130,12 +130,20 @@ section chrome from `@io/graph-surface`.
 
 Current landing:
 
-- `EntityInspector` and `GenericCreateInspector` are the active hosts
+- `EntitySurface` and `CreateEntitySurface` are the active app-owned wrappers
+- `entity-type-browser.tsx`, `collection-browser-surface.tsx`, and
+  `entity-create-button.tsx` consume those wrappers directly
 - `entity-surface-plan.ts` owns row roles and chrome policy
 - `PredicateRow` owns mode-aware row rendering and validation placement
+- future app-owned interactive record/detail work should start from
+  `EntitySurface` or `CreateEntitySurface`, not from a parallel inspector-local
+  detail or create stack
+- `RecordSurfaceMount*` stays the lower-level readonly record layer; app/web
+  may reuse its chrome helpers, but it is not the app-owned interactive detail
+  entrypoint
 
-Current details and the intended `EntitySurface` / `CreateEntitySurface`
-adapter path live in [`./entity-surface.md`](./entity-surface.md).
+Current details and the adapter path live in
+[`./entity-surface.md`](./entity-surface.md).
 
 ## Ownership boundary
 
