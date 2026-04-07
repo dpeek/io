@@ -95,7 +95,7 @@ export function TypeInspector({
       title={graphNameText}
       typeLabel={entry.name}
     >
-      <InspectorFieldSection rows={fieldRows} />
+      <InspectorFieldSection mode="edit" rows={fieldRows} />
 
       <Section
         title={

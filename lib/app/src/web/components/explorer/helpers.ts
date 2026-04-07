@@ -236,6 +236,49 @@ export function formatPredicateMetaSummary(
   return parts.join(" · ");
 }
 
+function formatFieldValidationMessage(
+  issue: {
+    code: string;
+    message: string;
+    nodeId: string;
+    path: readonly string[];
+    predicateKey: string;
+    source: string;
+  },
+  index: number,
+): FieldValidationMessage {
+  return {
+    id: `${issue.nodeId}:${issue.predicateKey}:${issue.code}:${index}`,
+    message: issue.message,
+    pathLabel: formatValidationPath(issue.path),
+    source: issue.source,
+  };
+}
+
+export function collectValidationMessages(error: unknown): FieldValidationMessage[] {
+  if (!(error instanceof GraphValidationError)) return [];
+
+  return error.result.issues.map((issue, index) => formatFieldValidationMessage(issue, index));
+}
+
+export function collectValidationMessagesByPath(
+  error: unknown,
+): Map<string, FieldValidationMessage[]> {
+  const grouped = new Map<string, FieldValidationMessage[]>();
+
+  for (const message of collectValidationMessages(error)) {
+    if (message.pathLabel.length === 0) continue;
+    const existing = grouped.get(message.pathLabel);
+    if (existing) {
+      existing.push(message);
+      continue;
+    }
+    grouped.set(message.pathLabel, [message]);
+  }
+
+  return grouped;
+}
+
 export function collectFieldValidationMessages(
   error: unknown,
   predicate: AnyPredicateRef,
@@ -254,12 +297,7 @@ export function collectFieldValidationMessages(
         ? relevantByPredicate
         : error.result.issues;
 
-  return issues.map((issue, index) => ({
-    id: `${issue.nodeId}:${issue.predicateKey}:${issue.code}:${index}`,
-    message: issue.message,
-    pathLabel: formatValidationPath(issue.path),
-    source: issue.source,
-  }));
+  return issues.map((issue, index) => formatFieldValidationMessage(issue, index));
 }
 
 export function checkToneClass(state: "aligned" | "drifted" | "missing"): string {

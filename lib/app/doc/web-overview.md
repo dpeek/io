@@ -21,6 +21,7 @@ last_updated: 2026-04-07
 - the shipped browser identity bootstrap contract
 - the current installed-module activation proof for authority bootstrap and
   query-surface composition
+- the app-owned entity-surface boundary for interactive record screens
 - the package boundary between app/web composition, shared browser primitives,
   and graph-owned runtime layers
 
@@ -122,6 +123,20 @@ Current limits:
 - activation changes are row-driven authority rebuilds, not hot toggles or
   installer UX
 
+## Entity-surface boundary
+
+Interactive entity screens stay in `@io/app`, even when they reuse shared
+section chrome from `@io/graph-surface`.
+
+Current landing:
+
+- `EntityInspector` and `GenericCreateInspector` are the active hosts
+- `entity-surface-plan.ts` owns row roles and chrome policy
+- `PredicateRow` owns mode-aware row rendering and validation placement
+
+Current details and the intended `EntitySurface` / `CreateEntitySurface`
+adapter path live in [`./entity-surface.md`](./entity-surface.md).
+
 ## Ownership boundary
 
 - keep reusable browser primitives in `@io/web`
@@ -156,6 +171,8 @@ or authority routing, it stays in app/web or the owning graph package.
 
 - [`./workflow-web.md`](./workflow-web.md): current browser workflow surface
   and browser-agent boundary
+- [`./entity-surface.md`](./entity-surface.md): app-owned interactive
+  entity-surface family above readonly record surfaces
 - [`./auth-store.md`](./auth-store.md): Better Auth store and migration path
 - [`./local-bootstrap.md`](./local-bootstrap.md): localhost-only instant
   onboarding contract

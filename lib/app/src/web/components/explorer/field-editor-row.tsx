@@ -13,6 +13,13 @@ import {
 import { cn } from "@io/web/utils";
 import { useContext, useEffect, useState, type ReactNode } from "react";
 
+import type {
+  EntitySurfaceDescriptionVisibilityPolicy,
+  EntitySurfaceLabelVisibilityPolicy,
+  EntitySurfaceMode,
+  EntitySurfaceModeValue,
+  EntitySurfaceValidationPlacementPolicy,
+} from "../entity-surface-plan.js";
 import {
   collectFieldValidationMessages,
   describePredicateValue,
@@ -25,6 +32,8 @@ import { iconTypeId } from "./model.js";
 import type { AnyPredicateRef, FieldValidationMessage, MutationCallbacks } from "./model.js";
 import { ExplorerSyncContext } from "./sync.js";
 import { Badge } from "./ui.js";
+
+type PredicateRowDisplay = "compact" | "default";
 
 function ValidationMessagePanel({
   attribute,
@@ -58,6 +67,70 @@ function ValidationMessagePanel({
         ))}
       </div>
     </div>
+  );
+}
+
+function isModeValueRecord<T>(
+  value: EntitySurfaceModeValue<T> | undefined,
+): value is Partial<Record<EntitySurfaceMode, T>> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    ("view" in value || "edit" in value)
+  );
+}
+
+function resolveModeValue<T>(
+  value: EntitySurfaceModeValue<T> | undefined,
+  mode: EntitySurfaceMode,
+  fallback: T,
+): T {
+  if (value === undefined) return fallback;
+  if (isModeValueRecord(value)) return value[mode] ?? fallback;
+  return value;
+}
+
+function mergeValidationMessages(
+  ...groups: ReadonlyArray<readonly FieldValidationMessage[] | undefined>
+): FieldValidationMessage[] {
+  const merged = new Map<string, FieldValidationMessage>();
+
+  for (const group of groups) {
+    for (const message of group ?? []) {
+      merged.set(message.id, message);
+    }
+  }
+
+  return [...merged.values()];
+}
+
+function FieldIssueBadge({
+  issueLabel,
+  invalid,
+  statusTone,
+}: {
+  issueLabel: string | null;
+  invalid: boolean;
+  statusTone?: "empty" | "missing" | "present";
+}) {
+  if (!issueLabel) return null;
+
+  return (
+    <Badge
+      className={
+        invalid
+          ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+          : statusTone
+            ? statusBadgeClass(statusTone)
+            : "border-border bg-muted/30 text-muted-foreground"
+      }
+      data={{
+        "data-explorer-field-status": invalid ? "invalid" : (statusTone ?? "valid"),
+      }}
+    >
+      {issueLabel}
+    </Badge>
   );
 }
 
@@ -145,29 +218,76 @@ function CompactPredicateValue({ predicate }: { predicate: AnyPredicateRef }) {
 }
 
 function CompactRow({
-  pathLabel,
+  fieldTitle,
+  helperText,
+  issueLabel,
+  mode,
   predicate,
-  title,
+  shouldShowInlineValidation,
+  shouldShowLabel,
+  statusTone,
+  validationMessages,
+  pathLabel,
   value,
 }: {
+  fieldTitle: string;
+  helperText?: string;
+  issueLabel: string | null;
+  mode: EntitySurfaceMode;
   pathLabel: string;
   predicate?: AnyPredicateRef;
-  title?: string;
+  shouldShowInlineValidation: boolean;
+  shouldShowLabel: boolean;
+  statusTone?: "empty" | "missing" | "present";
+  validationMessages: readonly FieldValidationMessage[];
   value?: ReactNode;
 }) {
-  const fieldTitle = title ?? (predicate ? getFieldLabel(predicate) : pathLabel);
-
   return (
     <div
-      className="border-border/60 bg-muted/10 grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-start gap-3 rounded-xl border px-3 py-2"
-      data-explorer-field-compact={pathLabel}
+      className="space-y-3 pb-4 last:pb-0"
+      data-explorer-field-display="compact"
+      data-explorer-field-mode={mode}
+      data-explorer-field-path={pathLabel}
+      data-explorer-field-validation-state={validationMessages.length > 0 ? "invalid" : "valid"}
     >
-      <div className="text-muted-foreground text-[11px] font-medium tracking-[0.16em] uppercase">
-        {fieldTitle}
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <FieldIssueBadge
+          invalid={validationMessages.length > 0}
+          issueLabel={issueLabel}
+          statusTone={statusTone}
+        />
       </div>
-      <div className="min-w-0 justify-self-end text-right text-sm break-words [&_a]:underline-offset-2 [&_a:hover]:underline [&_code]:text-[11px] [&_code]:break-all [&_li]:list-none [&_ul]:space-y-1">
-        {predicate ? <CompactPredicateValue predicate={predicate} /> : value}
+
+      <div
+        className={cn(
+          "border-border/60 bg-muted/10 grid items-start gap-3 rounded-xl border px-3 py-2",
+          shouldShowLabel ? "grid-cols-[minmax(0,auto)_minmax(0,1fr)]" : "grid-cols-1",
+        )}
+        data-explorer-field-compact={pathLabel}
+      >
+        {shouldShowLabel ? (
+          <div
+            className="text-muted-foreground text-[11px] font-medium tracking-[0.16em] uppercase"
+            data-explorer-field-label={pathLabel}
+          >
+            {fieldTitle}
+          </div>
+        ) : null}
+        <div
+          className={cn(
+            "min-w-0 text-sm break-words [&_a]:underline-offset-2 [&_a:hover]:underline [&_code]:text-[11px] [&_code]:break-all [&_li]:list-none [&_ul]:space-y-1",
+            shouldShowLabel ? "justify-self-end text-right" : "",
+          )}
+        >
+          {predicate ? <CompactPredicateValue predicate={predicate} /> : value}
+        </div>
       </div>
+
+      {helperText ? <div className="text-muted-foreground text-xs">{helperText}</div> : null}
+
+      {shouldShowInlineValidation ? (
+        <ValidationMessagePanel attribute={pathLabel} messages={validationMessages} />
+      ) : null}
     </div>
   );
 }
@@ -175,53 +295,100 @@ function CompactRow({
 export function PredicateRow({
   customEditor,
   description,
+  descriptionVisibility = "auto",
   display = "default",
   hideMissingStatus = false,
+  labelVisibility = "auto",
+  mode,
   pathLabel,
   predicate,
   readOnly = false,
   title,
+  validationMessages = [],
+  validationPlacement = "auto",
   value,
 }: {
   customEditor?: (callbacks: MutationCallbacks) => ReactNode;
   description?: string;
-  display?: "compact" | "default";
+  descriptionVisibility?: EntitySurfaceModeValue<EntitySurfaceDescriptionVisibilityPolicy>;
+  display?: EntitySurfaceModeValue<PredicateRowDisplay>;
   hideMissingStatus?: boolean;
+  labelVisibility?: EntitySurfaceModeValue<EntitySurfaceLabelVisibilityPolicy>;
+  mode: EntitySurfaceMode;
   pathLabel: string;
   predicate?: AnyPredicateRef;
   readOnly?: boolean;
   title?: string;
+  validationMessages?: readonly FieldValidationMessage[];
+  validationPlacement?: EntitySurfaceModeValue<EntitySurfaceValidationPlacementPolicy>;
   value?: ReactNode;
 }) {
-  if (display === "compact") {
-    return <CompactRow pathLabel={pathLabel} predicate={predicate} title={title} value={value} />;
-  }
+  const resolvedDisplay = resolveModeValue(display, mode, "default");
+  const resolvedDescriptionVisibility = resolveModeValue(descriptionVisibility, mode, "auto");
+  const resolvedLabelVisibility = resolveModeValue(labelVisibility, mode, "auto");
+  const resolvedValidationPlacement = resolveModeValue(validationPlacement, mode, "auto");
+  const shouldShowLabel = resolvedLabelVisibility !== "hide";
+  const shouldShowInlineValidation = resolvedValidationPlacement !== "summary-only";
 
   if (!predicate) {
+    const issueLabel = validationMessages.length > 0 ? "invalid" : null;
+
+    if (resolvedDisplay === "compact") {
+      return (
+        <CompactRow
+          fieldTitle={title ?? pathLabel}
+          helperText={
+            description && resolvedDescriptionVisibility !== "hide" ? description : undefined
+          }
+          issueLabel={issueLabel}
+          mode={mode}
+          pathLabel={pathLabel}
+          shouldShowInlineValidation={shouldShowInlineValidation}
+          shouldShowLabel={shouldShowLabel}
+          validationMessages={validationMessages}
+          value={value}
+        />
+      );
+    }
+
     return (
-      <div className="space-y-3 pb-4 last:pb-0" data-explorer-field-path={pathLabel}>
+      <div
+        className="space-y-3 pb-4 last:pb-0"
+        data-explorer-field-mode={mode}
+        data-explorer-field-path={pathLabel}
+        data-explorer-field-validation-state={validationMessages.length > 0 ? "invalid" : "valid"}
+      >
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-              <div
-                className="flex flex-wrap items-center gap-2"
-                data-explorer-field-heading={pathLabel}
-              >
+              {shouldShowLabel ? (
                 <div
-                  className="text-foreground text-sm font-medium"
-                  data-explorer-field-label={pathLabel}
+                  className="flex flex-wrap items-center gap-2"
+                  data-explorer-field-heading={pathLabel}
                 >
-                  {title ?? pathLabel}
+                  <div
+                    className="text-foreground text-sm font-medium"
+                    data-explorer-field-label={pathLabel}
+                  >
+                    {title ?? pathLabel}
+                  </div>
                 </div>
-              </div>
-              {description ? (
+              ) : null}
+              {description && resolvedDescriptionVisibility !== "hide" ? (
                 <div className="text-muted-foreground text-xs">{description}</div>
               ) : null}
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <FieldIssueBadge invalid={validationMessages.length > 0} issueLabel={issueLabel} />
             </div>
           </div>
         </div>
 
         <div className="mt-3">{value}</div>
+
+        {shouldShowInlineValidation ? (
+          <ValidationMessagePanel attribute={pathLabel} messages={validationMessages} />
+        ) : null}
       </div>
     );
   }
@@ -233,21 +400,24 @@ export function PredicateRow({
   const editorResolution = defaultWebFieldResolver.resolveEditor(rowPredicate);
   const writePolicy = fieldWritePolicy(rowPredicate.field);
   const isEditable =
+    mode === "edit" &&
     !readOnly &&
     (customEditor !== undefined ||
       (writePolicy === "client-tx" && editorResolution.status === "resolved"));
-  const [validationMessages, setValidationMessages] = useState<FieldValidationMessage[]>([]);
+  const [localValidationMessages, setLocalValidationMessages] = useState<FieldValidationMessage[]>(
+    [],
+  );
 
   useEffect(() => {
-    setValidationMessages([]);
+    setLocalValidationMessages([]);
   }, [binding.value]);
 
   function handleMutationError(error: unknown): void {
-    setValidationMessages(collectFieldValidationMessages(error, rowPredicate));
+    setLocalValidationMessages(collectFieldValidationMessages(error, rowPredicate));
   }
 
   function handleMutationSuccess(): void {
-    setValidationMessages([]);
+    setLocalValidationMessages([]);
   }
 
   const mutationCallbacks = usePersistedMutationCallbacks(
@@ -258,16 +428,26 @@ export function PredicateRow({
     sync ? { sync } : null,
   );
   const fieldTitle = title ?? getFieldLabel(rowPredicate);
+  const mergedValidationMessages = mergeValidationMessages(
+    localValidationMessages,
+    validationMessages,
+  );
   const shouldHideMissingStatus =
-    hideMissingStatus && validationMessages.length === 0 && status.tone === "missing";
+    hideMissingStatus && mergedValidationMessages.length === 0 && status.tone === "missing";
   const metaSummary = formatPredicateMetaSummary(rowPredicate, {
     includeReadOnly: !isEditable,
     status: shouldHideMissingStatus ? undefined : status,
   });
   const helperText = description ?? metaSummary;
+  const shouldShowHelperText =
+    resolvedDescriptionVisibility === "show"
+      ? helperText !== undefined
+      : resolvedDescriptionVisibility === "hide"
+        ? false
+        : Boolean(helperText);
   const isOptionalField = rowPredicate.field.cardinality !== "one";
   const issueLabel =
-    validationMessages.length > 0
+    mergedValidationMessages.length > 0
       ? "invalid"
       : status.tone === "present" ||
           status.label === "unset" ||
@@ -290,55 +470,71 @@ export function PredicateRow({
       <PredicateValuePreview predicate={rowPredicate} />
     ));
 
+  if (resolvedDisplay === "compact") {
+    return (
+      <CompactRow
+        fieldTitle={fieldTitle}
+        helperText={shouldShowHelperText ? helperText : undefined}
+        issueLabel={issueLabel}
+        mode={mode}
+        pathLabel={pathLabel}
+        predicate={rowPredicate}
+        shouldShowInlineValidation={shouldShowInlineValidation}
+        shouldShowLabel={shouldShowLabel}
+        statusTone={status.tone}
+        validationMessages={mergedValidationMessages}
+      />
+    );
+  }
+
   return (
     <div
       className="space-y-3 pb-4 last:pb-0"
+      data-explorer-field-mode={mode}
       data-explorer-field-path={pathLabel}
-      data-explorer-field-validation-state={validationMessages.length > 0 ? "invalid" : "valid"}
+      data-explorer-field-validation-state={
+        mergedValidationMessages.length > 0 ? "invalid" : "valid"
+      }
       data-explorer-field-state={status.tone}
     >
       <div className="space-y-1.5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
-            <div
-              className="flex flex-wrap items-center gap-2"
-              data-explorer-field-heading={pathLabel}
-            >
+            {shouldShowLabel ? (
               <div
-                className={cn(
-                  "text-sm font-medium",
-                  isOptionalField ? "text-foreground/65" : "text-foreground",
-                )}
-                data-explorer-field-label={pathLabel}
+                className="flex flex-wrap items-center gap-2"
+                data-explorer-field-heading={pathLabel}
               >
-                {fieldTitle}
+                <div
+                  className={cn(
+                    "text-sm font-medium",
+                    isOptionalField ? "text-foreground/65" : "text-foreground",
+                  )}
+                  data-explorer-field-label={pathLabel}
+                >
+                  {fieldTitle}
+                </div>
               </div>
-            </div>
-            {helperText ? <div className="text-muted-foreground text-xs">{helperText}</div> : null}
+            ) : null}
+            {shouldShowHelperText ? (
+              <div className="text-muted-foreground text-xs">{helperText}</div>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            {issueLabel ? (
-              <Badge
-                className={
-                  validationMessages.length > 0
-                    ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
-                    : statusBadgeClass(status.tone)
-                }
-                data={{
-                  "data-explorer-field-status":
-                    validationMessages.length > 0 ? "invalid" : status.tone,
-                }}
-              >
-                {issueLabel}
-              </Badge>
-            ) : null}
+            <FieldIssueBadge
+              invalid={mergedValidationMessages.length > 0}
+              issueLabel={issueLabel}
+              statusTone={status.tone}
+            />
           </div>
         </div>
       </div>
 
       <div className="mt-3">{editorContent}</div>
 
-      <ValidationMessagePanel attribute={pathLabel} messages={validationMessages} />
+      {shouldShowInlineValidation ? (
+        <ValidationMessagePanel attribute={pathLabel} messages={mergedValidationMessages} />
+      ) : null}
     </div>
   );
 }

@@ -69,6 +69,40 @@ The important boundary is:
 - app-owned surfaces own interactive behavior, host policy, and validation
   presentation
 
+## Current landing
+
+The first extracted planner now lives in
+`../lib/app/src/web/components/entity-surface-plan.ts`.
+
+Current delivered scope:
+
+- app-owned planning types for:
+  - surface mode
+  - row role
+  - label visibility
+  - description visibility
+  - validation placement
+- one pure live-entity planner that:
+  - keeps authored order as the base order for non-system rows
+  - promotes `name` into the title slot in `view` mode
+  - hides `id`, `type`, and `createdAt`
+  - moves `updatedAt` into trailing meta chrome
+- the shared field-row path now supports:
+  - explicit `view | edit` mode
+  - mode-aware label, description, display, and validation chrome
+  - external validation-message injection by field path alongside row-local
+    mutation failures
+- explorer field sections can now opt into one-column rendering without
+  forking shared section chrome
+- explorer `EntityInspector` now consumes that planner instead of owning the
+  ordering rules inline
+
+Still deferred:
+
+- the shared `EntitySurface` and `CreateEntitySurface` wrappers
+- the create-draft migration onto the same planner and body renderer
+- the broader explorer cleanup items such as removing the debug panel
+
 Recommended internal shape:
 
 - `EntitySurface`: wrapper for live entities
@@ -132,9 +166,6 @@ Example:
 
 - Should `updatedAt` render as a compact footer row inside the fields section,
   or as a separate metadata footer below the section?
-- Should single-column support be added to
-  `RecordSurfaceSectionView`, or should `EntitySurface` own its own section
-  rendering while the lower-level record surface stays unchanged?
 - Should `view` be the default mode everywhere, with `edit` only opt-in, or
   should explorer routes remember the last selected mode?
 - When an authored `RecordSurfaceSpec` explicitly includes system fields such

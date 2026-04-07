@@ -97,6 +97,8 @@ The current dependency chain is:
   durable restore direction above the live authority graph
 - `../lib/app/doc/web-overview.md`: current app-owned browser and Worker runtime
   map
+- `../lib/app/doc/entity-surface.md`: app-owned interactive entity-surface
+  family above readonly record surfaces
 - `../lib/app/doc/workflow-web.md`: current browser workflow surface and
   browser-agent boundary
 - `../lib/app/doc/auth-store.md`: current Better Auth store and migration path

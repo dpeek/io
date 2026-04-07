@@ -107,7 +107,7 @@ export function PredicateInspector({
       title={title}
       typeLabel="Predicate"
     >
-      <InspectorFieldSection rows={fieldRows} />
+      <InspectorFieldSection mode="edit" rows={fieldRows} />
 
       <Section title="Compiled Checkss">
         <div className="grid gap-3 md:grid-cols-4">

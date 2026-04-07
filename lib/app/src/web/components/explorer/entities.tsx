@@ -1,17 +1,11 @@
 import { GraphIcon } from "@io/graph-module-core/react-dom";
-import { usePredicateField } from "@io/graph-react";
 import { useMemo } from "react";
 
-import { asNodeMetadataFields, flattenPredicateRefs } from "./catalog.js";
+import { buildLiveEntitySurfacePlan } from "../entity-surface-plan.js";
 import { usePredicateSlotValue } from "./field-editor.js";
-import { formatEntityHeaderDate, getEntityLabel, getUntitledEntityLabel } from "./helpers.js";
+import { getEntityLabel, getUntitledEntityLabel } from "./helpers.js";
 import { InspectorFieldSection, InspectorShell, type InspectorFieldRow } from "./inspector.js";
-import {
-  createdAtPredicateId,
-  iconTypeId,
-  typePredicateId,
-  updatedAtPredicateId,
-} from "./model.js";
+import { iconTypeId, typePredicateId } from "./model.js";
 import type {
   AnyEntityRef,
   EntityCatalogEntry,
@@ -86,44 +80,31 @@ export function EntityInspector({
   store: ExplorerRuntime["store"];
   typeEntry: EntityCatalogEntry;
 }) {
-  const fields = asNodeMetadataFields(entity.fields);
-  const { value: createdAt } = usePredicateField(fields.createdAt);
-  const { value: updatedAt } = usePredicateField(fields.updatedAt);
   const iconSlotValue = usePredicateSlotValue(
     store,
     entity.id,
     typeEntry.iconPredicateId ?? typePredicateId,
   );
   const iconId = resolveEntityPreviewIconId(entity.id, iconSlotValue, typeEntry);
+  const surfacePlan = useMemo(() => buildLiveEntitySurfacePlan(entity, { mode: "edit" }), [entity]);
   const rows = useMemo(() => {
-    const compactPredicateIds = new Set([
-      typePredicateId,
-      createdAtPredicateId,
-      updatedAtPredicateId,
-    ]);
+    return surfacePlan.rows.flatMap((row) => {
+      if (row.kind !== "predicate" || row.role === "hidden" || row.role === "title") {
+        return [];
+      }
 
-    return [
-      {
-        display: "compact",
-        pathLabel: "id",
-        readOnly: true,
-        title: "ID",
-        value: <code>{entity.id}</code>,
-      },
-      ...flattenPredicateRefs(entity.fields as Record<string, unknown>).map((row) => ({
-        ...row,
-        ...(compactPredicateIds.has(row.predicate.predicateId)
-          ? { display: "compact" as const, readOnly: true }
-          : {}),
-      })),
-    ] satisfies InspectorFieldRow[];
-  }, [entity]);
-  const createdAtLabel = formatEntityHeaderDate(createdAt);
-  const updatedAtLabel = formatEntityHeaderDate(updatedAt);
-  const summaryItems = [
-    createdAtLabel ? `Created ${createdAtLabel}` : null,
-    updatedAtLabel ? `Updated ${updatedAtLabel}` : null,
-  ].filter((item): item is string => typeof item === "string");
+      return [
+        {
+          descriptionVisibility: row.chrome.descriptionVisibility,
+          display: row.role === "meta" ? "compact" : "default",
+          labelVisibility: row.chrome.labelVisibility,
+          pathLabel: row.pathLabel,
+          predicate: row.predicate,
+          validationPlacement: row.chrome.validationPlacement,
+        } satisfies InspectorFieldRow,
+      ];
+    });
+  }, [surfacePlan.rows]);
   const title = getEntityLabel(entity, getUntitledEntityLabel(typeEntry.name));
 
   return (
@@ -131,12 +112,13 @@ export function EntityInspector({
       iconId={iconId}
       state="entity"
       status={typeEntry.name}
-      summaryItems={summaryItems}
       title={title}
       typeLabel={typeEntry.name}
     >
       <InspectorFieldSection
+        columns={1}
         emptyMessage="No editable fields are exposed for this record yet."
+        mode={surfacePlan.mode}
         rows={rows}
         runtime={runtime}
         submitSecretField={submitSecretField}

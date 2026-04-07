@@ -1,7 +1,7 @@
 ---
 name: Graph surface record surfaces
 description: "Readonly record-surface binding and ObjectView adaptation in @io/graph-surface."
-last_updated: 2026-04-03
+last_updated: 2026-04-07
 ---
 
 # Graph surface record surfaces
@@ -12,6 +12,8 @@ last_updated: 2026-04-03
 - you need to understand how authored record surfaces become readonly runtime
   bindings
 - you are migrating older `ObjectViewSpec` metadata into record surfaces
+- you need the boundary between readonly record surfaces and the higher-level
+  app-owned entity surface
 
 ## Main source anchors
 
@@ -22,10 +24,13 @@ last_updated: 2026-04-03
 ## What this layer owns
 
 - readonly record-surface binding over field-value lookups
+- shared section shell chrome plus simple one- or two-column field layout
 - related collection resolution for record surfaces
 - compatibility adaptation from `ObjectViewSpec` to `RecordSurfaceSpec`
 
 It does not own edit-session orchestration or authoritative command execution.
+It also does not own product-facing row policy, draft flows, or validation
+presentation for interactive entity screens.
 
 ## Lookup model
 
@@ -100,9 +105,41 @@ Current mapping:
 
 The adapter intentionally drops related items it cannot map.
 
+## Boundary above this layer
+
+`RecordSurfaceSpec` is still the durable authored contract. It names fields,
+sections, title or subtitle lookups, and related collection keys. This package
+binds that structure to readonly values through `RecordSurfaceLookup`.
+
+Interactive entity screens sit above that layer in `@io/app`:
+
+- app-owned surfaces resolve live predicate refs or draft fields, rather than
+  routing edit behavior through `resolveRecordSurfaceBinding(...)`
+- app-owned row planning decides title, body, meta, or hidden roles plus label
+  and validation chrome
+- app-owned validation models cover row-local mutation failures, submit-time
+  draft failures, and non-field summary issues
+
+The intended adapter path is to consume `RecordSurfaceSpec` as authored section
+metadata, then map those field paths into app-owned row plans. Do not widen the
+authored contract with host policy such as `name` promotion, `id` hiding, or
+explicit `view | edit` mode.
+
 ## Practical rules
 
 - Treat record surfaces here as readonly runtime bindings.
+- Prefer host-supplied `renderField(...)` or the `columns` option when a
+  product surface needs different row chrome or single-column density without
+  forking the shared section shell.
+- Keep `RecordSurfaceSpec` narrow. Use it for authored structure, not for
+  app-specific interactive policy.
+- Reuse `RecordSurfaceLayout` or `RecordSurfaceSectionView` chrome from app
+  when helpful, but keep edit and validation ownership outside this package.
 - Keep authored metadata ownership in `@io/graph-module`.
 - Use `adaptObjectViewToRecordSurface(...)` as a migration bridge, not as a
   place to keep both models alive forever.
+
+## Related docs
+
+- [`../../app/doc/entity-surface.md`](../../app/doc/entity-surface.md):
+  app-owned interactive entity-surface family above this readonly layer

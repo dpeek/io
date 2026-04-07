@@ -8,9 +8,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { flattenPredicateRefs } from "./catalog.js";
 import { createEntityDraftController } from "./create-draft-controller.js";
 import { buildCreateDefaults, buildCreatePlan } from "./create-draft-plan.js";
+import { collectValidationMessages, collectValidationMessagesByPath } from "./helpers.js";
 import { InspectorFieldSection } from "./inspector.js";
 import { explorerNamespace } from "./model.js";
-import type { EntityCatalogEntry, ExplorerRuntime } from "./model.js";
+import type { EntityCatalogEntry, ExplorerRuntime, FieldValidationMessage } from "./model.js";
 import { describeSyncError } from "./sync.js";
 import { EmptyState } from "./ui.js";
 
@@ -27,6 +28,9 @@ export function GenericCreateInspector({
 }) {
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [submitValidationMessagesByPath, setSubmitValidationMessagesByPath] = useState<
+    ReadonlyMap<string, readonly FieldValidationMessage[]>
+  >(new Map());
   const entityEntryRef = useRef(entityEntry);
   const entityEntryByIdRef = useRef(entityEntryById);
 
@@ -67,6 +71,10 @@ export function GenericCreateInspector({
       }),
     [createPlan.clientFields, predicateRows],
   );
+  const visibleFieldPaths = useMemo(
+    () => new Set(fieldRows.map((row) => row.pathLabel)),
+    [fieldRows],
+  );
   const createLabel = `Create ${entityEntry.name}`;
 
   async function handleCreate(): Promise<void> {
@@ -75,20 +83,34 @@ export function GenericCreateInspector({
     const validation = currentEntry.validateCreate(input as never);
 
     if (!validation.ok) {
-      setSubmitError(
-        describeSyncError(new GraphValidationError(validation)) ?? "Create validation failed.",
+      const validationError = new GraphValidationError(validation);
+      const fieldMessagesByPath = collectValidationMessagesByPath(validationError);
+      const visibleFieldMessages = new Map<string, readonly FieldValidationMessage[]>();
+
+      for (const [pathLabel, messages] of fieldMessagesByPath) {
+        if (!visibleFieldPaths.has(pathLabel)) continue;
+        visibleFieldMessages.set(pathLabel, messages);
+      }
+
+      setSubmitValidationMessagesByPath(visibleFieldMessages);
+
+      const summaryMessages = collectValidationMessages(validationError).filter(
+        (message) => !visibleFieldPaths.has(message.pathLabel),
       );
+      setSubmitError(summaryMessages[0]?.message ?? "");
       return;
     }
 
     setBusy(true);
     setSubmitError("");
+    setSubmitValidationMessagesByPath(new Map());
 
     try {
       const createdId = currentEntry.create(input as never);
       await runtime.sync.flush();
       onCreated(createdId);
     } catch (error) {
+      setSubmitValidationMessagesByPath(new Map());
       setSubmitError(describeSyncError(error) ?? "Create failed.");
     } finally {
       setBusy(false);
@@ -147,9 +169,12 @@ export function GenericCreateInspector({
         <div className="space-y-4">
           <InspectorFieldSection
             chrome={false}
+            columns={1}
             emptyMessage="No client-writable fields."
             hideMissingStatus
+            mode="edit"
             rows={fieldRows}
+            validationMessagesByPath={submitValidationMessagesByPath}
           />
 
           {submitError ? (

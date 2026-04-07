@@ -64,6 +64,7 @@ export type RecordSurfaceLayoutProps = {
 
 export type RecordSurfaceSectionViewProps = {
   readonly chrome?: boolean;
+  readonly columns?: 1 | 2;
   readonly description?: ReactNode;
   readonly emptyMessage?: ReactNode;
   readonly fields: readonly RecordSurfaceFieldBinding[];
@@ -387,6 +388,7 @@ export function RecordSurfaceLayout({
 
 export function RecordSurfaceSectionView({
   chrome = true,
+  columns = 2,
   description,
   emptyMessage = "No fields are available for this record surface section.",
   fields,
@@ -395,10 +397,15 @@ export function RecordSurfaceSectionView({
 }: RecordSurfaceSectionViewProps) {
   const content =
     fields.length > 0 ? (
-      <div className="grid gap-4 md:grid-cols-2">
+      <div
+        className={cn("grid gap-4", columns === 2 ? "md:grid-cols-2" : undefined)}
+        data-record-surface-section-columns={columns}
+      >
         {fields.map((field) => (
           <div
-            className={cn(field.span === 1 ? "md:col-span-1" : "md:col-span-2")}
+            className={cn(
+              columns === 2 ? (field.span === 1 ? "md:col-span-1" : "md:col-span-2") : undefined,
+            )}
             key={`${section.key}:${field.path}`}
           >
             {renderField ? (
@@ -410,7 +417,10 @@ export function RecordSurfaceSectionView({
         ))}
       </div>
     ) : (
-      <p className="border-border bg-muted/20 text-muted-foreground rounded-xl border border-dashed p-4 text-sm">
+      <p
+        className="border-border bg-muted/20 text-muted-foreground rounded-xl border border-dashed p-4 text-sm"
+        data-record-surface-section-columns={columns}
+      >
         {emptyMessage}
       </p>
     );

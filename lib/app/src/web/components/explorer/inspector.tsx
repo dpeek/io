@@ -4,10 +4,18 @@ import { RecordSurfaceLayout, RecordSurfaceSectionView } from "@io/graph-surface
 import { GraphIcon } from "@io/graph-module-core/react-dom";
 import { type ReactNode } from "react";
 
+import type {
+  EntitySurfaceDescriptionVisibilityPolicy,
+  EntitySurfaceLabelVisibilityPolicy,
+  EntitySurfaceMode,
+  EntitySurfaceModeValue,
+  EntitySurfaceValidationPlacementPolicy,
+} from "../entity-surface-plan.js";
 import { PredicateRow, SecretFieldEditor } from "./field-editor.js";
 import type {
   AnyPredicateRef,
   ExplorerRuntime,
+  FieldValidationMessage,
   MutationCallbacks,
   SubmitSecretFieldMutation,
 } from "./model.js";
@@ -16,11 +24,15 @@ import { Badge } from "./ui.js";
 export type InspectorFieldRow = {
   customEditor?: (callbacks: MutationCallbacks) => ReactNode;
   description?: string;
-  display?: "compact" | "default";
+  descriptionVisibility?: EntitySurfaceModeValue<EntitySurfaceDescriptionVisibilityPolicy>;
+  display?: EntitySurfaceModeValue<"compact" | "default">;
+  labelVisibility?: EntitySurfaceModeValue<EntitySurfaceLabelVisibilityPolicy>;
   pathLabel: string;
   predicate?: AnyPredicateRef;
   readOnly?: boolean;
   title?: string;
+  validationMessages?: readonly FieldValidationMessage[];
+  validationPlacement?: EntitySurfaceModeValue<EntitySurfaceValidationPlacementPolicy>;
   value?: ReactNode;
 };
 
@@ -75,22 +87,28 @@ export function InspectorShell({
 
 export function InspectorFieldSection({
   chrome = true,
+  columns = 2,
   description,
   emptyMessage = "No shared fields are available for this selection.",
   hideMissingStatus = false,
+  mode,
   rows,
   runtime,
   submitSecretField,
   title = "Fields",
+  validationMessagesByPath,
 }: {
   chrome?: boolean;
+  columns?: 1 | 2;
   description?: string;
   emptyMessage?: string;
   hideMissingStatus?: boolean;
+  mode: EntitySurfaceMode;
   rows: readonly InspectorFieldRow[];
   runtime?: ExplorerRuntime;
   submitSecretField?: SubmitSecretFieldMutation;
   title?: string;
+  validationMessagesByPath?: ReadonlyMap<string, readonly FieldValidationMessage[]>;
 }) {
   const fieldEntries = rows.map((row) => ({
     field: {
@@ -106,6 +124,7 @@ export function InspectorFieldSection({
   return (
     <RecordSurfaceSectionView
       chrome={chrome}
+      columns={columns}
       description={description}
       emptyMessage={emptyMessage}
       fields={fieldEntries.map((entry) => entry.field)}
@@ -137,12 +156,20 @@ export function InspectorFieldSection({
                 : undefined
             }
             description={row.description}
+            descriptionVisibility={row.descriptionVisibility}
             display={row.display}
             hideMissingStatus={hideMissingStatus}
+            labelVisibility={row.labelVisibility}
+            mode={mode}
             pathLabel={row.pathLabel}
             predicate={predicate}
             readOnly={row.readOnly}
             title={row.title}
+            validationMessages={[
+              ...(row.validationMessages ?? []),
+              ...(validationMessagesByPath?.get(row.pathLabel) ?? []),
+            ]}
+            validationPlacement={row.validationPlacement}
             value={row.value}
           />
         );
