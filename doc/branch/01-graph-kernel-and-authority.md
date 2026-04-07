@@ -1,3 +1,9 @@
+---
+name: Graph kernel and authority branch
+description: "Canonical cross-package contract for Branch 1 graph kernel, authority, persistence, and sync work."
+last_updated: 2026-04-07
+---
+
 # Graph Kernel And Authority Canonical Contract
 
 ## Overview
@@ -89,12 +95,14 @@ fields reload correctly without replay drift.
 
 ### Source Anchors
 
-- `doc/02-current-state-architecture.md`
-- `doc/03-target-platform-architecture.md`
-- `doc/05-recommended-architecture.md`
-- `doc/06-migration-plan.md`
-- `doc/09-vision-platform-architecture.md`
-- `doc/11-vision-execution-model.md`
+- `doc/index.md`
+- `doc/vision.md`
+- `lib/graph-kernel/doc/runtime-stack.md`
+- `lib/graph-kernel/doc/roadmap.md`
+- `lib/graph-authority/doc/authority-stack.md`
+- `lib/graph-authority/doc/roadmap.md`
+- `lib/graph-sync/doc/sync-stack.md`
+- `lib/app/doc/authority-storage.md`
 
 ## 1. Purpose
 

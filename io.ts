@@ -19,10 +19,10 @@ export default defineIoConfig({
     entrypoint: "./io.md",
     docs: {
       "project.backlog": "./doc/agent/backlog.md",
-      "project.mcp": "./doc/graph/mcp.md",
+      "project.mcp": "./lib/cli/doc/graph-mcp.md",
       "project.overview": "./doc/index.md",
       "project.review": "./doc/agent/review.md",
-      "project.workflow": "./doc/agent/workflow.md",
+      "project.workflow": "./lib/cli/doc/agent-workflow.md",
     },
     profiles: {
       backlog: {
@@ -65,16 +65,18 @@ export default defineIoConfig({
   modules: {
     agent: {
       allowedSharedPaths: ["./lib/cli/src"],
-      docs: ["./doc/agent/index.md", "./doc/agent/workflow.md"],
+      docs: ["./lib/cli/doc/agent-runtime.md", "./lib/cli/doc/agent-workflow.md"],
       path: "./lib/cli/src/agent",
     },
     graph: {
       allowedSharedPaths: ["./lib/app/src"],
       docs: [
-        "./doc/graph/index.md",
-        "./doc/graph/computed.md",
-        "./doc/graph/icon.md",
-        "./doc/graph/architecture.md",
+        "./lib/graph-kernel/doc/runtime-stack.md",
+        "./lib/graph-kernel/doc/roadmap.md",
+        "./lib/graph-client/doc/roadmap.md",
+        "./lib/graph-surface/doc/roadmap.md",
+        "./lib/graph-authority/doc/roadmap.md",
+        "./lib/graph-module-core/doc/icons-and-svg.md",
       ],
       path: "./lib/app/src/graph",
     },

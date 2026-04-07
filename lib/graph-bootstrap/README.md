@@ -2,6 +2,41 @@
 
 `@io/graph-bootstrap` owns graph schema bootstrap and materialization.
 
+## Read This First
+
+- Start with `./out/index.d.ts` for the compact public contract.
+- Start with `./src/index.ts` for the curated package entrypoint.
+- Read `./src/bootstrap.ts` for additive schema materialization into a live
+  store.
+- Read `./src/snapshot.ts` for convergent snapshot creation and cache
+  behavior.
+- Read `./src/icons.ts` and `./src/contracts.ts` for icon seed and resolver
+  seams.
+- Read `./src/core-schema.ts` for the minimal core contract bootstrap
+  requires.
+- Read `./src/bootstrap-facts.ts` and `./src/schema-tree.ts` for the internal
+  dedupe and traversal helpers that shape bootstrap behavior.
+
+## Package Docs
+
+These are the canonical agent docs for package-specific behavior in
+`@io/graph-bootstrap`.
+
+- [`./doc/additive-bootstrap.md`](./doc/additive-bootstrap.md): additive
+  bootstrap semantics, ordering, and fact materialization
+- [`./doc/snapshots-and-cache.md`](./doc/snapshots-and-cache.md): convergent
+  snapshot creation and cache rules
+- [`./doc/icon-seeding.md`](./doc/icon-seeding.md): icon seed lookup,
+  resolution, and materialization
+- [`./doc/core-schema-requirements.md`](./doc/core-schema-requirements.md):
+  the minimal core schema contract bootstrap depends on
+
+Cross-package runtime and icon architecture now lives in
+`../graph-kernel/doc/runtime-stack.md` and
+`../graph-module-core/doc/icons-and-svg.md`. Start
+here when the question is local to bootstrap. Jump to the root graph docs when
+the question crosses package, authority, or host boundaries.
+
 ## Public API
 
 `src/index.ts` is the curated package surface. It exports:
@@ -9,11 +44,12 @@
 - `bootstrap(store, definitions, options)`
 - `createBootstrappedSnapshot(definitions, options)`
 - `requireGraphBootstrapCoreSchema(definitions)`
-- type-only bootstrap option and icon-resolution contracts
+- type-only exports for `GraphBootstrapIconSeed`,
+  `GraphBootstrapIconSeedResolver`, `GraphBootstrapOptions`,
+  `GraphBootstrapPredicateIconResolver`, `GraphBootstrapTypeIconResolver`,
+  and `GraphBootstrapCoreSchema`
 
-The implementation lives in focused internal modules such as `bootstrap.ts`,
-`snapshot.ts`, `icons.ts`, and `bootstrap-facts.ts`. Those files are package
-internals rather than additional public entrypoints.
+The package root is the only public entrypoint.
 
 ## What It Owns
 
@@ -22,6 +58,23 @@ internals rather than additional public entrypoints.
 - shared schema traversal and bootstrap materialization helpers
 - bootstrap-facing core-schema requirement helpers
 - pluggable icon seed and icon-resolution contracts
+
+## Important Semantics
+
+- `bootstrap(...)` is additive and idempotent for the resolved definition
+  slice. It fills in missing bootstrap-owned facts, but it does not retract or
+  rewrite facts that already exist in the store.
+- The package needs the built-in core node, predicate, type, enum, icon, and
+  cardinality contracts. By default it reads them from `definitions`; partial
+  bootstrap flows must pass `options.coreSchema`.
+- `options.availableDefinitions` widens the resolution set used for icon and
+  scalar lookup when the bootstrapped slice itself is incomplete.
+- Managed timestamps are only asserted for nodes bootstrap creates, and only
+  when the core node contract exposes `createdAt` and `updatedAt`.
+- `createBootstrappedSnapshot(...)` caches only when `options.timestamp` is
+  absent. It always returns a clone of the cached or freshly created snapshot.
+- Icon seeding is opt-in and domain-owned. Bootstrap will materialize icon
+  entities only when it can resolve an icon id to a seed record.
 
 ## What It Does Not Own
 
@@ -64,3 +117,5 @@ Run `turbo build --filter=@io/graph-bootstrap` from the repo root, or
 Run `turbo check --filter=@io/graph-bootstrap` from the repo root, or
 `bun run check` in this package, to lint, format, type-check, and execute the
 package-local Bun tests.
+
+The intended first-read contract artifact for agents is `./out/index.d.ts`.

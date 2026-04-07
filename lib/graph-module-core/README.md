@@ -3,6 +3,45 @@
 `@io/graph-module-core` is the canonical workspace package for the built-in
 `core:` namespace.
 
+## Read This First
+
+- Start with `./out/index.d.ts` for the compact public contract.
+- Start with `./src/index.ts` for the package-root public entrypoint.
+- Read `./src/core.ts` for the canonical `core:` namespace assembly.
+- Read `./src/query.ts` for the package-root core query-surface catalog and
+  module read-scope exports.
+- Read `./src/core/saved-query.ts` for durable saved-query and saved-view
+  records.
+- Read `./src/core/icon.ts`, `./src/icon/seed.ts`,
+  `./src/icon/resolve.ts`, and `./src/core/svg-sanitization.ts` for icon and
+  SVG ownership.
+- Read `./src/react-dom/index.ts` for the browser-default subpath.
+
+## Package Docs
+
+These are the canonical agent docs for package-specific behavior in
+`@io/graph-module-core`.
+
+- [`./doc/core-namespace.md`](./doc/core-namespace.md): built-in `core:`
+  namespace assembly, manifest ownership, and slice boundaries
+- [`./doc/saved-queries-and-catalogs.md`](./doc/saved-queries-and-catalogs.md):
+  durable saved-query or saved-view records plus the package-root core catalog
+  and read-scope contract
+- [`./doc/icons-and-svg.md`](./doc/icons-and-svg.md): `core:icon`,
+  `core:svg`, icon seeds, fallback resolution, SVG sanitization, and bootstrap
+  wiring
+- [`./doc/structured-values.md`](./doc/structured-values.md): duration, money,
+  percent, quantity, range, and rate families plus the shared structured-value
+  helpers
+- [`./doc/react-dom.md`](./doc/react-dom.md): the `react-dom` subpath,
+  browser field resolver defaults, and query-editor authoring support
+
+Cross-package architecture now lives in `../graph-module/doc/module-stack.md`,
+`../graph-module/doc/type-modules.md`, and
+`../graph-query/doc/query-stack.md`. Start here when the question is local to
+this package. Jump to the root graph docs when the question crosses package,
+runtime, or product boundaries.
+
 ## What It Owns
 
 - the canonical `core` namespace assembly
@@ -21,6 +60,30 @@
   `coreCatalogModuleReadScope`, `coreCatalogModuleReadScopeRegistration`
   exports for the built-in core catalog scope and saved-query library surfaces
 - core-specific browser defaults from `@io/graph-module-core/react-dom`
+
+## Important Semantics
+
+- `./src/core.ts` is the canonical `core:` namespace assembly. It applies the
+  generated id map over the built-in core slice definitions and is the place to
+  look when you need to know what currently ships in `core`.
+- `coreManifest` publishes definition-time runtime contributions only:
+  built-in schemas, the core query-surface catalog, and the core catalog
+  module read scope. Install lifecycle and activation state remain
+  authority-owned.
+- Durable `core:savedQuery`, `core:savedQueryParameter`, and `core:savedView`
+  records live here. Workflow and later modules may publish surfaces that those
+  durable saved queries bind to, but they do not take ownership of the durable
+  graph records themselves.
+- `core:icon` and `core:svg` are package-owned graph contracts. Bootstrap
+  consumes this package's icon seeds and default resolvers; it does not invent
+  a separate icon catalog.
+- The structured-value families in this package are semantic value contracts,
+  not formatting hints. If a field loses meaning without its unit, currency, or
+  bounds, it likely belongs on one of these types instead of plain `number` or
+  `string`.
+- The package root stays React-free. Browser defaults, DOM rendering, and the
+  shipped query-editor authoring model live on the
+  `@io/graph-module-core/react-dom` subpath.
 
 ## What It Depends On
 
@@ -119,3 +182,5 @@ Run `turbo build --filter=@io/graph-module-core` from the repo root, or
 Run `turbo check --filter=@io/graph-module-core` from the repo root, or
 `bun run check` in this package, to lint, format, type-check, and execute the
 package-local Bun tests.
+
+The intended first-read contract artifact for agents is `./out/index.d.ts`.

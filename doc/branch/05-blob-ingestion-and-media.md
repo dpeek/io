@@ -1,3 +1,9 @@
+---
+name: Blob, ingestion, and media branch
+description: "Canonical cross-package contract for Branch 5 blob storage, ingestion, provenance, and media work."
+last_updated: 2026-04-07
+---
+
 # Branch 5 Canonical: Blob, Ingestion, And Media
 
 ## Overview
@@ -78,12 +84,13 @@ view the extracted metadata or preview in the app.
 
 ### Source Anchors
 
-- `doc/03-target-platform-architecture.md`
-- `doc/05-recommended-architecture.md`
-- `doc/06-migration-plan.md`
-- `doc/09-vision-platform-architecture.md`
-- `doc/10-vision-product-model.md`
-- `doc/11-vision-execution-model.md`
+- `doc/index.md`
+- `doc/vision.md`
+- `lib/graph-kernel/doc/roadmap.md`
+- `lib/graph-module/doc/module-stack.md`
+- `lib/graph-authority/doc/roadmap.md`
+- `lib/app/doc/authority-storage.md`
+- `lib/app/doc/roadmap.md`
 
 The remainder of this document defines the canonical implementation contract
 for the blob tier, asynchronous ingestion pipeline, and first file, image, and
@@ -91,13 +98,13 @@ document module families.
 
 It is grounded in:
 
-- [`../03-target-platform-architecture.md`](../03-target-platform-architecture.md)
-- [`../05-recommended-architecture.md`](../05-recommended-architecture.md)
-- [`../06-migration-plan.md`](../06-migration-plan.md)
-- [`../09-vision-platform-architecture.md`](../09-vision-platform-architecture.md)
-- [`../10-vision-product-model.md`](../10-vision-product-model.md)
-- [`../11-vision-execution-model.md`](../11-vision-execution-model.md)
-- [`../../vision.md`](../../vision.md)
+- [`../vision.md`](../vision.md)
+- [`../index.md`](../index.md)
+- [`../../lib/graph-kernel/doc/roadmap.md`](../../lib/graph-kernel/doc/roadmap.md)
+- [`../../lib/graph-module/doc/module-stack.md`](../../lib/graph-module/doc/module-stack.md)
+- [`../../lib/graph-authority/doc/roadmap.md`](../../lib/graph-authority/doc/roadmap.md)
+- [`../../lib/app/doc/authority-storage.md`](../../lib/app/doc/authority-storage.md)
+- [`../../lib/app/doc/roadmap.md`](../../lib/app/doc/roadmap.md)
 
 ## 1. Purpose
 

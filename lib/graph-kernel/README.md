@@ -14,14 +14,17 @@
 These are the canonical agent docs for package-specific behavior in
 `@io/graph-kernel`.
 
+- [`./doc/runtime-stack.md`](./doc/runtime-stack.md): cross-package ownership for kernel, module authoring, bootstrap, authority seams, and runtime layering
+- [`./doc/roadmap.md`](./doc/roadmap.md): graph-engine roadmap, package-owned future docs, and promotion rules for shipped behavior
 - [`./doc/schema.md`](./doc/schema.md): schema authoring, field trees, authority metadata, and fallback policy lowering
 - [`./doc/identity.md`](./doc/identity.md): runtime ids, stable id maps, key extraction, and in-place id application
 - [`./doc/store.md`](./doc/store.md): append-oriented facts, snapshots, versioning, and predicate-slot subscriptions
 - [`./doc/write-transactions.md`](./doc/write-transactions.md): canonical write envelopes, snapshot diffs, and retained-history contracts
 
-Cross-package architecture still lives in `../../doc/graph/*.md`. Start here
-when the question is local to this package. Jump to the root graph docs when
-the question crosses package boundaries.
+Cross-package architecture now lives in `./doc/runtime-stack.md`,
+`./doc/roadmap.md`, and `../graph-sync/doc/sync-stack.md`. Start here when the
+question is local to this package. Jump to the broader package roadmaps when
+the question crosses package boundaries or future direction.
 
 ## What It Owns
 

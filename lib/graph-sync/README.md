@@ -6,8 +6,27 @@ cursored incremental delivery, and total sync sessions.
 ## Read This First
 
 - Start with `./out/index.d.ts` for the compact public contract.
+- Use the package-adjacent docs below for package-specific semantics.
 - Read `./src/index.ts` for the curated root export surface.
-- Read `./src/index.test.ts` for package-level usage examples.
+- Read one nearby `./src/*.test.ts` file for usage examples.
+
+## Package Docs
+
+These are the canonical agent docs for package-specific behavior in
+`@io/graph-sync`.
+
+- [`./doc/sync-stack.md`](./doc/sync-stack.md): cross-package ownership for scopes, payloads, authoritative replay, client reconcile, and retained projections
+- [`./doc/contracts.md`](./doc/contracts.md): sync scopes, payload shapes, diagnostics, and state contracts
+- [`./doc/cursor.md`](./doc/cursor.md): cursor parsing, ordering helpers, and fallback classification
+- [`./doc/transactions.md`](./doc/transactions.md): transaction preparation, canonicalization, snapshot materialization, and store apply behavior
+- [`./doc/total-sync-session.md`](./doc/total-sync-session.md): total-sync session state, activity tracking, pull behavior, and controller helpers
+- [`./doc/validation.md`](./doc/validation.md): payload normalization, incremental apply rules, and sync-specific validation results
+
+Cross-package architecture now lives in `./doc/sync-stack.md`,
+`../graph-query/doc/query-stack.md`, and
+`../graph-kernel/doc/runtime-stack.md`. Start here when the question is local
+to this package. Jump to the broader package docs when the question crosses
+package boundaries.
 
 ## What It Owns
 
@@ -69,3 +88,5 @@ Run `turbo check --filter=@io/graph-sync` from the repo root, or
 extracted sync-core Bun tests.
 
 The package `tsconfig.json` drives the normal `tsgo` build and emits `./out`.
+
+The intended first-read contract artifact for agents is `./out/index.d.ts`.

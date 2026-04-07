@@ -3,6 +3,51 @@
 `@io/graph-module-workflow` is the canonical workspace package for the built-in
 `workflow:` namespace.
 
+## Read This First
+
+- Start with `./out/index.d.ts` for the compact public contract.
+- Start with `./src/index.ts` for the package-root public entrypoint and
+  `workflowManifest`.
+- Read `./src/schema.ts` for the canonical workflow package export surface.
+- Read `./src/type.ts` for workflow-owned graph contracts and the browser-first
+  v1 operator model bridge.
+- Read `./src/command.ts`, `./src/session-append.ts`,
+  `./src/artifact-write.ts`, and `./src/decision-write.ts` for the command
+  surfaces.
+- Read `./src/projection.ts`, `./src/query.ts`, and
+  `./src/query-executors.ts` for review-scope projections, query surfaces, and
+  scope reads.
+- Read `./src/client/*` and `./src/server/mutation.ts` for the packaged read,
+  live-sync, session-feed, and mutation transport contracts.
+
+## Package Docs
+
+These are the canonical agent docs for package-specific behavior in
+`@io/graph-module-workflow`.
+
+- [`./doc/workflow-stack.md`](./doc/workflow-stack.md): cross-package ownership for the browser-first v1 workflow contract
+- [`./doc/workflow-model.md`](./doc/workflow-model.md): built-in `workflow:`
+  namespace assembly, schema ownership, and the browser-first v1 operator
+  model
+- [`./doc/workflow-commands.md`](./doc/workflow-commands.md): workflow
+  mutation, retained session append, artifact write, and decision write
+  commands
+- [`./doc/projections-and-query-surfaces.md`](./doc/projections-and-query-surfaces.md):
+  review-scope projections, dependency keys, invalidation, and built-in query
+  surfaces
+- [`./doc/reads-and-live-sync.md`](./doc/reads-and-live-sync.md): scope reads,
+  read-client request kinds, session-feed contract, and live refresh
+- [`./doc/env-vars.md`](./doc/env-vars.md): the `workflow:envVar` slice as a
+  consumer of the shared secret-handle contract
+- [`./doc/documents.md`](./doc/documents.md): workflow-owned document,
+  document-block, and document-placement slices
+
+Cross-package architecture now lives in `./doc/workflow-stack.md`,
+`../graph-module/doc/module-stack.md`, and
+`../graph-module/doc/secret-stack.md`. Start here when the question is local
+to this package. Jump to the root graph docs when the question crosses
+package, authority, or product boundaries.
+
 ## What It Owns
 
 - the canonical `workflow` namespace assembly
@@ -20,6 +65,32 @@
 - workflow-owned `env-var` and `document` slices
 - workflow-specific read clients, session-feed contracts, live wrappers, and
   mutation helpers via `./client` and `./server`
+
+## Important Semantics
+
+- `workflowManifest` publishes definition-time runtime contributions only:
+  built-in schemas, workflow query-surface catalogs, workflow commands, the
+  review module read scope, and the retained projections. Install lifecycle and
+  activation state stay authority-owned.
+- `type.ts` keeps the browser-first v1 operator model explicit even while the
+  graph still stores broader repository and retained-runtime records. The
+  package exports `workflowV1Branch`, `workflowV1Commit`, and
+  `workflowV1Session` as the current product contract.
+- Retained storage still uses `AgentSession` and `AgentSessionEvent`. The
+  explicit bridge to `WorkflowSession` semantics lives in `session-append.ts`,
+  which maps retained session kinds and runtime states onto the smaller v1
+  session contract.
+- `workflow:mutation` is the typed server-command write surface for project,
+  repository, branch, commit, and session changes. Mutable session writes stay
+  narrowed to `Plan`, `Review`, and `Implement` until native workflow-session
+  storage lands.
+- The package owns the workflow review read scope, projection dependency keys,
+  invalidation planning, and the built-in query-surface catalog for the branch
+  board, commit queue, and review scope.
+- The `client` and `server` subpaths publish transport and helper contracts,
+  not app route handlers or Durable Object composition.
+- `workflow:envVar` consumes the shared secret-handle authoring contract. It
+  does not define secret storage or authority runtime behavior itself.
 
 ## What It Depends On
 
@@ -84,3 +155,5 @@ Run `turbo build --filter=@io/graph-module-workflow` from the repo root, or
 Run `turbo check --filter=@io/graph-module-workflow` from the repo root, or
 `bun run check` in this package, to lint, format, type-check, and execute the
 package-local Bun tests.
+
+The intended first-read contract artifact for agents is `./out/index.d.ts`.

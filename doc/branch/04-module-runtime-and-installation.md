@@ -1,3 +1,9 @@
+---
+name: Module runtime and installation branch
+description: "Canonical cross-package contract for Branch 4 module manifests, installation, migration, and permission work."
+last_updated: 2026-04-07
+---
+
 # Branch 4 Canonical: Module Runtime And Installation
 
 ## Overview
@@ -80,12 +86,14 @@ up in the existing web shell.
 
 ### Source Anchors
 
-- `doc/03-target-platform-architecture.md`
-- `doc/05-recommended-architecture.md`
-- `doc/06-migration-plan.md`
-- `doc/08-vision-overview.md`
-- `doc/10-vision-product-model.md`
-- `doc/11-vision-execution-model.md`
+- `doc/index.md`
+- `doc/vision.md`
+- `lib/graph-module/doc/module-stack.md`
+- `lib/graph-module/doc/module-manifests.md`
+- `lib/graph-module/doc/authored-contracts.md`
+- `lib/graph-authority/doc/installed-modules.md`
+- `lib/graph-authority/doc/authority-stack.md`
+- `lib/app/doc/roadmap.md`
 
 The remainder of this document defines the implementation contract for
 installable modules in `io`.

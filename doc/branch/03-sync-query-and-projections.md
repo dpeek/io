@@ -1,3 +1,9 @@
+---
+name: Sync, query, and projections branch
+description: "Canonical cross-package contract for Branch 3 scoped sync, query, projection, and invalidation work."
+last_updated: 2026-04-07
+---
+
 # Branch 3 Canonical: Sync, Query, And Projections
 
 ## Overview
@@ -85,12 +91,14 @@ without full resync.
 
 ### Source Anchors
 
-- `doc/03-target-platform-architecture.md`
-- `doc/05-recommended-architecture.md`
-- `doc/06-migration-plan.md`
-- `doc/09-vision-platform-architecture.md`
-- `doc/10-vision-product-model.md`
-- `doc/11-vision-execution-model.md`
+- `doc/index.md`
+- `doc/vision.md`
+- `lib/graph-sync/doc/sync-stack.md`
+- `lib/graph-query/doc/query-stack.md`
+- `lib/graph-projection/doc/module-read-scopes.md`
+- `lib/graph-projection/doc/projections-and-retained-state.md`
+- `lib/graph-projection/doc/dependency-keys-and-invalidation.md`
+- `lib/graph-kernel/doc/roadmap.md`
 
 ## 1. Purpose
 
@@ -883,7 +891,7 @@ Current shipped workflow proof:
 
 ## 13. Recommended First Code Targets
 
-- `lib/graph-sync/src/contracts.ts` and `doc/graph/sync.md`:
+- `lib/graph-sync/src/contracts.ts` and `lib/graph-sync/doc/sync-stack.md`:
   extend `SyncScope`, completeness, and fallback semantics beyond whole-graph
 - `lib/graph-client/src/http.ts` and `lib/app/src/web/lib/server-routes.ts`: add
   scoped bootstrap and scoped incremental pull transport shapes

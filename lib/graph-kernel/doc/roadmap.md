@@ -1,225 +1,144 @@
-@@ -0,0 +1,223 @@
+---
+name: Graph kernel roadmap
+description: "Future-state direction for the graph engine plus the package-owned roadmap map."
+last_updated: 2026-04-07
+---
 
-# Kernel Initiative
+# Graph kernel roadmap
 
-## Status
+## Read this when
 
-- Status: active
-- Scope: post-shipment follow-on work for the Branch 1 kernel and authority
-  baseline
-- Supersedes as the active work doc: `doc/branch/01-graph-kernel-and-authority.md`
-- Promotion rule: when a slice ships, move the durable behavior into
-  current-state docs and package READMEs, then trim it out of this file
+- the question is about future graph-engine direction rather than shipped
+  package behavior
+- you need the top-level package boundary before deciding which package should
+  own new runtime or persistence work
+- you are looking for the package-owned roadmap docs after the retirement of
+  `doc/graph/*`
 
-## Purpose
+## What this roadmap owns
 
-The initial graph kernel and authoritative runtime baseline is already shipped.
-The repo now has extracted package boundaries for the kernel, bootstrap, sync,
-authority, module authoring, and built-in module surfaces.
+- the umbrella roadmap for the graph engine as a whole
+- the promotion rule for moving shipped behavior out of roadmap docs and into
+  owning package docs
+- links to the more focused package-owned roadmap docs
 
-This document is not a replacement roadmap for the whole platform. It is the
-active initiative doc for the next bounded phase of kernel work:
+Current-state behavior lives in owning package READMEs and `doc/*.md` files.
+This file is only for work that is still directional, provisional, or in
+active design.
 
-- keep the shipped kernel and authority contract explicit
-- harden the current single-graph authority proof where Branch 1 still owns it
-- reduce doc drift between package surfaces, current-state docs, and older
-  branch planning docs
-- avoid letting future branch work leak back into the kernel initiative
+## Documentation rule
 
-Current-state truth belongs in `doc/02-current-state-architecture.md`,
-topical docs under `doc/graph/`, and the relevant package READMEs. This file
-tracks only the work that is still active.
+- current-state docs live in the owning package
+- cross-package shipped behavior lives in the owning package's stack doc
+- future-state and proposal work lives in the owning package's
+  `doc/roadmap.md`
+- `doc/graph/*` is retired; do not recreate a second root-level graph doc tree
 
-## Current Baseline
+## Current baseline
 
 The shipped baseline now includes:
 
-- `@io/graph-kernel`: ids, store primitives, schema contracts, field-authority
-  metadata, and authoritative write envelopes
-- `@io/graph-bootstrap`: schema materialization and bootstrapped snapshots
-- `@io/graph-sync`: total and incremental sync contracts, cursor helpers, and
-  total-sync sessions
-- `@io/graph-authority`: authoritative write sessions, persisted authority
-  runtime, retained-history validation, replication filtering, and graph-owned
-  authority contracts
-- the current web authority proof in `lib/app/src/web/lib/`: SQLite-backed
-  Durable Object storage, thin Worker transport routes, and the current
-  consumer-owned command lowering seam
+- `@io/graph-kernel` for ids, store primitives, schema contracts,
+  field-authority metadata, and authoritative write envelopes
+- `@io/graph-module` for definition-time type, field, command, surface, and
+  manifest contracts
+- `@io/graph-module-core` and `@io/graph-module-workflow` for the current
+  built-in module packages
+- `@io/graph-bootstrap` for schema materialization and bootstrapped snapshots
+- `@io/graph-client` for typed refs, local CRUD, validation, and synced-client
+  composition
+- `@io/graph-sync` for total and incremental whole-graph sync contracts
+- `@io/graph-authority` for authoritative write sessions, persisted authority
+  runtime, retained-history validation, and graph-owned authority contracts
+- `@io/graph-projection` for module read scopes, projection metadata, retained
+  projection compatibility, and invalidation targeting
+- `@io/graph-react` for host-neutral React hooks, edit-session contracts, and
+  resolver primitives
+- `@io/graph-surface` for route-neutral record and collection surface runtime
+- the current web authority proof in `lib/app/src/web/lib/` for the SQLite
+  Durable Object adapter and thin consumer-owned transport or command seams
 
-That shipped baseline is the floor. This initiative should narrow and clarify
-it, not reopen the basic graph model.
+That shipped baseline is the floor. Roadmap work should clarify it, extend it,
+or layer on top of it. It should not silently reopen the basic graph model.
 
-## In Scope
+## Stable boundaries already in force
 
-- keep the stable package boundaries for:
-  - `@io/graph-kernel`
-  - `@io/graph-bootstrap`
-  - `@io/graph-sync`
-  - `@io/graph-authority`
-- keep the root `@io/app/graph` surface small and explicitly non-canonical
-- harden retained-history, restart recovery, and cursor fallback behavior in
-  the current SQLite Durable Object proof
-- keep the secret-handle versus authority-only plaintext boundary explicit
-- document exactly which authority and transport seams remain provisional
-- promote shipped stable behavior into current-state docs and package READMEs
-- remove stale descriptions from older roadmap docs when the code has moved on
+- keep the store schema-agnostic and stringly at the storage layer
+- keep key-based authoring and id-based runtime use distinct
+- keep reusable value rules with scalar or enum definitions
+- keep predicate-specific rules with field definitions
+- keep UI adapter concerns outside the runtime core
+- keep `@io/app/graph` as a small curated helper layer rather than another
+  canonical package surface
+- promote shipped behavior into owning package docs rather than leaving it in
+  roadmap prose
 
-## Out Of Scope
+## Active direction
 
-This initiative does not own:
+### Engine and persistence
 
-- principal-aware policy, auth session semantics, or sharing product behavior
-- Better Auth integration
-- scoped sync planners, query planning, retained projection routing, or live
-  scope registration
-- module installation, manifests, activation, or permission UX
-- blob/media ingestion and queue-backed derivatives
-- graph-native workflow productization above the lowering boundary
-- sharding, directory topology, federation, or cross-shard semantics
-- secret reveal flows, external KMS integration, or provider-specific secret
-  protocols
+- harden the current SQLite-backed authority proof without letting web adapter
+  details leak into shared package contracts
+- keep retained-history, startup recovery, cursor fallback, and baseline reset
+  behavior mechanically explicit
+- support additional persistence backends only when they can preserve the same
+  authority, replay, and recovery guarantees
+- keep semantic retained data and rebuildable derived state as separate
+  contracts
 
-Those belong in other initiative docs, even if they depend on this baseline.
+### Query, projection, and derived reads
 
-## Stable Contract Surface
+- grow richer query and indexing contracts above the current typed client
+- add computed or derived reads above predicate-slot subscriptions without
+  changing the kernel's reactive leaf
+- keep retained projection and scope contracts explicit about rebuild versus
+  source-of-truth ownership
 
-This initiative treats the following as stable unless there is an explicit
-contract change with doc and package updates in the same change:
+### UI and application model
 
-- graph ids, stable-id mapping, and schema bootstrap behavior
-- append-oriented fact and retraction semantics
-- `GraphWriteTransaction`, `AuthoritativeGraphWriteResult`, and write-scope
-  semantics
-- total and incremental whole-graph sync payloads and cursor fallback behavior
-- persisted-authority storage boundaries
-- secret-handle schema metadata and the secret-handle versus plaintext split
+- keep pushing graph-native authored metadata toward reusable record,
+  collection, command, and route surfaces
+- expand edit-session and validation contracts without moving route or browser
+  shell composition into the shared runtime packages
+- keep command execution authority-owned even when command-surface UX becomes
+  more generic
 
-The package README and root entrypoint for each owning package are the nearest
-contract source:
+### Transport and observability
 
-- `lib/graph-kernel/src/index.ts`
-- `lib/graph-bootstrap/src/index.ts`
-- `lib/graph-sync/src/index.ts`
-- `lib/graph-authority/src/index.ts`
+- keep HTTP, Worker, and other transports consumer-owned above the shared sync
+  contracts
+- improve observability around sync, validation, recovery, and baseline-reset
+  boundaries before ad hoc traces spread across packages
 
-## Provisional Seams
+## Package-owned roadmap docs
 
-The following remain intentionally provisional in this phase:
+- [`../../graph-client/doc/roadmap.md`](../../graph-client/doc/roadmap.md):
+  computed values and other client-side derived-read work above typed refs
+- [`../../graph-surface/doc/roadmap.md`](../../graph-surface/doc/roadmap.md):
+  graph-native surfaces, edit-session composition, and route-level UI direction
+- [`../../graph-authority/doc/roadmap.md`](../../graph-authority/doc/roadmap.md):
+  retained-record storage and restore semantics above the live authority graph
 
-- web-owned `/api/commands` envelopes, dispatch, and result payloads
-- the exact HTTP transport shape for `/api/sync`, `/api/tx`, and
-  `/api/commands`
-- Durable Object SQL table layout and adapter-specific retained-record tables
-- the cross-initiative meaning of optional secret-provider metadata such as
-  `provider`, `fingerprint`, and `externalKeyId`
-- web authority composition details that sit above the shared
-  persisted-authority and write-session contracts
+Use those docs for focused proposal work. Use this file when the question is
+about the whole engine or the boundary between those tracks.
 
-The rule here is simple: do not promote these seams to “stable” accidentally
-through convenience exports or broad prose.
+## Promotion workflow
 
-## Active Slices
+When roadmap work ships:
 
-### 1. Contract Promotion And Doc Cleanup
+1. update the owning package README and current-state topic docs
+2. update any affected stack docs such as `runtime-stack.md` or `sync-stack.md`
+3. trim the now-shipped detail out of the relevant `roadmap.md`
+4. keep only the still-open design or initiative material in roadmap docs
 
-Goal:
+## Source anchors
 
-- move shipped kernel behavior out of broad roadmap prose and into current-state
-  docs, topical docs, and package READMEs
-
-This slice includes:
-
-- updating `doc/02-current-state-architecture.md` when a stable kernel behavior
-  changes materially
-- keeping `doc/graph/runtime.md`, `doc/graph/storage.md`,
-  `doc/graph/sync.md`, and `doc/graph/secrets.md` aligned with package
-  boundaries
-- trimming or archiving stale sections from
-  `doc/branch/01-graph-kernel-and-authority.md`
-
-### 2. Web Authority Proof Hardening
-
-Goal:
-
-- keep the current web proof thin and honest about what it owns
-
-This slice includes:
-
-- keeping web-owned command envelopes clearly above the Branch 1 lowering
-  boundary
-- keeping Worker routes as transport adapters, not semantic owners
-- preventing app-level command growth from leaking into `@io/graph-authority`
-  as if it were a generic graph command system
-
-### 3. Durable Authority Hygiene
-
-Goal:
-
-- keep restart recovery and retained-history mechanics mechanically reliable in
-  the SQLite proof
-
-This slice includes:
-
-- retention policy normalization and diagnostics
-- retained-history continuity checks and reset-baseline behavior
-- explicit secret-side lifecycle semantics in the current adapter
-- clear adapter ownership for retained semantic rows that commit alongside graph
-  writes
-
-### 4. Root Surface Discipline
-
-Goal:
-
-- keep `@io/app/graph` as a curated helper layer rather than another kitchen
-  sink
-
-This slice includes:
-
-- preferring owning package imports in internal code
-- keeping graph-owned leftovers on the root surface intentionally small
-- avoiding new stable contract growth through the umbrella package
-
-## Exit Criteria
-
-This initiative is complete when:
-
-- current-state docs describe the shipped kernel and authority baseline without
-  relying on the old branch doc as the primary source
-- package READMEs are the nearest public contract docs for the stable package
-  surfaces
-- remaining provisional seams are explicitly named and stay outside the stable
-  contract surface
-- the current web authority proof is documented as an adapter/composition layer
-  rather than the source of graph semantics
-- the old broad Branch 1 doc can be archived or reduced to historical context
-
-## Update Workflow
-
-Use this file only for active kernel work.
-
-When a slice ships:
-
-1. update the owning package README and entrypoint comments
-2. update current-state docs and any affected topical docs
-3. remove or compress the shipped detail from this file
-4. leave only the still-active work here
-
-When no active kernel-only work remains:
-
-- archive this file or reduce it to a short completion note
-- stop carrying future-branch design work in the kernel initiative doc
-
-## Source Anchors
-
-- `doc/02-current-state-architecture.md`
-- `doc/graph/runtime.md`
-- `doc/graph/storage.md`
-- `doc/graph/sync.md`
-- `doc/graph/secrets.md`
-- `lib/graph-kernel/src/index.ts`
-- `lib/graph-bootstrap/src/index.ts`
-- `lib/graph-sync/src/index.ts`
-- `lib/graph-authority/src/index.ts`
-- `lib/app/src/web/lib/authority.ts`
-- `lib/app/src/web/lib/graph-authority-sql-startup.ts`
-- `lib/app/src/web/lib/graph-authority-sql-storage.ts`
+- `../README.md`
+- `./runtime-stack.md`
+- `../../graph-client/doc/roadmap.md`
+- `../../graph-surface/doc/roadmap.md`
+- `../../graph-authority/doc/roadmap.md`
+- `../../app/src/graph/index.ts`
+- `../../app/src/web/lib/authority.ts`
+- `../../app/src/web/lib/graph-authority-sql-startup.ts`
+- `../../app/src/web/lib/graph-authority-sql-storage.ts`

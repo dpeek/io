@@ -1,3 +1,9 @@
+---
+name: Identity, policy, and sharing branch
+description: "Canonical cross-package contract for Branch 2 identity, authorization, capability, and sharing work."
+last_updated: 2026-04-07
+---
+
 # Identity, Policy, And Sharing Canonical Contract
 
 ## Overview
@@ -83,12 +89,14 @@ visible predicate set changes according to policy.
 
 ### Source Anchors
 
-- `doc/03-target-platform-architecture.md`
-- `doc/05-recommended-architecture.md`
-- `doc/08-vision-overview.md`
-- `doc/09-vision-platform-architecture.md`
-- `doc/10-vision-product-model.md`
-- `doc/11-vision-execution-model.md`
+- `doc/index.md`
+- `doc/vision.md`
+- `lib/graph-authority/doc/authority-stack.md`
+- `lib/graph-authority/doc/authorization.md`
+- `lib/graph-authority/doc/replication.md`
+- `lib/app/doc/auth-store.md`
+- `lib/app/doc/roadmap.md`
+- `lib/graph-module/doc/module-stack.md`
 
 The remainder of this document is the implementation contract for
 identity, authorization policy, capability grants, and first-cut sharing in the
@@ -597,8 +605,8 @@ Contract rules:
 - `authorizeCommand(...)` uses command policy plus predicate policy; either may
   deny
 - `ModulePermissionRequest` is published once from
-  `lib/app/src/graph/runtime/contracts.ts`; Branch 2 does not define a second install
-  request shape
+  `lib/graph-authority/src/contracts.ts`; Branch 2 does not define a second
+  install request shape
 - `ModulePermissionRequest.key` is the stable permission identifier used for
   install plans, durable grants, approval UI state, and revocation
 - approval lowers every `ModulePermissionRequest` into the same grant key space
@@ -1044,12 +1052,12 @@ Important failure modes:
 
 ## 13. Recommended First Code Targets
 
-- `lib/app/src/graph/runtime/schema.ts`: keep `GraphFieldAuthority` stable and add the
-  principal-aware policy descriptor surface beside it rather than inside route
-  code
-- `lib/app/src/graph/runtime/contracts.ts`: publish the canonical `AdmissionPolicy`
-  contract beside the existing auth and grant vocabulary
-- `lib/app/src/graph/runtime/contracts.ts`: publish the canonical
+- `lib/graph-kernel/src/schema.ts`: keep `GraphFieldAuthority` stable and add
+  the principal-aware policy descriptor surface beside it rather than inside
+  route code
+- `lib/graph-authority/src/contracts.ts`: publish the canonical
+  `AdmissionPolicy` contract beside the existing auth and grant vocabulary
+- `lib/graph-authority/src/contracts.ts`: publish the canonical
   `ModulePermissionRequest` plus the command-policy vocabulary it lowers
   through
 - `lib/graph-authority/src/replication.ts`: add principal-aware filtering

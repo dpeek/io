@@ -7,11 +7,30 @@ transport helpers.
 ## Read This First
 
 - Start with `./out/index.d.ts` for the compact public contract.
+- Use the package-adjacent docs below for package-specific semantics.
 - Read `./src/index.ts` for the curated root export surface.
 - Internal package modules now follow role names such as `graph.ts`, `sync.ts`,
   `http.ts`, `core.ts`, `refs.ts`, and `validation.ts`.
-- Read `./src/http-sync-request.test.ts` and `./src/serialized-query.test.ts` for
-  focused transport examples.
+- Read one nearby `./src/*.test.ts` file for usage examples.
+
+## Package Docs
+
+These are the canonical agent docs for package-specific behavior in
+`@io/graph-client`.
+
+- [`./doc/validation-stack.md`](./doc/validation-stack.md): cross-package ownership for local validation, authoritative apply validation, and sync-boundary validation
+- [`./doc/typed-client.md`](./doc/typed-client.md): typed type handles, local CRUD flows, and query projection
+- [`./doc/refs.md`](./doc/refs.md): entity refs, predicate refs, field-group traversal, and mutation ergonomics
+- [`./doc/validation.md`](./doc/validation.md): local validation lifecycle, runtime invariants, and result surfaces
+- [`./doc/synced-client.md`](./doc/synced-client.md): pending-write replay, flush and sync semantics, and status widening
+- [`./doc/transport.md`](./doc/transport.md): HTTP sync requests, HTTP graph client wiring, and serialized-query transport helpers
+- [`./doc/roadmap.md`](./doc/roadmap.md): future computed-value and derived-read direction above typed refs
+
+Cross-package architecture now lives in `./doc/validation-stack.md`,
+`../graph-query/doc/query-stack.md`, `../graph-sync/doc/sync-stack.md`, and
+`../graph-surface/doc/ui-stack.md`. Start here when the question is local to
+this package. Jump to the broader package roadmaps when the question crosses
+package boundaries or future direction.
 
 ## What It Owns
 
@@ -73,3 +92,5 @@ package-local Bun tests.
 
 Cross-package client/bootstrap coverage lives in `@io/graph-integration` so the
 package can stay on public entrypoints and local fixtures only.
+
+The intended first-read contract artifact for agents is `./out/index.d.ts`.

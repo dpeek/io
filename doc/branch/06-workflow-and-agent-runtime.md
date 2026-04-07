@@ -1,3 +1,9 @@
+---
+name: Workflow and agent runtime branch
+description: "Canonical cross-package contract for Branch 6 browser-first workflow and agent runtime work."
+last_updated: 2026-04-07
+---
+
 # Branch 6 Canonical: Workflow And Agent Runtime
 
 ## Overview
@@ -112,10 +118,11 @@ from the browser.
 
 ### Source Anchors
 
-- `doc/agent/browser-first-workflow-v1-plan.md`
-- `doc/agent/browser.md`
-- `doc/graph/workflow.md`
-- `doc/tui/index.md`
+- `lib/app/doc/workflow-web.md`
+- `lib/app/doc/roadmap.md`
+- `lib/cli/doc/roadmap.md`
+- `lib/graph-module-workflow/doc/workflow-stack.md`
+- `lib/cli/doc/tui.md`
 
 ## 1. Purpose
 

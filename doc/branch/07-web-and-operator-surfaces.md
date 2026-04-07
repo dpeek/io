@@ -1,3 +1,9 @@
+---
+name: Web and operator surfaces branch
+description: "Canonical cross-package contract for Branch 7 browser and operator surface work."
+last_updated: 2026-04-07
+---
+
 # Branch 7 Canonical: Web And Operator Surfaces
 
 ## Overview
@@ -78,12 +84,13 @@ and watch the scoped sync and explorer update coherently.
 
 ### Source Anchors
 
-- `doc/02-current-state-architecture.md`
-- `doc/03-target-platform-architecture.md`
-- `doc/05-recommended-architecture.md`
-- `doc/08-vision-overview.md`
-- `doc/10-vision-product-model.md`
-- `doc/11-vision-execution-model.md`
+- `doc/index.md`
+- `doc/vision.md`
+- `lib/app/doc/web-overview.md`
+- `lib/app/doc/workflow-web.md`
+- `lib/app/doc/roadmap.md`
+- `lib/graph-surface/doc/ui-stack.md`
+- `lib/cli/doc/tui.md`
 
 ## 1. Purpose
 
@@ -164,8 +171,8 @@ Branch 7 owns the surface model that sits between upstream platform contracts
 and concrete UI screens.
 
 Inference: the bootstrap and module-host interfaces below are still partly
-provisional. `lib/app/src/graph/runtime/contracts.ts` now publishes the stable Branch 2
-minimum for identity bootstrap:
+provisional. `lib/graph-authority/src/contracts.ts` now publishes the stable
+Branch 2 minimum for identity bootstrap:
 
 - `WebPrincipalSession`
 - `WebPrincipalSummary`
@@ -458,7 +465,7 @@ Contract rules:
 ### `WebPrincipalBootstrapPayload`
 
 The stable current-proof bootstrap contract is the minimal identity payload
-published from `lib/app/src/graph/runtime/contracts.ts`.
+published from `lib/graph-authority/src/contracts.ts`.
 
 Canonical shape:
 

@@ -6,9 +6,29 @@ authoritative graph behavior.
 ## Read This First
 
 - Start with `./out/index.d.ts` for the compact public contract.
+- Use the package-adjacent docs below for package-specific semantics.
 - Read `./src/index.ts` for the curated package surface.
-- The package owns write sessions, persisted authority runtime, authority-side
-  sync filtering, validation, and graph-owned authorization/policy contracts.
+- Read `./src/index.test.ts`, `./src/authorization.test.ts`, or
+  `./src/contracts.test.ts` for focused usage examples.
+
+## Package Docs
+
+These are the canonical agent docs for package-specific behavior in
+`@io/graph-authority`.
+
+- [`./doc/authority-stack.md`](./doc/authority-stack.md): cross-package ownership for predicate visibility, command-lowering, authorization, and authoritative execution
+- [`./doc/write-session.md`](./doc/write-session.md): authoritative apply flow, idempotent replay, retained-history windows, and total or incremental sync seams
+- [`./doc/replication.md`](./doc/replication.md): transport visibility filtering, authority-owned read filtering, and write-scope enforcement
+- [`./doc/persistence.md`](./doc/persistence.md): persisted authority runtime, startup recovery, durable commit boundaries, and the Node JSON adapter
+- [`./doc/authorization.md`](./doc/authorization.md): request-bound policy evaluation, admission, share, and browser bootstrap contracts
+- [`./doc/installed-modules.md`](./doc/installed-modules.md): installed-module ledger validation and lifecycle planning
+- [`./doc/roadmap.md`](./doc/roadmap.md): retained-record storage and durable restore direction above the live authority graph
+
+Cross-package architecture now lives in `./doc/authority-stack.md`,
+`../graph-sync/doc/sync-stack.md`, `../graph-module/doc/module-stack.md`, and
+`../graph-module/doc/secret-stack.md`. Start here when the question is local to
+this package. Jump to the broader package roadmaps when the question crosses
+package boundaries or future direction.
 
 ## What It Owns
 
@@ -28,6 +48,15 @@ authoritative graph behavior.
 - client runtime and HTTP/query helpers from `@io/graph-client`
 - Durable Object wiring, SQLite layouts, route handlers, or request-session bridges
 - workflow-specific web authority logic, live-scope routing, or React/web UI
+
+## Common Workflows
+
+- Build an in-memory authority runtime: `createAuthoritativeGraphWriteSession`
+- Build a full replicated snapshot: `createAuthoritativeTotalSyncPayload`
+- Build a durable authority runtime: `createPersistedAuthoritativeGraph`
+- Validate external authority input: `validateAuthoritativeGraphWriteTransaction`, `validateAuthoritativeGraphWriteResult`, `validateAuthoritativeTotalSyncPayload`
+- Evaluate graph-owned policy: `authorizeRead`, `authorizeWrite`, `authorizeCommand`
+- Plan installed-module lifecycle: `validateInstalledModuleCompatibility`, `planInstalledModuleLifecycle`
 
 ## Important Semantics
 
@@ -75,31 +104,6 @@ Run `turbo build --filter=@io/graph-authority` from the repo root, or
 Run `turbo check --filter=@io/graph-authority` from the repo root, or
 `bun run check` in this package, to lint, format, type-check, and execute the
 package-local Bun tests.
-
-## Installed Module Ledger
-
-`@io/graph-authority` now owns the authoritative installed-module ledger
-contract used by later install planning and runtime rebuild work.
-
-- `InstalledModuleRecord` captures module identity, version, digest, source
-  linkage, compatibility metadata, granted permission keys, and timestamps.
-- `InstalledModuleTarget` and `InstalledModuleRuntimeExpectation` are the
-  planner-facing inputs derived from one manifest plus one concrete bundle
-  digest and the current runtime contract.
-- `installState` records whether the ledger row is `installing`, `installed`,
-  `uninstalling`, or `failed`.
-- `activation` separately records the desired activation target plus the
-  observed activation status so a module can stay installed while `inactive` or
-  activation-`failed`.
-- `defineInstalledModuleRecord(...)` validates and freezes that ledger row so
-  browser-safe consumers can fail closed on malformed install state.
-- `validateInstalledModuleCompatibility(...)` compares a planner target against
-  the installed row and current runtime expectations, then reports whether the
-  target is a fresh install, the current bundle, or an explicit replacement.
-- `planInstalledModuleLifecycle(...)` turns that compatibility result into one
-  of four contract-level plans: `install`, `activate`, `deactivate`, or
-  `update`. In-flight or incomplete rows fail closed with recovery guidance
-  instead of being guessed through.
 
 ## Package Boundary
 

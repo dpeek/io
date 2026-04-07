@@ -3,6 +3,17 @@
 `@io/app` now owns the remaining application surfaces after the operator runtime
 was extracted into `@op/cli`.
 
+## Docs
+
+- `./doc/web-overview.md`: current app-owned browser and Worker runtime map
+- `./doc/workflow-web.md`: current browser workflow surface and browser-agent
+  boundary
+- `./doc/auth-store.md`: Better Auth store, Worker runtime, and migration path
+- `./doc/local-bootstrap.md`: localhost-only instant onboarding contract
+- `./doc/authority-storage.md`: SQLite-backed Durable Object authority storage,
+  retained rows, and secret side-storage
+- `./doc/roadmap.md`: future auth and web-runtime direction
+
 ## What It Owns
 
 - the curated `@io/app/graph` helper surface and local graph fixtures

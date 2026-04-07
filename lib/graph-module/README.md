@@ -5,6 +5,7 @@ schemas.
 
 ## Read This First
 
+- Start with `./out/index.d.ts` for the compact public contract.
 - Start with `./src/index.ts` for the curated public entrypoint.
 - Read `./src/type.ts` for the `TypeModule` contract and the scalar/enum
   field-authoring helpers.
@@ -13,6 +14,23 @@ schemas.
   record-surface, collection-surface, and workflow descriptors.
 - Read `./src/manifest.ts` for the shared built-in/local module manifest
   contract, source metadata, and declared runtime contribution vocabulary.
+
+## Package Docs
+
+These are the canonical agent docs for package-specific behavior in
+`@io/graph-module`.
+
+- [`./doc/module-stack.md`](./doc/module-stack.md): cross-package ownership for type-module authoring, built-in modules, manifests, and installed-module lifecycle
+- [`./doc/secret-stack.md`](./doc/secret-stack.md): cross-package ownership for secret handles, secret-field authoring, authority writes, and web-side storage
+- [`./doc/type-modules.md`](./doc/type-modules.md): type-module metadata, filter contracts, field overrides, and packaged defaults
+- [`./doc/reference-and-secret-fields.md`](./doc/reference-and-secret-fields.md): reference-field helpers, existing-entity metadata, and shared secret-field authoring
+- [`./doc/authored-contracts.md`](./doc/authored-contracts.md): object-view, record-surface, collection-surface, command-surface, workflow, and command descriptors
+- [`./doc/module-manifests.md`](./doc/module-manifests.md): shared built-in or local module manifest contract and fail-closed runtime contribution validation
+
+Cross-package architecture now lives in `./doc/module-stack.md`,
+`./doc/secret-stack.md`, and `../graph-surface/doc/roadmap.md`. Start here
+when the question is local to this package. Jump to the broader package docs
+when the question crosses package or runtime boundaries.
 
 ## Naming
 
@@ -42,6 +60,24 @@ schemas.
 - `GraphCommandSpec` owns execution mode, policy, and I/O shape only. Human
   invocation metadata such as dialog or sheet presentation belongs on
   `GraphCommandSurfaceSpec`.
+
+## Important Semantics
+
+- This package is definition-time only. It authors data contracts and helpers;
+  it does not own runtime installation, execution, or host composition.
+- `TypeModule.field(...)` composes field-local metadata overrides with the
+  module defaults and narrows filter operators against the module filter
+  contract.
+- `defineReferenceField(...)` is a freeze-only authoring helper. It does not
+  add runtime behavior.
+- `defineSecretField(...)` always produces a concrete `authority.secret`
+  payload and defaults to `visibility: "replicated"` plus
+  `write: "server-command"` unless the caller narrows those values.
+- `GraphCommandSpec` owns execution and policy. UI invocation semantics belong
+  on `GraphCommandSurfaceSpec`.
+- `defineGraphModuleManifest(...)` fails closed on blank metadata, duplicate
+  contribution identities, empty runtime blocks, and module-id drift across
+  query-surface catalogs or read scopes.
 
 ## What It Owns
 
@@ -144,3 +180,5 @@ in this package, to emit `./out`.
 Run `turbo check --filter=@io/graph-module` from the repo root, or
 `bun run check` in this package, to lint, format, type-check, and execute the
 package-local Bun tests.
+
+The intended first-read contract artifact for agents is `./out/index.d.ts`.

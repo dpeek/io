@@ -1,41 +1,112 @@
-# IO Overview
+---
+name: IO docs index
+description: "Repo entrypoint for root docs, package-owned current-state docs, and branch specs."
+last_updated: 2026-04-07
+---
 
-## Purpose
+# IO docs index
+
+## Read this when
+
+- you need the repo-level doc entrypoint before changing code
+- you need to know whether a topic belongs in root docs or a package-local doc
+- you need the long-form vision or the cross-package branch contracts
+
+## Documentation rules
+
+- current-state docs live with the owning package under `lib/*/doc/*.md`
+- package future work lives in the owning package `lib/*/doc/roadmap.md`
+- root `doc/branch/*.md` owns cross-package workstream contracts and sequencing
+- root `doc/vision.md` owns the repo-wide product vision
+- the older numbered root synthesis docs are retired; do not recreate them
+
+## Repo overview
 
 `io` is a Bun workspaces repository coordinated by Turborepo. The repo root
-owns shared project configuration, entrypoints, and docs, while the workspace
-packages under `lib/*` carry the operator runtime, graph engine, web surfaces,
-shared browser primitives, and shared utilities.
+owns shared project configuration, entrypoints, and root docs, while packages
+under `lib/*` own the operator runtime, graph engine, web surfaces, shared
+browser primitives, and shared utilities.
 
-The operator/runtime implementation now lives in `@op/cli`. `@io/app` stays
-focused on the curated graph helper surface plus app-specific web and Worker
-composition. `@io/web` owns reusable browser primitives, and `@io/utils` owns
-shared env/log/process helpers.
+The operator runtime now lives in `@op/cli`. `@io/app` stays focused on the
+curated graph helper surface plus app-specific web and Worker composition.
+`@io/web` owns reusable browser primitives. `@io/utils` owns shared env, log,
+and process helpers.
 
-## Docs
+## Root docs
 
-- `../io.md`
-- `../vision.md`
-- `./agent/index.md`
-- `./agent/workflow.md`
-- `./agent/backlog.md`
-- `./agent/review.md`
-- `./agent/cli.md`
-- `./agent/tui.md`
-- `./agent/browser-first-workflow-v1-plan.md`
-- `./graph/index.md`
-- `./graph/surfaces-and-editing.md`
-- `./integration.md`
-- `./graph/computed.md`
-- `./graph/mcp.md`
-- `./graph/package-formalization.md`
-- `./graph/query.md`
-- `./graph/storage.md`
-- `./graph/retained-records.md`
-- `./tui/index.md`
-- `./README.md`
-- `./branch/README.md`
-- `./web/index.md`
+- `../io.md`: repo-local execution guidance included in prompt context
+- `./vision.md`: long-form product vision and platform thesis
+- `./agent/backlog.md`: stream, feature, and task planning plus backlog-editing contract
+- `./agent/review.md`: post-execution review contract and follow-up issue creation rules
+- `./agent/document.md`: doc-maintenance prompt contract
+- `./agent/simplify.md`: cleanup prompt contract
+
+## Branch model
+
+Here, "branch" means delivery branch or workstream, not a Git branch.
+
+The current dependency chain is:
+
+1. Branch 1 defines the durable graph and authority kernel
+2. Branch 2 defines identity, policy, and sharing rules on top of that graph
+3. Branch 3 defines query, sync, projection, and invalidation contracts
+4. Branches 4, 5, and 6 build product capabilities on those contracts
+5. Branch 7 turns the contracts and capabilities into product surfaces
+
+## Branch specs
+
+- `./branch/01-graph-kernel-and-authority.md`: Branch 1 kernel, persistence,
+  sync, and authority contracts
+- `./branch/02-identity-policy-and-sharing.md`: Branch 2 identity, policy,
+  capability, and sharing contracts
+- `./branch/03-sync-query-and-projections.md`: Branch 3 scoped sync, query,
+  projection, and invalidation contracts
+- `./branch/04-module-runtime-and-installation.md`: Branch 4 module manifests,
+  installation, migration, and permission contracts
+- `./branch/05-blob-ingestion-and-media.md`: Branch 5 blob, ingestion,
+  provenance, and media contracts
+- `./branch/06-workflow-and-agent-runtime.md`: Branch 6 workflow and agent
+  runtime contracts
+- `./branch/07-web-and-operator-surfaces.md`: Branch 7 browser and operator
+  surface contracts
+
+## Package docs
+
+- `../lib/cli/doc/agent-runtime.md`: issue-driven automation runtime,
+  scheduler, workspace lifecycle, and retained runtime behavior
+- `../lib/cli/doc/agent-workflow.md`: workflow loading, issue routing, context
+  assembly, and module-scoped doc selection
+- `../lib/cli/doc/command-surfaces.md`: current `io agent ...`,
+  `io browser-agent ...`, `io mcp ...`, and `io tui ...` command groups
+- `../lib/cli/doc/legacy-agent-tui.md`: retained operator-facing session
+  monitor for `io agent tui ...`
+- `../lib/cli/doc/graph-mcp.md`: current graph MCP read surface and opt-in
+  write gate
+- `../lib/cli/doc/roadmap.md`: future CLI and graph MCP direction
+- `../lib/cli/doc/tui.md`: terminal workflow product surface and the boundary
+  against the legacy agent TUI
+- `../lib/graph-kernel/doc/runtime-stack.md`: graph workspace layout, current
+  package boundaries, and the package-owned documentation rule
+- `../lib/graph-kernel/doc/roadmap.md`: graph-engine roadmap plus the package
+  map for future-state docs
+- `../lib/graph-client/doc/roadmap.md`: computed-value and derived-read
+  direction above typed refs
+- `../lib/graph-surface/doc/roadmap.md`: proposed graph-native record and
+  collection surfaces, edit-session semantics, and route-level UI direction
+- `../lib/graph-authority/doc/roadmap.md`: retained-record boundary and
+  durable restore direction above the live authority graph
+- `../lib/app/doc/web-overview.md`: current app-owned browser and Worker runtime
+  map
+- `../lib/app/doc/workflow-web.md`: current browser workflow surface and
+  browser-agent boundary
+- `../lib/app/doc/auth-store.md`: current Better Auth store and migration path
+- `../lib/app/doc/local-bootstrap.md`: current localhost-only instant-onboarding
+  contract
+- `../lib/app/doc/authority-storage.md`: current SQLite-backed Durable Object
+  authority storage shape, raw-SQL decision, retained rows, and secret
+  side-storage
+- `../lib/app/doc/roadmap.md`: future Better Auth and browser workflow
+  direction
 
 ## Layout
 
@@ -43,62 +114,14 @@ shared env/log/process helpers.
   root Turbo web-dev entrypoint, and app auth-migration proxy scripts
 - `../turbo.json`: repo task graph for `build`, `check`, `clean`, and `dev`
 - `../.oxlintrc.json`, `../.oxfmtrc.json`: repo-wide lint and formatting config
-- `../io.ts`: repo config, context registry, profiles, modules, routing
-- `../io.md`: repo-local execution guidance included in prompt context
-- `./agent/workflow.md`: workflow loading, issue routing, context assembly, and module-scoped doc selection
-- `./agent/backlog.md`: stream, feature, and task planning plus backlog-editing contract
-- `./agent/review.md`: post-execution review contract and follow-up issue creation rules
-- `./agent/cli.md`: current `io agent ...` and `io mcp ...` command surface
-- `./agent/index.md`: agent runtime overview, scheduler layout, and operator surfaces
-- `./agent/tui.md`: operator-facing TUI layout and retained runtime display
-- `./agent/browser-first-workflow-v1-plan.md`: narrowed browser-first workflow
-  milestone plan for the first browser-launched session
-- `./graph/index.md`: graph workspace layout including the root `@io/app/graph`
-  surface, extracted `lib/graph-*` packages, adapters, taxonomies, and
-  focused subdocs
-- `./graph/surfaces-and-editing.md`: proposed graph-native record and
-  collection surfaces, edit-session semantics, and the command UI boundary
-- `./integration.md`: plan for consolidating graph integration coverage into a
-  dedicated downstream `@io/graph-integration` package
-- `./graph/computed.md`: proposed computed-value layer for lazy, memoized, read-only graph derivations
-- `./graph/mcp.md`: current graph MCP read surface, opt-in writes, and the remaining command roadmap
-- `./graph/package-formalization.md`: comprehensive source-to-package map,
-  target public APIs, naming rules, and extraction plan for semantic graph and
-  collaborative UI primitives
-- `./graph/query.md`: serialized query, saved-query, saved-view, query-container,
-  and live-refresh model
-- `./graph/storage.md`: current SQLite-backed Durable Object authority storage shape, raw-SQL decision,
-  retained-history model, and secret side-storage split
-- `./graph/retained-records.md`: proposed retained-record boundary for data
-  that should survive graph refactors, recovery, and live-graph rebuilds
-- `./tui/index.md`: terminal workflow product surface and the boundary against legacy agent TUI
-- `./README.md`: architecture and vision doc map for the numbered architecture
-  and branch docs
-- `./branch/README.md`: platform branches as parallel workstreams with canonical specs where available
-- `./index.md`: repo map and context entrypoint
+- `../io.ts`: repo config, context registry, profiles, modules, and routing
 - `../lib/app/`: `@io/app`, the app package for graph helper exports plus the
   browser Worker, routes, and app-owned web composition
-- `../lib/app/auth.ts`, `../lib/app/vite.config.ts`,
-  `../lib/app/wrangler.jsonc`, `../lib/app/index.html`: app-local auth, Vite,
-  Worker, and SPA entry config
-- `../lib/app/migrations/auth-store/`: committed Better Auth D1 migrations for
-  the app-owned auth store
 - `../lib/cli/`: `@op/cli`, the operator shell package for command dispatch,
-  task execution, agent/browser-agent runtimes, MCP, TUI, and runtime config
+  task execution, agent and browser-agent runtimes, MCP, TUI, and runtime config
+- `../lib/graph-*/`: extracted graph kernel, bootstrap, client, authority,
+  sync, projection, query, workflow, and surface packages
 - `../lib/web/`: `@io/web`, the shared browser primitive package for reusable
   controls, markdown, Monaco, and source-preview chrome
 - `../lib/utils/`: `@io/utils`, the shared runtime helper package for env,
   logging, and process helpers
-- `../lib/cli/src/agent/`: scheduler, context assembly, tracker integration, retained runtime,
-  and the operator TUI
-- `../lib/cli/src/tui/`: graph-backed terminal workflow product surface
-- `../lib/cli/src/lib/config.ts`: runtime config loading, normalization, and typed config surface
-- `../lib/utils/src/`: extracted generic process, env, and logging helpers
-- `../lib/app/src/graph/`: root `@io/app/graph` wrappers, local schema and module
-  authoring, graph adapters, and graph-owned icon helpers
-- `../lib/graph-*/`: extracted graph kernel, bootstrap, client, authority,
-  sync, and projection packages
-- `../lib/app/src/web/`: worker-backed browser surfaces and the SQLite Durable Object
-  authority path that backs the web shell
-- `../lib/web/src/`: shared browser primitives, editor shells, and styling
-- `../lib/cli/src/cli/`: operator command surface

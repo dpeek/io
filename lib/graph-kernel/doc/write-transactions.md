@@ -16,7 +16,7 @@ last_updated: 2026-04-02
 
 - `../src/tx.ts`: write-envelope types and helpers
 - `../src/tx.test.ts`: canonicalization, diffing, clone helpers, and retained-history rules
-- `../../doc/graph/sync.md`: cross-package ownership boundary with `@io/graph-sync` and `@io/graph-authority`
+- `../../graph-sync/doc/sync-stack.md`: cross-package ownership boundary with `@io/graph-sync` and `@io/graph-authority`
 
 ## What the kernel owns
 

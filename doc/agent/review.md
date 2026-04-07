@@ -20,7 +20,7 @@ What to read first:
 - the current task issue
 - the parent feature and stream issues
 - linked docs from the task, feature, and stream
-- [Workflow And Context](./workflow.md)
+- [CLI agent workflow](../../lib/cli/doc/agent-workflow.md)
 - [Backlog Workflow](./backlog.md)
 - repo docs directly relevant to the changed surface
 
