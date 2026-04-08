@@ -87,7 +87,6 @@ export function InspectorShell({
 
 export function InspectorFieldSection({
   chrome = true,
-  columns = 2,
   description,
   emptyMessage = "No shared fields are available for this selection.",
   hideMissingStatus = false,
@@ -99,7 +98,6 @@ export function InspectorFieldSection({
   validationMessagesByPath,
 }: {
   chrome?: boolean;
-  columns?: 1 | 2;
   description?: string;
   emptyMessage?: string;
   hideMissingStatus?: boolean;
@@ -115,7 +113,6 @@ export function InspectorFieldSection({
       ...(row.description ? { description: row.description } : {}),
       label: row.title ?? row.pathLabel,
       path: row.pathLabel,
-      span: 2,
       value: row.value,
     } satisfies RecordSurfaceFieldBinding,
     row,
@@ -124,7 +121,6 @@ export function InspectorFieldSection({
   return (
     <RecordSurfaceSectionView
       chrome={chrome}
-      columns={columns}
       description={description}
       emptyMessage={emptyMessage}
       fields={fieldEntries.map((entry) => entry.field)}

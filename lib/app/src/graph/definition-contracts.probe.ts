@@ -110,8 +110,8 @@ export const probeContractObjectView = {
       title: "Summary",
       description: "Fields authored against the root-safe graph surface.",
       fields: [
-        { path: "name", label: "Name", span: 2 },
-        { path: "summary", label: "Summary", span: 2 },
+        { path: "name", label: "Name" },
+        { path: "summary", label: "Summary" },
       ],
     },
   ],

@@ -252,10 +252,10 @@ Example:
   - external validation issues can be injected by path in addition to existing
     row-local mutation errors
   - row chrome can hide or show labels and descriptions by mode
-- Decide and implement the single-column section strategy:
-  - either extend `RecordSurfaceSectionView` with a column option and section
-    header actions
-  - or add an app-owned section renderer used only by `EntitySurface`
+- Keep entity and readonly record sections stacked in one flex column:
+  - remove multi-column section props and field-span metadata from the shared
+    record/detail stack
+  - do not reintroduce layout branching for field sections
 - Define a shared validation model for the new surface:
   - path-keyed field issues
   - surface-level issues
@@ -277,7 +277,7 @@ Example:
 - Add tests for:
   - system-field ordering and hiding
   - `view | edit` mode switching
-  - one-column section rendering
+  - stacked section rendering
   - field-level validation injection and clearing
   - create-submit validation summary behavior
   - secret-backed and readonly fallback behavior

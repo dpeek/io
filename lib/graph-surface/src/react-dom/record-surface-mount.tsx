@@ -11,7 +11,6 @@ import {
   type QueryRendererRegistry,
 } from "@io/graph-query/react-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
-import { cn } from "@io/web/utils";
 import { useEffect, useState, type ReactNode } from "react";
 
 import type { CollectionSurfaceRecordLookup } from "../collection-surface.js";
@@ -64,7 +63,6 @@ export type RecordSurfaceLayoutProps = {
 
 export type RecordSurfaceSectionViewProps = {
   readonly chrome?: boolean;
-  readonly columns?: 1 | 2;
   readonly description?: ReactNode;
   readonly emptyMessage?: ReactNode;
   readonly fields: readonly RecordSurfaceFieldBinding[];
@@ -140,7 +138,7 @@ function renderFieldValue(value: unknown): ReactNode {
       return <span className="text-muted-foreground text-sm">Empty</span>;
     }
     return (
-      <ul className="grid gap-1.5 text-sm [&_li]:list-none">
+      <ul className="flex flex-col gap-1.5 text-sm [&_li]:list-none">
         {value.map((item, index) => (
           <li className="text-foreground break-words" key={`${index}:${String(item)}`}>
             {renderFieldValue(item)}
@@ -209,7 +207,7 @@ function RecordSurfaceUnavailableCard({
   readonly surface: RecordSurfaceSpec;
 }) {
   return (
-    <div className="grid gap-3" data-record-surface={surface.key}>
+    <div className="flex flex-col gap-3" data-record-surface={surface.key}>
       <Card
         className="border-border/70 bg-card/95 border shadow-sm"
         data-record-surface-state={issue ? "unavailable" : "loading"}
@@ -229,11 +227,7 @@ function RecordSurfaceUnavailableCard({
 
 function DefaultRecordSurfaceFieldRow({ field }: { readonly field: RecordSurfaceFieldBinding }) {
   return (
-    <div
-      className="space-y-3 pb-4 last:pb-0"
-      data-record-surface-field={field.path}
-      data-record-surface-field-span={field.span ?? 2}
-    >
+    <div className="space-y-3 pb-4 last:pb-0" data-record-surface-field={field.path}>
       <div className="space-y-1.5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
@@ -292,7 +286,7 @@ function RecordSurfaceRelatedCollections({
   const canMountCollections = options?.lookup && options.surfaceRegistry;
 
   return (
-    <div className="grid gap-3" data-record-surface-related="">
+    <div className="flex flex-col gap-3" data-record-surface-related="">
       {binding.related.map((related) => {
         const collection = {
           ...related.collection,
@@ -388,7 +382,6 @@ export function RecordSurfaceLayout({
 
 export function RecordSurfaceSectionView({
   chrome = true,
-  columns = 2,
   description,
   emptyMessage = "No fields are available for this record surface section.",
   fields,
@@ -397,17 +390,9 @@ export function RecordSurfaceSectionView({
 }: RecordSurfaceSectionViewProps) {
   const content =
     fields.length > 0 ? (
-      <div
-        className={cn("grid gap-4", columns === 2 ? "md:grid-cols-2" : undefined)}
-        data-record-surface-section-columns={columns}
-      >
+      <div className="flex flex-col gap-4">
         {fields.map((field) => (
-          <div
-            className={cn(
-              columns === 2 ? (field.span === 1 ? "md:col-span-1" : "md:col-span-2") : undefined,
-            )}
-            key={`${section.key}:${field.path}`}
-          >
+          <div key={`${section.key}:${field.path}`}>
             {renderField ? (
               renderField(field, section)
             ) : (
@@ -417,10 +402,7 @@ export function RecordSurfaceSectionView({
         ))}
       </div>
     ) : (
-      <p
-        className="border-border bg-muted/20 text-muted-foreground rounded-xl border border-dashed p-4 text-sm"
-        data-record-surface-section-columns={columns}
-      >
+      <p className="border-border bg-muted/20 text-muted-foreground rounded-xl border border-dashed p-4 text-sm">
         {emptyMessage}
       </p>
     );

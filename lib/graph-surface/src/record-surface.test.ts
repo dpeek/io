@@ -27,7 +27,6 @@ describe("record surface binding", () => {
             {
               label: "Status",
               path: "status",
-              span: 1,
             },
           ],
           key: "details",
@@ -89,7 +88,6 @@ describe("record surface binding", () => {
               {
                 label: "Status",
                 path: "status",
-                span: 1,
                 value: "active",
               },
             ],

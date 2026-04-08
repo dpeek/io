@@ -18,7 +18,6 @@ export type RecordSurfaceFieldBinding = {
   readonly description?: string;
   readonly label: string;
   readonly path: string;
-  readonly span?: 1 | 2;
   readonly value: unknown;
 };
 
@@ -127,7 +126,6 @@ async function resolveFieldBinding(
     ...(field.description ? { description: field.description } : {}),
     label: field.label ?? field.path,
     path: field.path,
-    ...(field.span ? { span: field.span } : {}),
     value,
   };
 }

@@ -269,7 +269,7 @@ void defineScalarModule({
 });
 
 const probeObjectFields = [
-  { path: "name", label: "Name", span: 2 },
+  { path: "name", label: "Name" },
 ] satisfies readonly ObjectViewFieldSpec[];
 void (probeObjectFields satisfies readonly RecordSurfaceFieldSpec[]);
 
@@ -386,7 +386,7 @@ void ({
     {
       key: "summary",
       title: "Summary",
-      fields: [{ path: "name", label: "Name", span: 2 }],
+      fields: [{ path: "name", label: "Name" }],
     },
   ],
   commands: ["probe:save"],
@@ -403,7 +403,7 @@ void ({
       title: "Summary",
       description: "Probe record surface sections stay aligned with object-view fields.",
       fields: [
-        { path: "name", label: "Name", span: 2 },
+        { path: "name", label: "Name" },
         { path: "status", label: "Status" },
       ],
     },

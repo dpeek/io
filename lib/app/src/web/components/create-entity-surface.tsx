@@ -197,7 +197,6 @@ export function CreateEntitySurface({
         <div className="space-y-4">
           <InspectorFieldSection
             chrome={false}
-            columns={1}
             emptyMessage="No client-writable fields."
             hideMissingStatus
             mode="edit"

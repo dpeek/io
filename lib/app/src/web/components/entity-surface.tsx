@@ -143,7 +143,6 @@ export function EntitySurface({
         typeLabel={typeEntry.name}
       >
         <InspectorFieldSection
-          columns={1}
           emptyMessage="No editable fields are exposed for this record yet."
           mode={surfacePlan.mode}
           rows={rows}

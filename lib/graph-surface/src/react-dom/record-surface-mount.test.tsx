@@ -24,7 +24,6 @@ const surface = {
         {
           label: "Status",
           path: "status",
-          span: 1,
         },
       ],
       key: "details",
@@ -68,7 +67,6 @@ const binding = {
         {
           label: "Status",
           path: "status",
-          span: 1,
           value: "active",
         },
       ],
@@ -110,7 +108,6 @@ describe("record surface mount", () => {
   it("allows hosts to replace field rendering while keeping shared section chrome", () => {
     const html = renderToStaticMarkup(
       <RecordSurfaceSectionView
-        columns={1}
         fields={binding.sections[0].fields}
         renderField={(field) => <div data-custom-field={field.path}>{field.label}</div>}
         section={binding.sections[0]}
@@ -119,7 +116,6 @@ describe("record surface mount", () => {
 
     expect(html).toContain('data-custom-field="id"');
     expect(html).toContain('data-custom-field="status"');
-    expect(html).toContain('data-record-surface-section-columns="1"');
     expect(html).toContain("Details");
   });
 });

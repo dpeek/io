@@ -263,10 +263,7 @@ function CompactRow({
       </div>
 
       <div
-        className={cn(
-          "border-border/60 bg-muted/10 grid items-start gap-3 rounded-xl border px-3 py-2",
-          shouldShowLabel ? "grid-cols-[minmax(0,auto)_minmax(0,1fr)]" : "grid-cols-1",
-        )}
+        className="border-border/60 bg-muted/10 flex flex-col gap-2 rounded-xl border px-3 py-2"
         data-explorer-field-compact={pathLabel}
       >
         {shouldShowLabel ? (
@@ -277,12 +274,7 @@ function CompactRow({
             {fieldTitle}
           </div>
         ) : null}
-        <div
-          className={cn(
-            "min-w-0 text-sm break-words [&_a]:underline-offset-2 [&_a:hover]:underline [&_code]:text-[11px] [&_code]:break-all [&_li]:list-none [&_ul]:space-y-1",
-            shouldShowLabel ? "justify-self-end text-right" : "",
-          )}
-        >
+        <div className="min-w-0 text-sm break-words [&_a]:underline-offset-2 [&_a:hover]:underline [&_code]:text-[11px] [&_code]:break-all [&_li]:list-none [&_ul]:space-y-1">
           {predicate ? <CompactPredicateValue predicate={predicate} /> : value}
         </div>
       </div>

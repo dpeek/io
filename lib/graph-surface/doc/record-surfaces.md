@@ -24,7 +24,7 @@ last_updated: 2026-04-08
 ## What this layer owns
 
 - readonly record-surface binding over field-value lookups
-- shared section shell chrome plus simple one- or two-column field layout
+- shared section shell chrome plus simple stacked field layout
 - related collection resolution for record surfaces
 - compatibility adaptation from `ObjectViewSpec` to `RecordSurfaceSpec`
 
@@ -62,7 +62,6 @@ On success, the binding includes:
 Field binding behavior:
 
 - `label` falls back to the field path when the authored field omitted one
-- `span` is preserved when present
 - field values are whatever the lookup returns
 
 ## Failure model
@@ -135,9 +134,8 @@ explicit `view | edit` mode.
 - If app-owned product work needs interactive record/detail UI, route it
   through `EntitySurface` or `CreateEntitySurface` and reuse this package only
   for readonly binding or shared shell chrome.
-- Prefer host-supplied `renderField(...)` or the `columns` option when a
-  product surface needs different row chrome or single-column density without
-  forking the shared section shell.
+- Prefer host-supplied `renderField(...)` when a product surface needs
+  different row chrome without forking the shared section shell.
 - Keep `RecordSurfaceSpec` narrow. Use it for authored structure, not for
   app-specific interactive policy.
 - Reuse `RecordSurfaceLayout` or `RecordSurfaceSectionView` chrome from app

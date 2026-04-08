@@ -6,7 +6,7 @@ import { GraphRuntimeBootstrap, useGraphRuntime } from "./graph-runtime-bootstra
 
 function GraphExplorerSurface() {
   const runtime = useGraphRuntime();
-  return <Explorer runtime={runtime} showSyncInspector={false} />;
+  return <Explorer runtime={runtime} />;
 }
 
 export function GraphExplorerPage() {

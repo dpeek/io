@@ -30,11 +30,9 @@ function selectionsEqual(left: ExplorerSelection, right: ExplorerSelection): boo
 export function Explorer({
   runtime,
   submitSecretField = postSecretFieldMutation,
-  showSyncInspector: _showSyncInspector = true,
 }: {
   runtime?: ExplorerRuntime;
   submitSecretField?: SubmitSecretFieldMutation;
-  showSyncInspector?: boolean;
 }) {
   const graphRuntime = runtime ?? useGraphRuntime();
   const client = graphRuntime.graph;

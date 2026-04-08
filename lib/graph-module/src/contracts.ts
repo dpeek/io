@@ -8,7 +8,6 @@ export type ObjectViewFieldSpec = {
   readonly path: string;
   readonly label?: string;
   readonly description?: string;
-  readonly span?: 1 | 2;
 };
 
 /**
