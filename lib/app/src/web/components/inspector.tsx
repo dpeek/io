@@ -2,6 +2,7 @@ import { isSecretBackedField } from "@io/app/graph";
 import type { RecordSurfaceFieldBinding } from "@io/graph-surface";
 import { RecordSurfaceLayout, RecordSurfaceSectionView } from "@io/graph-surface/react-dom";
 import { GraphIcon } from "@io/graph-module-core/react-dom";
+import { Badge } from "@io/web/badge";
 import { type ReactNode } from "react";
 
 import type {
@@ -19,7 +20,6 @@ import type {
   MutationCallbacks,
   SubmitSecretFieldMutation,
 } from "./explorer/model.js";
-import { Badge } from "./explorer/ui.js";
 
 export type InspectorFieldRow = {
   customEditor?: (callbacks: MutationCallbacks) => ReactNode;
@@ -70,7 +70,7 @@ export function InspectorShell({
         status={
           <Badge
             className="border-border bg-muted/30 text-muted-foreground tracking-normal normal-case"
-            data={{ "data-explorer-inspector-status": status }}
+            data-explorer-inspector-status={status}
           >
             {status}
           </Badge>

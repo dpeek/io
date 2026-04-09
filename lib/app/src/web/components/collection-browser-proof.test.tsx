@@ -60,6 +60,14 @@ async function waitFor<T>(callback: () => T | Promise<T>, timeoutMs = 5_000): Pr
   throw new Error(String(lastError ?? "Timed out waiting for condition."));
 }
 
+function getEntityIdFromRow(row: HTMLElement): string {
+  const itemKey = row.getAttribute("data-query-result-item");
+  if (!itemKey?.startsWith("row:")) {
+    throw new Error("Expected query row item key.");
+  }
+  return itemKey.slice("row:".length);
+}
+
 function installDom(): {
   readonly cleanup: () => void;
   readonly container: HTMLElement;
@@ -129,12 +137,20 @@ describe("collection browser proof", () => {
         root?.render(<CollectionBrowserProof />);
       });
 
+      const shellRow = await waitFor(() => {
+        const row = queryByText(dom!.container, "[data-query-result-item]", "Workflow shell");
+        if (!row) {
+          throw new Error("Expected workflow shell row.");
+        }
+        return row;
+      });
+
       await waitFor(() => {
-        const title = dom?.container.querySelector<HTMLElement>("[data-explorer-inspector-title]");
-        if (!title?.textContent?.includes("Workflow shell")) {
+        const surface = dom?.container.querySelector<HTMLElement>('[data-entity-surface="entity"]');
+        if (surface?.getAttribute("data-entity-surface-entity") !== getEntityIdFromRow(shellRow)) {
           throw new Error("Expected the first branch detail to render.");
         }
-        return title;
+        return surface;
       });
 
       await waitFor(() => {
@@ -169,11 +185,13 @@ describe("collection browser proof", () => {
       await click(backlogRow);
 
       await waitFor(() => {
-        const title = dom?.container.querySelector<HTMLElement>("[data-explorer-inspector-title]");
-        if (!title?.textContent?.includes("Workflow backlog")) {
+        const surface = dom?.container.querySelector<HTMLElement>('[data-entity-surface="entity"]');
+        if (
+          surface?.getAttribute("data-entity-surface-entity") !== getEntityIdFromRow(backlogRow)
+        ) {
           throw new Error("Expected branch detail selection to update before the row command.");
         }
-        return title;
+        return surface;
       });
 
       await click(rowAction);

@@ -223,7 +223,6 @@ export function formatPredicateMetaSummary(
 ): string {
   const parts: string[] = [];
 
-  if (options.includeReadOnly) parts.unshift("Read only");
   if (
     options.status &&
     options.status.tone !== "present" &&

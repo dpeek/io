@@ -1,12 +1,22 @@
 "use client";
 
+import { Alert, AlertDescription, AlertTitle } from "@io/web/alert";
 import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
 import { Checkbox } from "@io/web/checkbox";
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from "@io/web/field";
+import { Empty, EmptyDescription } from "@io/web/empty";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldTitle,
+} from "@io/web/field";
 import { Input } from "@io/web/input";
-import { Label } from "@io/web/label";
+import { NativeSelect, NativeSelectOption } from "@io/web/native-select";
 import { Textarea } from "@io/web/textarea";
 import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 
@@ -114,7 +124,7 @@ export function QueryEditor({
   }
 
   return (
-    <Card className="border-border/70 bg-card/95 border shadow-sm" data-query-editor="">
+    <Card data-query-editor="">
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
@@ -135,10 +145,18 @@ export function QueryEditor({
             title="Source"
           />
           <FieldGroup>
-            <Field>
+            <Field
+              data-invalid={
+                findIssues(validation.issues, "draft.surfaceId").length > 0 || undefined
+              }
+            >
               <FieldLabel htmlFor="query-editor-surface">Surface</FieldLabel>
               <FieldContent>
                 <NativeSelect
+                  aria-invalid={
+                    findIssues(validation.issues, "draft.surfaceId").length > 0 || undefined
+                  }
+                  className="w-full"
                   id="query-editor-surface"
                   onChange={(event: ChangeEvent<HTMLSelectElement>) => {
                     updateDraft(createQueryEditorDraft(catalog, event.target.value));
@@ -146,9 +164,9 @@ export function QueryEditor({
                   value={draft.surfaceId}
                 >
                   {catalog.surfaces.map((candidate) => (
-                    <option key={candidate.surfaceId} value={candidate.surfaceId}>
+                    <NativeSelectOption key={candidate.surfaceId} value={candidate.surfaceId}>
                       {candidate.label}
-                    </option>
+                    </NativeSelectOption>
                   ))}
                 </NativeSelect>
                 {surface ? (
@@ -156,10 +174,10 @@ export function QueryEditor({
                     {surface.description ?? `${surface.queryKind} query on ${surface.sourceKind}.`}
                   </FieldDescription>
                 ) : null}
+                <FieldError errors={findIssues(validation.issues, "draft.surfaceId")} />
               </FieldContent>
             </Field>
           </FieldGroup>
-          <ValidationSummary issues={findIssues(validation.issues, "draft.surfaceId")} />
         </section>
 
         <section className="grid gap-4" data-query-editor-section="filters">
@@ -181,23 +199,28 @@ export function QueryEditor({
           </div>
           {surface && draft.filters.length > 0 ? (
             <div className="grid gap-3">
-              {draft.filters.map((filter) => {
+              {draft.filters.map((filter, index) => {
                 const field = getQueryEditorField(surface, filter.fieldId);
-                const filterIssues = findIssues(
+                const filterPath = `draft.filters[${index}]`;
+                const filterFieldIssues = findIssues(validation.issues, `${filterPath}.fieldId`);
+                const filterOperatorIssues = findIssues(
                   validation.issues,
-                  `draft.filters[${draft.filters.indexOf(filter)}]`,
+                  `${filterPath}.operator`,
                 );
+                const filterValueIssues = findIssues(validation.issues, `${filterPath}.value`);
                 if (!field) {
                   return null;
                 }
                 return (
-                  <Card className="border-border/70 border" key={filter.id} size="sm">
+                  <Card key={filter.id} size="sm">
                     <CardContent className="grid gap-4 pt-6">
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_auto]">
-                        <Field>
+                        <Field data-invalid={filterFieldIssues.length > 0 || undefined}>
                           <FieldLabel htmlFor={`${filter.id}-field`}>Field</FieldLabel>
                           <FieldContent>
                             <NativeSelect
+                              aria-invalid={filterFieldIssues.length > 0 || undefined}
+                              className="w-full"
                               id={`${filter.id}-field`}
                               onChange={(event: ChangeEvent<HTMLSelectElement>) => {
                                 updateDraft((current) =>
@@ -212,23 +235,29 @@ export function QueryEditor({
                               value={filter.fieldId}
                             >
                               {surface.fields.map((candidate) => (
-                                <option key={candidate.fieldId} value={candidate.fieldId}>
+                                <NativeSelectOption
+                                  key={candidate.fieldId}
+                                  value={candidate.fieldId}
+                                >
                                   {candidate.label}
                                   {isQueryEditorFieldKindSupported(candidate.kind)
                                     ? ""
                                     : " (unsupported)"}
-                                </option>
+                                </NativeSelectOption>
                               ))}
                             </NativeSelect>
                             <FieldDescription>
                               {field.description ?? field.fieldId}
                             </FieldDescription>
+                            <FieldError errors={filterFieldIssues} />
                           </FieldContent>
                         </Field>
-                        <Field>
+                        <Field data-invalid={filterOperatorIssues.length > 0 || undefined}>
                           <FieldLabel htmlFor={`${filter.id}-operator`}>Operator</FieldLabel>
                           <FieldContent>
                             <NativeSelect
+                              aria-invalid={filterOperatorIssues.length > 0 || undefined}
+                              className="w-full"
                               id={`${filter.id}-operator`}
                               onChange={(event: ChangeEvent<HTMLSelectElement>) => {
                                 updateDraft((current) =>
@@ -246,17 +275,19 @@ export function QueryEditor({
                               value={filter.operator}
                             >
                               {field.filterOperators.map((operator) => (
-                                <option key={operator} value={operator}>
+                                <NativeSelectOption key={operator} value={operator}>
                                   {operator}
-                                </option>
+                                </NativeSelectOption>
                               ))}
                             </NativeSelect>
+                            <FieldError errors={filterOperatorIssues} />
                           </FieldContent>
                         </Field>
-                        <Field>
+                        <Field data-invalid={filterValueIssues.length > 0 || undefined}>
                           <FieldLabel htmlFor={`${filter.id}-value-mode`}>Value</FieldLabel>
                           <FieldContent className="grid gap-3">
                             <NativeSelect
+                              className="w-full"
                               id={`${filter.id}-value-mode`}
                               onChange={(event: ChangeEvent<HTMLSelectElement>) => {
                                 updateDraft((current) =>
@@ -278,12 +309,13 @@ export function QueryEditor({
                               }}
                               value={filter.value.kind}
                             >
-                              <option value="literal">Literal</option>
-                              <option value="param">Parameter</option>
+                              <NativeSelectOption value="literal">Literal</NativeSelectOption>
+                              <NativeSelectOption value="param">Parameter</NativeSelectOption>
                             </NativeSelect>
                             <FilterValueEditor
                               field={field}
                               filterId={filter.id}
+                              invalid={filterValueIssues.length > 0}
                               operator={filter.operator}
                               value={filter.value}
                               onChange={(value) => {
@@ -292,6 +324,7 @@ export function QueryEditor({
                                 );
                               }}
                             />
+                            <FieldError errors={filterValueIssues} />
                           </FieldContent>
                         </Field>
                         <div className="flex items-end">
@@ -307,7 +340,6 @@ export function QueryEditor({
                           </Button>
                         </div>
                       </div>
-                      <ValidationSummary issues={filterIssues} />
                     </CardContent>
                   </Card>
                 );
@@ -337,10 +369,17 @@ export function QueryEditor({
             </Button>
           </div>
           <div className="grid gap-4">
-            <Field>
+            <Field
+              data-invalid={
+                findIssues(validation.issues, "draft.pagination.after").length > 0 || undefined
+              }
+            >
               <FieldLabel htmlFor="query-editor-after">After cursor</FieldLabel>
               <FieldContent>
                 <Input
+                  aria-invalid={
+                    findIssues(validation.issues, "draft.pagination.after").length > 0 || undefined
+                  }
                   id="query-editor-after"
                   onChange={(event) => {
                     const nextValue = event.target.value;
@@ -355,12 +394,20 @@ export function QueryEditor({
                   placeholder="Opaque pagination cursor"
                   value={draft.pagination.after}
                 />
+                <FieldError errors={findIssues(validation.issues, "draft.pagination.after")} />
               </FieldContent>
             </Field>
-            <Field>
+            <Field
+              data-invalid={
+                findIssues(validation.issues, "draft.pagination.limit").length > 0 || undefined
+              }
+            >
               <FieldLabel htmlFor="query-editor-limit">Default page size</FieldLabel>
               <FieldContent>
                 <Input
+                  aria-invalid={
+                    findIssues(validation.issues, "draft.pagination.limit").length > 0 || undefined
+                  }
                   id="query-editor-limit"
                   min={1}
                   onChange={(event) => {
@@ -376,17 +423,28 @@ export function QueryEditor({
                   type="number"
                   value={String(draft.pagination.limit)}
                 />
+                <FieldError errors={findIssues(validation.issues, "draft.pagination.limit")} />
               </FieldContent>
             </Field>
             {surface && draft.sorts.length > 0 ? (
               <div className="grid gap-3">
                 {draft.sorts.map((sort, index) => (
-                  <Card className="border-border/70 border" key={sort.id} size="sm">
+                  <Card key={sort.id} size="sm">
                     <CardContent className="grid gap-4 pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)_auto]">
-                      <Field>
+                      <Field
+                        data-invalid={
+                          findIssues(validation.issues, `draft.sorts[${index}].fieldId`).length >
+                            0 || undefined
+                        }
+                      >
                         <FieldLabel htmlFor={`${sort.id}-field`}>Field</FieldLabel>
                         <FieldContent>
                           <NativeSelect
+                            aria-invalid={
+                              findIssues(validation.issues, `draft.sorts[${index}].fieldId`)
+                                .length > 0 || undefined
+                            }
+                            className="w-full"
                             id={`${sort.id}-field`}
                             onChange={(event: ChangeEvent<HTMLSelectElement>) => {
                               updateDraft((current) =>
@@ -398,17 +456,30 @@ export function QueryEditor({
                             value={sort.fieldId}
                           >
                             {(surface.sortFields ?? []).map((field) => (
-                              <option key={field.fieldId} value={field.fieldId}>
+                              <NativeSelectOption key={field.fieldId} value={field.fieldId}>
                                 {field.label}
-                              </option>
+                              </NativeSelectOption>
                             ))}
                           </NativeSelect>
+                          <FieldError
+                            errors={findIssues(validation.issues, `draft.sorts[${index}].fieldId`)}
+                          />
                         </FieldContent>
                       </Field>
-                      <Field>
+                      <Field
+                        data-invalid={
+                          findIssues(validation.issues, `draft.sorts[${index}].direction`).length >
+                            0 || undefined
+                        }
+                      >
                         <FieldLabel htmlFor={`${sort.id}-direction`}>Direction</FieldLabel>
                         <FieldContent>
                           <NativeSelect
+                            aria-invalid={
+                              findIssues(validation.issues, `draft.sorts[${index}].direction`)
+                                .length > 0 || undefined
+                            }
+                            className="w-full"
                             id={`${sort.id}-direction`}
                             onChange={(event: ChangeEvent<HTMLSelectElement>) => {
                               updateDraft((current) =>
@@ -424,11 +495,17 @@ export function QueryEditor({
                               surface.sortFields?.find((field) => field.fieldId === sort.fieldId)
                                 ?.directions ?? ["asc", "desc"]
                             ).map((direction) => (
-                              <option key={direction} value={direction}>
+                              <NativeSelectOption key={direction} value={direction}>
                                 {direction}
-                              </option>
+                              </NativeSelectOption>
                             ))}
                           </NativeSelect>
+                          <FieldError
+                            errors={findIssues(
+                              validation.issues,
+                              `draft.sorts[${index}].direction`,
+                            )}
+                          />
                         </FieldContent>
                       </Field>
                       <div className="flex items-end">
@@ -443,11 +520,6 @@ export function QueryEditor({
                           Remove
                         </Button>
                       </div>
-                      <div className="lg:col-span-3">
-                        <ValidationSummary
-                          issues={findIssues(validation.issues, `draft.sorts[${index}]`)}
-                        />
-                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -456,7 +528,6 @@ export function QueryEditor({
               <EmptyState message="No sort clauses yet." />
             )}
           </div>
-          <ValidationSummary issues={findIssues(validation.issues, "draft.pagination")} />
           <ValidationSummary issues={findIssues(validation.issues, "draft.sorts")} />
         </section>
 
@@ -484,6 +555,8 @@ export function QueryEditor({
                   <CardContent className="grid gap-4 pt-6">
                     <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_minmax(0,1fr)_auto]">
                       <ParameterEditor
+                        issues={validation.issues}
+                        index={index}
                         onChange={(update) => {
                           updateDraft((current) =>
                             updateQueryEditorParameter(current, parameter.id, update),
@@ -506,9 +579,6 @@ export function QueryEditor({
                         </Button>
                       </div>
                     </div>
-                    <ValidationSummary
-                      issues={findIssues(validation.issues, `draft.parameters[${index}]`)}
-                    />
                   </CardContent>
                 </Card>
               ))}
@@ -541,18 +611,10 @@ export function QueryEditor({
                 ) : null}
               </div>
             ) : (
-              <div className="grid gap-2">
-                {validation.issues.map((issue) => (
-                  <div
-                    className="rounded-xl border border-amber-400/40 bg-amber-50/60 px-3 py-2 text-xs"
-                    key={`${issue.path}:${issue.message}`}
-                  >
-                    <div className="font-medium">{issue.code}</div>
-                    <div>{issue.path}</div>
-                    <div>{issue.message}</div>
-                  </div>
-                ))}
-              </div>
+              <ValidationSummary
+                issues={validation.issues}
+                title="Resolve the draft validation issues before inspecting the serialized request."
+              />
             )}
           </details>
         </section>
@@ -579,33 +641,40 @@ function SectionHeader({
 
 function EmptyState({ message }: { readonly message: string }) {
   return (
-    <div className="text-muted-foreground rounded-xl border border-dashed px-4 py-3 text-sm">
-      {message}
-    </div>
+    <Empty className="border-border bg-muted/20 flex-none p-4">
+      <EmptyDescription className="text-sm">{message}</EmptyDescription>
+    </Empty>
   );
 }
 
 function ValidationSummary({
   issues,
+  title = issues.length === 1 ? "Validation issue" : "Validation issues",
 }: {
   readonly issues: readonly { code: string; message: string; path: string }[];
+  readonly title?: string;
 }) {
   if (issues.length === 0) {
     return null;
   }
 
   return (
-    <div className="grid gap-2">
-      {issues.map((issue) => (
-        <div
-          className="rounded-xl border border-amber-400/40 bg-amber-50/60 px-3 py-2 text-xs"
-          key={`${issue.path}:${issue.message}`}
-        >
-          <div className="font-medium">{issue.code}</div>
-          <div>{issue.message}</div>
-        </div>
-      ))}
-    </div>
+    <Alert variant="destructive">
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription>
+        {issues.length === 1 ? (
+          issues[0]?.message
+        ) : (
+          <ul className="ml-4 flex list-disc flex-col gap-1">
+            {issues.map((issue) => (
+              <li key={`${issue.path}:${issue.message}`}>
+                <span className="font-medium">{issue.code}</span>: {issue.message}
+              </li>
+            ))}
+          </ul>
+        )}
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -619,12 +688,14 @@ function findIssues(
 function FilterValueEditor({
   field,
   filterId,
+  invalid = false,
   operator,
   onChange,
   value,
 }: {
   readonly field: QueryEditorFieldSpec;
   readonly filterId: string;
+  readonly invalid?: boolean;
   readonly operator: QueryEditorDraft["filters"][number]["operator"];
   readonly onChange: (value: QueryEditorValueDraft) => void;
   readonly value: QueryEditorValueDraft;
@@ -642,6 +713,7 @@ function FilterValueEditor({
   if (value.kind === "param") {
     return (
       <Input
+        aria-invalid={invalid || undefined}
         data-query-editor-control="parameter"
         id={`${filterId}-param`}
         onChange={(event) => {
@@ -656,20 +728,22 @@ function FilterValueEditor({
   if (operator === "exists") {
     return (
       <NativeSelect
+        aria-invalid={invalid || undefined}
+        className="w-full"
         data-query-editor-control="boolean"
         onChange={(event: ChangeEvent<HTMLSelectElement>) => {
           onChange({ kind: "literal", value: event.target.value === "true" });
         }}
         value={value.value === true ? "true" : "false"}
       >
-        <option value="true">true</option>
-        <option value="false">false</option>
+        <NativeSelectOption value="true">true</NativeSelectOption>
+        <NativeSelectOption value="false">false</NativeSelectOption>
       </NativeSelect>
     );
   }
 
   if (operator === "in") {
-    return renderListEditor(field, value.value, onChange);
+    return renderListEditor(field, value.value, onChange, invalid);
   }
 
   const editorKind = getQueryEditorFieldKindForFilterOperator(field.kind, operator);
@@ -695,6 +769,7 @@ function FilterValueEditor({
       if (!field.options?.length) {
         return (
           <Input
+            aria-invalid={invalid || undefined}
             data-query-editor-control={field.control}
             onChange={(event) => {
               onChange({ kind: "literal", value: event.target.value });
@@ -705,6 +780,8 @@ function FilterValueEditor({
       }
       return (
         <NativeSelect
+          aria-invalid={invalid || undefined}
+          className="w-full"
           data-query-editor-control={field.control}
           onChange={(event: ChangeEvent<HTMLSelectElement>) => {
             onChange({ kind: "literal", value: event.target.value });
@@ -712,15 +789,16 @@ function FilterValueEditor({
           value={typeof value.value === "string" ? value.value : ""}
         >
           {(field.options ?? []).map((option) => (
-            <option key={option.value} value={option.value}>
+            <NativeSelectOption key={option.value} value={option.value}>
               {option.label}
-            </option>
+            </NativeSelectOption>
           ))}
         </NativeSelect>
       );
     case "date":
       return (
         <Input
+          aria-invalid={invalid || undefined}
           data-query-editor-control="date"
           onChange={(event) => {
             onChange({ kind: "literal", value: event.target.value });
@@ -732,19 +810,22 @@ function FilterValueEditor({
     case "boolean":
       return (
         <NativeSelect
+          aria-invalid={invalid || undefined}
+          className="w-full"
           data-query-editor-control="boolean"
           onChange={(event: ChangeEvent<HTMLSelectElement>) => {
             onChange({ kind: "literal", value: event.target.value === "true" });
           }}
           value={value.value === true ? "true" : "false"}
         >
-          <option value="true">true</option>
-          <option value="false">false</option>
+          <NativeSelectOption value="true">true</NativeSelectOption>
+          <NativeSelectOption value="false">false</NativeSelectOption>
         </NativeSelect>
       );
     case "text":
       return (
         <Input
+          aria-invalid={invalid || undefined}
           data-query-editor-control="text"
           onChange={(event) => {
             onChange({ kind: "literal", value: event.target.value });
@@ -755,6 +836,7 @@ function FilterValueEditor({
     case "number":
       return (
         <Input
+          aria-invalid={invalid || undefined}
           data-query-editor-control="number"
           onChange={(event) => {
             onChange({ kind: "literal", value: event.target.value });
@@ -774,13 +856,13 @@ function UnsupportedFieldKindNotice({
   readonly message: string;
 }) {
   return (
-    <div
-      className="text-muted-foreground rounded-md border border-dashed px-3 py-2 text-xs"
+    <Alert
       data-query-editor-control="unsupported"
       data-query-editor-unsupported-kind={kind}
+      variant="destructive"
     >
-      {message}
-    </div>
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
   );
 }
 
@@ -788,6 +870,7 @@ function renderListEditor(
   field: QueryEditorFieldSpec,
   value: QueryEditorRawValue,
   onChange: (value: QueryEditorValueDraft) => void,
+  invalid = false,
 ) {
   const stringListValue = Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string")
@@ -800,8 +883,9 @@ function renderListEditor(
     : [];
   if ((field.kind === "enum" || field.kind === "entity-ref") && field.options?.length) {
     return (
-      <select
-        className="border-input bg-input/20 h-24 rounded-md border px-2 py-1 text-xs"
+      <NativeSelect
+        aria-invalid={invalid || undefined}
+        className="w-full"
         data-query-editor-control={field.control}
         multiple
         onChange={(event) => {
@@ -813,17 +897,18 @@ function renderListEditor(
         value={stringListValue}
       >
         {field.options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <NativeSelectOption key={option.value} value={option.value}>
             {option.label}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
+      </NativeSelect>
     );
   }
 
   if (field.kind === "boolean") {
     return (
       <Textarea
+        aria-invalid={invalid || undefined}
         data-query-editor-control="boolean"
         onChange={(event) => {
           onChange({
@@ -844,6 +929,7 @@ function renderListEditor(
   if (field.kind === "number" || field.kind === "percent") {
     return (
       <Textarea
+        aria-invalid={invalid || undefined}
         data-query-editor-control="number"
         onChange={(event) => {
           onChange({
@@ -864,6 +950,7 @@ function renderListEditor(
 
   return (
     <Textarea
+      aria-invalid={invalid || undefined}
       data-query-editor-control={field.control}
       onChange={(event) => {
         onChange({
@@ -881,24 +968,34 @@ function renderListEditor(
 }
 
 function ParameterEditor({
+  index,
+  issues,
   onChange,
   parameter,
 }: {
+  readonly index: number;
+  readonly issues: readonly { code: string; message: string; path: string }[];
   readonly onChange: (update: Partial<QueryEditorParameterDraft>) => void;
   readonly parameter: QueryEditorParameterDraft;
 }) {
+  const path = `draft.parameters[${index}]`;
+  const nameIssues = findIssues(issues, `${path}.name`);
+  const defaultIssues = findIssues(issues, `${path}.defaultValue`);
+
   return (
     <>
-      <Field>
+      <Field data-invalid={nameIssues.length > 0 || undefined}>
         <FieldLabel htmlFor={`${parameter.id}-name`}>Name</FieldLabel>
         <FieldContent>
           <Input
+            aria-invalid={nameIssues.length > 0 || undefined}
             id={`${parameter.id}-name`}
             onChange={(event) => {
               onChange({ name: event.target.value });
             }}
             value={parameter.name}
           />
+          <FieldError errors={nameIssues} />
         </FieldContent>
       </Field>
       <Field>
@@ -917,6 +1014,7 @@ function ParameterEditor({
         <FieldLabel htmlFor={`${parameter.id}-type`}>Type</FieldLabel>
         <FieldContent>
           <NativeSelect
+            className="w-full"
             id={`${parameter.id}-type`}
             onChange={(event: ChangeEvent<HTMLSelectElement>) => {
               onChange({
@@ -927,32 +1025,41 @@ function ParameterEditor({
             value={parameter.type}
           >
             {queryEditorDefaults.parameterTypes.map((type) => (
-              <option key={type} value={type}>
+              <NativeSelectOption key={type} value={type}>
                 {type}
-              </option>
+              </NativeSelectOption>
             ))}
           </NativeSelect>
         </FieldContent>
       </Field>
-      <Field>
+      <Field data-invalid={defaultIssues.length > 0 || undefined}>
         <FieldLabel htmlFor={`${parameter.id}-default`}>Default</FieldLabel>
         <FieldContent className="grid gap-3">
           <ParameterDefaultEditor
+            invalid={defaultIssues.length > 0}
             parameter={parameter}
             onChange={(defaultValue) => {
               onChange({ defaultValue });
             }}
           />
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={parameter.required}
-              id={`${parameter.id}-required`}
-              onCheckedChange={(checked) => {
-                onChange({ required: checked === true });
-              }}
-            />
-            <Label htmlFor={`${parameter.id}-required`}>Required</Label>
-          </div>
+          <FieldError errors={defaultIssues} />
+          <Field orientation="horizontal">
+            <FieldLabel htmlFor={`${parameter.id}-required`}>
+              <Checkbox
+                checked={parameter.required}
+                id={`${parameter.id}-required`}
+                onCheckedChange={(checked) => {
+                  onChange({ required: checked === true });
+                }}
+              />
+              <FieldContent>
+                <FieldTitle>Required</FieldTitle>
+                <FieldDescription>
+                  Require callers to provide this parameter instead of relying on the default.
+                </FieldDescription>
+              </FieldContent>
+            </FieldLabel>
+          </Field>
         </FieldContent>
       </Field>
     </>
@@ -960,9 +1067,11 @@ function ParameterEditor({
 }
 
 function ParameterDefaultEditor({
+  invalid = false,
   onChange,
   parameter,
 }: {
+  readonly invalid?: boolean;
   readonly onChange: (value: QueryEditorRawValue) => void;
   readonly parameter: QueryEditorParameterDraft;
 }) {
@@ -983,19 +1092,22 @@ function ParameterDefaultEditor({
     case "boolean":
       return (
         <NativeSelect
+          aria-invalid={invalid || undefined}
+          className="w-full"
           data-query-editor-control="boolean"
           onChange={(event: ChangeEvent<HTMLSelectElement>) => {
             onChange(event.target.value === "true");
           }}
           value={parameter.defaultValue === true ? "true" : "false"}
         >
-          <option value="true">true</option>
-          <option value="false">false</option>
+          <NativeSelectOption value="true">true</NativeSelectOption>
+          <NativeSelectOption value="false">false</NativeSelectOption>
         </NativeSelect>
       );
     case "boolean-list":
       return (
         <Textarea
+          aria-invalid={invalid || undefined}
           data-query-editor-control="boolean"
           onChange={(event) => {
             onChange(
@@ -1020,6 +1132,7 @@ function ParameterDefaultEditor({
     case "percent-list":
       return (
         <Textarea
+          aria-invalid={invalid || undefined}
           data-query-editor-control="number"
           onChange={(event) => {
             onChange(
@@ -1055,6 +1168,7 @@ function ParameterDefaultEditor({
     case "rate-list":
       return (
         <Textarea
+          aria-invalid={invalid || undefined}
           data-query-editor-control="text"
           onChange={(event) => {
             onChange(
@@ -1072,6 +1186,7 @@ function ParameterDefaultEditor({
     case "entity-ref":
       return (
         <Input
+          aria-invalid={invalid || undefined}
           data-query-editor-control={parameter.type === "entity-ref" ? "entity-ref" : "text"}
           onChange={(event) => {
             onChange(event.target.value);
@@ -1142,13 +1257,4 @@ function supportsPredicateFieldEditorParameterType(
     default:
       return false;
   }
-}
-
-function NativeSelect(props: React.ComponentProps<"select">) {
-  return (
-    <select
-      className="border-input bg-input/20 h-8 rounded-md border px-2 py-1 text-xs outline-none"
-      {...props}
-    />
-  );
 }

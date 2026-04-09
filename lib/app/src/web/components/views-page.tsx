@@ -406,7 +406,7 @@ function QueryRendererPreviewGallery() {
 
   return (
     <div className="grid gap-4">
-      <Card className="border-border/70 bg-card/95 border shadow-sm">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base">Query Renderer Proof</CardTitle>
           <CardDescription>
@@ -471,7 +471,7 @@ function KindCoverageCard({
   const missingKinds = supportedKinds.filter((kind) => !coveredKinds.has(kind));
 
   return (
-    <Card className="border-border/70 bg-card/95 border shadow-sm">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
         <CardDescription>
@@ -505,7 +505,7 @@ function ViewsPageItemCard({ item }: { readonly item: ViewsPageItem }) {
   const { value } = usePredicateField(item.predicate);
 
   return (
-    <Card className="border-border/70 bg-card/95 border shadow-sm">
+    <Card>
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
@@ -572,7 +572,7 @@ function ViewsPageCatalog() {
   return (
     <div className="grid gap-4">
       <div className="grid gap-4 xl:grid-cols-3">
-        <Card className="border-border/70 bg-card/95 border shadow-sm xl:col-span-1">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Proof Fixture</CardTitle>
             <CardDescription>

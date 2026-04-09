@@ -1,7 +1,14 @@
 import { edgeId } from "@io/app/graph";
 import { core } from "@io/graph-module-core";
 import { GraphIcon } from "@io/graph-module-core/react-dom";
+import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@io/web/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@io/web/collapsible";
+import { Empty, EmptyDescription } from "@io/web/empty";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@io/web/item";
+import { cn } from "@io/web/utils";
+import { useState, type ReactNode } from "react";
 
 import { asTypeMetadataFields } from "./catalog.js";
 import { usePredicateSlotValue } from "./field-editor.js";
@@ -13,8 +20,20 @@ import {
 } from "./helpers.js";
 import { keyPredicateId, typeIconPredicateId } from "./model.js";
 import type { AnyEntityRef, ExplorerClient, ExplorerRuntime, TypeCatalogEntry } from "./model.js";
-import { Badge, DebugDisclosure, DebugValue, EmptyState, ListButton, Section } from "./ui.js";
 import { InspectorFieldSection, InspectorShell } from "../inspector.js";
+
+function DebugValueCard({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <Item className="rounded-xl border-border bg-muted/20" size="sm" variant="muted">
+      <ItemContent>
+        <div className="text-muted-foreground text-[11px] font-medium tracking-[0.16em] uppercase">
+          {label}
+        </div>
+        <code className="text-foreground block text-xs break-all">{value}</code>
+      </ItemContent>
+    </Item>
+  );
+}
 
 export function TypeListItem({
   active,
@@ -32,7 +51,16 @@ export function TypeListItem({
   const iconId = resolveDisplayedDefinitionIconId(entry.compiledIconId, graphIconId);
 
   return (
-    <ListButton active={active} onClick={onSelect} props={{ "data-explorer-item-type": entry.id }}>
+    <Button
+      className={cn(
+        "rounded-none h-auto w-full justify-start border px-3 py-3 text-left text-sm",
+        active ? "bg-secondary text-foreground" : "bg-background text-foreground hover:bg-muted",
+      )}
+      data-explorer-item-type={entry.id}
+      onClick={onSelect}
+      type="button"
+      variant="ghost"
+    >
       <div className="flex items-start gap-3">
         {typeof iconId === "string" && iconId.length > 0 ? (
           <GraphIcon className="text-muted-foreground size-6" iconId={iconId} />
@@ -43,7 +71,7 @@ export function TypeListItem({
           </div>
         </div>
       </div>
-    </ListButton>
+    </Button>
   );
 }
 
@@ -68,6 +96,7 @@ export function TypeInspector({
   const graphNameText =
     typeof graphName === "string" && graphName.length > 0 ? graphName : entry.name;
   const iconId = resolveDisplayedDefinitionIconId(entry.compiledIconId, graphIconId);
+  const [debugOpen, setDebugOpen] = useState(false);
   const fieldRows = [
     { pathLabel: "metadata.name", predicate: fields.name },
     { pathLabel: "metadata.description", predicate: fields.description },
@@ -78,13 +107,9 @@ export function TypeInspector({
     <InspectorShell
       badges={
         <>
-          <Badge className="border-border bg-muted/30 text-muted-foreground tracking-normal normal-case">
-            {entry.kind}
-          </Badge>
+          <Badge variant="outline">{entry.kind}</Badge>
           {entry.kind === "entity" ? (
-            <Badge className="border-border bg-muted/30 text-muted-foreground tracking-normal normal-case">
-              {entry.dataCount} nodes
-            </Badge>
+            <Badge variant="outline">{entry.dataCount} nodes</Badge>
           ) : null}
         </>
       }
@@ -97,131 +122,149 @@ export function TypeInspector({
     >
       <InspectorFieldSection mode="edit" rows={fieldRows} />
 
-      <Section
-        title={
-          entry.kind === "entity"
-            ? "Compiled Field Tree"
-            : entry.kind === "enum"
-              ? "Enum Options"
-              : "Scalar Definition"
-        }
-        right={
-          entry.kind === "entity" ? (
-            <Badge className="border-slate-700 bg-slate-950 text-slate-300">
-              {entry.fieldDefs.length} fields
-            </Badge>
-          ) : entry.kind === "enum" ? (
-            <Badge className="border-slate-700 bg-slate-950 text-slate-300">
-              {entry.optionDefs.length} options
-            </Badge>
-          ) : null
-        }
-      >
-        {entry.kind === "entity" ? (
-          <div className="grid gap-3">
-            {entry.fieldDefs.map((fieldDef) => (
-              <div
-                className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3"
-                data-explorer-schema-field={fieldDef.pathLabel}
-                key={`${entry.id}:${fieldDef.pathLabel}`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-slate-100">{fieldDef.pathLabel}</div>
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">
-                      {formatCardinality(fieldDef.cardinality)}
-                    </Badge>
-                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">
+      <Card className="border-border/70 bg-card/95 flex min-h-0 flex-col border shadow-sm">
+        <CardHeader className="border-border/60 border-b">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-1">
+              <CardTitle>
+                {entry.kind === "entity"
+                  ? "Compiled Field Tree"
+                  : entry.kind === "enum"
+                    ? "Enum Options"
+                    : "Scalar Definition"}
+              </CardTitle>
+            </div>
+            {entry.kind === "entity" ? (
+              <Badge variant="outline">{entry.fieldDefs.length} fields</Badge>
+            ) : entry.kind === "enum" ? (
+              <Badge variant="outline">{entry.optionDefs.length} options</Badge>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+          {entry.kind === "entity" ? (
+            <div className="grid gap-3">
+              {entry.fieldDefs.map((fieldDef) => (
+                <Item
+                  className="items-start justify-between gap-3"
+                  data-explorer-schema-field={fieldDef.pathLabel}
+                  key={`${entry.id}:${fieldDef.pathLabel}`}
+                  size="sm"
+                  variant="outline"
+                >
+                  <ItemContent>
+                    <ItemTitle>{fieldDef.pathLabel}</ItemTitle>
+                  </ItemContent>
+                  <ItemActions className="flex-wrap justify-end">
+                    <Badge variant="outline">{formatCardinality(fieldDef.cardinality)}</Badge>
+                    <Badge variant="outline">
                       {getExplorerTypeLabel(fieldDef.rangeId, typeKeyById)}
                     </Badge>
                     <Button
-                      className="border-primary/20 bg-primary/5 text-primary h-5 rounded-full px-2 py-0.5 text-[11px]"
                       data-explorer-open-predicate={fieldDef.predicateId}
                       onClick={() => onOpenPredicate(fieldDef.predicateId)}
+                      size="xs"
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                     >
-                      open predicate
+                      Open predicate
                     </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : entry.kind === "enum" ? (
-          <div className="grid gap-3">
-            {entry.optionDefs.map((option) => (
-              <div
-                className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3"
-                key={option.id}
-              >
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-slate-100">
-                    {getDefinitionDisplayLabel(option.name, option.key)}
-                  </div>
-                </div>
-                {option.description ? (
-                  <p className="mt-2 text-sm text-slate-400">{option.description}</p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyState>
-            Scalar types are codec-backed today. This panel still lets you inspect and edit the
-            human metadata node without pretending the runtime can live-edit codecs.
-          </EmptyState>
-        )}
-      </Section>
+                  </ItemActions>
+                </Item>
+              ))}
+            </div>
+          ) : entry.kind === "enum" ? (
+            <div className="grid gap-3">
+              {entry.optionDefs.map((option) => (
+                <Item className="items-start" key={option.id} size="sm" variant="outline">
+                  <ItemContent>
+                    <ItemTitle>{getDefinitionDisplayLabel(option.name, option.key)}</ItemTitle>
+                    {option.description ? (
+                      <ItemDescription>{option.description}</ItemDescription>
+                    ) : null}
+                  </ItemContent>
+                </Item>
+              ))}
+            </div>
+          ) : (
+            <Empty className="border-border bg-muted/20 flex-none p-4">
+              <EmptyDescription className="text-sm">
+                Scalar types are codec-backed today. This panel still lets you inspect and edit the
+                human metadata node without pretending the runtime can live-edit codecs.
+              </EmptyDescription>
+            </Empty>
+          )}
+        </CardContent>
+      </Card>
 
-      <DebugDisclosure panelId="schema">
-        <div className="grid gap-3 md:grid-cols-2">
-          <DebugValue label="Type ID" value={entry.id} />
-          <DebugValue label="Compiled Key" value={entry.key} />
-          <DebugValue label="Graph Key" value={graphKey ?? "unset"} />
-          <DebugValue label="Compiled Icon ID" value={entry.compiledIconId} />
-          <DebugValue label="Graph Icon ID" value={graphIconId ?? "unset"} />
-          <DebugValue
-            label="Graph Name"
-            value={typeof graphName === "string" ? graphName : "unset"}
-          />
-        </div>
-
-        {entry.kind === "entity" && entry.fieldDefs.length > 0 ? (
-          <div className="grid gap-3">
-            {entry.fieldDefs.map((fieldDef) => (
-              <div
-                className="border-border bg-muted/20 grid gap-3 rounded-xl border p-3 md:grid-cols-3"
-                key={`debug:${entry.id}:${fieldDef.pathLabel}`}
-              >
-                <DebugValue label="Field Path" value={fieldDef.pathLabel} />
-                <DebugValue label="Predicate Key" value={fieldDef.key} />
-                <DebugValue label="Predicate ID" value={fieldDef.predicateId} />
+      <Collapsible onOpenChange={setDebugOpen} open={debugOpen}>
+        <div className="border-border/70 bg-card/70 rounded-2xl border p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Advanced Debug</div>
+              <div className="text-muted-foreground text-sm">
+                Raw ids, keys, and compiled values stay hidden until you ask for them.
               </div>
-            ))}
+            </div>
+            <CollapsibleTrigger
+              render={
+                <Button data-explorer-debug-toggle="schema" type="button" variant="outline" />
+              }
+            >
+              {debugOpen ? "Hide debug" : "Show debug"}
+            </CollapsibleTrigger>
           </div>
-        ) : null}
 
-        {entry.kind === "enum" && entry.optionDefs.length > 0 ? (
-          <div className="grid gap-3">
-            {entry.optionDefs.map((option) => (
-              <div
-                className="border-border bg-muted/20 grid gap-3 rounded-xl border p-3 md:grid-cols-3"
-                key={`debug:${entry.id}:${option.id}`}
-              >
-                <DebugValue
-                  label="Option Label"
-                  value={getDefinitionDisplayLabel(option.name, option.key)}
+          <CollapsibleContent>
+            <div className="grid gap-3 pt-3" data-explorer-debug-panel="schema">
+              <div className="grid gap-3 md:grid-cols-2">
+                <DebugValueCard label="Type ID" value={entry.id} />
+                <DebugValueCard label="Compiled Key" value={entry.key} />
+                <DebugValueCard label="Graph Key" value={graphKey ?? "unset"} />
+                <DebugValueCard label="Compiled Icon ID" value={entry.compiledIconId} />
+                <DebugValueCard label="Graph Icon ID" value={graphIconId ?? "unset"} />
+                <DebugValueCard
+                  label="Graph Name"
+                  value={typeof graphName === "string" ? graphName : "unset"}
                 />
-                <DebugValue label="Option Key" value={option.key} />
-                <DebugValue label="Option ID" value={option.id} />
               </div>
-            ))}
-          </div>
-        ) : null}
-      </DebugDisclosure>
+
+              {entry.kind === "entity" && entry.fieldDefs.length > 0 ? (
+                <div className="grid gap-3">
+                  {entry.fieldDefs.map((fieldDef) => (
+                    <div
+                      className="grid gap-3 md:grid-cols-3"
+                      key={`debug:${entry.id}:${fieldDef.pathLabel}`}
+                    >
+                      <DebugValueCard label="Field Path" value={fieldDef.pathLabel} />
+                      <DebugValueCard label="Predicate Key" value={fieldDef.key} />
+                      <DebugValueCard label="Predicate ID" value={fieldDef.predicateId} />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {entry.kind === "enum" && entry.optionDefs.length > 0 ? (
+                <div className="grid gap-3">
+                  {entry.optionDefs.map((option) => (
+                    <div
+                      className="grid gap-3 md:grid-cols-3"
+                      key={`debug:${entry.id}:${option.id}`}
+                    >
+                      <DebugValueCard
+                        label="Option Label"
+                        value={getDefinitionDisplayLabel(option.name, option.key)}
+                      />
+                      <DebugValueCard label="Option Key" value={option.key} />
+                      <DebugValueCard label="Option ID" value={option.id} />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
     </InspectorShell>
   );
 }

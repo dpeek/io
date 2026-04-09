@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { core, coreBuiltInQuerySurfaceIds, coreQuerySurfaceCatalog } from "@io/graph-module-core";
+import { coreBuiltInQuerySurfaceIds, coreQuerySurfaceCatalog } from "@io/graph-module-core";
 import { workflowQuerySurfaceCatalog } from "@io/graph-module-workflow";
 import { serializedQueryVersion, type SerializedQueryRequest } from "@io/graph-client";
 

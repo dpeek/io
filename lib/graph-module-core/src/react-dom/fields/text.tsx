@@ -140,7 +140,6 @@ export function TextFieldEditor(props: AnyRenderableFieldProps) {
         <InputGroupTextarea
           aria-invalid={invalid || undefined}
           autoFocus={shouldAutoFocus}
-          className="min-h-28 resize-y"
           data-web-field-kind="textarea"
           onBlur={handleBlur}
           onChange={(event) => applyDraft(event.target.value)}

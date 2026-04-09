@@ -73,10 +73,7 @@ function CollectionSurfaceUnavailableCard({
 }) {
   return (
     <div className="grid gap-3" data-collection-surface={collection.key}>
-      <Card
-        className="border-border/70 bg-card/95 border shadow-sm"
-        data-collection-surface-state={issue ? "unavailable" : "loading"}
-      >
+      <Card data-collection-surface-state={issue ? "unavailable" : "loading"}>
         <CardHeader>
           <CardTitle className="text-base">{collection.title}</CardTitle>
           {collection.description ? (

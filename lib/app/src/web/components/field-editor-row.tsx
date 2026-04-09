@@ -10,6 +10,7 @@ import {
   usePersistedMutationCallbacks,
   usePredicateField,
 } from "@io/graph-react";
+import { Badge } from "@io/web/badge";
 import { cn } from "@io/web/utils";
 import { useContext, useEffect, useState, type ReactNode } from "react";
 
@@ -35,7 +36,6 @@ import type {
   MutationCallbacks,
 } from "./explorer/model.js";
 import { ExplorerSyncContext } from "./explorer/sync.js";
-import { Badge } from "./explorer/ui.js";
 
 type PredicateRowDisplay = "compact" | "default";
 
@@ -129,9 +129,7 @@ function FieldIssueBadge({
             ? statusBadgeClass(statusTone)
             : "border-border bg-muted/30 text-muted-foreground"
       }
-      data={{
-        "data-explorer-field-status": invalid ? "invalid" : (statusTone ?? "valid"),
-      }}
+      data-explorer-field-status={invalid ? "invalid" : (statusTone ?? "valid")}
     >
       {issueLabel}
     </Badge>
@@ -274,7 +272,7 @@ function CompactRow({
             {fieldTitle}
           </div>
         ) : null}
-        <div className="min-w-0 text-sm break-words [&_a]:underline-offset-2 [&_a:hover]:underline [&_code]:text-[11px] [&_code]:break-all [&_li]:list-none [&_ul]:space-y-1">
+        <div className="min-w-0 text-sm wrap-break-word [&_a]:underline-offset-2 [&_a:hover]:underline [&_code]:text-[11px] [&_code]:break-all [&_li]:list-none [&_ul]:space-y-1">
           {predicate ? <CompactPredicateValue predicate={predicate} /> : value}
         </div>
       </div>

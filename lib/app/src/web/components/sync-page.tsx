@@ -66,7 +66,7 @@ function SyncPageSurface({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4" data-sync-page="">
-      <Card className="border-border/70 bg-card/95 border shadow-sm">
+      <Card>
         <CardHeader className="gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">

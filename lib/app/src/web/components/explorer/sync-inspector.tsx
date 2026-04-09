@@ -1,3 +1,7 @@
+import { Badge } from "@io/web/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@io/web/card";
+import { Empty, EmptyDescription } from "@io/web/empty";
+
 import type { ExplorerSync } from "./model.js";
 import {
   describeSyncError,
@@ -10,7 +14,6 @@ import {
   syncStatusClass,
   useExplorerSyncSnapshot,
 } from "./sync.js";
-import { Badge, EmptyState, Section } from "./ui.js";
 
 export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
   const { pendingTransactions, state } = useExplorerSyncSnapshot(sync);
@@ -18,33 +21,34 @@ export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
   const errorMessage = describeSyncError(state.error);
 
   return (
-    <Section
-      title="Branch"
-      right={
-        <Badge
-          className={syncStatusClass(state.status)}
-          data={{ "data-explorer-stream-status": state.status }}
-        >
-          {state.status}
-        </Badge>
-      }
-    >
-      <div className="space-y-4" data-explorer-stream="">
+    <Card className="border-border/70 bg-card/95 flex h-full min-h-0 flex-col border shadow-sm">
+      <CardHeader className="border-border/60 border-b">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <CardTitle>Branch</CardTitle>
+          </div>
+          <Badge
+            className={syncStatusClass(state.status)}
+            data-explorer-stream-status={state.status}
+            variant="outline"
+          >
+            {state.status}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4" data-explorer-stream="">
         <div className="flex flex-wrap gap-1.5">
-          <Badge className="border-slate-700 bg-slate-950 text-slate-300">
-            {state.cursor ?? "no cursor"}
-          </Badge>
-          <Badge className="border-slate-700 bg-slate-950 text-slate-300">{state.freshness}</Badge>
-          <Badge className="border-slate-700 bg-slate-950 text-slate-300">
-            {state.completeness}
-          </Badge>
+          <Badge variant="outline">{state.cursor ?? "no cursor"}</Badge>
+          <Badge variant="outline">{state.freshness}</Badge>
+          <Badge variant="outline">{state.completeness}</Badge>
           <Badge
             className={
               pendingTransactions.length > 0
                 ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
                 : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
             }
-            data={{ "data-explorer-stream-pending-count": String(pendingTransactions.length) }}
+            data-explorer-stream-pending-count={String(pendingTransactions.length)}
+            variant="outline"
           >
             {pendingTransactions.length} pending
           </Badge>
@@ -107,15 +111,17 @@ export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <code className="text-xs text-slate-200">{transaction.id}</code>
-                    <Badge className="border-slate-700 bg-slate-900 text-slate-300">
-                      {formatPendingTransactionSummary(transaction)}
-                    </Badge>
+                    <Badge variant="outline">{formatPendingTransactionSummary(transaction)}</Badge>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <EmptyState>Local optimistic writes are fully reconciled.</EmptyState>
+            <Empty className="border-border bg-muted/20 flex-none p-4">
+              <EmptyDescription className="text-sm">
+                Local optimistic writes are fully reconciled.
+              </EmptyDescription>
+            </Empty>
           )}
         </div>
 
@@ -141,10 +147,10 @@ export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
                       </div>
                     </div>
                     <div className="flex flex-wrap justify-end gap-1.5">
-                      <Badge className={streamActivityClass(activity.kind)}>{activity.kind}</Badge>
-                      <Badge className="border-slate-700 bg-slate-900 text-slate-300">
-                        {activity.freshness}
+                      <Badge className={streamActivityClass(activity.kind)} variant="outline">
+                        {activity.kind}
                       </Badge>
+                      <Badge variant="outline">{activity.freshness}</Badge>
                     </div>
                   </div>
 
@@ -156,13 +162,12 @@ export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
                           return (
                             <Badge
                               className="border-cyan-500/20 bg-cyan-500/5 tracking-normal text-cyan-100 normal-case"
-                              data={{
-                                "data-explorer-stream-activity-tx": txId,
-                                ...(writeScope
-                                  ? { "data-explorer-stream-activity-write-scope": writeScope }
-                                  : {}),
-                              }}
+                              data-explorer-stream-activity-tx={txId}
+                              {...(writeScope
+                                ? { "data-explorer-stream-activity-write-scope": writeScope }
+                                : {})}
                               key={txId}
+                              variant="outline"
                             >
                               {writeScope ? formatScopedTransactionLabel(txId, writeScope) : txId}
                             </Badge>
@@ -172,16 +177,18 @@ export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
                     {activity.kind === "write" ? (
                       <Badge
                         className="border-emerald-500/20 bg-emerald-500/5 tracking-normal text-emerald-100 normal-case"
-                        data={{
-                          "data-explorer-stream-activity-tx": activity.txId,
-                          "data-explorer-stream-activity-write-scope": activity.writeScope,
-                        }}
+                        data-explorer-stream-activity-tx={activity.txId}
+                        data-explorer-stream-activity-write-scope={activity.writeScope}
+                        variant="outline"
                       >
                         {formatScopedTransactionLabel(activity.txId, activity.writeScope)}
                       </Badge>
                     ) : null}
                     {activity.kind === "fallback" ? (
-                      <Badge className="border-rose-500/20 bg-rose-500/5 tracking-normal text-rose-100 normal-case">
+                      <Badge
+                        className="border-rose-500/20 bg-rose-500/5 tracking-normal text-rose-100 normal-case"
+                        variant="outline"
+                      >
                         {activity.fallbackReason}
                       </Badge>
                     ) : null}
@@ -190,10 +197,14 @@ export function ExplorerSyncInspector({ sync }: { sync: ExplorerSync }) {
               ))}
             </div>
           ) : (
-            <EmptyState>No authoritative delivery has been observed yet.</EmptyState>
+            <Empty className="border-border bg-muted/20 flex-none p-4">
+              <EmptyDescription className="text-sm">
+                No authoritative delivery has been observed yet.
+              </EmptyDescription>
+            </Empty>
           )}
         </div>
-      </div>
-    </Section>
+      </CardContent>
+    </Card>
   );
 }

@@ -137,7 +137,7 @@ function LoadingState({
       className="flex min-h-[60svh] items-center justify-center px-6"
       data-app-bootstrap="loading"
     >
-      <Card className="border-border/70 bg-card/95 w-full max-w-lg border shadow-sm">
+      <Card>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
           <CardDescription>{description}</CardDescription>

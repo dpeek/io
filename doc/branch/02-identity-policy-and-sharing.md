@@ -705,6 +705,10 @@ Responsibilities:
 Process and trust boundaries:
 
 - browser or TUI clients only hold policy-filtered replicated state
+- browser sync does not replicate hidden identity entities such as principals,
+  auth-subject projections, admission records, capability grants, or share
+  grants; those records contain authority-only predicates that must stay on
+  direct authority read paths
 - Worker request handlers are trusted to produce `AuthorizationContext`, but not
   to bypass authority decisions
 - Durable Object authority remains the authoritative write point

@@ -23,11 +23,14 @@ import {
   createDefaultTableRendererBinding,
   createQueryRendererCapabilityMap,
 } from "@io/graph-query/react-dom";
+import { Alert, AlertDescription, AlertTitle } from "@io/web/alert";
 import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
+import { Empty, EmptyDescription } from "@io/web/empty";
 import { Field, FieldContent, FieldGroup, FieldLabel } from "@io/web/field";
 import { Input } from "@io/web/input";
+import { NativeSelect, NativeSelectOption } from "@io/web/native-select";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -568,10 +571,7 @@ export function QueryWorkbench({
         />
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
-          <Card
-            className="border-border/70 bg-card/95 border shadow-sm"
-            data-query-workbench-save=""
-          >
+          <Card data-query-workbench-save="">
             <CardHeader>
               <CardTitle className="text-base">Save And Reopen</CardTitle>
               <CardDescription>
@@ -625,17 +625,15 @@ export function QueryWorkbench({
                 </Button>
               </div>
               {saveError ? (
-                <div className="rounded-xl border border-amber-400/40 bg-amber-50/60 px-3 py-2 text-xs">
-                  {saveError}
-                </div>
+                <Alert variant="destructive">
+                  <AlertTitle>Unable to save the current draft</AlertTitle>
+                  <AlertDescription>{saveError}</AlertDescription>
+                </Alert>
               ) : null}
             </CardContent>
           </Card>
 
-          <Card
-            className="border-border/70 bg-card/95 border shadow-sm"
-            data-query-workbench-library=""
-          >
+          <Card data-query-workbench-library="">
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -653,15 +651,16 @@ export function QueryWorkbench({
             </CardHeader>
             <CardContent className="grid gap-3 lg:grid-cols-2">
               {savedLibraryMessage ? (
-                <div
-                  className={
-                    savedState?.status === "error"
-                      ? "rounded-xl border border-amber-400/40 bg-amber-50/60 px-3 py-2 text-xs lg:col-span-2"
-                      : "text-muted-foreground text-sm lg:col-span-2"
-                  }
-                >
-                  {savedLibraryMessage}
-                </div>
+                savedState?.status === "error" ? (
+                  <Alert className="lg:col-span-2" variant="destructive">
+                    <AlertTitle>Saved library unavailable</AlertTitle>
+                    <AlertDescription>{savedLibraryMessage}</AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="text-muted-foreground text-sm lg:col-span-2">
+                    {savedLibraryMessage}
+                  </div>
+                )
               ) : null}
               {listedQueries.map((query) => (
                 <Button
@@ -698,9 +697,11 @@ export function QueryWorkbench({
               {listedQueries.length === 0 &&
               listedViews.length === 0 &&
               savedState?.status !== "loading" ? (
-                <div className="text-muted-foreground text-sm">
-                  Save a query or view to populate the route-addressable catalog.
-                </div>
+                <Empty className="border-border bg-muted/20 flex-none p-4 lg:col-span-2">
+                  <EmptyDescription className="text-sm">
+                    Save a query or view to populate the route-addressable catalog.
+                  </EmptyDescription>
+                </Empty>
               ) : null}
             </CardContent>
           </Card>
@@ -708,10 +709,7 @@ export function QueryWorkbench({
       </div>
 
       <div className="grid content-start gap-4 xl:sticky xl:top-4" data-query-workbench-results="">
-        <Card
-          className="border-border/70 bg-card/95 border shadow-sm"
-          data-query-workbench-preview-controls=""
-        >
+        <Card data-query-workbench-preview-controls="">
           <CardHeader className="gap-3">
             <div className="space-y-1">
               <CardTitle className="text-base">Results Panel</CardTitle>
@@ -741,19 +739,17 @@ export function QueryWorkbench({
               ) : null}
             </div>
             {previewDraftNotice ? (
-              <div
-                className="rounded-xl border border-amber-400/40 bg-amber-50/60 px-3 py-2 text-xs"
-                data-query-workbench-preview-note="draft-invalid"
-              >
-                {previewDraftNotice}
-              </div>
+              <Alert data-query-workbench-preview-note="draft-invalid" variant="destructive">
+                <AlertTitle>Preview pinned to the last valid route state</AlertTitle>
+                <AlertDescription>{previewDraftNotice}</AlertDescription>
+              </Alert>
             ) : null}
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="query-preview-renderer">Renderer</FieldLabel>
                 <FieldContent>
-                  <select
-                    className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
+                  <NativeSelect
+                    className="w-full"
                     id="query-preview-renderer"
                     onChange={(event) =>
                       void onSearchChange?.(
@@ -766,11 +762,11 @@ export function QueryWorkbench({
                     value={previewControls.rendererId}
                   >
                     {queryRoutePreviewRendererIds.map((rendererId) => (
-                      <option key={rendererId} value={rendererId}>
+                      <NativeSelectOption key={rendererId} value={rendererId}>
                         {rendererId}
-                      </option>
+                      </NativeSelectOption>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </FieldContent>
               </Field>
               <Field>
@@ -801,9 +797,11 @@ export function QueryWorkbench({
                 onSearchChange={onSearchChange}
               />
             ) : (
-              <div className="text-muted-foreground text-xs">
-                The current selection does not define any route-level parameter overrides.
-              </div>
+              <Empty className="border-border bg-muted/20 flex-none p-4">
+                <EmptyDescription className="text-sm">
+                  The current selection does not define any route-level parameter overrides.
+                </EmptyDescription>
+              </Empty>
             )}
           </CardContent>
         </Card>
@@ -816,7 +814,7 @@ export function QueryWorkbench({
             </CardHeader>
           </Card>
         ) : routeTarget.kind === "blank" ? (
-          <Card className="border-border/70 bg-card/95 border shadow-sm">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Preview pending</CardTitle>
               <CardDescription>

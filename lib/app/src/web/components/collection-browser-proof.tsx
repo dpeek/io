@@ -261,7 +261,7 @@ export function CollectionBrowserProof() {
 
   return (
     <div className="grid gap-4">
-      <Card className="border-border/70 bg-card/95 border shadow-sm">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base">Generic Collection Browser Proof</CardTitle>
           <CardDescription>

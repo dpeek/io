@@ -5,10 +5,14 @@ import { describe, expect, it } from "bun:test";
 import { parseSetCookieHeader } from "better-auth/cookies";
 
 import type { AuthorizationContext, WebPrincipalSummary } from "@io/graph-authority";
-import { createGraphClient, defaultHttpSerializedQueryPath } from "@io/graph-client";
+import {
+  createGraphClient,
+  createHttpGraphClient,
+  defaultHttpSerializedQueryPath,
+} from "@io/graph-client";
 import { createGraphStore, type GraphStoreSnapshot } from "@io/graph-kernel";
 import { type GraphWriteTransaction } from "@io/graph-kernel";
-import { core } from "@io/graph-module-core";
+import { core, coreGraphBootstrapOptions } from "@io/graph-module-core";
 import { workflow } from "@io/graph-module-workflow";
 import { webWorkflowReadPath } from "@io/graph-module-workflow/client";
 
@@ -321,6 +325,7 @@ async function createProjectedPrincipalWithoutBindings(
 function createEndToEndWorkerEnv(
   input: {
     readonly betterAuthEnv?: BetterAuthWorkerEnv;
+    readonly onAuthorityFetch?: (request: Request) => Promise<void> | void;
   } = {},
 ) {
   const { state } = createSqliteDurableObjectState();
@@ -348,7 +353,8 @@ function createEndToEndWorkerEnv(
       get(id: unknown) {
         expect(id).toBe("graph-authority-id");
         return {
-          fetch(request: Request) {
+          async fetch(request: Request) {
+            await input.onAuthorityFetch?.(request);
             return durableObject.fetch(request);
           },
         };
@@ -1711,9 +1717,18 @@ describe("web worker localhost instant onboarding end to end", () => {
       BETTER_AUTH_URL: "http://io.localhost:8787",
     });
     applyBetterAuthSchema(localAuthEnv);
+    const forwardedAuthorizations: AuthorizationContext[] = [];
 
     const { durableObject, env } = createEndToEndWorkerEnv({
       betterAuthEnv: localAuthEnv,
+      onAuthorityFetch(request) {
+        const pathname = new URL(request.url).pathname;
+        if (pathname !== "/api/sync") {
+          return;
+        }
+
+        forwardedAuthorizations.push(readRequestAuthorizationContext(request));
+      },
     });
     const authority = await getDurableAuthority(durableObject);
     const handler = createWorkerFetchHandler();
@@ -1727,6 +1742,7 @@ describe("web worker localhost instant onboarding end to end", () => {
       fetcher: browser.fetcher,
       origin: "http://io.localhost:8787",
     });
+    const workerGraph = { ...core, ...workflow } as const;
 
     expect(browser.readCookieHeader()).toBeTruthy();
     expect(browser.readPaths()).toEqual([
@@ -1753,11 +1769,55 @@ describe("web worker localhost instant onboarding end to end", () => {
     expect(payload.principal?.roleKeys).toEqual(
       expect.arrayContaining(["graph:authority", "graph:owner"]),
     );
+    const authoritativeSnapshot = authority.readSnapshot({
+      authorization: authorityAuthorization,
+    });
+    const principalIdsMissingHomeGraphId = [
+      ...new Set(
+        authoritativeSnapshot.edges
+          .filter((edge) => edge.p === core.principal.fields.kind.id)
+          .map((edge) => edge.s),
+      ),
+    ].filter(
+      (principalId) =>
+        !authoritativeSnapshot.edges.some(
+          (edge) => edge.s === principalId && edge.p === core.principal.fields.homeGraphId.id,
+        ),
+    );
+
+    expect(principalIdsMissingHomeGraphId).toEqual([]);
+    const totalSyncResponse = await browser.fetcher("/api/sync");
+    const totalSyncPayload = (await totalSyncResponse.json()) as {
+      readonly snapshot?: GraphStoreSnapshot;
+    };
+
+    expect(forwardedAuthorizations.at(-1)).toMatchObject({
+      principalId: payload.principal?.principalId,
+      roleKeys: expect.arrayContaining(["graph:authority", "graph:owner"]),
+    });
+    expect(
+      totalSyncPayload.snapshot?.edges.some((edge) => edge.s === payload.principal!.principalId),
+    ).toBe(false);
+    const syncedClient = await createHttpGraphClient(workerGraph, {
+      bootstrap: coreGraphBootstrapOptions,
+      fetch(input, init) {
+        return browser.fetcher(
+          typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url,
+          init,
+        );
+      },
+      url: "http://io.localhost:8787",
+    });
+
+    expect(syncedClient.sync.getState()).toMatchObject({
+      completeness: "complete",
+      freshness: "current",
+      status: "ready",
+    });
 
     const mutationStore = createGraphStore(
       authority.readSnapshot({ authorization: authorityAuthorization }),
     );
-    const workerGraph = { ...core, ...workflow } as const;
     const mutationGraph = createGraphClient(mutationStore, workerGraph);
     const beforeCreate = mutationStore.snapshot();
     const envVarId = mutationGraph.envVar.create({

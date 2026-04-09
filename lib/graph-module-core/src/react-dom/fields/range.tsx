@@ -1,4 +1,5 @@
 import { performValidatedMutation, usePredicateField } from "@io/graph-react";
+import { Field, FieldContent, FieldError, FieldGroup, FieldTitle } from "@io/web/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@io/web/select";
 import { useEffect, useState } from "react";
 
@@ -119,51 +120,57 @@ export function RangeFieldEditor({ onMutationError, onMutationSuccess, predicate
   }
 
   return (
-    <div className="grid min-w-0 gap-2" data-web-field-kind="number/range">
-      <div className="flex min-w-0 items-center gap-2">
-        <label className="text-muted-foreground w-12 shrink-0 text-[11px] font-medium tracking-[0.16em] uppercase">
-          Kind
-        </label>
-        <Select onValueChange={handleKindChange} value={rangeKind}>
-          <SelectTrigger aria-invalid={isInvalid || undefined} className="w-32 shrink-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {structuredValueKinds.map((kind) => (
-              <SelectItem key={kind} value={kind}>
-                {getStructuredValueKindLabel(kind)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex min-w-0 items-center gap-2">
-        <label className="text-muted-foreground w-12 shrink-0 text-[11px] font-medium tracking-[0.16em] uppercase">
-          Min
-        </label>
-        <div className="min-w-0 flex-1" data-web-range-slot="min">
-          <StructuredValuePartEditorFields
-            draft={{ ...minDraft, kind: rangeKind }}
-            invalid={isInvalid}
-            onChange={(next) => commitRange(rangeKind, { ...next, kind: rangeKind }, maxDraft)}
-            showKindSelect={false}
-          />
-        </div>
-      </div>
-      <div className="flex min-w-0 items-center gap-2">
-        <label className="text-muted-foreground w-12 shrink-0 text-[11px] font-medium tracking-[0.16em] uppercase">
-          Max
-        </label>
-        <div className="min-w-0 flex-1" data-web-range-slot="max">
-          <StructuredValuePartEditorFields
-            draft={{ ...maxDraft, kind: rangeKind }}
-            invalid={isInvalid}
-            onChange={(next) => commitRange(rangeKind, minDraft, { ...next, kind: rangeKind })}
-            showKindSelect={false}
-          />
-        </div>
-      </div>
-      {isInvalid ? <span className="sr-only">Invalid range value</span> : null}
+    <div className="grid min-w-0 gap-3" data-web-field-kind="number/range">
+      <FieldGroup className="gap-3">
+        <Field data-invalid={isInvalid || undefined} orientation="responsive">
+          <FieldTitle className="text-muted-foreground w-12 shrink-0 text-[11px] font-medium tracking-[0.16em] uppercase">
+            Kind
+          </FieldTitle>
+          <FieldContent className="min-w-0">
+            <Select onValueChange={handleKindChange} value={rangeKind}>
+              <SelectTrigger aria-invalid={isInvalid || undefined} className="w-32 shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {structuredValueKinds.map((kind) => (
+                  <SelectItem key={kind} value={kind}>
+                    {getStructuredValueKindLabel(kind)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FieldContent>
+        </Field>
+        <Field data-invalid={isInvalid || undefined} orientation="responsive">
+          <FieldTitle className="text-muted-foreground w-12 shrink-0 text-[11px] font-medium tracking-[0.16em] uppercase">
+            Min
+          </FieldTitle>
+          <FieldContent className="min-w-0" data-web-range-slot="min">
+            <StructuredValuePartEditorFields
+              draft={{ ...minDraft, kind: rangeKind }}
+              invalid={isInvalid}
+              onChange={(next) => commitRange(rangeKind, { ...next, kind: rangeKind }, maxDraft)}
+              showKindSelect={false}
+            />
+          </FieldContent>
+        </Field>
+        <Field data-invalid={isInvalid || undefined} orientation="responsive">
+          <FieldTitle className="text-muted-foreground w-12 shrink-0 text-[11px] font-medium tracking-[0.16em] uppercase">
+            Max
+          </FieldTitle>
+          <FieldContent className="min-w-0" data-web-range-slot="max">
+            <StructuredValuePartEditorFields
+              draft={{ ...maxDraft, kind: rangeKind }}
+              invalid={isInvalid}
+              onChange={(next) => commitRange(rangeKind, minDraft, { ...next, kind: rangeKind })}
+              showKindSelect={false}
+            />
+          </FieldContent>
+        </Field>
+      </FieldGroup>
+      {isInvalid ? (
+        <FieldError>Enter a complete range with valid minimum and maximum values.</FieldError>
+      ) : null}
     </div>
   );
 }

@@ -97,7 +97,7 @@ function createInstalledWorkflowRecord(overrides?: {
       desired: "active",
       status: "active",
       changedAt: "2026-04-02T00:00:00.000Z",
-      ...(overrides?.activation ?? {}),
+      ...overrides?.activation,
     },
     grantedPermissionKeys: overrides?.grantedPermissionKeys ?? ["workflow.document.read.summary"],
     ...(overrides?.installedAt === undefined

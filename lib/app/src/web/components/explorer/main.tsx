@@ -1,15 +1,23 @@
 import { typeId } from "@io/app/graph";
 import { workflow } from "@io/graph-module-workflow";
-import { Input } from "@io/web/input";
+import { Button } from "@io/web/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@io/web/card";
+import { Empty, EmptyDescription } from "@io/web/empty";
 import { ScrollArea } from "@io/web/scroll-area";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { cn } from "@io/web/utils";
+import { useEffect, useMemo, useState } from "react";
 
 import { EntityTypeBrowserSurface } from "../entity-type-browser.js";
 import { GraphRuntimeProvider, useGraphRuntime } from "../graph-runtime-bootstrap.js";
 import { buildEntityCatalog, buildTypeCatalog } from "./catalog.js";
-import { matchesQuery, postSecretFieldMutation } from "./helpers.js";
+import { postSecretFieldMutation } from "./helpers.js";
 import { predicateTypeId, schemaTarget, typePredicateId } from "./model.js";
-import type { ExplorerRuntime, ExplorerSelection, SubmitSecretFieldMutation } from "./model.js";
+import type {
+  ExplorerRuntime,
+  ExplorerSelection,
+  SubmitSecretFieldMutation,
+  TypeCatalogEntry,
+} from "./model.js";
 import {
   buildExplorerHref,
   isNewTarget,
@@ -20,8 +28,9 @@ import {
   replaceExplorerUrl,
 } from "./navigation.js";
 import { ExplorerSyncContext, useExplorerSyncSnapshot } from "./sync.js";
-import { TypeInspector, TypeListItem } from "./types-panel.js";
-import { Badge, EmptyState, ListButton, Section } from "./ui.js";
+import { TypeInspector } from "./types-panel.js";
+import { List } from "./list.js";
+import { EntityIcon } from "./icon.js";
 
 function selectionsEqual(left: ExplorerSelection, right: ExplorerSelection): boolean {
   return left.typeId === right.typeId && left.target === right.target;
@@ -116,17 +125,6 @@ export function Explorer({
     [selection, typeEntryById, entityEntryById],
   );
 
-  const [typeQuery, setTypeQuery] = useState("");
-  const deferredTypeQuery = useDeferredValue(typeQuery.trim().toLowerCase());
-
-  const visibleTypes = useMemo(
-    () =>
-      typeEntries.filter((entry) =>
-        matchesQuery(deferredTypeQuery, entry.key, entry.name, entry.kind),
-      ),
-    [deferredTypeQuery, typeEntries],
-  );
-
   const selectedTypeEntry = typeEntryById.get(resolvedSelection.typeId) ?? null;
   const selectedEntityType =
     selectedTypeEntry?.kind === "entity"
@@ -160,15 +158,15 @@ export function Explorer({
   }, [resolvedSelection]);
 
   useEffect(() => {
-    if (visibleTypes.length === 0) return;
-    if (visibleTypes.some((entry) => entry.id === resolvedSelection.typeId)) return;
+    if (typeEntries.length === 0) return;
+    if (typeEntries.some((entry) => entry.id === resolvedSelection.typeId)) return;
 
     const nextSelection = normalizeSelection({
       target: schemaTarget,
-      typeId: visibleTypes[0]!.id,
+      typeId: typeEntries[0]!.id,
     });
     setSelection((current) => (selectionsEqual(current, nextSelection) ? current : nextSelection));
-  }, [normalizeSelection, resolvedSelection.typeId, visibleTypes]);
+  }, [normalizeSelection, resolvedSelection.typeId, typeEntries]);
 
   function commitSelection(nextSelection: ExplorerSelection): void {
     const normalizedSelection = normalizeSelection(nextSelection);
@@ -206,48 +204,40 @@ export function Explorer({
       ) : null;
     }
 
-    return <EmptyState>Select a type to inspect it.</EmptyState>;
+    return (
+      <Empty className="border-border bg-muted/20 flex-none p-4">
+        <EmptyDescription className="text-sm">Select a type to inspect it.</EmptyDescription>
+      </Empty>
+    );
   })();
 
   return (
     <ExplorerSyncContext.Provider value={graphRuntime.sync}>
       <GraphRuntimeProvider runtime={graphRuntime}>
-        <div className="graph-explorer text-foreground flex min-h-0 flex-1 flex-col gap-4 xl:overflow-hidden">
-          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[280px_340px_minmax(0,1fr)] xl:overflow-hidden">
+        <div className="graph-explorer text-foreground flex min-h-0 flex-1 flex-col gap-4">
+          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[280px_340px_minmax(0,1fr)]">
             <div className="flex min-h-0 flex-col gap-4">
-              <div className="min-h-0 flex-1">
-                <Section
-                  title="Types"
-                  right={
-                    <Badge className="border-border bg-muted/30 text-muted-foreground">
-                      {visibleTypes.length}
-                    </Badge>
-                  }
-                >
-                  <Input
-                    onChange={(event) => setTypeQuery(event.target.value)}
-                    placeholder="Filter by key, name, or kind"
-                    value={typeQuery}
-                  />
-                  <ScrollArea className="min-h-0 flex-1">
-                    <div className="grid gap-2 pr-3">
-                      {visibleTypes.length > 0 ? (
-                        visibleTypes.map((entry) => (
-                          <TypeListItem
-                            active={entry.id === resolvedSelection.typeId}
-                            entry={entry}
-                            key={entry.id}
-                            onSelect={() => selectType(entry.id)}
-                            store={graphRuntime.store}
-                          />
-                        ))
-                      ) : (
-                        <EmptyState>No types match the current filter.</EmptyState>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </Section>
-              </div>
+              <TypeList
+                items={typeEntries}
+                onSelect={selectType}
+                selectedItem={selectedTypeEntry}
+              />
+              {/* <Card>
+                <CardHeader>
+                  <CardTitle>Types</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 overflow-y-auto">
+                  {visibleTypes.map((entry) => (
+                    <TypeListItem
+                      active={entry.id === resolvedSelection.typeId}
+                      entry={entry}
+                      key={entry.id}
+                      onSelect={() => selectType(entry.id)}
+                      store={graphRuntime.store}
+                    />
+                  ))}
+                </CardContent>
+              </Card> */}
             </div>
 
             {selectedEntityType ? (
@@ -266,27 +256,39 @@ export function Explorer({
               <>
                 <div className="flex min-h-0 flex-col gap-4">
                   <div className="min-h-0 flex-1">
-                    <Section
-                      title={selectedTypeEntry ? `${selectedTypeEntry.name} Targets` : "Targets"}
-                    >
-                      <ScrollArea className="min-h-0 flex-1">
-                        <div className="grid gap-2 pr-3">
-                          <ListButton
-                            active={isSchemaTarget(resolvedSelection.target)}
-                            onClick={() => selectTarget(schemaTarget)}
-                            props={{ "data-explorer-target": schemaTarget }}
-                          >
-                            <div className="space-y-1">
-                              <div className="text-sm font-medium">Schema</div>
-                              <div className="text-muted-foreground text-xs">
-                                Edit graph metadata and inspect the compiled definition for this
-                                type.
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>
+                          {selectedTypeEntry ? `${selectedTypeEntry.name} Targets` : "Targets"}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+                        <ScrollArea className="min-h-0 flex-1">
+                          <div className="grid gap-2 pr-3">
+                            <Button
+                              className={cn(
+                                "h-auto w-full justify-start rounded-xl border px-3 py-3 text-left text-sm",
+                                isSchemaTarget(resolvedSelection.target)
+                                  ? "border-primary/20 bg-secondary text-foreground"
+                                  : "border-border/60 bg-background text-foreground hover:bg-muted",
+                              )}
+                              data-explorer-target={schemaTarget}
+                              onClick={() => selectTarget(schemaTarget)}
+                              type="button"
+                              variant="ghost"
+                            >
+                              <div className="space-y-1">
+                                <div className="text-sm font-medium">Schema</div>
+                                <div className="text-muted-foreground text-xs">
+                                  Edit graph metadata and inspect the compiled definition for this
+                                  type.
+                                </div>
                               </div>
-                            </div>
-                          </ListButton>
-                        </div>
-                      </ScrollArea>
-                    </Section>
+                            </Button>
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
                   </div>
                 </div>
 
@@ -299,5 +301,24 @@ export function Explorer({
         </div>
       </GraphRuntimeProvider>
     </ExplorerSyncContext.Provider>
+  );
+}
+
+function TypeList({
+  items,
+  selectedItem,
+  onSelect,
+}: {
+  items: TypeCatalogEntry[];
+  selectedItem?: TypeCatalogEntry | null;
+  onSelect: (typeId: string) => void;
+}) {
+  return (
+    <List
+      title="Types"
+      items={items.map((entry) => ({ title: entry.name, icon: <EntityIcon id={entry.id} /> }))}
+      selectedIndex={selectedItem ? items.indexOf(selectedItem) : undefined}
+      onSelect={(index) => onSelect(items[index]!.id)}
+    />
   );
 }

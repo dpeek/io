@@ -1,7 +1,11 @@
 "use client";
 
 import { GraphIcon } from "@io/graph-module-core/react-dom";
+import { Button } from "@io/web/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@io/web/card";
+import { Empty, EmptyDescription } from "@io/web/empty";
 import { ScrollArea } from "@io/web/scroll-area";
+import { cn } from "@io/web/utils";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCreateButton, EntityCreateRuntimeProvider } from "./entity-create-button.js";
@@ -21,7 +25,6 @@ import type {
 } from "./explorer/model.js";
 import { typePredicateId } from "./explorer/model.js";
 import { useExplorerSyncSnapshot } from "./explorer/sync.js";
-import { EmptyState, ListButton, Section } from "./explorer/ui.js";
 import { useGraphRuntime } from "./graph-runtime-bootstrap.js";
 
 function resolveEntityTypeEntry(
@@ -61,11 +64,19 @@ function EntityListItem({
   const title = getEntityLabel(entity, getUntitledEntityLabel(typeEntry.name));
 
   return (
-    <ListButton
-      active={active}
-      className={className}
+    <Button
+      {...props}
+      className={cn(
+        "h-auto w-full justify-start rounded-xl border px-3 py-3 text-left text-sm",
+        active
+          ? "border-primary/20 bg-secondary text-foreground"
+          : "border-border/60 bg-background text-foreground hover:bg-muted",
+        className,
+      )}
+      data-explorer-item-entity={entity.id}
       onClick={onSelect}
-      props={{ "data-explorer-item-entity": entity.id, ...props }}
+      type="button"
+      variant="ghost"
     >
       <div className="flex items-start gap-3">
         {typeof iconId === "string" && iconId.length > 0 ? (
@@ -75,7 +86,7 @@ function EntityListItem({
           <div className="text-sm font-medium">{title}</div>
         </div>
       </div>
-    </ListButton>
+    </Button>
   );
 }
 
@@ -151,55 +162,68 @@ export function EntityTypeBrowserSurface({
         className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]"
         data-entity-type-browser={typeId}
       >
-        <Section
-          right={
-            <EntityCreateButton
-              onCreated={(entityId) => {
-                commitEntitySelection(entityId);
-                onCreated?.(entityId);
-              }}
-              typeId={typeId}
-            />
-          }
-          title={title}
-        >
-          {entities.length > 0 ? (
-            <ScrollArea className="-mx-4 min-h-0 flex-1" data-entity-type-list-scroll={typeId}>
-              <div className="grid min-w-0" data-entity-type-list={typeId}>
-                {entities.map((entity) => (
-                  <EntityListItem
-                    active={entity.id === selectedEntityId}
-                    className="min-h-16 rounded-none border-x-0 border-t-0 px-4 py-4 [&_svg]:shrink-0"
-                    entity={entity}
-                    key={entity.id}
-                    onSelect={() => commitEntitySelection(entity.id)}
-                    props={{ "data-entity-type-list-item": entity.id }}
-                    store={runtime.store}
-                    typeEntry={typeEntry}
-                  />
-                ))}
-              </div>
-            </ScrollArea>
-          ) : (
-            <EmptyState>No records are available yet.</EmptyState>
-          )}
-        </Section>
+        <Card data-entity-type-browser={typeId}>
+          <CardHeader>
+            <CardTitle>{title}</CardTitle>
+            <CardAction>
+              <EntityCreateButton
+                onCreated={(entityId) => {
+                  commitEntitySelection(entityId);
+                  onCreated?.(entityId);
+                }}
+                typeId={typeId}
+              />
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {entities.length > 0 ? (
+              <ScrollArea className="-mx-4 min-h-0 flex-1" data-entity-type-list-scroll={typeId}>
+                <div className="grid min-w-0" data-entity-type-list={typeId}>
+                  {entities.map((entity) => (
+                    <EntityListItem
+                      active={entity.id === selectedEntityId}
+                      className="min-h-16 rounded-none border-x-0 border-t-0 px-4 py-4 [&_svg]:shrink-0"
+                      entity={entity}
+                      key={entity.id}
+                      onSelect={() => commitEntitySelection(entity.id)}
+                      props={{ "data-entity-type-list-item": entity.id }}
+                      store={runtime.store}
+                      typeEntry={typeEntry}
+                    />
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : (
+              <Empty className="border-border bg-muted/20 flex-none p-4">
+                <EmptyDescription className="text-sm">
+                  No records are available yet.
+                </EmptyDescription>
+              </Empty>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="min-h-0">
           {selectedEntity ? (
-            <ScrollArea className="h-full pr-1">
-              <EntitySurface
-                defaultMode="edit"
-                entity={selectedEntity}
-                runtime={runtime}
-                submitSecretField={submitSecretField}
-                typeEntry={typeEntry}
-              />
-            </ScrollArea>
+            <EntitySurface
+              defaultMode="edit"
+              entity={selectedEntity}
+              runtime={runtime}
+              submitSecretField={submitSecretField}
+            />
           ) : (
-            <Section title="Detail">
-              <EmptyState>Select a record to open its field editor.</EmptyState>
-            </Section>
+            <Card>
+              <CardHeader>
+                <CardTitle>Detail</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Empty className="border-border bg-muted/20 flex-none p-4">
+                  <EmptyDescription className="text-sm">
+                    Select a record to open its field editor.
+                  </EmptyDescription>
+                </Empty>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

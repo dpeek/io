@@ -6,6 +6,7 @@
   "exports": {
     "./global.css": "./src/global.css",
     "./accordion": "./src/accordion.tsx",
+    "./alert": "./src/alert.tsx",
     "./alert-dialog": "./src/alert-dialog.tsx",
     "./aspect-ratio": "./src/aspect-ratio.tsx",
     "./autocomplete": "./src/autocomplete.tsx",
@@ -29,6 +30,7 @@
     "./dialog": "./src/dialog.tsx",
     "./dropdown-menu": "./src/dropdown-menu.tsx",
     "./error-boundary": "./src/error-boundary.tsx",
+    "./empty": "./src/empty.tsx",
     "./field": "./src/field.tsx",
     "./form-tanstack": "./src/form-tanstack.tsx",
     "./form": "./src/form.tsx",
@@ -43,6 +45,7 @@
     "./markdown": "./src/markdown.tsx",
     "./monaco": "./src/monaco.tsx",
     "./menubar": "./src/menubar.tsx",
+    "./native-select": "./src/native-select.tsx",
     "./navigation-menu": "./src/navigation-menu.tsx",
     "./pagination": "./src/pagination.tsx",
     "./popover": "./src/popover.tsx",

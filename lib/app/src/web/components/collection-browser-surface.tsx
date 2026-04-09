@@ -17,6 +17,8 @@ import type {
   QueryContainerRuntimeController,
   QueryContainerRuntimeValue,
 } from "@io/graph-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@io/web/card";
+import { Empty, EmptyDescription } from "@io/web/empty";
 import { ScrollArea } from "@io/web/scroll-area";
 import { useEffect, useMemo, useState } from "react";
 
@@ -30,7 +32,6 @@ import type {
   SubmitSecretFieldMutation,
 } from "./explorer/model.js";
 import { ExplorerSyncContext, useExplorerSyncSnapshot } from "./explorer/sync.js";
-import { EmptyState, Section } from "./explorer/ui.js";
 import {
   getInstalledModuleQueryEditorCatalog,
   getInstalledModuleQuerySurfaceRegistry,
@@ -253,13 +254,21 @@ export function CollectionBrowserSurface({
                   entity={selectedEntity}
                   runtime={runtime}
                   submitSecretField={submitSecretField}
-                  typeEntry={typeEntry}
                 />
               </ScrollArea>
             ) : (
-              <Section title="Detail">
-                <EmptyState>Select a record to open its field editor.</EmptyState>
-              </Section>
+              <Card className="border-border/70 bg-card/95 flex h-full min-h-0 flex-col border shadow-sm">
+                <CardHeader className="border-border/60 border-b">
+                  <CardTitle>Detail</CardTitle>
+                </CardHeader>
+                <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+                  <Empty className="border-border bg-muted/20 flex-none p-4">
+                    <EmptyDescription className="text-sm">
+                      Select a record to open its field editor.
+                    </EmptyDescription>
+                  </Empty>
+                </CardContent>
+              </Card>
             )}
           </div>
         </div>

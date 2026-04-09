@@ -33,7 +33,8 @@ stay in `@io/graph-module` and `@io/graph-surface`.
   row roles, row chrome, and explicit `view | edit` mode
 - `../src/web/components/inspector.tsx`: shared inspector shell and section
   renderer that reuses `RecordSurfaceLayout` and
-  `RecordSurfaceSectionView`
+  `RecordSurfaceSectionView`; `EntitySurface` now only reuses the section path
+  and owns its single-card chrome locally
 - `../src/web/components/field-editor-row.tsx`: mode-aware row body, widget
   selection, and validation placement
 - `../src/web/components/explorer/create-draft-plan.ts`: create-draft field
@@ -69,6 +70,8 @@ stay in `@io/graph-module` and `@io/graph-surface`.
   create failures, and hidden or non-field summary issues
 - reuse shared field widgets and section chrome instead of forking a second
   widget stack
+- keep the live entity detail in one app card, with the `view | edit` toggle
+  in the footer instead of a separate header panel
 
 ## Row planning and chrome
 

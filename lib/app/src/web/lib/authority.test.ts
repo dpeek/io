@@ -4309,6 +4309,18 @@ describe("web authority", () => {
     );
     const admitted = await authority.lookupSessionPrincipal(lookupInput);
     const projection = await authority.activateSessionPrincipalRoleBindings(lookupInput);
+    const signedInAuthorization = createTestAuthorizationContext({
+      graphId: lookupInput.graphId,
+      principalId: projection.principalId,
+      principalKind: projection.principalKind,
+      sessionId: "session:operator-browser",
+      roleKeys: [...(projection.roleKeys ?? [])],
+      capabilityGrantIds: [...(projection.capabilityGrantIds ?? [])],
+      capabilityVersion: projection.capabilityVersion,
+    });
+    const browserTotal = authority.createTotalSyncPayload({
+      authorization: signedInAuthorization,
+    });
     const productGraphClient = readProductGraph(
       authority,
       createAuthorityAuthorizationContext({ graphId: lookupInput.graphId }),
@@ -4345,6 +4357,9 @@ describe("web authority", () => {
       roleKeys: ["graph:authority", "graph:owner"],
       capabilityVersion: 1,
     });
+    expect(browserTotal.snapshot.edges.some((edge) => edge.s === projection.principalId)).toBe(
+      false,
+    );
   });
 
   it("lets operators manage explicit admission approvals separately from explicit role binding", async () => {

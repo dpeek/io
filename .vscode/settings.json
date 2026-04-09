@@ -5,10 +5,10 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.oxc": "explicit"
   },
-  "typescript.preferences.importModuleSpecifierEnding": "js",
-  "typescript.reportStyleChecksAsWarnings": false,
-  "typescript.updateImportsOnFileMove.enabled": "always",
-  "typescript.experimental.useTsgo": true,
+  "ts.preferences.importModuleSpecifierEnding": "js",
+  "ts.reportStyleChecksAsWarnings": false,
+  "ts.updateImportsOnFileMove.enabled": "always",
+  "ts.experimental.useTsgo": true,
   "explorer.confirmDragAndDrop": false,
   "explorer.confirmDelete": false,
   "workbench.startupEditor": "none",

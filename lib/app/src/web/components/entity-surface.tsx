@@ -1,5 +1,6 @@
 import { Button } from "@io/web/button";
 import { ButtonGroup } from "@io/web/button-group";
+import { Card, CardContent, CardFooter } from "@io/web/card";
 import { useMemo, useState } from "react";
 
 import {
@@ -7,9 +8,7 @@ import {
   type EntitySurfaceMode,
   type EntitySurfaceRowPlan,
 } from "./entity-surface-plan.js";
-import { usePredicateSlotValue } from "./field-editor.js";
-import { getEntityLabel, getUntitledEntityLabel } from "./explorer/helpers.js";
-import { iconTypeId, typePredicateId } from "./explorer/model.js";
+import { iconTypeId } from "./explorer/model.js";
 import type {
   AnyEntityRef,
   AnyPredicateRef,
@@ -17,7 +16,7 @@ import type {
   ExplorerRuntime,
   SubmitSecretFieldMutation,
 } from "./explorer/model.js";
-import { InspectorFieldSection, InspectorShell, type InspectorFieldRow } from "./inspector.js";
+import { InspectorFieldSection, type InspectorFieldRow } from "./inspector.js";
 
 function resolveEntityPreviewIconId(
   entityId: string,
@@ -94,7 +93,6 @@ export function EntitySurface({
   runtime,
   showModeToggle = true,
   submitSecretField,
-  typeEntry,
 }: {
   defaultMode?: EntitySurfaceMode;
   entity: AnyEntityRef;
@@ -103,19 +101,11 @@ export function EntitySurface({
   runtime: ExplorerRuntime;
   showModeToggle?: boolean;
   submitSecretField: SubmitSecretFieldMutation;
-  typeEntry: EntityCatalogEntry;
 }) {
   const [uncontrolledMode, setUncontrolledMode] = useState<EntitySurfaceMode>(defaultMode);
   const mode = controlledMode ?? uncontrolledMode;
-  const iconSlotValue = usePredicateSlotValue(
-    runtime.store,
-    entity.id,
-    typeEntry.iconPredicateId ?? typePredicateId,
-  );
-  const iconId = resolveEntityPreviewIconId(entity.id, iconSlotValue, typeEntry);
   const surfacePlan = useMemo(() => buildLiveEntitySurfacePlan(entity, { mode }), [entity, mode]);
   const rows = useMemo(() => buildEntitySurfaceFieldRows(surfacePlan.rows), [surfacePlan.rows]);
-  const title = getEntityLabel(entity, getUntitledEntityLabel(typeEntry.name));
 
   function commitMode(nextMode: EntitySurfaceMode): void {
     onModeChange?.(nextMode);
@@ -125,32 +115,27 @@ export function EntitySurface({
   }
 
   return (
-    <div
+    <Card
       data-entity-surface="entity"
       data-entity-surface-entity={entity.id}
       data-entity-surface-mode={surfacePlan.mode}
     >
-      <InspectorShell
-        badges={
-          showModeToggle ? (
-            <EntitySurfaceModeToggle mode={surfacePlan.mode} onModeChange={commitMode} />
-          ) : undefined
-        }
-        iconId={iconId}
-        state="entity"
-        status={typeEntry.name}
-        title={title}
-        typeLabel={typeEntry.name}
-      >
+      <CardContent className="flex min-h-0 flex-1 flex-col">
         <InspectorFieldSection
+          chrome={false}
           emptyMessage="No editable fields are exposed for this record yet."
           mode={surfacePlan.mode}
           rows={rows}
           runtime={runtime}
           submitSecretField={submitSecretField}
         />
-      </InspectorShell>
-    </div>
+      </CardContent>
+      {showModeToggle ? (
+        <CardFooter className="border-border/60 justify-end border-t">
+          <EntitySurfaceModeToggle mode={surfacePlan.mode} onModeChange={commitMode} />
+        </CardFooter>
+      ) : null}
+    </Card>
   );
 }
 

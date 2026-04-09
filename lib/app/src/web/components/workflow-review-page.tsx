@@ -925,7 +925,7 @@ function PageHeader({
   readonly selectedCommit?: CommitQueueScopeCommitRow["commit"];
 }) {
   return (
-    <Card className="border-border/70 bg-card/95 border shadow-sm">
+    <Card>
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
@@ -977,7 +977,7 @@ function PageHeader({
 function BrowserAgentStatusCard({ runtime }: { readonly runtime: BrowserAgentRuntimeProbe }) {
   if (runtime.status === "checking") {
     return (
-      <Card className="border-border/70 bg-card/95 border shadow-sm">
+      <Card>
         <CardHeader>
           <CardTitle>Checking local browser-agent runtime</CardTitle>
           <CardDescription>
@@ -990,7 +990,7 @@ function BrowserAgentStatusCard({ runtime }: { readonly runtime: BrowserAgentRun
 
   if (runtime.status === "ready") {
     return (
-      <Card className="border-border/70 bg-card/95 border shadow-sm">
+      <Card>
         <CardHeader>
           <CardTitle>Local browser-agent runtime ready</CardTitle>
           <CardDescription>{runtime.message}</CardDescription>
@@ -1004,7 +1004,7 @@ function BrowserAgentStatusCard({ runtime }: { readonly runtime: BrowserAgentRun
   }
 
   return (
-    <Card className="border-border/70 bg-card/95 border shadow-sm">
+    <Card>
       <CardHeader>
         <CardTitle>Local browser-agent runtime unavailable</CardTitle>
         <CardDescription>{runtime.message}</CardDescription>

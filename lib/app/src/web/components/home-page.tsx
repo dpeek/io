@@ -60,7 +60,7 @@ export function HomePageStateView({
 
   return (
     <div className="grid gap-4" data-home-auth-state="ready">
-      <Card className="border-border/70 bg-card/95 border shadow-sm">
+      <Card>
         <CardHeader>
           <CardTitle>Session ready</CardTitle>
           <CardDescription>

@@ -2,6 +2,7 @@ import { typeId } from "@io/app/graph";
 import { GraphValidationError } from "@io/graph-client";
 import { Button } from "@io/web/button";
 import { DialogClose, DialogFooter, DialogHeader, DialogTitle } from "@io/web/dialog";
+import { Empty, EmptyDescription } from "@io/web/empty";
 import { XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -17,7 +18,6 @@ import type {
   FieldValidationMessage,
 } from "./explorer/model.js";
 import { describeSyncError } from "./explorer/sync.js";
-import { EmptyState } from "./explorer/ui.js";
 import { InspectorFieldSection } from "./inspector.js";
 
 function ValidationSummary({ message }: { message: string }) {
@@ -161,9 +161,11 @@ export function CreateEntitySurface({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <EmptyState>
-            This type requires fields that cannot be set in the generic create dialog.
-          </EmptyState>
+          <Empty className="border-border bg-muted/20 flex-none p-4">
+            <EmptyDescription className="text-sm">
+              This type requires fields that cannot be set in the generic create dialog.
+            </EmptyDescription>
+          </Empty>
         </div>
 
         <DialogFooter className="border-border/60 border-t px-4 py-3">

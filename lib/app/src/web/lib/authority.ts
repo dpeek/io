@@ -3161,6 +3161,27 @@ function createReadableReplicationAuthorizer(
     ).allowed;
 }
 
+function createSyncReplicationAuthorizer(
+  store: GraphStore,
+  authorization: AuthorizationContext,
+  compiledFieldIndex: ReadonlyMap<string, CompiledFieldDefinition>,
+  authorityPolicyVersion: number = webAppPolicyVersion,
+): ReplicationReadAuthorizer {
+  const authorizeReadablePredicate = createReadableReplicationAuthorizer(
+    store,
+    authorization,
+    compiledFieldIndex,
+    authorityPolicyVersion,
+  );
+
+  return ({ subjectId, predicateId }) =>
+    !subjectIsHiddenIdentityEntity(store, subjectId) &&
+    authorizeReadablePredicate({
+      subjectId,
+      predicateId,
+    });
+}
+
 function filterReadableSnapshot(
   store: GraphStore,
   snapshot: GraphStoreSnapshot,
@@ -4628,7 +4649,7 @@ export async function createWebAppAuthority(
   }
 
   function createTotalSyncPayload(options: WebAppAuthoritySyncOptions) {
-    const authorizeRead = createReadableReplicationAuthorizer(
+    const authorizeRead = createSyncReplicationAuthorizer(
       authority.store,
       options.authorization,
       compiledFieldIndex,
@@ -4702,7 +4723,7 @@ export async function createWebAppAuthority(
   ) {
     const requestedAfter = after;
     const snapshot = authority.store.snapshot();
-    const authorizeRead = createReadableReplicationAuthorizer(
+    const authorizeRead = createSyncReplicationAuthorizer(
       authority.store,
       options.authorization,
       compiledFieldIndex,

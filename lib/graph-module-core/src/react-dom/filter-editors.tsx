@@ -3,13 +3,15 @@ import type {
   GraphFilterEnumOption,
   GraphFilterOperandEditorCapability,
 } from "@io/graph-react";
+import { Input } from "@io/web/input";
+import { NativeSelect, NativeSelectOption } from "@io/web/native-select";
 import { useEffect, useState } from "react";
 
 type AnyOperandProps = FilterOperandProps<any, any, any>;
 
 function TextFilterOperandEditor({ operator, onChange, value }: AnyOperandProps) {
   return (
-    <input
+    <Input
       data-web-filter-operand-kind="string"
       onChange={(event) => {
         const nextValue = event.target.value;
@@ -37,7 +39,7 @@ function NumberFilterOperandEditor({ operator, onChange, value }: AnyOperandProp
   }, [committedValue]);
 
   return (
-    <input
+    <Input
       aria-invalid={isInvalid || undefined}
       data-web-filter-operand-kind="number"
       inputMode={
@@ -83,7 +85,7 @@ function DateFilterOperandEditor({ operator, onChange, value }: AnyOperandProps)
   }, [committedValue]);
 
   return (
-    <input
+    <Input
       aria-invalid={isInvalid || undefined}
       data-web-filter-operand-kind="date"
       onChange={(event) => {
@@ -126,7 +128,7 @@ function UrlFilterOperandEditor({ operator, onChange, value }: AnyOperandProps) 
   }, [committedValue]);
 
   return (
-    <input
+    <Input
       aria-invalid={isInvalid || undefined}
       data-web-filter-operand-kind="url"
       onChange={(event) => {
@@ -171,7 +173,8 @@ function EnumFilterOperandEditor({ operator, onChange, value }: AnyOperandProps)
       : [];
 
   return (
-    <select
+    <NativeSelect
+      className="w-full"
       data-web-filter-operand-kind="enum"
       data-web-filter-selection={operator.operand.selection}
       multiple={isMany}
@@ -198,19 +201,20 @@ function EnumFilterOperandEditor({ operator, onChange, value }: AnyOperandProps)
       }}
       value={isMany ? selectedValues : (selectedValues[0] ?? "")}
     >
-      {!isMany ? <option value="">Select an option</option> : null}
+      {!isMany ? <NativeSelectOption value="">Select an option</NativeSelectOption> : null}
       {operator.operand.options.map((option: GraphFilterEnumOption) => (
-        <option key={option.value} value={option.value}>
+        <NativeSelectOption key={option.value} value={option.value}>
           {option.label}
-        </option>
+        </NativeSelectOption>
       ))}
-    </select>
+    </NativeSelect>
   );
 }
 
 function BooleanFilterOperandEditor({ operator, onChange, value }: AnyOperandProps) {
   return (
-    <select
+    <NativeSelect
+      className="w-full"
       data-web-filter-operand-kind="boolean"
       onChange={(event) => {
         const nextValue = event.target.value;
@@ -222,10 +226,10 @@ function BooleanFilterOperandEditor({ operator, onChange, value }: AnyOperandPro
       }}
       value={typeof value === "boolean" ? String(value) : ""}
     >
-      <option value="">Select a value</option>
-      <option value="true">True</option>
-      <option value="false">False</option>
-    </select>
+      <NativeSelectOption value="">Select a value</NativeSelectOption>
+      <NativeSelectOption value="true">True</NativeSelectOption>
+      <NativeSelectOption value="false">False</NativeSelectOption>
+    </NativeSelect>
   );
 }
 

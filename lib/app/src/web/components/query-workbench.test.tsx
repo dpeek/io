@@ -302,6 +302,8 @@ describe("query workbench component", () => {
     );
 
     expect(html).toContain('value="3"');
-    expect(html).toContain('<option value="default:table" selected="">');
+    expect(html).toContain(
+      '<option data-slot="native-select-option" value="default:table" selected="">',
+    );
   });
 });

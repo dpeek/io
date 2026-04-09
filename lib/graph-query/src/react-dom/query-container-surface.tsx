@@ -79,10 +79,7 @@ function SurfaceFrame({
   readonly title?: string;
 }) {
   return (
-    <Card
-      className="border-border/70 bg-card/95 border shadow-sm"
-      data-query-container={spec.containerId}
-    >
+    <Card data-query-container={spec.containerId}>
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">

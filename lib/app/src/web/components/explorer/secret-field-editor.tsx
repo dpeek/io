@@ -1,5 +1,7 @@
 import { usePredicateField } from "@io/graph-react";
+import { Alert, AlertDescription } from "@io/web/alert";
 import { Button } from "@io/web/button";
+import { Field, FieldContent, FieldDescription, FieldError, FieldLabel } from "@io/web/field";
 import { Input } from "@io/web/input";
 import { useEffect, useState } from "react";
 
@@ -98,37 +100,36 @@ export function SecretFieldEditor({
         </div>
       </div>
 
-      <label className="grid gap-2">
-        <span className="text-sm font-medium text-slate-100">
+      <Field data-invalid={error ? true : undefined}>
+        <FieldLabel htmlFor={`explorer-secret-${predicate.predicateId}`}>
           {secretId ? "Rotate secret" : "Set secret"}
-        </span>
-        <Input
-          data-explorer-secret-input={predicate.predicateId}
-          onChange={(event) => {
-            setPlaintext(event.target.value);
-          }}
-          placeholder={secretId ? "Paste a new plaintext value" : "Paste the plaintext value once"}
-          type="password"
-          value={plaintext}
-        />
-      </label>
-
-      {error ? (
-        <div
-          className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100"
-          data-explorer-secret-error={predicate.predicateId}
-        >
-          {error}
-        </div>
-      ) : null}
+        </FieldLabel>
+        <FieldContent>
+          <Input
+            aria-invalid={error ? true : undefined}
+            data-explorer-secret-input={predicate.predicateId}
+            id={`explorer-secret-${predicate.predicateId}`}
+            onChange={(event) => {
+              setPlaintext(event.target.value);
+            }}
+            placeholder={
+              secretId ? "Paste a new plaintext value" : "Paste the plaintext value once"
+            }
+            type="password"
+            value={plaintext}
+          />
+          <FieldDescription>
+            Plaintext stays authority-only. The synced graph only carries the opaque handle,
+            version, and rotation metadata.
+          </FieldDescription>
+          <FieldError data-explorer-secret-error={predicate.predicateId}>{error}</FieldError>
+        </FieldContent>
+      </Field>
 
       {status ? (
-        <div
-          className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100"
-          data-explorer-secret-result={predicate.predicateId}
-        >
-          {status}
-        </div>
+        <Alert data-explorer-secret-result={predicate.predicateId}>
+          <AlertDescription>{status}</AlertDescription>
+        </Alert>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
@@ -142,11 +143,6 @@ export function SecretFieldEditor({
         >
           {busy ? "Saving..." : secretId ? "Rotate secret" : "Save secret"}
         </Button>
-      </div>
-
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-400">
-        Plaintext stays authority-only. The synced graph only carries the opaque handle, version,
-        and rotation metadata.
       </div>
     </div>
   );

@@ -83,7 +83,7 @@ function QueryPageView({ children }: { readonly children: ReactNode }) {
 
 function SavedSelectionLoadingCard() {
   return (
-    <Card className="border-border/70 bg-card/95 border shadow-sm" data-query-page-loading="">
+    <Card data-query-page-loading="">
       <CardHeader>
         <CardTitle className="text-base">Loading saved selection</CardTitle>
         <CardDescription>

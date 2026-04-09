@@ -1,14 +1,18 @@
 "use client";
 
+import { Alert, AlertDescription } from "@io/web/alert";
 import { Badge } from "@io/web/badge";
 import { Button } from "@io/web/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@io/web/card";
+import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from "@io/web/field";
 import { Input } from "@io/web/input";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import {
+  activateGraphAccess,
   authClient,
   completeLocalhostOnboarding,
+  hasWritableGraphAccess,
   notifyWebPrincipalBootstrapChanged,
   readWebAuthState,
   resolveWebPrincipalBootstrap,
@@ -149,7 +153,7 @@ function useLocalhostOnboardingState(enabled: boolean): LocalhostOnboardingState
   };
 }
 
-function useResetSharedGraphRuntimeOnSessionChange(sessionId: string | null) {
+export function useResetSharedGraphRuntimeOnSessionChange(sessionId: string | null) {
   const previousSessionIdRef = useRef<string | null>(sessionId);
 
   useEffect(() => {
@@ -238,10 +242,7 @@ export function AuthSessionLoadingCard({
   readonly title?: string;
 }) {
   return (
-    <Card
-      className="border-border/70 bg-card/95 border shadow-sm"
-      data-auth-session-state="booting"
-    >
+    <Card data-auth-session-state="booting">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
@@ -358,12 +359,7 @@ export function AuthSessionEntryCard({
   }
 
   return (
-    <Card
-      className="border-border/70 bg-card/95 border shadow-sm"
-      data-auth-entry-card=""
-      data-auth-entry-mode={mode}
-      data-auth-session-state="signed-out"
-    >
+    <Card data-auth-entry-card="" data-auth-entry-mode={mode} data-auth-session-state="signed-out">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
@@ -404,16 +400,12 @@ export function AuthSessionEntryCard({
             )}
 
             {localhostOnboarding.available && localhostOnboarding.feedback ? (
-              <div
-                className={
-                  localhostOnboarding.feedback.kind === "error"
-                    ? "border-destructive/20 bg-destructive/5 text-destructive rounded-lg border px-3 py-2 text-xs"
-                    : "border-primary/20 bg-primary/5 text-foreground rounded-lg border px-3 py-2 text-xs"
-                }
+              <Alert
                 data-auth-localhost-feedback={localhostOnboarding.feedback.kind}
+                variant={localhostOnboarding.feedback.kind === "error" ? "destructive" : "default"}
               >
-                {localhostOnboarding.feedback.message}
-              </div>
+                <AlertDescription>{localhostOnboarding.feedback.message}</AlertDescription>
+              </Alert>
             ) : null}
           </div>
         ) : null}
@@ -436,40 +428,56 @@ export function AuthSessionEntryCard({
         </div>
 
         <form className="grid gap-3" onSubmit={handleSubmit}>
-          {mode === "sign-up" ? (
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Name</span>
-              <Input
-                autoComplete="name"
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Operator"
-                value={name}
-              />
-            </label>
-          ) : null}
+          <FieldGroup className="gap-3">
+            {mode === "sign-up" ? (
+              <Field>
+                <FieldLabel htmlFor="auth-entry-name">Name</FieldLabel>
+                <FieldContent>
+                  <Input
+                    autoComplete="name"
+                    id="auth-entry-name"
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Operator"
+                    value={name}
+                  />
+                </FieldContent>
+              </Field>
+            ) : null}
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">Email</span>
-            <Input
-              autoComplete="email"
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="operator@example.com"
-              type="email"
-              value={email}
-            />
-          </label>
+            <Field>
+              <FieldLabel htmlFor="auth-entry-email">Email</FieldLabel>
+              <FieldContent>
+                <Input
+                  autoComplete="email"
+                  id="auth-entry-email"
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="operator@example.com"
+                  type="email"
+                  value={email}
+                />
+              </FieldContent>
+            </Field>
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">Password</span>
-            <Input
-              autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-              minLength={8}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="At least 8 characters"
-              type="password"
-              value={password}
-            />
-          </label>
+            <Field>
+              <FieldLabel htmlFor="auth-entry-password">Password</FieldLabel>
+              <FieldContent>
+                <Input
+                  autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+                  id="auth-entry-password"
+                  minLength={8}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="At least 8 characters"
+                  type="password"
+                  value={password}
+                />
+                <FieldDescription>
+                  {mode === "sign-in"
+                    ? "Use the same password you created for this browser principal."
+                    : "New passwords must be at least 8 characters."}
+                </FieldDescription>
+              </FieldContent>
+            </Field>
+          </FieldGroup>
 
           <div className="flex flex-wrap items-center gap-3 pt-1">
             <Button
@@ -487,16 +495,12 @@ export function AuthSessionEntryCard({
         </form>
 
         {feedback ? (
-          <div
-            className={
-              feedback.kind === "error"
-                ? "border-destructive/20 bg-destructive/5 text-destructive rounded-lg border px-3 py-2 text-xs"
-                : "border-primary/20 bg-primary/5 text-foreground rounded-lg border px-3 py-2 text-xs"
-            }
+          <Alert
             data-auth-feedback={feedback.kind}
+            variant={feedback.kind === "error" ? "destructive" : "default"}
           >
-            {feedback.message}
-          </div>
+            <AlertDescription>{feedback.message}</AlertDescription>
+          </Alert>
         ) : null}
       </CardContent>
     </Card>
@@ -528,7 +532,7 @@ export function AppShellAuthStatus() {
   }
 
   return (
-    <div className="ml-auto flex items-center gap-2" data-auth-session-status="">
+    <div className="items-center gap-2" data-auth-session-status="">
       <Badge variant="outline">{readAuthStatusLabel(auth)}</Badge>
       {auth.status === "ready" ? (
         <span className="text-muted-foreground hidden text-xs sm:inline">{auth.displayName}</span>
@@ -617,26 +621,19 @@ export function GraphAccessGate({
     let cancelled = false;
     setActivationState({ status: "activating" });
 
-    void fetch("/api/access/activate", {
-      method: "POST",
-      credentials: "same-origin",
-    })
-      .then(async (response) => {
+    void activateGraphAccess({})
+      .then((projection) => {
         if (cancelled) return;
 
-        if (response.ok) {
+        if (hasWritableGraphAccess(projection.summary)) {
           setActivationState({ status: "ready" });
           return;
         }
 
-        const payload = (await response.json().catch(() => undefined)) as
-          | { readonly error?: string }
-          | undefined;
         setActivationState({
           status: "error",
           message:
-            payload?.error ??
-            `Unable to activate graph access with ${response.status} ${response.statusText}.`,
+            "This session is authenticated, but the current principal does not have graph-member write access. Ask a graph operator to admit this account before using graph-backed routes.",
         });
       })
       .catch((error) => {

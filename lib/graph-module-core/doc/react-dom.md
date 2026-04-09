@@ -1,7 +1,7 @@
 ---
 name: Graph module core react-dom
 description: "The react-dom subpath, browser field resolver defaults, and query-editor authoring support in @io/graph-module-core."
-last_updated: 2026-04-04
+last_updated: 2026-04-08
 ---
 
 # Graph module core react-dom
@@ -59,6 +59,25 @@ Important rules:
   default `field` wrappers automatically
 - `PredicateFieldControl` and `PredicateField` accept shared `controller` and
   `issues` props so validation state can flow through one editor path
+
+## Shared form composition
+
+Authored browser forms and field rows should compose through `@io/web` instead
+of bespoke labels, selects, and validation blocks.
+
+Preferred pattern:
+
+- wrap authored controls in `Field`
+- use `FieldLabel`, `FieldContent`, `FieldDescription`, and `FieldError` for
+  field chrome
+- set `data-invalid` on `Field` and `aria-invalid` on the concrete control
+- use `NativeSelect` for simple HTML select behavior and `Select` only when the
+  richer popup behavior is required
+- use `Alert` for form-level or section-level feedback and `Empty` for empty
+  states instead of ad hoc bordered boxes
+- render checkbox and boolean rows with `Field orientation="horizontal"` or
+  `orientation="responsive"`, with the control first and the label/content to
+  its right
 
 ## Built-in browser capabilities
 

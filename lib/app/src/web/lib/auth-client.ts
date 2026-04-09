@@ -268,7 +268,7 @@ export async function startLocalhostBootstrapSession(
   return credential;
 }
 
-function hasWritableGraphAccess(
+export function hasWritableGraphAccess(
   summary: Pick<WebPrincipalSummary, "access"> | SessionPrincipalProjection["summary"],
 ): boolean {
   return summary.access.authority || summary.access.graphMember;

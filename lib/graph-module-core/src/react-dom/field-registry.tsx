@@ -3,6 +3,7 @@ import {
   usePredicateField,
   type PredicateFieldViewCapability,
 } from "@io/graph-react";
+import { Checkbox } from "@io/web/checkbox";
 
 import { colorFieldViewCapability } from "./fields/color.js";
 import { CheckboxFieldEditor } from "./fields/checkbox.js";
@@ -39,13 +40,11 @@ function BooleanFieldView({ predicate }: AnyFieldProps) {
   }
 
   return (
-    <input
+    <Checkbox
       aria-label={formatPredicateValue(predicate, value)}
       checked={value === true}
       data-web-field-kind="boolean"
       disabled
-      readOnly
-      type="checkbox"
     />
   );
 }

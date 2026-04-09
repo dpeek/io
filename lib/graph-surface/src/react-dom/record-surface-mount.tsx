@@ -173,32 +173,6 @@ function renderFieldValue(value: unknown): ReactNode {
   return <span className="text-foreground text-sm break-words">{String(value)}</span>;
 }
 
-function SurfaceCard({
-  children,
-  description,
-  title,
-}: {
-  readonly children: ReactNode;
-  readonly description?: ReactNode;
-  readonly title: ReactNode;
-}) {
-  return (
-    <section className="flex h-full min-h-0 flex-col">
-      <Card className="border-border/70 bg-card/95 flex h-full min-h-0 flex-col border shadow-sm">
-        <CardHeader className="border-border/60 border-b">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 flex-col gap-1">
-              <CardTitle>{title}</CardTitle>
-              {description ? <CardDescription>{description}</CardDescription> : null}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col gap-3">{children}</CardContent>
-      </Card>
-    </section>
-  );
-}
-
 function RecordSurfaceUnavailableCard({
   issue,
   surface,
@@ -208,10 +182,7 @@ function RecordSurfaceUnavailableCard({
 }) {
   return (
     <div className="flex flex-col gap-3" data-record-surface={surface.key}>
-      <Card
-        className="border-border/70 bg-card/95 border shadow-sm"
-        data-record-surface-state={issue ? "unavailable" : "loading"}
-      >
+      <Card data-record-surface-state={issue ? "unavailable" : "loading"}>
         <CardHeader>
           <CardTitle className="text-base">{surface.key}</CardTitle>
           <CardDescription>
@@ -257,7 +228,7 @@ function RelatedCollectionUnavailableCard({
   readonly title: string;
 }) {
   return (
-    <Card className="border-border/70 bg-card/95 border shadow-sm">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
         <CardDescription>
@@ -337,7 +308,7 @@ export function RecordSurfaceLayout({
 }: RecordSurfaceLayoutProps) {
   return (
     <div className="space-y-4" data-record-surface-layout="">
-      <Card className="border-border/70 bg-card/95 border shadow-sm">
+      <Card>
         <CardHeader className="gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-3">
@@ -382,7 +353,6 @@ export function RecordSurfaceLayout({
 
 export function RecordSurfaceSectionView({
   chrome = true,
-  description,
   emptyMessage = "No fields are available for this record surface section.",
   fields,
   renderField,
@@ -412,9 +382,13 @@ export function RecordSurfaceSectionView({
   }
 
   return (
-    <SurfaceCard description={description} title={section.title}>
-      {content}
-    </SurfaceCard>
+    <Card>
+      <CardHeader>
+        <CardTitle>{section.title}</CardTitle>
+        {section.description ? <CardDescription>{section.description}</CardDescription> : null}
+      </CardHeader>
+      <CardContent>{content}</CardContent>
+    </Card>
   );
 }
 
