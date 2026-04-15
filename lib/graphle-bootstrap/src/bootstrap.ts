@@ -81,8 +81,12 @@ export function bootstrap<const T extends Record<string, AnyTypeOutput>>(
     const descriptionPredicateId = edgeId(coreSchema.node.fields.description);
     const rangePredicateId = edgeId(coreSchema.predicate.fields.range);
     const cardinalityPredicateId = edgeId(coreSchema.predicate.fields.cardinality);
-    const typeIconPredicateId = edgeId(coreSchema.type.fields.icon);
-    const predicateIconPredicateId = edgeId(coreSchema.predicate.fields.icon);
+    const typeIconPredicateId = coreSchema.type.fields.icon
+      ? edgeId(coreSchema.type.fields.icon)
+      : undefined;
+    const predicateIconPredicateId = coreSchema.predicate.fields.icon
+      ? edgeId(coreSchema.predicate.fields.icon)
+      : undefined;
     const enumMemberPredicateId = edgeId(coreSchema.enum.fields.member);
     const nodeTypePredicateId = edgeId(coreSchema.node.fields.type);
     const schemaTypeId = typeId(coreSchema.type);
@@ -94,37 +98,46 @@ export function bootstrap<const T extends Record<string, AnyTypeOutput>>(
     } as const;
     const bootstrapFacts = createBootstrapFacts(store);
 
-    for (const typeDef of orderedTypes) {
-      const iconId = resolveBootstrapTypeIconId(typeDef, options);
-      if (!iconId) continue;
-      resolvedTypeIconIds.set(typeId(typeDef), iconId);
-      referencedIconIds.add(iconId);
+    if (typeIconPredicateId) {
+      for (const typeDef of orderedTypes) {
+        const iconId = resolveBootstrapTypeIconId(typeDef, options);
+        if (!iconId) continue;
+        resolvedTypeIconIds.set(typeId(typeDef), iconId);
+        referencedIconIds.add(iconId);
+      }
     }
 
-    for (const predicateDef of allPredicates) {
-      const iconId = resolveBootstrapPredicateIconId(
-        store,
-        predicateDef,
-        resolutionTypeById.get(predicateDef.range),
-        options,
-        typeIconPredicateId,
-      );
-      if (!iconId) continue;
-      resolvedPredicateIconIds.set(edgeId(predicateDef), iconId);
-      referencedIconIds.add(iconId);
+    if (predicateIconPredicateId) {
+      for (const predicateDef of allPredicates) {
+        const iconId = resolveBootstrapPredicateIconId(
+          store,
+          predicateDef,
+          resolutionTypeById.get(predicateDef.range),
+          options,
+          typeIconPredicateId,
+        );
+        if (!iconId) continue;
+        resolvedPredicateIconIds.set(edgeId(predicateDef), iconId);
+        referencedIconIds.add(iconId);
+      }
     }
 
-    for (const iconId of referencedIconIds) {
-      const seed = resolveIconSeed(iconId);
-      if (!seed) continue;
-      seedBootstrapIcon(
-        store,
-        bootstrapFacts,
-        coreSchema,
-        seed,
-        bootstrapTimestamp,
-        resolutionTypeById,
-      );
+    const iconCoreSchema = coreSchema.icon
+      ? (coreSchema as typeof coreSchema & { icon: NonNullable<typeof coreSchema.icon> })
+      : undefined;
+    if (iconCoreSchema) {
+      for (const iconId of referencedIconIds) {
+        const seed = resolveIconSeed(iconId);
+        if (!seed) continue;
+        seedBootstrapIcon(
+          store,
+          bootstrapFacts,
+          iconCoreSchema,
+          seed,
+          bootstrapTimestamp,
+          resolutionTypeById,
+        );
+      }
     }
 
     for (const typeDef of orderedTypes) {
@@ -153,7 +166,7 @@ export function bootstrap<const T extends Record<string, AnyTypeOutput>>(
       assertCurrentFactOnce(store, bootstrapFacts, subjectId, nodeTypePredicateId, schemaTypeId);
 
       const typeIconId = resolvedTypeIconIds.get(subjectId);
-      if (typeIconId && bootstrapFacts.existingNodeIds.has(typeIconId)) {
+      if (typeIconId && typeIconPredicateId && bootstrapFacts.existingNodeIds.has(typeIconId)) {
         assertCurrentFactOnce(store, bootstrapFacts, subjectId, typeIconPredicateId, typeIconId);
       }
     }
@@ -207,7 +220,11 @@ export function bootstrap<const T extends Record<string, AnyTypeOutput>>(
       );
 
       const predicateIconId = resolvedPredicateIconIds.get(predicateId);
-      if (predicateIconId && bootstrapFacts.existingNodeIds.has(predicateIconId)) {
+      if (
+        predicateIconId &&
+        predicateIconPredicateId &&
+        bootstrapFacts.existingNodeIds.has(predicateIconId)
+      ) {
         assertCurrentFactOnce(
           store,
           bootstrapFacts,

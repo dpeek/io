@@ -1,7 +1,7 @@
 ---
 name: Graph bootstrap core schema requirements
 description: "The minimal core schema contract required by @dpeek/graphle-bootstrap."
-last_updated: 2026-04-03
+last_updated: 2026-04-15
 ---
 
 # Graph bootstrap core schema requirements
@@ -33,7 +33,6 @@ Bootstrap needs these built-in contracts:
 - `node`
 - `predicate`
 - `type`
-- `icon`
 - `enum`
 - `cardinality`
 
@@ -47,10 +46,10 @@ More specifically, it needs these fields and ids:
 - `predicate.fields.key`
 - `predicate.fields.range`
 - `predicate.fields.cardinality`
-- `predicate.fields.icon`
-- `type.fields.icon`
-- `icon.fields.key`
-- `icon.fields.svg`
+- optional `predicate.fields.icon`
+- optional `type.fields.icon`
+- optional `icon.fields.key`
+- optional `icon.fields.svg`
 - `enum.fields.member`
 - `cardinality.values.one.id`
 - `cardinality.values.oneOptional.id`
@@ -74,10 +73,13 @@ missing or malformed.
 
 Important behavior:
 
-- missing top-level contracts produce targeted bootstrap errors
+- missing required top-level contracts produce targeted bootstrap errors
 - malformed fields or missing cardinality ids produce one shared invalid-core
   error
 - optional `createdAt` and `updatedAt` are allowed to be absent
+- optional icon contracts are allowed to be absent; bootstrap skips icon record
+  seeding and type/predicate icon links when the relevant core icon contracts
+  are not present
 
 If those timestamp fields are absent, bootstrap simply skips managed timestamp
 assertion.
@@ -89,3 +91,6 @@ assertion.
 - Treat this type as the minimum contract bootstrap needs, not as a full
   description of the built-in core package.
 - Keep broader `core:` semantics documented in `@dpeek/graphle-module-core`.
+- Use the optional icon contracts only for icon-capable boot paths. The
+  personal-site MVP uses `minimalCore`, which intentionally boots without icon
+  or SVG graph records.

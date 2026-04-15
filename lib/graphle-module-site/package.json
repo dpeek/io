@@ -1,5 +1,5 @@
 {
-  "name": "@dpeek/graphle-sqlite",
+  "name": "@dpeek/graphle-module-site",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -18,17 +18,14 @@
     "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.ts' && oxfmt && bun test"
   },
   "dependencies": {
-    "@dpeek/graphle-authority": "workspace:*",
-    "@dpeek/graphle-kernel": "workspace:*",
-    "@dpeek/graphle-sync": "workspace:*"
-  },
-  "devDependencies": {
     "@dpeek/graphle-bootstrap": "workspace:*",
     "@dpeek/graphle-client": "workspace:*",
-    "@dpeek/graphle-module-core": "workspace:*",
-    "@dpeek/graphle-module-site": "workspace:*",
+    "@dpeek/graphle-kernel": "workspace:*",
+    "@dpeek/graphle-module": "workspace:*",
+    "@dpeek/graphle-module-core": "workspace:*"
+  },
+  "devDependencies": {
     "@types/bun": "^1.3.9",
-    "@types/node": "^25.3.2",
     "@typescript/native-preview": "^7.0.0-dev.20260226.1",
     "oxfmt": "^0.42.0",
     "oxlint": "^1.57.0"

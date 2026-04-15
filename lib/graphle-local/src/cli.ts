@@ -4,6 +4,7 @@ import { createLocalAuthController } from "./auth.js";
 import { openBrowser as openBrowserUrl } from "./browser.js";
 import { prepareLocalProject, type GraphleLocalProject } from "./project.js";
 import { createGraphleLocalServer } from "./server.js";
+import { openLocalSiteAuthority, type LocalSiteAuthority } from "./site-authority.js";
 
 export const defaultGraphleDevHost = "127.0.0.1";
 export const defaultGraphleDevPort = 4318;
@@ -41,6 +42,7 @@ export interface GraphleDevRuntime {
   readonly initUrl: string;
   readonly project: GraphleLocalProject;
   readonly sqlite: GraphleSqliteHandle;
+  readonly siteAuthority: LocalSiteAuthority;
   close(): void;
 }
 
@@ -152,6 +154,16 @@ export async function runGraphleDev(
     cwd: dependencies.cwd ?? process.cwd(),
   });
   const sqlite = await openGraphleSqlite({ path: project.databasePath });
+  let siteAuthority: LocalSiteAuthority;
+  try {
+    siteAuthority = await openLocalSiteAuthority({
+      sqlite,
+      now: dependencies.now,
+    });
+  } catch (error) {
+    sqlite.close();
+    throw error;
+  }
   const auth = createLocalAuthController({
     authSecret: project.authSecret,
     projectId: project.projectId,
@@ -161,6 +173,7 @@ export async function runGraphleDev(
     project,
     sqlite,
     auth,
+    siteAuthority,
     now: dependencies.now,
   });
 
@@ -201,6 +214,7 @@ export async function runGraphleDev(
     initUrl,
     project,
     sqlite,
+    siteAuthority,
     close() {
       handle.stop();
       sqlite.close();

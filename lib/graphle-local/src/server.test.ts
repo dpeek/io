@@ -8,6 +8,7 @@ import { describe, expect, it } from "bun:test";
 import { createLocalAuthController, graphleAdminCookieName, parseCookieHeader } from "./auth.js";
 import { prepareLocalProject } from "./project.js";
 import { createGraphleLocalServer } from "./server.js";
+import { openLocalSiteAuthority } from "./site-authority.js";
 
 async function withServer<T>(
   run: (input: {
@@ -66,7 +67,10 @@ describe("local server routes", () => {
         database: {
           opened: true,
           metaTableReady: true,
-          schemaVersion: 1,
+          schemaVersion: 2,
+        },
+        graph: {
+          status: "unavailable",
         },
       });
       expect(await session.json()).toEqual({
@@ -156,5 +160,57 @@ describe("local server routes", () => {
         code: "not-found",
       });
     });
+  });
+
+  it("reports graph startup health and renders seeded home content", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "graphle-local-server-graph-"));
+    const project = await prepareLocalProject({
+      cwd,
+      generateAuthSecret: () => "secret",
+      generateProjectId: () => "project-1",
+    });
+    const sqlite = await openGraphleSqlite({ path: project.databasePath });
+    const siteAuthority = await openLocalSiteAuthority({
+      sqlite,
+      now: () => new Date("2026-04-15T00:00:00.000Z"),
+    });
+    const auth = createLocalAuthController({
+      authSecret: project.authSecret,
+      projectId: project.projectId,
+      initToken: "init-token",
+      now: () => new Date("2026-04-15T00:00:00.000Z"),
+    });
+    const server = createGraphleLocalServer({
+      project,
+      sqlite,
+      auth,
+      siteAuthority,
+      now: () => new Date("2026-04-15T00:00:00.000Z"),
+    });
+
+    try {
+      const health = await server.fetch(new Request("http://127.0.0.1:4318/api/health"));
+      const page = await server.fetch(new Request("http://127.0.0.1:4318/"));
+      const html = await page.text();
+
+      expect(await health.json()).toMatchObject({
+        graph: {
+          status: "ok",
+          startupDiagnostics: {
+            recovery: "none",
+          },
+          records: {
+            pages: 1,
+            posts: 1,
+          },
+        },
+      });
+      expect(html).toContain("<h1>Home</h1>");
+      expect(html).toContain("Welcome to your new Graphle site.");
+      expect(html).not.toContain("Personal site placeholder");
+    } finally {
+      sqlite.close();
+      await rm(cwd, { force: true, recursive: true });
+    }
   });
 });

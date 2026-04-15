@@ -13,7 +13,7 @@ export type GraphBootstrapCoreSchema = {
       readonly member: EdgeOutput;
     };
   };
-  readonly icon: EntityTypeOutput & {
+  readonly icon?: EntityTypeOutput & {
     readonly fields: {
       readonly key: EdgeOutput;
       readonly svg: EdgeOutput;
@@ -31,14 +31,14 @@ export type GraphBootstrapCoreSchema = {
   readonly predicate: EntityTypeOutput & {
     readonly fields: {
       readonly cardinality: EdgeOutput;
-      readonly icon: EdgeOutput;
+      readonly icon?: EdgeOutput;
       readonly key: EdgeOutput;
       readonly range: EdgeOutput;
     };
   };
   readonly type: EntityTypeOutput & {
     readonly fields: {
-      readonly icon: EdgeOutput;
+      readonly icon?: EdgeOutput;
     };
   };
 };
@@ -66,11 +66,10 @@ export function requireGraphBootstrapCoreSchema(
   assertGraphBootstrapCoreSchema(record.node, "node");
   assertGraphBootstrapCoreSchema(record.predicate, "predicate");
   assertGraphBootstrapCoreSchema(record.type, "type");
-  assertGraphBootstrapCoreSchema(record.icon, "icon");
   assertGraphBootstrapCoreSchema(record.enum, "enum");
   assertGraphBootstrapCoreSchema(record.cardinality, "cardinality");
 
-  const icon = record.icon as Partial<EntityTypeOutput>;
+  const icon = record.icon as Partial<EntityTypeOutput> | undefined;
   const node = record.node as Partial<EntityTypeOutput>;
   const predicate = record.predicate as Partial<EntityTypeOutput>;
   const typeDef = record.type as Partial<EntityTypeOutput>;
@@ -78,8 +77,8 @@ export function requireGraphBootstrapCoreSchema(
   const cardinality = record.cardinality as Partial<GraphBootstrapCoreSchema["cardinality"]>;
 
   if (
-    !isEdgeOutputProperty(icon.fields?.key) ||
-    !isEdgeOutputProperty(icon.fields?.svg) ||
+    (icon !== undefined &&
+      (!isEdgeOutputProperty(icon.fields?.key) || !isEdgeOutputProperty(icon.fields?.svg))) ||
     !isEdgeOutputProperty(node.fields?.type) ||
     !isEdgeOutputProperty(node.fields?.name) ||
     !isEdgeOutputProperty(node.fields?.description) ||
@@ -88,8 +87,8 @@ export function requireGraphBootstrapCoreSchema(
     !isEdgeOutputProperty(predicate.fields?.key) ||
     !isEdgeOutputProperty(predicate.fields?.range) ||
     !isEdgeOutputProperty(predicate.fields?.cardinality) ||
-    !isEdgeOutputProperty(predicate.fields?.icon) ||
-    !isEdgeOutputProperty(typeDef.fields?.icon) ||
+    (predicate.fields?.icon !== undefined && !isEdgeOutputProperty(predicate.fields.icon)) ||
+    (typeDef.fields?.icon !== undefined && !isEdgeOutputProperty(typeDef.fields.icon)) ||
     !isEdgeOutputProperty(enumDef.fields?.member) ||
     typeof cardinality.values?.one?.id !== "string" ||
     typeof cardinality.values?.oneOptional?.id !== "string" ||

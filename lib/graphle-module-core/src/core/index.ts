@@ -38,6 +38,8 @@ export * from "./markdown.js";
 
 export * from "./money.js";
 
+export * from "./minimal.js";
+
 export * from "./node.js";
 
 export * from "./number.js";

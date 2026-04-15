@@ -9,9 +9,12 @@
   server, `/api/init`, signed local admin cookies, placeholder site rendering,
   and focused tests.
 - [Personal site MVP phase 2](/Users/dpeek/code/graphle/pdr/personal-site-mvp/phase-2-site-graph.md):
-  plan the minimal core and durable site graph substrate: site schema, SQLite
-  persisted-authority storage, first-run seed content, and local runtime graph
-  bootstrap.
+  implemented the minimal core and durable site graph substrate: `site:` schema,
+  SQLite persisted-authority storage, first-run seed content, and local runtime
+  graph bootstrap.
+- [Personal site MVP phase 3](/Users/dpeek/code/graphle/pdr/personal-site-mvp/phase-3-shell.md):
+  plan the lightweight browser shell substrate: web UI primitives, generic shell
+  runtime, assembled site browser app, and local packaged asset serving.
 - [Dedicated auth routes](/Users/dpeek/code/graphle/pdr/dedicated-auth-routes.md):
   move inline auth into dedicated sign-in/sign-up routes with TanStack
   Router route guards and Better Auth-aligned session context.

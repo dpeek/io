@@ -20,6 +20,10 @@ import type {
 } from "./contracts.js";
 import type { GraphBootstrapCoreSchema } from "./core-schema.js";
 
+type GraphBootstrapIconCoreSchema = GraphBootstrapCoreSchema & {
+  readonly icon: NonNullable<GraphBootstrapCoreSchema["icon"]>;
+};
+
 function isBootstrapIconSeed(value: unknown): value is GraphBootstrapIconSeed {
   const candidate = value as Partial<GraphBootstrapIconSeed> | undefined;
   return (
@@ -82,14 +86,14 @@ export function resolveBootstrapPredicateIconId(
   predicateDef: EdgeOutput,
   rangeType: AnyTypeOutput | undefined,
   options: GraphBootstrapOptions,
-  typeIconPredicateId: string,
+  typeIconPredicateId?: string,
 ): string | undefined {
   const explicitIconId = readDefinitionIconId(predicateDef.icon);
   if (explicitIconId) {
     return options.resolvePredicateIconId?.(predicateDef, rangeType) ?? explicitIconId;
   }
 
-  if (!rangeType) {
+  if (!rangeType && typeIconPredicateId) {
     const existingRangeIcon = store.facts(predicateDef.range, typeIconPredicateId)[0]?.o;
     if (typeof existingRangeIcon === "string" && existingRangeIcon.length > 0) {
       return existingRangeIcon;
@@ -102,7 +106,7 @@ export function resolveBootstrapPredicateIconId(
 export function seedBootstrapIcon(
   store: GraphStore,
   bootstrapFacts: BootstrapFacts,
-  coreSchema: GraphBootstrapCoreSchema,
+  coreSchema: GraphBootstrapIconCoreSchema,
   iconSeed: GraphBootstrapIconSeed,
   bootstrapTimestamp: Date,
   typeById: ReadonlyMap<string, AnyTypeOutput>,

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "keys": {
+    "site:page": "990845ad-fb53-42b8-86ee-0c659c3dd414",
+    "site:page:body": "f8d0a526-cfbd-4c68-9d36-3f06fd79d70b",
+    "site:page:path": "594406ae-44b7-4b20-b0b9-a1ab935dc8ae",
+    "site:page:status": "98b674ea-3718-477c-ae87-e1c02a6b31be",
+    "site:page:title": "e3b0a0f2-9ed6-4fc5-906a-7d0174d73548",
+    "site:page:updatedAt": "8776c376-ef82-4884-b90d-852f89207101",
+    "site:path": "6d074037-37a2-4121-a6d4-263c480fafa0",
+    "site:post": "329fbab6-1df5-4891-a51e-8931c2a8576d",
+    "site:post:body": "241ac51d-c1ed-412e-9f09-4ae9dbe18dc4",
+    "site:post:excerpt": "c2c637dc-357c-494f-89c0-f25291319c32",
+    "site:post:publishedAt": "fce93dd6-c501-40dc-9670-7e61bf86530d",
+    "site:post:slug": "11c2eb10-a336-4282-8df2-d9c8e1712568",
+    "site:post:status": "dffe40d3-865c-4883-a36d-895410d86117",
+    "site:post:title": "3eb6df43-24a2-4ba3-bf26-4cf94c37c538",
+    "site:post:updatedAt": "87bd004a-2a36-48fb-b0d9-779434c86cd2",
+    "site:status": "c22703dd-0483-49ca-ab66-4acff5fb779b",
+    "site:status.draft": "9eb969d2-f6bd-4423-9f30-ed698349d7b0",
+    "site:status.published": "440ddd94-626b-46fb-b523-30be6c248904"
+  }
+}

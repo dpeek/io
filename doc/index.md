@@ -29,7 +29,8 @@ browser primitives, and shared utilities.
 
 The public product command now lives in `@dpeek/graphle`, with `graphle dev`
 delegating to `@dpeek/graphle-local` for the personal-site local runtime.
-`@dpeek/graphle-sqlite` owns the small local SQLite bootstrap helper. The
+`@dpeek/graphle-sqlite` owns local SQLite bootstrap plus persisted authority
+storage, and `@dpeek/graphle-module-site` owns the `site:` schema. The
 operator runtime remains in `@dpeek/graphle-cli`. `@dpeek/graphle-app` stays
 focused on the curated graph helper surface plus app-specific web and Worker
 composition. `@dpeek/graphle-web` owns reusable browser primitives.
@@ -78,9 +79,12 @@ The current dependency chain is:
 - `../lib/graphle/README.md`: public `graphle` binary package and `graphle dev`
   dispatch boundary
 - `../lib/graphle-local/doc/local-dev.md`: local personal-site dev runtime,
-  project bootstrap, signed-cookie auth, `/api/*` routes, and browser opening
+  project bootstrap, persisted site authority, signed-cookie auth, `/api/*`
+  routes, and browser opening
 - `../lib/graphle-sqlite/doc/sqlite-bootstrap.md`: local `graphle.sqlite`
-  creation, metadata bootstrap, and health summary
+  creation, metadata bootstrap, persisted-authority storage, and health summary
+- `../lib/graphle-module-site/doc/site-schema.md`: built-in `site:` schema for
+  personal-site pages, posts, status, and paths
 - `../lib/graphle-cli/doc/agent-runtime.md`: issue-driven automation runtime,
   scheduler, workspace lifecycle, and retained runtime behavior
 - `../lib/graphle-cli/doc/agent-workflow.md`: workflow loading, issue routing, context
@@ -130,9 +134,12 @@ The current dependency chain is:
 - `../lib/graphle/`: `@dpeek/graphle`, the public command package for
   `bunx @dpeek/graphle dev`
 - `../lib/graphle-local/`: `@dpeek/graphle-local`, the phase-1 local Bun server,
-  cwd project bootstrap, local auth, browser opening, and placeholder rendering
+  cwd project bootstrap, local auth, persisted site authority startup, browser
+  opening, and placeholder rendering
 - `../lib/graphle-sqlite/`: `@dpeek/graphle-sqlite`, the local
-  `graphle.sqlite` open/bootstrap helper
+  `graphle.sqlite` open/bootstrap helper and persisted authority adapter
+- `../lib/graphle-module-site/`: `@dpeek/graphle-module-site`, the built-in
+  `site:` namespace for page and post records in the personal-site MVP
 - `../lib/graphle-app/`: `@dpeek/graphle-app`, the app package for graph helper exports plus the
   browser Worker, routes, and app-owned web composition
 - `../lib/graphle-cli/`: `@dpeek/graphle-cli`, the operator shell package for command dispatch,

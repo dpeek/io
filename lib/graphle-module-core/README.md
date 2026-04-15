@@ -8,6 +8,8 @@
 - Start with `./out/index.d.ts` for the compact public contract.
 - Start with `./src/index.ts` for the package-root public entrypoint.
 - Read `./src/core.ts` for the canonical `core:` namespace assembly.
+- Read `./src/core/minimal.ts` for the minimal core slice used by the
+  personal-site MVP boot path.
 - Read `./src/query.ts` for the package-root core query-surface catalog and
   module read-scope exports.
 - Read `./src/core/saved-query.ts` for durable saved-query and saved-view
@@ -45,10 +47,13 @@ runtime, or product boundaries.
 ## What It Owns
 
 - the canonical `core` namespace assembly
+- the `minimalCore` namespace and `minimalCoreGraphBootstrapOptions` for the
+  local personal-site graph path
 - the built-in `coreManifest` authored through the shared graph-module manifest
   contract
 - built-in core scalar, enum, entity, dataset, and helper contracts
 - `coreGraphBootstrapOptions`
+- `minimalCoreGraphBootstrapOptions`
 - colocated core icon seeds and shared icon-resolution helpers
 - SVG sanitization for the built-in icon and SVG contracts
 - structured-value parsing, normalization, and formatting helpers
@@ -66,6 +71,10 @@ runtime, or product boundaries.
 - `./src/core.ts` is the canonical `core:` namespace assembly. It applies the
   generated id map over the built-in core slice definitions and is the place to
   look when you need to know what currently ships in `core`.
+- `minimalCore` is a deliberately smaller boot namespace for the personal-site
+  MVP. It includes schema anchors and the scalar types needed for page/post
+  records, but leaves icon, SVG, saved-query/view, workflow, identity, sharing,
+  and app-owned records out of the default local graph.
 - `coreManifest` publishes definition-time runtime contributions only:
   built-in schemas, the core query-surface catalog, and the core catalog
   module read scope. Install lifecycle and activation state remain

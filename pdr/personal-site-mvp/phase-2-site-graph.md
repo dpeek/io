@@ -1,4 +1,4 @@
-Status: Proposed
+Status: Implemented
 Last Updated: 2026-04-15
 
 # Phase 2: Minimal core and site graph
@@ -183,6 +183,22 @@ package tests.
 ## Open Questions
 
 None.
+
+## Implementation Notes
+
+- `@dpeek/graphle-module-core` now exports `minimalCore` and
+  `minimalCoreGraphBootstrapOptions` for the MVP boot path.
+- `@dpeek/graphle-bootstrap` treats icon and SVG bootstrap contracts as optional
+  while preserving icon-capable behavior for full-core callers.
+- `@dpeek/graphle-module-site` owns `site:path`, `site:status`, `site:page`,
+  `site:post`, `siteManifest`, package docs, and stable id-map drift tests.
+- `@dpeek/graphle-sqlite` now implements a SQLite
+  `PersistedAuthoritativeGraphStorage` adapter with versioned authority state
+  and retained commit rows.
+- `@dpeek/graphle-local` opens the persisted site authority before serving,
+  seeds one home page and one example post only when storage is empty, reports
+  graph diagnostics on `/api/health`, and renders the seeded home page in the
+  placeholder HTML.
 
 ## Success Criteria
 

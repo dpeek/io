@@ -1,7 +1,7 @@
 ---
 name: Graph module core namespace
 description: "Built-in core namespace assembly, manifest ownership, and slice boundaries in @dpeek/graphle-module-core."
-last_updated: 2026-04-03
+last_updated: 2026-04-15
 ---
 
 # Graph module core namespace
@@ -16,6 +16,7 @@ last_updated: 2026-04-03
 ## Main source anchors
 
 - `../src/core.ts`: canonical `core:` namespace assembly
+- `../src/core/minimal.ts`: minimal `core:` slice for the personal-site MVP
 - `../src/core/index.ts`: curated slice exports
 - `../src/index.ts`: package-root public entrypoint and `coreManifest`
 - `../src/query.ts`: package-root core query-surface catalog and read-scope
@@ -50,6 +51,23 @@ It does three concrete things:
 
 That means package-local slice files define the contracts, but `core.ts` is the
 place to check whether a slice is actually part of the shipped namespace.
+
+## Minimal Core
+
+`minimalCore` is a second exported namespace slice for the personal-site MVP
+boot path. It reuses the stable core id map but includes only:
+
+- schema anchors: `node`, `type`, `predicate`, `enum`, and `cardinality`
+- scalar types: `string`, `number`, `boolean`, `date`, `json`, `markdown`,
+  `slug`, and `url`
+- node metadata fields required by the typed graph stack, including optional
+  managed timestamps
+
+It intentionally omits icon, SVG, saved-query/view, workflow, identity,
+admission, share, capability, secret, installed-module, and other app-owned
+records. Use `minimalCoreGraphBootstrapOptions` when booting the MVP site graph.
+Use `core` and `coreGraphBootstrapOptions` when callers need the full built-in
+core namespace and icon-capable bootstrap behavior.
 
 ## Package root versus slice exports
 
@@ -105,5 +123,7 @@ usually belongs in `@dpeek/graphle-module`, not here.
 - Re-export public slices through `../src/core/index.ts`.
 - Wire shipped slices into `../src/core.ts` so they actually land in the
   canonical namespace.
+- Add a slice to `minimalCore` only when it is required by the personal-site MVP
+  boot path.
 - Update `../src/index.ts` or `../src/query.ts` when the new slice changes the
   package-root public contract or runtime contributions.

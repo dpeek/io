@@ -18,6 +18,10 @@
     "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.ts' && oxfmt && bun test"
   },
   "dependencies": {
+    "@dpeek/graphle-bootstrap": "workspace:*",
+    "@dpeek/graphle-kernel": "workspace:*",
+    "@dpeek/graphle-module-core": "workspace:*",
+    "@dpeek/graphle-module-site": "workspace:*",
     "@dpeek/graphle-sqlite": "workspace:*"
   },
   "devDependencies": {

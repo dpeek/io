@@ -2,6 +2,12 @@ import type { GraphleSqliteHandle } from "@dpeek/graphle-sqlite";
 
 import type { LocalAuthController, LocalAdminSession } from "./auth.js";
 import type { GraphleLocalProject } from "./project.js";
+import {
+  readLocalSiteAuthorityHealth,
+  readLocalSiteHomePage,
+  type LocalSiteAuthority,
+  type LocalSiteHomePage,
+} from "./site-authority.js";
 
 export interface GraphleLocalServer {
   fetch(request: Request): Promise<Response> | Response;
@@ -11,6 +17,7 @@ export interface CreateGraphleLocalServerOptions {
   readonly project: GraphleLocalProject;
   readonly sqlite: GraphleSqliteHandle;
   readonly auth: LocalAuthController;
+  readonly siteAuthority?: LocalSiteAuthority;
   readonly now?: () => Date;
 }
 
@@ -60,10 +67,15 @@ function escapeHtml(value: string): string {
 function renderPlaceholderPage(
   session: LocalAdminSession | null,
   project: GraphleLocalProject,
+  homePage?: LocalSiteHomePage,
 ): string {
   const authenticated = session !== null;
   const statusLabel = authenticated ? "Admin session active" : "Visitor preview";
   const authoringLabel = authenticated ? "Inline authoring available" : "Inline authoring locked";
+  const title = homePage?.title ?? "Personal site placeholder";
+  const body =
+    homePage?.body ??
+    `This page is served from ${project.cwd} while the site schema and editor surfaces are added in later phases.`;
 
   return `<!doctype html>
 <html lang="en">
@@ -173,8 +185,8 @@ function renderPlaceholderPage(
     </header>
     <main>
       <section>
-        <h1>Personal site placeholder</h1>
-        <p>This page is served from ${escapeHtml(project.cwd)} while the site schema and editor surfaces are added in later phases.</p>
+        <h1>${escapeHtml(title)}</h1>
+        <p>${escapeHtml(body)}</p>
       </section>
       <section class="panel" aria-label="Local authoring state">
         <div class="state">
@@ -191,6 +203,7 @@ export function createGraphleLocalServer({
   project,
   sqlite,
   auth,
+  siteAuthority,
   now = () => new Date(),
 }: CreateGraphleLocalServerOptions): GraphleLocalServer {
   const startedAt = now().toISOString();
@@ -215,6 +228,7 @@ export function createGraphleLocalServer({
             id: project.projectId,
           },
           database: sqlite.health(),
+          graph: readLocalSiteAuthorityHealth(siteAuthority),
         });
       }
 
@@ -267,7 +281,9 @@ export function createGraphleLocalServer({
 
       const session = auth.getSession(cookieHeader);
       return new Response(
-        request.method === "HEAD" ? null : renderPlaceholderPage(session, project),
+        request.method === "HEAD"
+          ? null
+          : renderPlaceholderPage(session, project, readLocalSiteHomePage(siteAuthority)),
         {
           status: 200,
           headers: {
