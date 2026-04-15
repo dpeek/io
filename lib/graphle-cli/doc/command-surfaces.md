@@ -15,14 +15,17 @@ last_updated: 2026-04-07
 
 ## Purpose
 
-`@dpeek/graphle-cli` owns the `graphle` binary and the operator-facing command groups behind
-it. This doc stays at the command-surface level. Package-local behavior details
-live in the more specific docs linked below.
+`@dpeek/graphle-cli` owns the legacy operator-facing command groups. The public
+personal-site product command lives in `@dpeek/graphle`; `graphle dev` delegates
+to `@dpeek/graphle-local` and does not depend on this package.
+
+This doc stays at the command-surface level. Package-local behavior details live
+in the more specific docs linked below.
 
 ## Top-level dispatch
 
-- `graphle <cmd> ...` dispatches to `../src/task/<cmd>.ts`, which then calls the
-  owning package entrypoint
+- legacy operator commands dispatch to `../src/task/<cmd>.ts`, which then calls
+  the owning package entrypoint
 
 Current top-level task modules:
 

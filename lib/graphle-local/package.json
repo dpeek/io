@@ -1,12 +1,7 @@
 {
-  "name": "@dpeek/graphle",
+  "name": "@dpeek/graphle-local",
   "version": "0.0.1",
-  "description": "Graphle public command package",
-  "license": "UNLICENSED",
-  "repository": "https://github.com/dpeek/graphle",
-  "bin": {
-    "graphle": "./src/cli.ts"
-  },
+  "private": true,
   "type": "module",
   "imports": {
     "#*": "./out/*"
@@ -23,7 +18,7 @@
     "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.ts' && oxfmt && bun test"
   },
   "dependencies": {
-    "@dpeek/graphle-local": "workspace:*"
+    "@dpeek/graphle-sqlite": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.3.9",

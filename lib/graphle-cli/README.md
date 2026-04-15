@@ -1,6 +1,8 @@
 # CLI
 
 `@dpeek/graphle-cli` owns the operator/runtime shell for the workspace repo.
+The public personal-site product command lives in `@dpeek/graphle`; `graphle dev`
+does not depend on this package.
 
 ## Docs
 
@@ -17,7 +19,8 @@
 
 ## What It Owns
 
-- the `graphle` binary entrypoint and top-level command dispatch
+- legacy operator command dispatch for the current agent, browser-agent, MCP,
+  graph, setup, and TUI command groups
 - task modules and operator-facing runtime entrypoints
 - agent runtime, retained agent TUI monitor, and browser-agent runtime
 - MCP stdio entrypoints
@@ -42,7 +45,8 @@ the legacy agent TUI.
 ## What It Does Not Own
 
 - graph helper/runtime umbrella exports under `@dpeek/graphle-app/graph`
-- web routes, components, or browser app runtime code under `lib/app/src/web`
+- the public `@dpeek/graphle` package or the `graphle dev` product path
+- web routes, components, or browser app runtime code under `lib/graphle-app/src/web`
 - generic helper utilities like `env`, `log`, and `process`
 
 ## Validation

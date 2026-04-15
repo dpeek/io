@@ -1,4 +1,4 @@
-Status: Proposed
+Status: Implemented
 Last Updated: 2026-04-15
 
 # Phase 1: Local dev bootstrap
@@ -193,6 +193,18 @@ None.
 - New package READMEs and package-local docs describe ownership and boundaries.
 - `turbo build` passes.
 - `turbo check` passes.
+
+## Implementation Notes
+
+- `@dpeek/graphle` now owns the public `graphle` bin and dispatches `graphle dev`
+  to `@dpeek/graphle-local`.
+- `@dpeek/graphle-local` owns cwd `.env` bootstrap, signed local admin cookies,
+  `/api/*` routes, placeholder site rendering, browser opening, and the dev CLI
+  options.
+- `@dpeek/graphle-sqlite` owns local `graphle.sqlite` opening, the
+  `graphle_meta` table, schema-version metadata, and database health summaries.
+- This phase still intentionally avoids `@dpeek/graphle-app`, Better Auth,
+  `AUTH_DB`, Vite, site schema, editors, deploy, and sync.
 
 ## Tasks
 
