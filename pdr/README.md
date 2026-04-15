@@ -1,5 +1,13 @@
 # Plans
 
+- [Personal site MVP](/Users/dpeek/code/graphle/pdr/personal-site-mvp/spec.md):
+  ship the first end-to-end Graphle product slice with `bunx @dpeek/graphle dev`,
+  cwd-local `graphle.sqlite`, a reusable shell, a site module, Cloudflare deploy,
+  and local/remote graph sync.
+- [Personal site MVP phase 1](/Users/dpeek/code/graphle/pdr/personal-site-mvp/phase-1-local-dev.md):
+  create the local `graphle dev` spine with `.env`, `graphle.sqlite`, a Bun
+  server, `/api/init`, signed local admin cookies, and placeholder site
+  rendering.
 - [Dedicated auth routes](/Users/dpeek/code/graphle/pdr/dedicated-auth-routes.md):
   move inline auth into dedicated sign-in/sign-up routes with TanStack
   Router route guards and Better Auth-aligned session context.
