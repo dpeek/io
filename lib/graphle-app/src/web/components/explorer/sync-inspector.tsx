@@ -1,6 +1,6 @@
-import { Badge } from "@dpeek/graphle-web/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
-import { Empty, EmptyDescription } from "@dpeek/graphle-web/empty";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web-ui/card";
+import { Empty, EmptyDescription } from "@dpeek/graphle-web-ui/empty";
 
 import type { ExplorerSync } from "./model.js";
 import {

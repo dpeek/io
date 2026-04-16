@@ -11,8 +11,14 @@ import type {
   CollectionCommandBinding,
   CollectionSurfaceRecordLookup,
 } from "@dpeek/graphle-surface";
-import { Badge } from "@dpeek/graphle-web/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
 import { useState } from "react";
 
 import type { ExplorerRuntime } from "./explorer/model.js";

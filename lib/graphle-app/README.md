@@ -17,7 +17,7 @@ was extracted into `@dpeek/graphle-cli`.
 ## What It Owns
 
 - the curated `@dpeek/graphle-app/graph` helper surface and local graph fixtures
-- browser Worker, routes, and app-owned web composition on top of `@dpeek/graphle-web`
+- browser Worker, routes, and app-owned web composition on top of `@dpeek/graphle-web-ui`
 - app-owned web exports such as `@dpeek/graphle-app/web/better-auth` and
   `@dpeek/graphle-app/web/query-container`
 - app-owned installed-module manifest loading plus activation-driven authority
@@ -32,7 +32,7 @@ was extracted into `@dpeek/graphle-cli`.
 - CLI entrypoints and task dispatch now live in `@dpeek/graphle-cli`
 - agent runtime, browser-agent runtime, MCP entrypoints, workflow TUI, and
   runtime config now live in `@dpeek/graphle-cli`
-- reusable browser primitives and editor chrome now live in `@dpeek/graphle-web`
+- reusable browser primitives and editor chrome now live in `@dpeek/graphle-web-ui`
 - generic env/log/process helpers now live in `@dpeek/utils`
 
 ## What Stays At The Root

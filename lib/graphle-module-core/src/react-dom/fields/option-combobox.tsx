@@ -10,14 +10,14 @@ import {
   ComboboxList,
   ComboboxValue,
   useComboboxAnchor,
-} from "@dpeek/graphle-web/combobox";
+} from "@dpeek/graphle-web-ui/combobox";
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldError,
   FieldTitle,
-} from "@dpeek/graphle-web/field";
+} from "@dpeek/graphle-web-ui/field";
 import { useDeferredValue, useState, type ReactNode } from "react";
 
 type HtmlProps = Record<string, string | undefined>;

@@ -66,8 +66,8 @@ The MVP must create new package boundaries instead of growing the existing app:
   bootstrap, local auth, and local graph host wiring
 - `@dpeek/graphle-sqlite`: SQLite-backed persisted authority storage adapter
   for `graphle.sqlite`
-- `@dpeek/graphle-web-ui`: browser UI kit and presentation primitives,
-  replacing or narrowing the current `@dpeek/graphle-web` boundary
+- `@dpeek/graphle-web-ui`: browser UI kit and presentation primitives, renamed
+  from the former `@dpeek/graphle-web` boundary
 - `@dpeek/graphle-web-shell`: lightweight reusable browser shell runtime that is
   not tied to personal websites
 - `@dpeek/graphle-module-site`: site schema, module manifest, routing metadata,
@@ -165,8 +165,8 @@ The initial routing contract is:
 
 ### Web UI kit and web shell
 
-`@dpeek/graphle-web-ui` owns browser presentation primitives. It may be a rename
-or replacement for the current `@dpeek/graphle-web` package. It should stay
+`@dpeek/graphle-web-ui` owns browser presentation primitives. It is the renamed
+successor to the former `@dpeek/graphle-web` package. It should stay
 runtime-agnostic and must not import graph runtime, local server, Cloudflare
 deploy, shell, or site packages.
 
@@ -415,7 +415,7 @@ Primary packages:
 
 Tasks:
 
-- split or rename the current `@dpeek/graphle-web` boundary into the
+- split or rename the former `@dpeek/graphle-web` boundary into the
   `@dpeek/graphle-web-ui` ownership model
 - build the generic browser shell frame and host context
 - define feature registration/slot contracts

@@ -15,7 +15,7 @@ import {
   InputGroupButton,
   InputGroupInput,
   InputGroupTextarea,
-} from "@dpeek/graphle-web/input-group";
+} from "@dpeek/graphle-web-ui/input-group";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 

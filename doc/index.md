@@ -33,8 +33,10 @@ delegating to `@dpeek/graphle-local` for the personal-site local runtime.
 storage, and `@dpeek/graphle-module-site` owns the `site:` schema. The
 operator runtime remains in `@dpeek/graphle-cli`. `@dpeek/graphle-app` stays
 focused on the curated graph helper surface plus app-specific web and Worker
-composition. `@dpeek/graphle-web` owns reusable browser primitives.
-`@dpeek/utils` owns shared env, log, and process helpers.
+composition. `@dpeek/graphle-web-ui` owns reusable browser primitives,
+`@dpeek/graphle-web-shell` owns generic browser shell composition, and
+`@dpeek/graphle-site-web` owns the assembled personal-site browser app served
+by the local runtime. `@dpeek/utils` owns shared env, log, and process helpers.
 
 ## Root docs
 
@@ -85,6 +87,13 @@ The current dependency chain is:
   creation, metadata bootstrap, persisted-authority storage, and health summary
 - `../lib/graphle-module-site/doc/site-schema.md`: built-in `site:` schema for
   personal-site pages, posts, status, and paths
+- `../lib/graphle-web-ui/doc/browser-primitives.md`: browser primitive package
+  boundary, root export, component subpaths, and global CSS
+- `../lib/graphle-web-shell/doc/web-shell.md`: generic browser shell
+  registration, host status, navigation, command, and content slots
+- `../lib/graphle-site-web/doc/site-web.md`: assembled personal-site browser app,
+  local route loading, inline authoring controls, and package-built static
+  assets
 - `../lib/graphle-cli/doc/agent-runtime.md`: issue-driven automation runtime,
   scheduler, workspace lifecycle, and retained runtime behavior
 - `../lib/graphle-cli/doc/agent-workflow.md`: workflow loading, issue routing, context
@@ -133,20 +142,27 @@ The current dependency chain is:
 - `../graphle.ts`: repo config, context registry, profiles, modules, and routing
 - `../lib/graphle/`: `@dpeek/graphle`, the public command package for
   `bunx @dpeek/graphle dev`
-- `../lib/graphle-local/`: `@dpeek/graphle-local`, the phase-1 local Bun server,
-  cwd project bootstrap, local auth, persisted site authority startup, browser
-  opening, and placeholder rendering
+- `../lib/graphle-local/`: `@dpeek/graphle-local`, the local Bun server, cwd
+  project bootstrap, local auth, persisted site authority startup, `/api/site/*`
+  route handling, browser opening, and graph-backed site rendering
 - `../lib/graphle-sqlite/`: `@dpeek/graphle-sqlite`, the local
   `graphle.sqlite` open/bootstrap helper and persisted authority adapter
 - `../lib/graphle-module-site/`: `@dpeek/graphle-module-site`, the built-in
   `site:` namespace for page and post records in the personal-site MVP
+- `../lib/graphle-web-ui/`: `@dpeek/graphle-web-ui`, the shared browser
+  primitive package for reusable controls, markdown, Monaco, and
+  source-preview chrome
+- `../lib/graphle-web-shell/`: `@dpeek/graphle-web-shell`, the generic browser
+  shell library for feature registration, host status, navigation, commands,
+  and content slots
+- `../lib/graphle-site-web/`: `@dpeek/graphle-site-web`, the packaged
+  personal-site browser app, inline authoring surface, and built client assets
+  served by `graphle dev`
 - `../lib/graphle-app/`: `@dpeek/graphle-app`, the app package for graph helper exports plus the
   browser Worker, routes, and app-owned web composition
 - `../lib/graphle-cli/`: `@dpeek/graphle-cli`, the operator shell package for command dispatch,
   task execution, agent and browser-agent runtimes, MCP, TUI, and runtime config
 - `../lib/graphle-*/`: extracted graph kernel, bootstrap, client, authority,
   sync, projection, query, workflow, and surface packages
-- `../lib/graphle-web/`: `@dpeek/graphle-web`, the shared browser primitive package for reusable
-  controls, markdown, Monaco, and source-preview chrome
 - `../lib/utils/`: `@dpeek/utils`, the shared runtime helper package for env,
   logging, and process helpers

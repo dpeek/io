@@ -2,7 +2,7 @@ import { isSecretBackedField } from "@dpeek/graphle-app/graph";
 import type { RecordSurfaceFieldBinding } from "@dpeek/graphle-surface";
 import { RecordSurfaceLayout, RecordSurfaceSectionView } from "@dpeek/graphle-surface/react-dom";
 import { GraphIcon } from "@dpeek/graphle-module-core/react-dom";
-import { Badge } from "@dpeek/graphle-web/badge";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
 import { type ReactNode } from "react";
 
 import type {

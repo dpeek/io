@@ -1,0 +1,247 @@
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.graphle-shell-content {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.graphle-site-workspace {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 24px;
+  align-items: start;
+}
+
+.graphle-site-preview {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: clamp(24px, 5vw, 56px);
+}
+
+.graphle-site-preview-article {
+  display: grid;
+  min-height: 52vh;
+  align-content: start;
+  gap: 22px;
+}
+
+.graphle-site-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
+
+.graphle-site-preview-article h2 {
+  max-width: 760px;
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(2.3rem, 7vw, 5.2rem);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.graphle-site-excerpt {
+  max-width: 680px;
+  margin: 0;
+  color: color-mix(in oklch, var(--foreground) 76%, var(--muted-foreground));
+  font-size: 1.15rem;
+  line-height: 1.6;
+}
+
+.graphle-site-markdown {
+  display: grid;
+  max-width: 720px;
+  gap: 14px;
+  color: color-mix(in oklch, var(--foreground) 88%, var(--muted-foreground));
+  font-size: 1rem;
+  line-height: 1.72;
+}
+
+.graphle-site-markdown > * {
+  margin: 0;
+}
+
+.graphle-site-markdown h1,
+.graphle-site-markdown h2,
+.graphle-site-markdown h3 {
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.graphle-site-markdown a {
+  color: #145b7e;
+  text-underline-offset: 3px;
+}
+
+.graphle-site-markdown pre,
+.graphle-site-markdown code {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.graphle-site-authoring {
+  display: grid;
+  min-width: 0;
+  gap: 18px;
+  border-left: 1px solid var(--border);
+  padding-left: 24px;
+}
+
+.graphle-site-editor,
+.graphle-site-create-form,
+.graphle-site-content-lists section {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 16px;
+}
+
+.graphle-site-editor-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.graphle-site-editor h3,
+.graphle-site-create-form h4,
+.graphle-site-content-lists h4 {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.96rem;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.graphle-site-editor h3 {
+  font-size: 1.05rem;
+}
+
+.graphle-site-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.graphle-site-field > span {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.graphle-site-select {
+  min-height: 36px;
+  width: 100%;
+  border: 1px solid var(--input);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0 10px;
+}
+
+.graphle-site-editor textarea,
+.graphle-site-create-form textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.graphle-site-editor textarea[rows="12"] {
+  min-height: 260px;
+}
+
+.graphle-site-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.graphle-site-save-error {
+  margin: 0;
+  color: #a43b35;
+  font-size: 0.88rem;
+}
+
+.graphle-site-create-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.graphle-site-content-lists {
+  display: grid;
+  gap: 12px;
+}
+
+.graphle-site-content-lists ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.graphle-site-content-lists li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.graphle-site-content-lists a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #145b7e;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (max-width: 1120px) {
+  .graphle-site-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .graphle-site-authoring {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .graphle-shell-main {
+    padding: 16px;
+  }
+
+  .graphle-site-preview {
+    padding: 22px;
+  }
+
+  .graphle-site-preview-article {
+    min-height: 40vh;
+  }
+
+  .graphle-site-preview-article h2 {
+    font-size: 2.35rem;
+  }
+}

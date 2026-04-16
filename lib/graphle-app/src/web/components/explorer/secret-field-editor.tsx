@@ -1,14 +1,14 @@
 import { usePredicateField } from "@dpeek/graphle-react";
-import { Alert, AlertDescription } from "@dpeek/graphle-web/alert";
-import { Button } from "@dpeek/graphle-web/button";
+import { Alert, AlertDescription } from "@dpeek/graphle-web-ui/alert";
+import { Button } from "@dpeek/graphle-web-ui/button";
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from "@dpeek/graphle-web/field";
-import { Input } from "@dpeek/graphle-web/input";
+} from "@dpeek/graphle-web-ui/field";
+import { Input } from "@dpeek/graphle-web-ui/input";
 import { useEffect, useState } from "react";
 
 import { secretFieldPlaintextRequiredMessage } from "../../lib/secret-fields.js";

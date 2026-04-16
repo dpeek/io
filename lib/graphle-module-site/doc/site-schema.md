@@ -28,6 +28,17 @@ The package exports the resolved `site` namespace and `siteManifest`. Stable ids
 live in `../src/site.json`; package-local tests fail when authored schema keys
 drift without an intentional id-map update.
 
+The package also exports browser-safe helpers used by the local runtime and
+site browser app:
+
+- `parseSitePath`: validates exact public page paths
+- `parseSiteSlug`: normalizes and validates post slugs
+- `parseSitePublicationStatus`: accepts only `draft` or `published`
+- `parseSitePublicRoute`: maps `/posts/:slug` to post routes and all other
+  valid public paths to page routes
+- `siteStatusIdFor` and `siteStatusForId`: translate between public status keys
+  and resolved graph enum ids
+
 ## Minimal Core Dependency
 
 The site module is booted with `minimalCore` from `@dpeek/graphle-module-core`.
@@ -38,6 +49,6 @@ installed-module records.
 
 ## Boundary
 
-This package defines schema only. It does not open `graphle.sqlite`, seed default
-content, serve HTTP, render markdown, own browser UI, deploy to Cloudflare, or
-sync local and remote graphs.
+This package defines schema, validation helpers, and route-read contracts only.
+It does not open `graphle.sqlite`, seed default content, serve HTTP, render
+markdown, own browser UI, deploy to Cloudflare, or sync local and remote graphs.

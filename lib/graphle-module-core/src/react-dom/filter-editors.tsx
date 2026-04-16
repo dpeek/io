@@ -3,8 +3,8 @@ import type {
   GraphFilterEnumOption,
   GraphFilterOperandEditorCapability,
 } from "@dpeek/graphle-react";
-import { Input } from "@dpeek/graphle-web/input";
-import { NativeSelect, NativeSelectOption } from "@dpeek/graphle-web/native-select";
+import { Input } from "@dpeek/graphle-web-ui/input";
+import { NativeSelect, NativeSelectOption } from "@dpeek/graphle-web-ui/native-select";
 import { useEffect, useState } from "react";
 
 type AnyOperandProps = FilterOperandProps<any, any, any>;

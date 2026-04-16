@@ -1,23 +1,23 @@
 import { edgeId } from "@dpeek/graphle-app/graph";
 import { core } from "@dpeek/graphle-module-core";
 import { GraphIcon } from "@dpeek/graphle-module-core/react-dom";
-import { Badge } from "@dpeek/graphle-web/badge";
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web-ui/card";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@dpeek/graphle-web/collapsible";
-import { Empty, EmptyDescription } from "@dpeek/graphle-web/empty";
+} from "@dpeek/graphle-web-ui/collapsible";
+import { Empty, EmptyDescription } from "@dpeek/graphle-web-ui/empty";
 import {
   Item,
   ItemActions,
   ItemContent,
   ItemDescription,
   ItemTitle,
-} from "@dpeek/graphle-web/item";
-import { cn } from "@dpeek/graphle-web/utils";
+} from "@dpeek/graphle-web-ui/item";
+import { cn } from "@dpeek/graphle-web-ui/utils";
 import { useState, type ReactNode } from "react";
 
 import { asTypeMetadataFields } from "./catalog.js";

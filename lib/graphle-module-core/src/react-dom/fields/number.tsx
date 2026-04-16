@@ -1,5 +1,5 @@
 import { performValidatedMutation, usePredicateField } from "@dpeek/graphle-react";
-import { Input } from "@dpeek/graphle-web/input";
+import { Input } from "@dpeek/graphle-web-ui/input";
 import { useEffect, useState } from "react";
 
 import {

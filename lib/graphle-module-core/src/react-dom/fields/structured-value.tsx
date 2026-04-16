@@ -3,14 +3,14 @@ import {
   InputGroupAddon,
   InputGroupInput,
   InputGroupText,
-} from "@dpeek/graphle-web/input-group";
+} from "@dpeek/graphle-web-ui/input-group";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@dpeek/graphle-web/select";
+} from "@dpeek/graphle-web-ui/select";
 
 import {
   convertDurationAmount,

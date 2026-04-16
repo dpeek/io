@@ -36,7 +36,7 @@
     "@dpeek/graphle-react": "workspace:*",
     "@dpeek/graphle-surface": "workspace:*",
     "@dpeek/graphle-sync": "workspace:*",
-    "@dpeek/graphle-web": "workspace:*",
+    "@dpeek/graphle-web-ui": "workspace:*",
     "@tanstack/react-router": "^1.167.4",
     "better-auth": "1.5.6",
     "class-variance-authority": "^0.7.1",

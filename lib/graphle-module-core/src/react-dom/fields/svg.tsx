@@ -4,8 +4,8 @@ import {
   usePredicateField,
   type PredicateFieldViewCapability,
 } from "@dpeek/graphle-react";
-import { MonacoSourceEditor, sourcePreviewMonacoOptions } from "@dpeek/graphle-web/monaco";
-import { SourcePreviewFieldEditor } from "@dpeek/graphle-web/source-preview";
+import { MonacoSourceEditor, sourcePreviewMonacoOptions } from "@dpeek/graphle-web-ui/monaco";
+import { SourcePreviewFieldEditor } from "@dpeek/graphle-web-ui/source-preview";
 import { useDeferredValue, useEffect, useState } from "react";
 
 import {

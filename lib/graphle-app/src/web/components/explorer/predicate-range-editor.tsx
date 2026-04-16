@@ -5,7 +5,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@dpeek/graphle-web/select";
+} from "@dpeek/graphle-web-ui/select";
 
 import { getDefinitionDisplayLabel } from "./helpers.js";
 import type { MutableOptionalPredicateRef, TypeCatalogEntry } from "./model.js";

@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@dpeek/graphle-web/button";
-import { Dialog, DialogContent, DialogTrigger } from "@dpeek/graphle-web/dialog";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import { Dialog, DialogContent, DialogTrigger } from "@dpeek/graphle-web-ui/dialog";
 import {
   createContext,
   useContext,

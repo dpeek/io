@@ -4,7 +4,7 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-} from "@dpeek/graphle-web/sidebar";
+} from "@dpeek/graphle-web-ui/sidebar";
 import {
   GitGraphIcon,
   HomeIcon,

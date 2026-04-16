@@ -1,6 +1,6 @@
-import { Button } from "@dpeek/graphle-web/button";
-import { ButtonGroup } from "@dpeek/graphle-web/button-group";
-import { Card, CardContent, CardFooter } from "@dpeek/graphle-web/card";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import { ButtonGroup } from "@dpeek/graphle-web-ui/button-group";
+import { Card, CardContent, CardFooter } from "@dpeek/graphle-web-ui/card";
 import { useMemo, useState } from "react";
 
 import {

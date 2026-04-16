@@ -10,7 +10,13 @@ import {
   builtInQueryRendererRegistry,
   type QueryRendererRegistry,
 } from "@dpeek/graphle-query/react-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
 import { useEffect, useState, type ReactNode } from "react";
 
 import type { CollectionSurfaceRecordLookup } from "../collection-surface.js";

@@ -1,4 +1,4 @@
-Status: Proposed
+Status: Implemented
 Last Updated: 2026-04-15
 
 # Phase 3: Lightweight shell
@@ -12,8 +12,8 @@ Last Updated: 2026-04-15
 - `../../package.json`
 - `../../turbo.json`
 - `../../doc/index.md`
-- `../../lib/graphle-web/package.json`
-- `../../lib/graphle-web/README.md`
+- `../../lib/graphle-web-ui/package.json`
+- `../../lib/graphle-web-ui/README.md`
 - `../../lib/graphle-local/README.md`
 - `../../lib/graphle-local/doc/local-dev.md`
 - `../../lib/graphle-local/src/cli.ts`
@@ -62,7 +62,7 @@ staying strict about future ownership boundaries.
 
 Introduce `@dpeek/graphle-web-ui` as the canonical browser primitive package.
 
-The current `@dpeek/graphle-web` package already contains shared browser
+The former `@dpeek/graphle-web` package already contained shared browser
 primitives and no graph-runtime ownership. This phase should either:
 
 1. rename/narrow that package to `@dpeek/graphle-web-ui`, updating imports that
@@ -191,11 +191,23 @@ Do not copy app-specific route, auth, workflow, or authority wiring.
 
 None.
 
+## Implementation Notes
+
+- The former `@dpeek/graphle-web` package was renamed to
+  `@dpeek/graphle-web-ui`. Imports were updated across the repo and the package
+  now has a root export plus package-local primitive docs.
+- `@dpeek/graphle-web-shell` now owns generic feature registration, host status
+  summaries, shell frame rendering, and empty/loading/error shell states.
+- `@dpeek/graphle-site-web` now builds a Vite browser bundle into `out/client`,
+  registers a minimal site feature with the shell, and reads `/api/health` plus
+  `/api/session` for local status.
+- `@dpeek/graphle-local` now serves the site-web client assets and keeps the
+  graph-backed placeholder HTML inside `#root` as the no-JS fallback for
+  non-API routes.
+
 ## Success Criteria
 
-- `@dpeek/graphle-web-ui` exists as the canonical browser primitive package, or
-  `@dpeek/graphle-web` is explicitly documented as a temporary legacy/proof
-  boundary while `@dpeek/graphle-web-ui` becomes canonical.
+- `@dpeek/graphle-web-ui` exists as the canonical browser primitive package.
 - `@dpeek/graphle-web-ui` has package metadata, TypeScript config, README,
   package-local docs, and focused tests for any new primitives or exports.
 - `@dpeek/graphle-web-shell` exists with package metadata, TypeScript config,

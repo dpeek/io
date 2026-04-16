@@ -3,7 +3,7 @@
 import type { ComponentProps } from "react";
 import { useState } from "react";
 
-import { Button } from "@dpeek/graphle-web/button";
+import { Button } from "@dpeek/graphle-web-ui/button";
 
 import type {
   CollectionCommandExecutionResult,

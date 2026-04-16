@@ -1,5 +1,5 @@
 import { useOptionalMutationRuntime, usePredicateField } from "@dpeek/graphle-react";
-import { cn } from "@dpeek/graphle-web/utils";
+import { cn } from "@dpeek/graphle-web-ui/utils";
 import type { ReactNode } from "react";
 
 import { sanitizeSvgMarkup } from "../core/svg-sanitization.js";

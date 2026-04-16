@@ -3,7 +3,7 @@ import {
   usePredicateField,
   type PredicateFieldViewCapability,
 } from "@dpeek/graphle-react";
-import { Checkbox } from "@dpeek/graphle-web/checkbox";
+import { Checkbox } from "@dpeek/graphle-web-ui/checkbox";
 
 import { colorFieldViewCapability } from "./fields/color.js";
 import { CheckboxFieldEditor } from "./fields/checkbox.js";

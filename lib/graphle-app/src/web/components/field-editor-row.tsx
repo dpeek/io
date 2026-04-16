@@ -10,8 +10,8 @@ import {
   usePersistedMutationCallbacks,
   usePredicateField,
 } from "@dpeek/graphle-react";
-import { Badge } from "@dpeek/graphle-web/badge";
-import { cn } from "@dpeek/graphle-web/utils";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import { cn } from "@dpeek/graphle-web-ui/utils";
 import { useContext, useEffect, useState, type ReactNode } from "react";
 
 import type {

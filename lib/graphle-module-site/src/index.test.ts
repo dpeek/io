@@ -5,7 +5,16 @@ import { createGraphClient } from "@dpeek/graphle-client";
 import { createGraphIdMap, createGraphStore } from "@dpeek/graphle-kernel";
 import { minimalCore } from "@dpeek/graphle-module-core";
 
-import { parseSitePath, site, siteManifest } from "./index.js";
+import {
+  parseSitePath,
+  parseSitePublicRoute,
+  parseSitePublicationStatus,
+  parseSiteSlug,
+  site,
+  siteManifest,
+  siteStatusForId,
+  siteStatusIdFor,
+} from "./index.js";
 import siteIds from "./site.json";
 
 const siteGraphDefinitions = { ...minimalCore, ...site } as const;
@@ -68,5 +77,21 @@ describe("site module", () => {
     expect(parseSitePath("/work/example")).toBe("/work/example");
     expect(() => parseSitePath("posts/example")).toThrow("Invalid site path");
     expect(() => parseSitePath("/work/")).toThrow("Invalid site path");
+  });
+
+  it("normalizes route, slug, and status helpers for browser-safe site APIs", () => {
+    expect(parseSiteSlug("Launch Notes")).toBe("launch-notes");
+    expect(parseSitePublicationStatus("draft")).toBe("draft");
+    expect(siteStatusForId(siteStatusIdFor("published"))).toBe("published");
+    expect(parseSitePublicRoute("/posts/example-post")).toEqual({
+      kind: "post",
+      slug: "example-post",
+    });
+    expect(parseSitePublicRoute("/work")).toEqual({
+      kind: "page",
+      path: "/work",
+    });
+    expect(() => parseSiteSlug("bad/slug")).toThrow("Invalid site slug");
+    expect(() => parseSitePublicationStatus("archived")).toThrow("Invalid site status");
   });
 });

@@ -1,0 +1,43 @@
+{
+  "name": "@dpeek/graphle-site-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./out/*"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./out/index.js"
+    },
+    "./assets": {
+      "types": "./src/assets.ts",
+      "default": "./out/assets.js"
+    }
+  },
+  "scripts": {
+    "build": "tsgo && vite build",
+    "clean": "rm -rf out",
+    "check": "oxlint --type-aware --type-check --fix src vite.config.ts --ignore-pattern '**/*.test.ts' --ignore-pattern '**/*.test.tsx' && oxfmt && bun test"
+  },
+  "dependencies": {
+    "@dpeek/graphle-web-shell": "workspace:*",
+    "@dpeek/graphle-web-ui": "workspace:*",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/bun": "^1.3.11",
+    "@types/node": "^25.3.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@typescript/native-preview": "^7.0.0-dev.20260226.1",
+    "@vitejs/plugin-react": "^6.0.1",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
+    "vite": "^8.0.3"
+  }
+}

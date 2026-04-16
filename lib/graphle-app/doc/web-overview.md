@@ -9,7 +9,7 @@ last_updated: 2026-04-08
 ## Read this when
 
 - the question is about the current browser or Worker runtime in `@dpeek/graphle-app`
-- you need the ownership split between `@dpeek/graphle-app`, `@dpeek/graphle-web`, and the graph
+- you need the ownership split between `@dpeek/graphle-app`, `@dpeek/graphle-web-ui`, and the graph
   packages
 - you are tracing how the browser shell boots auth, graph runtime, and the
   current query or workflow surfaces
@@ -147,14 +147,14 @@ Current details and the adapter path live in
 
 ## Ownership boundary
 
-- keep reusable browser primitives in `@dpeek/graphle-web`
+- keep reusable browser primitives in `@dpeek/graphle-web-ui`
 - keep graph-aware field, query, and runtime contracts in the owning graph
   packages
 - keep route composition, Worker routes, auth-shell behavior, query route
   mounting, and authority wiring in `@dpeek/graphle-app`
 
 If a browser component can be reused without importing graph runtime types, it
-belongs in `@dpeek/graphle-web`. If it decides graph validation, mutation, typed previews,
+belongs in `@dpeek/graphle-web-ui`. If it decides graph validation, mutation, typed previews,
 or authority routing, it stays in app/web or the owning graph package.
 
 ## Source anchors
@@ -192,5 +192,5 @@ or authority routing, it stays in app/web or the owning graph package.
 - [`../../graph-query/doc/installed-surfaces.md`](../../graph-query/doc/installed-surfaces.md):
   installed query-surface registry and activation-fed editor-catalog
   composition
-- [`../../web/README.md`](../../web/README.md): shared browser primitives owned
-  by `@dpeek/graphle-web`
+- [`../../graphle-web-ui/README.md`](../../graphle-web-ui/README.md): shared browser primitives owned
+  by `@dpeek/graphle-web-ui`

@@ -1,9 +1,15 @@
 "use client";
 
 import { type SyncScope, type SyncScopeRequest } from "@dpeek/graphle-sync";
-import { Badge } from "@dpeek/graphle-web/badge";
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
 import { Link } from "@tanstack/react-router";
 
 import {

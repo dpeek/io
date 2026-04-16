@@ -9,7 +9,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
   InputGroupText,
-} from "@dpeek/graphle-web/input-group";
+} from "@dpeek/graphle-web-ui/input-group";
 import { useEffect, useState } from "react";
 
 import {

@@ -8,7 +8,13 @@ import {
   deriveSavedViewRecord,
   type QueryContainerPageExecutor,
 } from "@dpeek/graphle-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
 import { useEffect, useState, type ReactNode } from "react";
 
 import type { QueryRouteSearch } from "../lib/query-route-state.js";

@@ -7,7 +7,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@dpeek/graphle-web/sidebar";
+} from "@dpeek/graphle-web-ui/sidebar";
 import { Link } from "@tanstack/react-router";
 
 type NavItem = {

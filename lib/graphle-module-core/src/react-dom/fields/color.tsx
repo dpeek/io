@@ -6,8 +6,8 @@ import {
   usePredicateField,
   type PredicateFieldViewCapability,
 } from "@dpeek/graphle-react";
-import { ColorInput } from "@dpeek/graphle-web/color";
-import { InputGroup, InputGroupAddon } from "@dpeek/graphle-web/input-group";
+import { ColorInput } from "@dpeek/graphle-web-ui/color";
+import { InputGroup, InputGroupAddon } from "@dpeek/graphle-web-ui/input-group";
 import { useEffect, useState } from "react";
 
 import {

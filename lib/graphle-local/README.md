@@ -18,15 +18,18 @@ personal-site product path.
   definitions
 - first-run seed content for one home page and one example post
 - the Bun HTTP request handler for `/api/health`, `/api/session`, `/api/init`,
-  unknown `/api/*` JSON 404s, and placeholder public-site HTML
+  `/api/site/*` page/post read-write routes, unknown `/api/*` JSON 404s,
+  package-owned browser assets, and the site host document with graph-backed
+  fallback HTML
+- public route resolution for `/`, exact page paths, and `/posts/:slug`
 - signed local admin cookies and process-local init-token redemption
 - `graphle dev` CLI option parsing and browser opening
 
 ## What It Does Not Own
 
-- packaged Vite or TanStack browser assets
+- packaged browser source or Vite dev-server ownership
 - Better Auth or `AUTH_DB` migrations
-- site page/post schema ownership, editors, deploy, or sync
+- site page/post schema ownership, browser editor UI, deploy, or sync
 - the existing operator CLI package
 
 ## Validation

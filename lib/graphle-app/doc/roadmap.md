@@ -94,7 +94,7 @@ Follow-on app-owned work includes:
 - keep localhost instant onboarding as a short bridge into the same Better Auth
   session model instead of introducing a second long-lived local auth model
 - keep app-owned browser and Worker composition in `@dpeek/graphle-app`, while leaving
-  shared browser primitives in `@dpeek/graphle-web`
+  shared browser primitives in `@dpeek/graphle-web-ui`
 
 ## Source anchors
 

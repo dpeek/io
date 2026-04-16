@@ -19,7 +19,7 @@ import {
   FieldDescription,
   FieldError,
   FieldTitle,
-} from "@dpeek/graphle-web/field";
+} from "@dpeek/graphle-web-ui/field";
 import type { ReactNode } from "react";
 
 export type AnyFieldProps = PredicateFieldProps<any, any>;

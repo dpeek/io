@@ -17,7 +17,13 @@ import {
   type QueryRendererRegistry,
   type QueryRendererViewProps,
 } from "@dpeek/graphle-query/react-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
 import { useEffect, useMemo, useState } from "react";
 
 import {

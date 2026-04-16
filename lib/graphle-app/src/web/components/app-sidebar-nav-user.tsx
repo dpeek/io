@@ -1,4 +1,4 @@
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@dpeek/graphle-web/sidebar";
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@dpeek/graphle-web-ui/sidebar";
 import { LogOutIcon } from "lucide-react";
 import { useResetSharedGraphRuntimeOnSessionChange, useWebAuthSession } from "./auth-shell";
 import { authClient, notifyWebPrincipalBootstrapChanged } from "../lib/auth-client";

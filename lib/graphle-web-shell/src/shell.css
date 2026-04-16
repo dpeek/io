@@ -1,0 +1,146 @@
+.graphle-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--accent) 46%, transparent), transparent 36%),
+    var(--background);
+  color: var(--foreground);
+}
+
+.graphle-shell-sidebar {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 28px;
+  border-right: 1px solid var(--border);
+  background: color-mix(in oklch, var(--card) 90%, transparent);
+  padding: 24px;
+}
+
+.graphle-shell-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.graphle-shell-brand-mark {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 0.88rem;
+}
+
+.graphle-shell-nav {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.graphle-shell-nav-item {
+  display: flex;
+  min-height: 34px;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 8px;
+  color: var(--muted-foreground);
+  padding: 0 10px;
+  text-decoration: none;
+}
+
+.graphle-shell-nav-item[data-active="true"] {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+.graphle-shell-nav-status,
+.graphle-shell-nav-empty,
+.graphle-shell-eyebrow {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+.graphle-shell-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+}
+
+.graphle-shell-header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.graphle-shell-header h1 {
+  margin: 4px 0 0;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.graphle-shell-status,
+.graphle-shell-command-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.graphle-shell-content {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--card) 94%, transparent);
+  padding: 24px;
+}
+
+.graphle-shell-state {
+  min-height: 260px;
+}
+
+.graphle-shell-spin {
+  animation: graphle-shell-spin 900ms linear infinite;
+}
+
+@keyframes graphle-shell-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .graphle-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .graphle-shell-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .graphle-shell-header {
+    flex-direction: column;
+  }
+
+  .graphle-shell-status,
+  .graphle-shell-command-bar {
+    justify-content: flex-start;
+  }
+}

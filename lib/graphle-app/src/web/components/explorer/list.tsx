@@ -1,6 +1,12 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
-import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@dpeek/graphle-web/item";
-import { cn } from "@dpeek/graphle-web/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web-ui/card";
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@dpeek/graphle-web-ui/item";
+import { cn } from "@dpeek/graphle-web-ui/utils";
 import type { ReactNode } from "react";
 
 type ListItemData = {

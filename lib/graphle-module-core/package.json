@@ -36,7 +36,7 @@
     "@dpeek/graphle-module": "workspace:*",
     "@dpeek/graphle-projection": "workspace:*",
     "@dpeek/graphle-react": "workspace:*",
-    "@dpeek/graphle-web": "workspace:*",
+    "@dpeek/graphle-web-ui": "workspace:*",
     "lucide-react": "^0.577.0",
     "react": "^19.2.4"
   },

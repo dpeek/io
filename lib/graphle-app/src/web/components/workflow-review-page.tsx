@@ -21,9 +21,15 @@ import {
   type WorkflowSessionFeedReadResult,
   type WorkflowSessionFeedSelectionState,
 } from "@dpeek/graphle-module-workflow/client";
-import { Badge } from "@dpeek/graphle-web/badge";
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type {

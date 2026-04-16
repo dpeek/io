@@ -23,14 +23,20 @@ import {
   createDefaultTableRendererBinding,
   createQueryRendererCapabilityMap,
 } from "@dpeek/graphle-query/react-dom";
-import { Alert, AlertDescription, AlertTitle } from "@dpeek/graphle-web/alert";
-import { Badge } from "@dpeek/graphle-web/badge";
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
-import { Empty, EmptyDescription } from "@dpeek/graphle-web/empty";
-import { Field, FieldContent, FieldGroup, FieldLabel } from "@dpeek/graphle-web/field";
-import { Input } from "@dpeek/graphle-web/input";
-import { NativeSelect, NativeSelectOption } from "@dpeek/graphle-web/native-select";
+import { Alert, AlertDescription, AlertTitle } from "@dpeek/graphle-web-ui/alert";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
+import { Empty, EmptyDescription } from "@dpeek/graphle-web-ui/empty";
+import { Field, FieldContent, FieldGroup, FieldLabel } from "@dpeek/graphle-web-ui/field";
+import { Input } from "@dpeek/graphle-web-ui/input";
+import { NativeSelect, NativeSelectOption } from "@dpeek/graphle-web-ui/native-select";
 import { useEffect, useMemo, useState } from "react";
 
 import {

@@ -22,6 +22,7 @@
     "@dpeek/graphle-kernel": "workspace:*",
     "@dpeek/graphle-module-core": "workspace:*",
     "@dpeek/graphle-module-site": "workspace:*",
+    "@dpeek/graphle-site-web": "workspace:*",
     "@dpeek/graphle-sqlite": "workspace:*"
   },
   "devDependencies": {

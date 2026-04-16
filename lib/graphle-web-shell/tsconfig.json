@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["@types/bun", "node"],
+    "outDir": "./out",
+    "rootDir": "./src",
+    "paths": {
+      "@dpeek/graphle-web-shell": ["./src/index.ts"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["**/*.test.tsx"]
+}

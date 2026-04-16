@@ -28,7 +28,7 @@
     "@dpeek/graphle-module-workflow": "workspace:*",
     "@dpeek/graphle-projection": "workspace:*",
     "@dpeek/graphle-query": "workspace:*",
-    "@dpeek/graphle-web": "workspace:*",
+    "@dpeek/graphle-web-ui": "workspace:*",
     "react": "^19.2.4"
   },
   "devDependencies": {

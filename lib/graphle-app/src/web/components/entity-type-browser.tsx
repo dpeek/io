@@ -1,11 +1,11 @@
 "use client";
 
 import { GraphIcon } from "@dpeek/graphle-module-core/react-dom";
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
-import { Empty, EmptyDescription } from "@dpeek/graphle-web/empty";
-import { ScrollArea } from "@dpeek/graphle-web/scroll-area";
-import { cn } from "@dpeek/graphle-web/utils";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web-ui/card";
+import { Empty, EmptyDescription } from "@dpeek/graphle-web-ui/empty";
+import { ScrollArea } from "@dpeek/graphle-web-ui/scroll-area";
+import { cn } from "@dpeek/graphle-web-ui/utils";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCreateButton, EntityCreateRuntimeProvider } from "./entity-create-button.js";

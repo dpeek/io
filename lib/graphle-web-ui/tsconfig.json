@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@dpeek/graphle-web-ui": ["./src/index.ts"],
+      "@dpeek/graphle-web-ui/*": ["./src/*"]
+    },
+    "types": ["@types/bun"]
+  },
+  "include": ["./src/**/*"]
+}

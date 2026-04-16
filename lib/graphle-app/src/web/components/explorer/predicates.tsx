@@ -1,13 +1,13 @@
 import { usePredicateField } from "@dpeek/graphle-react";
-import { Badge } from "@dpeek/graphle-web/badge";
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web-ui/card";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@dpeek/graphle-web/collapsible";
-import { Item, ItemActions, ItemContent, ItemTitle } from "@dpeek/graphle-web/item";
+} from "@dpeek/graphle-web-ui/collapsible";
+import { Item, ItemActions, ItemContent, ItemTitle } from "@dpeek/graphle-web-ui/item";
 import { type ReactNode, useState } from "react";
 
 import { asPredicateMetadataFields } from "./catalog.js";

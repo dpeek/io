@@ -4,13 +4,13 @@ import {
   usePredicateField,
   type PredicateFieldViewCapability,
 } from "@dpeek/graphle-react";
-import { MarkdownRenderer } from "@dpeek/graphle-web/markdown";
-import { MonacoSourceEditor, sourcePreviewMonacoOptions } from "@dpeek/graphle-web/monaco";
+import { MarkdownRenderer } from "@dpeek/graphle-web-ui/markdown";
+import { MonacoSourceEditor, sourcePreviewMonacoOptions } from "@dpeek/graphle-web-ui/monaco";
 import {
   EmptyPreview,
   SourcePreviewFieldEditor,
   sourcePreviewPanelClassName,
-} from "@dpeek/graphle-web/source-preview";
+} from "@dpeek/graphle-web-ui/source-preview";
 import { useDeferredValue, useEffect, useState } from "react";
 
 import {

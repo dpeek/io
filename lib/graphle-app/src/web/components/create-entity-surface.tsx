@@ -1,8 +1,8 @@
 import { typeId } from "@dpeek/graphle-app/graph";
 import { GraphValidationError } from "@dpeek/graphle-client";
-import { Button } from "@dpeek/graphle-web/button";
-import { DialogClose, DialogFooter, DialogHeader, DialogTitle } from "@dpeek/graphle-web/dialog";
-import { Empty, EmptyDescription } from "@dpeek/graphle-web/empty";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import { DialogClose, DialogFooter, DialogHeader, DialogTitle } from "@dpeek/graphle-web-ui/dialog";
+import { Empty, EmptyDescription } from "@dpeek/graphle-web-ui/empty";
 import { XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 

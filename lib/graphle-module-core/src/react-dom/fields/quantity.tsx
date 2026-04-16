@@ -1,5 +1,5 @@
 import { performValidatedMutation, usePredicateField } from "@dpeek/graphle-react";
-import { InputGroup, InputGroupInput } from "@dpeek/graphle-web/input-group";
+import { InputGroup, InputGroupInput } from "@dpeek/graphle-web-ui/input-group";
 import { useEffect, useState } from "react";
 
 import type { QuantityValue } from "../../core/quantity.js";

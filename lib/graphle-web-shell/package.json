@@ -1,0 +1,35 @@
+{
+  "name": "@dpeek/graphle-web-shell",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./out/*"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./out/index.js"
+    },
+    "./shell.css": "./src/shell.css"
+  },
+  "scripts": {
+    "build": "tsgo",
+    "clean": "rm -rf out",
+    "check": "oxlint --type-aware --type-check --fix src --ignore-pattern '**/*.test.tsx' && oxfmt && bun test"
+  },
+  "dependencies": {
+    "@dpeek/graphle-web-ui": "workspace:*",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.11",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@typescript/native-preview": "^7.0.0-dev.20260226.1",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
+    "react-dom": "^19.2.4"
+  }
+}

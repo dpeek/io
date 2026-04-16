@@ -62,7 +62,7 @@ Important rules:
 
 ## Shared form composition
 
-Authored browser forms and field rows should compose through `@dpeek/graphle-web` instead
+Authored browser forms and field rows should compose through `@dpeek/graphle-web-ui` instead
 of bespoke labels, selects, and validation blocks.
 
 Preferred pattern:

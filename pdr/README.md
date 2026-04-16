@@ -13,8 +13,13 @@
   SQLite persisted-authority storage, first-run seed content, and local runtime
   graph bootstrap.
 - [Personal site MVP phase 3](/Users/dpeek/code/graphle/pdr/personal-site-mvp/phase-3-shell.md):
-  plan the lightweight browser shell substrate: web UI primitives, generic shell
-  runtime, assembled site browser app, and local packaged asset serving.
+  implemented the lightweight browser shell substrate: canonical web UI
+  primitives, generic shell runtime, assembled site browser app, and local
+  packaged asset serving with the graph-backed fallback kept in place.
+- [Personal site MVP phase 4](/Users/dpeek/code/graphle/pdr/personal-site-mvp/phase-4-site-web.md):
+  plan inline site authoring and preview: graph-backed public routes, local
+  page/post APIs, markdown editing, publish controls, and visitor-safe draft
+  handling.
 - [Dedicated auth routes](/Users/dpeek/code/graphle/pdr/dedicated-auth-routes.md):
   move inline auth into dedicated sign-in/sign-up routes with TanStack
   Router route guards and Better Auth-aligned session context.

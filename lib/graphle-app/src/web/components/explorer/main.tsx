@@ -1,10 +1,10 @@
 import { typeId } from "@dpeek/graphle-app/graph";
 import { workflow } from "@dpeek/graphle-module-workflow";
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
-import { Empty, EmptyDescription } from "@dpeek/graphle-web/empty";
-import { ScrollArea } from "@dpeek/graphle-web/scroll-area";
-import { cn } from "@dpeek/graphle-web/utils";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web-ui/card";
+import { Empty, EmptyDescription } from "@dpeek/graphle-web-ui/empty";
+import { ScrollArea } from "@dpeek/graphle-web-ui/scroll-area";
+import { cn } from "@dpeek/graphle-web-ui/utils";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityTypeBrowserSurface } from "../entity-type-browser.js";

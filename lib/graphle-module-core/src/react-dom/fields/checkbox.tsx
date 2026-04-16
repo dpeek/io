@@ -1,5 +1,5 @@
 import { performValidatedMutation, usePredicateField } from "@dpeek/graphle-react";
-import { Checkbox } from "@dpeek/graphle-web/checkbox";
+import { Checkbox } from "@dpeek/graphle-web-ui/checkbox";
 import {
   Field,
   FieldContent,
@@ -7,7 +7,7 @@ import {
   FieldError,
   FieldLabel,
   FieldTitle,
-} from "@dpeek/graphle-web/field";
+} from "@dpeek/graphle-web-ui/field";
 
 import {
   getFieldState,

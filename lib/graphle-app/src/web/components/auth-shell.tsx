@@ -1,17 +1,23 @@
 "use client";
 
-import { Alert, AlertDescription } from "@dpeek/graphle-web/alert";
-import { Badge } from "@dpeek/graphle-web/badge";
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
+import { Alert, AlertDescription } from "@dpeek/graphle-web-ui/alert";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-} from "@dpeek/graphle-web/field";
-import { Input } from "@dpeek/graphle-web/input";
+} from "@dpeek/graphle-web-ui/field";
+import { Input } from "@dpeek/graphle-web-ui/input";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import {

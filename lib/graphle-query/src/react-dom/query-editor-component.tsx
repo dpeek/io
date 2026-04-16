@@ -1,11 +1,17 @@
 "use client";
 
-import { Alert, AlertDescription, AlertTitle } from "@dpeek/graphle-web/alert";
-import { Badge } from "@dpeek/graphle-web/badge";
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
-import { Checkbox } from "@dpeek/graphle-web/checkbox";
-import { Empty, EmptyDescription } from "@dpeek/graphle-web/empty";
+import { Alert, AlertDescription, AlertTitle } from "@dpeek/graphle-web-ui/alert";
+import { Badge } from "@dpeek/graphle-web-ui/badge";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
+import { Checkbox } from "@dpeek/graphle-web-ui/checkbox";
+import { Empty, EmptyDescription } from "@dpeek/graphle-web-ui/empty";
 import {
   Field,
   FieldContent,
@@ -14,10 +20,10 @@ import {
   FieldGroup,
   FieldLabel,
   FieldTitle,
-} from "@dpeek/graphle-web/field";
-import { Input } from "@dpeek/graphle-web/input";
-import { NativeSelect, NativeSelectOption } from "@dpeek/graphle-web/native-select";
-import { Textarea } from "@dpeek/graphle-web/textarea";
+} from "@dpeek/graphle-web-ui/field";
+import { Input } from "@dpeek/graphle-web-ui/input";
+import { NativeSelect, NativeSelectOption } from "@dpeek/graphle-web-ui/native-select";
+import { Textarea } from "@dpeek/graphle-web-ui/textarea";
 import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 
 import {

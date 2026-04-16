@@ -17,9 +17,9 @@ import type {
   QueryContainerRuntimeController,
   QueryContainerRuntimeValue,
 } from "@dpeek/graphle-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
-import { Empty, EmptyDescription } from "@dpeek/graphle-web/empty";
-import { ScrollArea } from "@dpeek/graphle-web/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "@dpeek/graphle-web-ui/card";
+import { Empty, EmptyDescription } from "@dpeek/graphle-web-ui/empty";
+import { ScrollArea } from "@dpeek/graphle-web-ui/scroll-area";
 import { useEffect, useMemo, useState } from "react";
 
 import { EntityCreateButton, EntityCreateRuntimeProvider } from "./entity-create-button.js";

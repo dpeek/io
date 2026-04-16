@@ -1,8 +1,14 @@
 "use client";
 
-import { Button } from "@dpeek/graphle-web/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@dpeek/graphle-web/card";
-import { Skeleton } from "@dpeek/graphle-web/skeleton";
+import { Button } from "@dpeek/graphle-web-ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@dpeek/graphle-web-ui/card";
+import { Skeleton } from "@dpeek/graphle-web-ui/skeleton";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {

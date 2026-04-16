@@ -1,5 +1,5 @@
-import { EmptyPreview, sourcePreviewPanelClassName } from "@dpeek/graphle-web/source-preview";
-import { cn } from "@dpeek/graphle-web/utils";
+import { EmptyPreview, sourcePreviewPanelClassName } from "@dpeek/graphle-web-ui/source-preview";
+import { cn } from "@dpeek/graphle-web-ui/utils";
 
 import { sanitizeSvgMarkup } from "../../core/svg-sanitization.js";
 import { SvgMarkup } from "../icon.js";
