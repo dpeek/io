@@ -1,4 +1,14 @@
 export { graphleSiteWebClientAssetsPath } from "./assets.js";
+export {
+  createGraphleSiteHttpGraphClient,
+  graphleSiteGraphBootstrapOptions,
+  graphleSiteGraphDefinitions,
+  graphleSiteGraphNamespace,
+  type GraphleSiteGraphClient,
+  type GraphleSiteGraphDefinitions,
+  type GraphleSiteGraphNamespace,
+  type GraphleSiteHttpGraphClientOptions,
+} from "./graph.js";
 export { GraphleSiteApp, GraphleSiteShell } from "./site-app.js";
 export { buildGraphleSiteOrderPayload, createGraphleSiteFeature } from "./site-feature.js";
 export {

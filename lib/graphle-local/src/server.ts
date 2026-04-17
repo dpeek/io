@@ -1,6 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 
+import {
+  GraphValidationError,
+  readHttpSyncRequest,
+  type GraphValidationIssue,
+} from "@dpeek/graphle-client";
+import type { GraphWriteTransaction } from "@dpeek/graphle-kernel";
 import type { GraphleSqliteHandle } from "@dpeek/graphle-sqlite";
 import { graphleSiteWebClientAssetsPath } from "@dpeek/graphle-site-web/assets";
 
@@ -73,6 +79,10 @@ function methodNotAllowed(method: string): Response {
 
 function errorResponse(error: string, code: string, status: number): Response {
   return jsonResponse({ error, code }, status);
+}
+
+function authRequiredResponse(): Response {
+  return errorResponse("Authentication required.", "auth.required", 401);
 }
 
 function redirect(location: string, setCookie?: string): Response {
@@ -485,6 +495,95 @@ function validationResponse(issues: readonly LocalSiteValidationIssue[]): Respon
   );
 }
 
+function graphAuthorityUnavailableResponse(): Response {
+  return errorResponse(
+    "The local site authority is unavailable.",
+    "graph.authority_unavailable",
+    503,
+  );
+}
+
+function graphTransportInputResponse(error: string, code: string): Response {
+  return errorResponse(error, code, 400);
+}
+
+function graphValidationResponse(issues: readonly GraphValidationIssue[]): Response {
+  return jsonResponse(
+    {
+      error: "Invalid graph transaction.",
+      code: "graph.validation_failed",
+      issues: issues.map((issue) => ({
+        path: [...issue.path],
+        pathText: issue.path.join("."),
+        code: issue.code,
+        message: issue.message,
+        source: issue.source,
+        predicateKey: issue.predicateKey,
+        nodeId: issue.nodeId,
+      })),
+    },
+    400,
+  );
+}
+
+function graphTransportErrorResponse(error: unknown): Response {
+  if (error instanceof GraphValidationError) {
+    return graphValidationResponse(error.result.issues);
+  }
+
+  return errorResponse("Graph transport request failed.", "graph.request_failed", 500);
+}
+
+async function graphSyncResponse(
+  request: Request,
+  authority: LocalSiteAuthority | undefined,
+): Promise<Response> {
+  if (!authority) return graphAuthorityUnavailableResponse();
+
+  let syncRequest: ReturnType<typeof readHttpSyncRequest>;
+  try {
+    syncRequest = readHttpSyncRequest(request);
+  } catch (error) {
+    return graphTransportInputResponse(
+      error instanceof Error ? error.message : "Invalid graph sync request.",
+      "graph.sync_request_invalid",
+    );
+  }
+
+  if (syncRequest.scope?.kind === "module") {
+    return graphTransportInputResponse(
+      "The local graph transport only supports whole-graph sync.",
+      "graph.sync_scope_unsupported",
+    );
+  }
+
+  return jsonResponse(
+    syncRequest.after
+      ? authority.getIncrementalSyncResult(syncRequest.after)
+      : authority.createTotalSyncPayload(),
+  );
+}
+
+async function graphTransactionResponse(
+  request: Request,
+  authority: LocalSiteAuthority | undefined,
+): Promise<Response> {
+  if (!authority) return graphAuthorityUnavailableResponse();
+
+  let transaction: GraphWriteTransaction;
+  try {
+    transaction = (await request.json()) as GraphWriteTransaction;
+  } catch {
+    return graphTransportInputResponse("Request body must be valid JSON.", "graph.body_invalid");
+  }
+
+  try {
+    return jsonResponse(await authority.applyTransaction(transaction));
+  } catch (error) {
+    return graphTransportErrorResponse(error);
+  }
+}
+
 function readGraphValidationIssues(
   error: unknown,
 ): readonly LocalSiteValidationIssue[] | undefined {
@@ -613,6 +712,26 @@ export function createGraphleLocalServer({
         return redirect("/", result.setCookie);
       }
 
+      if (url.pathname === "/api/sync") {
+        if (request.method !== "GET") {
+          return methodNotAllowed("GET");
+        }
+        if (!auth.getSession(cookieHeader)) {
+          return authRequiredResponse();
+        }
+        return graphSyncResponse(request, siteAuthority);
+      }
+
+      if (url.pathname === "/api/tx") {
+        if (request.method !== "POST") {
+          return methodNotAllowed("POST");
+        }
+        if (!auth.getSession(cookieHeader)) {
+          return authRequiredResponse();
+        }
+        return graphTransactionResponse(request, siteAuthority);
+      }
+
       if (url.pathname === "/api/site/route") {
         if (request.method !== "GET") {
           return methodNotAllowed("GET");
@@ -629,7 +748,7 @@ export function createGraphleLocalServer({
         const session = auth.getSession(cookieHeader);
         if (request.method === "GET") {
           if (!session) {
-            return errorResponse("Authentication required.", "auth.required", 401);
+            return authRequiredResponse();
           }
           return siteApiResponse(() => ({
             items: listLocalSiteItems(requireSiteAuthority(siteAuthority)),
@@ -637,7 +756,7 @@ export function createGraphleLocalServer({
         }
         if (request.method === "POST") {
           if (!session) {
-            return errorResponse("Authentication required.", "auth.required", 401);
+            return authRequiredResponse();
           }
           return siteApiResponse(async () => ({
             item: await createLocalSiteItem(
@@ -658,7 +777,7 @@ export function createGraphleLocalServer({
         }
         const session = auth.getSession(cookieHeader);
         if (!session) {
-          return errorResponse("Authentication required.", "auth.required", 401);
+          return authRequiredResponse();
         }
         return siteApiResponse(async () => ({
           items: await reorderLocalSiteItems(
@@ -673,7 +792,7 @@ export function createGraphleLocalServer({
       if (itemId !== undefined) {
         const session = auth.getSession(cookieHeader);
         if (!session) {
-          return errorResponse("Authentication required.", "auth.required", 401);
+          return authRequiredResponse();
         }
         if (request.method === "DELETE") {
           return siteApiResponse(async () => {

@@ -2,6 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { createGraphleSiteHttpGraphClient } from "@dpeek/graphle-site-web";
+import { siteVisibilityIdFor } from "@dpeek/graphle-module-site";
 import { openGraphleSqlite } from "@dpeek/graphle-sqlite";
 import { describe, expect, it } from "bun:test";
 
@@ -99,6 +101,18 @@ async function redeemAdminCookie(
   );
   if (!signedCookie) throw new Error("Expected local admin cookie.");
   return `${graphleAdminCookieName}=${signedCookie}`;
+}
+
+function createAdminCookieFetch(
+  server: ReturnType<typeof createGraphleLocalServer>,
+  cookie: string,
+) {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const request = new Request(input, init);
+    const headers = new Headers(request.headers);
+    headers.set("cookie", cookie);
+    return await server.fetch(new Request(request, { headers }));
+  };
 }
 
 describe("local server routes", () => {
@@ -234,6 +248,254 @@ describe("local server routes", () => {
       expect(html).toContain("Welcome to your new Graphle site.");
       expect(html).not.toContain("Personal site placeholder");
     });
+  });
+
+  it("requires local admin auth for graph transport endpoints", async () => {
+    await withGraphServer(async ({ server, initToken }) => {
+      const unauthenticatedSync = await server.fetch(new Request("http://127.0.0.1:4318/api/sync"));
+      const unauthenticatedTx = await server.fetch(
+        new Request("http://127.0.0.1:4318/api/tx", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ id: "tx:unauthenticated", ops: [] }),
+        }),
+      );
+      const cookie = await redeemAdminCookie(server, initToken);
+      const wrongSyncMethod = await server.fetch(
+        new Request("http://127.0.0.1:4318/api/sync", {
+          method: "POST",
+          headers: { cookie },
+        }),
+      );
+      const wrongTxMethod = await server.fetch(
+        new Request("http://127.0.0.1:4318/api/tx", {
+          headers: { cookie },
+        }),
+      );
+
+      expect(unauthenticatedSync.status).toBe(401);
+      expect(await unauthenticatedSync.json()).toEqual({
+        error: "Authentication required.",
+        code: "auth.required",
+      });
+      expect(unauthenticatedTx.status).toBe(401);
+      expect(await unauthenticatedTx.json()).toEqual({
+        error: "Authentication required.",
+        code: "auth.required",
+      });
+      expect(wrongSyncMethod.status).toBe(405);
+      expect(wrongSyncMethod.headers.get("allow")).toBe("GET");
+      expect(wrongTxMethod.status).toBe(405);
+      expect(wrongTxMethod.headers.get("allow")).toBe("POST");
+    });
+  });
+
+  it("returns 503 graph transport responses when the local authority is unavailable", async () => {
+    await withServer(async ({ server, initToken }) => {
+      const cookie = await redeemAdminCookie(server, initToken);
+      const sync = await server.fetch(
+        new Request("http://127.0.0.1:4318/api/sync", {
+          headers: { cookie },
+        }),
+      );
+      const tx = await server.fetch(
+        new Request("http://127.0.0.1:4318/api/tx", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie,
+          },
+          body: JSON.stringify({ id: "tx:unavailable", ops: [] }),
+        }),
+      );
+
+      expect(sync.status).toBe(503);
+      expect(await sync.json()).toEqual({
+        error: "The local site authority is unavailable.",
+        code: "graph.authority_unavailable",
+      });
+      expect(tx.status).toBe(503);
+      expect(await tx.json()).toEqual({
+        error: "The local site authority is unavailable.",
+        code: "graph.authority_unavailable",
+      });
+    });
+  });
+
+  it("serves authenticated total and incremental graph sync payloads", async () => {
+    await withGraphServer(async ({ server, initToken }) => {
+      const cookie = await redeemAdminCookie(server, initToken);
+      const total = await server.fetch(
+        new Request("http://127.0.0.1:4318/api/sync", {
+          headers: { cookie },
+        }),
+      );
+      const totalPayload = (await total.json()) as {
+        readonly mode: "total";
+        readonly cursor: string;
+        readonly snapshot: { readonly edges: readonly { readonly o: string }[] };
+      };
+      const incremental = await server.fetch(
+        new Request(
+          `http://127.0.0.1:4318/api/sync?after=${encodeURIComponent(totalPayload.cursor)}`,
+          {
+            headers: { cookie },
+          },
+        ),
+      );
+
+      expect(total.status).toBe(200);
+      expect(total.headers.get("cache-control")).toBe("no-store");
+      expect(totalPayload.mode).toBe("total");
+      expect(totalPayload.snapshot.edges.some((edge) => edge.o === "Home")).toBe(true);
+      expect(incremental.status).toBe(200);
+      expect(await incremental.json()).toMatchObject({
+        mode: "incremental",
+        after: totalPayload.cursor,
+        transactions: [],
+      });
+    });
+  });
+
+  it("returns useful graph transaction parse and validation errors", async () => {
+    await withGraphServer(async ({ server, initToken }) => {
+      const cookie = await redeemAdminCookie(server, initToken);
+      const malformed = await server.fetch(
+        new Request("http://127.0.0.1:4318/api/tx", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie,
+          },
+          body: "{",
+        }),
+      );
+      const validation = await server.fetch(
+        new Request("http://127.0.0.1:4318/api/tx", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie,
+          },
+          body: JSON.stringify({ id: "tx:empty", ops: [] }),
+        }),
+      );
+
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({
+        error: "Request body must be valid JSON.",
+        code: "graph.body_invalid",
+      });
+      expect(validation.status).toBe(400);
+      expect(await validation.json()).toMatchObject({
+        error: "Invalid graph transaction.",
+        code: "graph.validation_failed",
+        issues: [
+          {
+            code: "sync.tx.ops.empty",
+            message: 'Field "ops" must contain at least one operation.',
+          },
+        ],
+      });
+    });
+  });
+
+  it("syncs, writes, and persists site graph records through createHttpGraphClient", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "graphle-local-server-graph-transport-"));
+    const project = await prepareLocalProject({
+      cwd,
+      generateAuthSecret: () => "secret",
+      generateProjectId: () => "project-1",
+    });
+    const firstSqlite = await openGraphleSqlite({ path: project.databasePath });
+    const firstAuthority = await openLocalSiteAuthority({
+      sqlite: firstSqlite,
+      now: () => new Date("2026-04-15T00:00:00.000Z"),
+    });
+    const auth = createLocalAuthController({
+      authSecret: project.authSecret,
+      projectId: project.projectId,
+      initToken: "init-token",
+      now: () => new Date("2026-04-15T00:00:00.000Z"),
+    });
+    const firstServer = createGraphleLocalServer({
+      project,
+      sqlite: firstSqlite,
+      auth,
+      siteAuthority: firstAuthority,
+      now: () => new Date("2026-04-15T00:00:00.000Z"),
+    });
+
+    let itemId = "";
+    try {
+      const cookie = await redeemAdminCookie(firstServer, auth.initToken);
+      const fetcher = createAdminCookieFetch(firstServer, cookie);
+      const client = await createGraphleSiteHttpGraphClient({
+        url: "http://127.0.0.1:4318/",
+        fetch: fetcher,
+        createTxId: () => "tx:site-web-client:1",
+      });
+
+      expect(client.graph.item.list().some((item) => item.title === "Home")).toBe(true);
+      itemId = client.graph.item.create({
+        title: "Graph transport",
+        path: "/graph-transport",
+        body: "# Graph transport\n\nWritten through /api/tx.",
+        visibility: siteVisibilityIdFor("public"),
+        tags: [],
+        pinned: false,
+      });
+      expect(client.sync.getPendingTransactions()).toHaveLength(1);
+      await client.sync.flush();
+
+      const followupClient = await createGraphleSiteHttpGraphClient({
+        url: "http://127.0.0.1:4318/",
+        fetch: fetcher,
+        createTxId: () => "tx:site-web-client:2",
+      });
+      expect(followupClient.graph.item.get(itemId)).toMatchObject({
+        title: "Graph transport",
+        path: "/graph-transport",
+        visibility: siteVisibilityIdFor("public"),
+      });
+    } finally {
+      firstSqlite.close();
+    }
+
+    const secondSqlite = await openGraphleSqlite({ path: project.databasePath });
+    const secondAuthority = await openLocalSiteAuthority({
+      sqlite: secondSqlite,
+      now: () => new Date("2026-04-15T00:00:00.000Z"),
+    });
+    const secondServer = createGraphleLocalServer({
+      project,
+      sqlite: secondSqlite,
+      auth,
+      siteAuthority: secondAuthority,
+      now: () => new Date("2026-04-15T00:00:00.000Z"),
+    });
+
+    try {
+      const route = await secondServer.fetch(
+        new Request("http://127.0.0.1:4318/api/site/route?path=%2Fgraph-transport"),
+      );
+
+      expect(itemId).not.toBe("");
+      expect(await route.json()).toMatchObject({
+        route: {
+          kind: "item",
+          item: {
+            id: itemId,
+            title: "Graph transport",
+          },
+        },
+      });
+    } finally {
+      secondSqlite.close();
+      await rm(cwd, { force: true, recursive: true });
+    }
   });
 
   it("exposes site route, list, create, update, URL-only, and visibility APIs", async () => {

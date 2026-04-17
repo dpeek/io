@@ -11,6 +11,8 @@ browser primitives and the MVP site item contracts.
 ## What It Owns
 
 - the package-built browser entrypoint served by `@dpeek/graphle-local`
+- the browser-safe local site graph namespace and `createHttpGraphClient`
+  assembly seam for the generic graph transport migration
 - the site-owned sidebar and centered content frame for the personal-site path
 - personal-site feature registration for future generic-shell composition
 - local status loading from `/api/health` and `/api/session`

@@ -1,4 +1,5 @@
 import { createBootstrappedSnapshot } from "@dpeek/graphle-bootstrap";
+import type { PersistedAuthoritativeGraph } from "@dpeek/graphle-authority";
 import { createGraphStore } from "@dpeek/graphle-kernel";
 import { colorType, minimalCore, tag } from "@dpeek/graphle-module-core";
 import {
@@ -24,8 +25,21 @@ import {
 
 export const graphleLocalSiteAuthorityId = "site";
 
-const localSiteGraphNamespace = { ...site, tag } as const;
-const localSiteGraphDefinitions = { ...minimalCore, color: colorType, tag, ...site } as const;
+export type LocalSiteGraphNamespace = typeof site & {
+  readonly tag: typeof tag;
+};
+export type LocalSiteGraphDefinitions = typeof minimalCore & {
+  readonly color: typeof colorType;
+  readonly tag: typeof tag;
+} & typeof site;
+
+const localSiteGraphNamespace: LocalSiteGraphNamespace = { ...site, tag };
+const localSiteGraphDefinitions: LocalSiteGraphDefinitions = {
+  ...minimalCore,
+  color: colorType,
+  tag,
+  ...site,
+};
 const defaultTagColor = "#2563eb";
 
 export type LocalSiteStartupDiagnostics = {
@@ -57,61 +71,6 @@ export interface LocalSiteItem {
   readonly createdAt: string;
   readonly updatedAt: string;
 }
-
-type LocalSiteRawTag = {
-  readonly id: string;
-  readonly name: string;
-  readonly key: string;
-  readonly color: string;
-};
-
-type LocalSiteRawItem = {
-  readonly id: string;
-  readonly title: string;
-  readonly path?: string;
-  readonly url?: URL | string;
-  readonly body?: string;
-  readonly excerpt?: string;
-  readonly visibility: string;
-  readonly icon?: string;
-  readonly tags?: string[];
-  readonly pinned?: boolean;
-  readonly sortOrder?: number;
-  readonly publishedAt?: Date | string;
-  readonly createdAt?: Date | string;
-  readonly updatedAt?: Date | string;
-};
-
-type LocalSiteRawItemCreate = {
-  readonly title: string;
-  readonly path?: string;
-  readonly url?: URL;
-  readonly body?: string;
-  readonly excerpt?: string;
-  readonly visibility: string;
-  readonly icon?: string;
-  readonly tags?: string[];
-  readonly pinned?: boolean;
-  readonly sortOrder?: number;
-  readonly publishedAt?: Date;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-};
-
-type LocalSiteRawItemPatch = {
-  title?: string;
-  path?: string;
-  url?: URL;
-  body?: string;
-  excerpt?: string;
-  visibility?: string;
-  icon?: string;
-  tags?: string[];
-  pinned?: boolean;
-  sortOrder?: number;
-  publishedAt?: Date;
-  updatedAt?: Date;
-};
 
 export type LocalSiteRouteResult =
   | {
@@ -155,26 +114,14 @@ export class LocalSiteNotFoundError extends Error {
   }
 }
 
-export interface LocalSiteAuthority {
-  readonly startupDiagnostics: LocalSiteStartupDiagnostics;
-  readonly graph: {
-    readonly item: {
-      create(input: LocalSiteRawItemCreate): string;
-      delete(id: string): void;
-      update(id: string, patch: LocalSiteRawItemPatch): LocalSiteRawItem;
-      list(): readonly LocalSiteRawItem[];
-    };
-    readonly tag: {
-      create(input: {
-        readonly name: string;
-        readonly key: string;
-        readonly color: string;
-      }): string;
-      list(): readonly LocalSiteRawTag[];
-    };
-  };
-  persist(): Promise<void>;
-}
+export type LocalSiteAuthority = PersistedAuthoritativeGraph<
+  LocalSiteGraphNamespace,
+  LocalSiteGraphDefinitions
+>;
+
+type LocalSiteRawTag = ReturnType<LocalSiteAuthority["graph"]["tag"]["list"]>[number];
+type LocalSiteRawItem = ReturnType<LocalSiteAuthority["graph"]["item"]["list"]>[number];
+type LocalSiteRawItemPatch = Parameters<LocalSiteAuthority["graph"]["item"]["update"]>[1];
 
 export interface OpenLocalSiteAuthorityOptions {
   readonly sqlite: GraphleSqliteHandle;

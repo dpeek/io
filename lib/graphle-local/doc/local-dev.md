@@ -1,7 +1,7 @@
 ---
 name: Graphle local dev runtime
 description: "Local dev runtime, project bootstrap, persisted site authority, auth, routes, and browser opening owned by @dpeek/graphle-local."
-last_updated: 2026-04-16
+last_updated: 2026-04-17
 ---
 
 # Graphle Local Dev Runtime
@@ -58,6 +58,12 @@ seed duplicate records.
   diagnostics
 - `GET /api/session`: local admin session status
 - `GET /api/init?token=<token>`: one-time local admin cookie bootstrap
+- `GET /api/sync`: authenticated generic graph sync transport for the local
+  site graph; no `after` query returns a total payload, while `after=<cursor>`
+  returns incremental output or the retained-history reset fallback
+- `POST /api/tx`: authenticated generic graph transaction transport; accepts a
+  `GraphWriteTransaction` JSON body and commits through the persisted local
+  site authority
 - `GET /api/site/route?path=<path>`: resolves an exact `site:item.path` route
   and returns the sidebar items visible to the request; unauthenticated
   requests see public items only, while a valid local admin cookie can preview
@@ -73,6 +79,11 @@ seed duplicate records.
   referenced ids must exist before any `site:item.sortOrder` values are written
 - unknown `/api/*`: JSON 404
 
+`/api/sync` and `/api/tx` are the authoring substrate for the graph-backed site
+editor migration. The `/api/site/items` create/update/delete/order endpoints
+remain transitional compatibility routes for the current Phase 4 browser UI and
+should not grow new content DTO behavior.
+
 Static browser files are served from the package-built
 `@dpeek/graphle-site-web` client output. Unknown static asset paths return a
 plain 404 and do not fall through to the website route.
@@ -86,10 +97,11 @@ still loading the package browser app. The host document includes graph-backed
 title, body, excerpt, outbound URL, tags, and item sidebar content inside
 `#root` before the browser bundle mounts.
 
-Create, update, delete, and reorder helpers use the typed graph client over the
-persisted authority and then rewrite the authority baseline through the SQLite
-adapter. They do not add site-specific SQLite tables, keep a route-local content
-mirror, or bypass authority storage.
+Generic graph transactions use the shared persisted-authority write session and
+durably commit through the SQLite adapter. The transitional site DTO helpers
+still use the typed graph client over that same authority and then rewrite the
+authority baseline. Neither path adds site-specific SQLite tables, keeps a
+route-local content mirror, or bypasses authority storage.
 
 ## Local Auth
 

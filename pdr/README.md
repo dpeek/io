@@ -23,6 +23,22 @@
   implemented inline site authoring and preview with the flat `site:item` model:
   graph-backed item routes, local item APIs, markdown editing, private/public
   visibility, tags, icon presets, and a searchable item sidebar.
+- [Personal site MVP phase 4 graph surface reset](/Users/dpeek/code/graphle/pdr/personal-site-mvp/phase-4-graph-surface-reset/spec.md):
+  plan the corrective productization pass that deletes custom site content DTO
+  authoring, extracts app-proven entity surface integration into shared
+  packages, and rewires `site-web` to schema/surface-driven graph authoring.
+- [Personal site MVP phase 4 graph transport reset](/Users/dpeek/code/graphle/pdr/personal-site-mvp/phase-4-graph-surface-reset/01-generic-local-graph-transport.md):
+  implemented the first reset slice: authenticated `/api/sync` and `/api/tx`
+  over the existing persisted local site authority, plus the browser-safe
+  site graph client seam needed before custom site DTO APIs are deleted.
+- [Personal site MVP phase 4 entity surface reset](/Users/dpeek/code/graphle/pdr/personal-site-mvp/phase-4-graph-surface-reset/02-productize-entity-surfaces.md):
+  plan the second reset slice: move reusable entity view/edit/create surface
+  integration out of `graphle-app`, into shared surface packages, and delete or
+  thin app-local generic copies.
+- [Personal site MVP phase 4 site-web reset](/Users/dpeek/code/graphle/pdr/personal-site-mvp/phase-4-graph-surface-reset/03-site-web-migration-and-deletion.md):
+  plan the final reset slice: add `site:item` surface metadata, migrate
+  `site-web` to graph transport and shared entity surfaces, then delete custom
+  site content DTO authoring.
 - [Personal site layout and authoring UX](/Users/dpeek/code/graphle/pdr/personal-site-mvp/site-layout-ux.md):
   plan the minimalist site frame: item-only sidebar, centered route content,
   predicate-backed edit mode, one-button create, URL-only item actions,

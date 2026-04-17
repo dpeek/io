@@ -10,6 +10,8 @@ last_updated: 2026-04-17
 
 - you are changing the browser app served by `graphle dev`
 - you are changing the site feature registration mounted in the generic shell
+- you are changing the browser-safe graph client assembly for the local site
+  graph
 - you are changing package-built client assets, route loading, or inline
   authoring controls
 
@@ -23,6 +25,19 @@ browser-safe item helpers from `@dpeek/graphle-module-site`.
 Markdown typography comes from `@dpeek/graphle-web-ui`'s shared
 Tailwind Typography-backed renderer; site-web only adds route-level layout
 constraints.
+
+The package also exports a browser-safe graph client seam:
+
+- `graphleSiteGraphNamespace`
+- `graphleSiteGraphDefinitions`
+- `graphleSiteGraphBootstrapOptions`
+- `createGraphleSiteHttpGraphClient(...)`
+
+That seam assembles `site:item`, `core:tag`, `core:color`, and the minimal core
+definitions needed by the local site graph, then wires them to
+`@dpeek/graphle-client`'s standard `/api/sync` and `/api/tx` transport. It is
+available for the generic authoring migration, but the visible Phase 4 UI is
+not mounted on it yet.
 
 The first screen is the current website route preview. The app loads:
 
@@ -60,7 +75,7 @@ The local theme helper reads and writes `localStorage.graphle.theme`, supports
 visible control is one icon-only sidebar button with a tooltip and accessible
 label.
 
-Mutation helpers call only the local `/api/site/*` endpoints:
+Current visible mutation helpers call only the local `/api/site/*` endpoints:
 
 - `POST /api/site/items`
 - `PATCH /api/site/items/:id`
@@ -68,8 +83,9 @@ Mutation helpers call only the local `/api/site/*` endpoints:
 - `PATCH /api/site/items/order`
 
 Visibility, tags, pins, sort order, URL, path, excerpt, and markdown body are
-represented as item fields in the same payloads. `@dpeek/graphle-site-web` does
-not mutate graph state directly.
+represented as item fields in the same payloads. These DTO helpers are
+transitional; future site authoring should use the exported generic graph
+client seam instead of adding new `/api/site/*` content routes.
 
 ## Built Assets
 

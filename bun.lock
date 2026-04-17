@@ -220,7 +220,9 @@
       "name": "@dpeek/graphle-local",
       "version": "0.0.1",
       "dependencies": {
+        "@dpeek/graphle-authority": "workspace:*",
         "@dpeek/graphle-bootstrap": "workspace:*",
+        "@dpeek/graphle-client": "workspace:*",
         "@dpeek/graphle-kernel": "workspace:*",
         "@dpeek/graphle-module-core": "workspace:*",
         "@dpeek/graphle-module-site": "workspace:*",
@@ -376,6 +378,8 @@
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
+        "@dpeek/graphle-client": "workspace:*",
+        "@dpeek/graphle-module-core": "workspace:*",
         "@dpeek/graphle-module-site": "workspace:*",
         "@dpeek/graphle-react": "workspace:*",
         "@dpeek/graphle-web-shell": "workspace:*",

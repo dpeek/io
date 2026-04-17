@@ -476,6 +476,52 @@ Success criteria:
   `graphle.sqlite`
 - the public renderer does not require admin auth for public content
 
+### Phase 4.5: Graph surface reset
+
+Goal: correct the Phase 4 authoring substrate before deploy and sync build on
+custom site DTOs.
+
+Expected PDR:
+
+- `pdr/personal-site-mvp/phase-4-graph-surface-reset/spec.md`
+
+Primary packages:
+
+- `@dpeek/graphle-local`
+- `@dpeek/graphle-client`
+- `@dpeek/graphle-react`
+- `@dpeek/graphle-surface`
+- `@dpeek/graphle-module-core`
+- `@dpeek/graphle-module-site`
+- `@dpeek/graphle-site-web`
+- `@dpeek/graphle-web-shell`
+
+Tasks:
+
+- expose generic local graph sync and transaction transport over the persisted
+  local authority
+- productize the app-proven entity view/edit/create surface integration into
+  shared package-owned boundaries
+- add authored `site:item` surface metadata to the site module
+- rewire site authoring to graph transactions and shared predicate field
+  renderers
+- delete the custom site content DTO authoring path and bespoke site field
+  editor switches
+- document the ownership boundary between field widgets, entity surfaces, web
+  shell composition, site schema, and site browser assembly
+
+Success criteria:
+
+- `@dpeek/graphle-site-web` no longer writes site content through custom JSON
+  CRUD endpoints
+- site item markdown, tags, dates, URLs, booleans, numbers, and selects render
+  through shared predicate controls
+- local site content writes use graph transactions
+- public site rendering and authenticated local private preview still work
+- the MVP path still does not import `@dpeek/graphle-app`
+- `turbo build` passes
+- `turbo check` passes
+
 ### Phase 5: Cloudflare deploy
 
 Goal: deploy the local site graph to Cloudflare from the web shell.
