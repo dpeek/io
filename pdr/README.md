@@ -39,6 +39,14 @@
   plan the final reset slice: add `site:item` surface metadata, migrate
   `site-web` to graph transport and shared entity surfaces, then delete custom
   site content DTO authoring.
+- [Personal site MVP public graph projection](/Users/dpeek/code/graphle/pdr/personal-site-mvp/public-graph-projection.md):
+  plan the pre-deploy cleanup that replaces the unauthenticated route DTO
+  fallback with a sanitized public graph runtime, using the existing projection
+  contracts instead of a new DTO-shaped model.
+- [Personal site MVP cloud public rendering](/Users/dpeek/code/graphle/pdr/personal-site-mvp/cloud-public-rendering.md):
+  plan the deployed public-site renderer: Cloudflare Worker SSR from the public
+  graph baseline, projection-compatible baseline metadata, CDN caching, and a
+  clean sync handoff.
 - [Personal site layout and authoring UX](/Users/dpeek/code/graphle/pdr/personal-site-mvp/site-layout-ux.md):
   plan the minimalist site frame: item-only sidebar, centered route content,
   predicate-backed edit mode, one-button create, URL-only item actions,
@@ -51,3 +59,6 @@
   move inline auth into dedicated sign-in/sign-up routes with TanStack
   Router route guards and Better Auth-aligned session context.
 - [Entity surface](/Users/dpeek/code/graphle/pdr/entity-surface.md): formalize the app-owned editable entity surface and define its relationship to `RecordSurfaceSpec`.
+- [Markdown code blocks](/Users/dpeek/code/graphle/pdr/markdown-code-blocks.md):
+  add lazy Shiki highlighting, copy-to-clipboard controls, and
+  filename/language detection to the shared markdown renderer.
