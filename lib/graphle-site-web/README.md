@@ -22,7 +22,8 @@ browser primitives and the MVP site item contracts.
   menus, delete confirmation, drag reorder, and a theme toggle
 - one inline shared entity-surface `site:item` editor that appears only for
   authenticated local admin sessions
-- site-specific public preview presentation for the current local host route
+- graph-backed `site:item` route preview through the authored view surface when
+  authenticated, with DTO route projection fallback for public visitors
 
 ## What It Does Not Own
 

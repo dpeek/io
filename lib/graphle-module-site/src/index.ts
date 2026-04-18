@@ -217,6 +217,17 @@ function visibilityField(label: string) {
   };
 }
 
+const siteItemDateFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "2-digit",
+  month: "long",
+  timeZone: "UTC",
+  year: "numeric",
+});
+
+function formatSiteItemDate(value: Date): string {
+  return siteItemDateFormatter.format(value);
+}
+
 function createdAtField() {
   return {
     ...dateTypeModule.field({
@@ -224,6 +235,9 @@ function createdAtField() {
       onCreate: ({ incoming, now }) => incoming ?? now,
       meta: {
         label: "Created at",
+        display: {
+          format: formatSiteItemDate,
+        },
       },
     }),
     createOptional: true as const,
@@ -352,6 +366,24 @@ export const siteItemSurface = {
   ],
 } as const satisfies RecordSurfaceSpec;
 
+export const siteItemViewSurface = {
+  key: "site:item:view-surface",
+  subject: site.item.values.key,
+  titleField: "title",
+  sections: [
+    {
+      key: "content",
+      title: "Content",
+      fields: [
+        { path: "title", label: "Title" },
+        { path: "createdAt", label: "Created at" },
+        { path: "tags", label: "Tags" },
+        { path: "body", label: "Body" },
+      ],
+    },
+  ],
+} as const satisfies RecordSurfaceSpec;
+
 export interface SiteItemRoute {
   readonly kind: "item";
   readonly path: string;
@@ -474,6 +506,6 @@ export const siteManifest = defineGraphModuleManifest({
         namespace: site,
       },
     ],
-    recordSurfaces: [siteItemSurface],
+    recordSurfaces: [siteItemSurface, siteItemViewSurface],
   },
 });

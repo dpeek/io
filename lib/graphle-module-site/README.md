@@ -18,7 +18,8 @@ personal-site MVP.
 - browser-safe helpers for item path, URL, visibility, icon, search, and sort
   behavior
 - stable ids for every site type, predicate, enum option, and field-tree node
-- authored `site:item` `RecordSurfaceSpec` metadata for shared entity surfaces
+- authored `site:item` editor and route-view `RecordSurfaceSpec` metadata for
+  shared entity surfaces
 - `siteManifest` for the built-in site schema and record-surface contributions
 
 ## What It Does Not Own

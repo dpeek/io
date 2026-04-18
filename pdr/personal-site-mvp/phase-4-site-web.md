@@ -56,8 +56,8 @@ The user should be able to:
 - view the home item at `/`
 - edit the home item inline when logged in
 - create and edit one unified item type
-- give an item a path, URL, markdown body, excerpt, tags, icon, pinned state,
-  sort order, and private/public visibility
+- give an item a path, URL, markdown body, tags, icon, and private/public
+  visibility
 - create URL-only links and bookmarks that appear in the item sidebar but do
   not get internal pages
 - create path-backed notes, pages, and posts without a stored kind
@@ -90,13 +90,10 @@ Add the item fields from the PRD:
 - optional path
 - optional absolute URL
 - optional markdown body
-- optional excerpt
 - visibility: private or public
 - optional named icon preset
 - tags: many references to `core:tag`
-- pinned
 - optional sort order
-- optional published-at timestamp
 - created-at timestamp
 - updated-at timestamp
 
@@ -125,7 +122,6 @@ Add local site helpers that can:
 - create an item
 - update item fields
 - change visibility between private and public
-- set `publishedAt` when an item becomes public and the field is empty
 - create or reuse `core:tag` records from inline tag creation
 
 Those helpers should use the typed graph client over the persisted authority.
@@ -185,10 +181,9 @@ returning the host document:
 - missing routes return a useful 404 document while still loading the browser
   app
 
-The HTML fallback should contain the resolved title, body, excerpt, outbound
-URL, tags, and public sidebar/list summaries so the page is useful before
-JavaScript mounts. The browser app can then hydrate into the inline editing
-experience.
+The HTML fallback should contain the resolved title, body, outbound URL, tags,
+and public sidebar/list summaries so the page is useful before JavaScript
+mounts. The browser app can then hydrate into the inline editing experience.
 
 ### Browser app
 
@@ -206,19 +201,19 @@ The browser app should:
 - provide one editor for every item
 - support creation presets as UI-only defaults for page, post, link, bookmark,
   and social link
-- search all visible items by title, path, URL host/path, excerpt, body text,
-  tag key, and tag name
+- search all visible items by title, path, URL host/path, body text, tag key,
+  and tag name
 - keep the sidebar flat for the MVP
-- show compact private/public and pinned indicators
+- show compact private/public indicators
 - let URL-only items open their external URL instead of navigating to a local
   route
 - preserve the generic shell boundary by registering site feature pages and
   commands from `@dpeek/graphle-site-web`
 
 For the first editor, use existing browser-safe primitives: inputs, textareas,
-native selects or comboboxes, checkboxes/toggles, and markdown preview. Do not
-copy Monaco, query workbench, Better Auth session context, app route
-composition, or installed-module UI from `@dpeek/graphle-app`.
+native selects or comboboxes, and checkboxes/toggles. Do not copy Monaco, query
+workbench, Better Auth session context, app route composition, or
+installed-module UI from `@dpeek/graphle-app`.
 
 ### Content seed
 
@@ -367,9 +362,8 @@ the Phase 4 three-column authoring preview with the minimalist site frame:
   route content and visible sidebar/list data from `/api/site/route`.
 - Load `/api/site/items` for authenticated authoring.
 - Add the site preview surface, searchable item sidebar, item editor state,
-  markdown textarea, markdown preview, save/cancel controls, visibility
-  controls, tag controls, icon preset controls, pinned control, and sort-order
-  control.
+  markdown editor, save/cancel controls, visibility controls, tag controls, and
+  icon preset controls.
 - Add UI-only creation presets for page, post, link, bookmark, and social link
   without persisting kind.
 - Add package tests for item route rendering, sidebar search, editor state,

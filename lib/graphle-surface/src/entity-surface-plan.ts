@@ -369,7 +369,7 @@ function createPlanSections<P>(
   }
 
   return [...sections.values()].filter((section) =>
-    section.rows.some((row) => row.role !== "hidden" && row.role !== "title"),
+    section.rows.some((row) => row.role !== "hidden"),
   );
 }
 

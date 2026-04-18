@@ -14,6 +14,7 @@ import {
   parseSiteVisibility,
   site,
   siteItemSurface,
+  siteItemViewSurface,
   siteIconPresetForId,
   siteIconPresetIdFor,
   siteItemMatchesSearch,
@@ -102,7 +103,21 @@ describe("site module", () => {
       "createdAt",
       "updatedAt",
     ]);
-    expect(siteManifest.runtime.recordSurfaces).toEqual([siteItemSurface]);
+    expect(siteItemViewSurface).toMatchObject({
+      key: "site:item:view-surface",
+      subject: "site:item",
+      titleField: "title",
+    });
+    expect(
+      siteItemViewSurface.sections.flatMap((section) => section.fields.map((field) => field.path)),
+    ).toEqual(["title", "createdAt", "tags", "body"]);
+    expect(siteManifest.runtime.recordSurfaces).toEqual([siteItemSurface, siteItemViewSurface]);
+  });
+
+  it("formats site item created dates for the authored view surface", () => {
+    expect(
+      site.item.fields.createdAt.meta.display.format(new Date("2023-11-01T00:00:00.000Z")),
+    ).toBe("November 01, 2023");
   });
 
   it("validates site paths, URLs, visibility, and icon presets", () => {

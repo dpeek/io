@@ -46,6 +46,7 @@ import {
   type EntitySurfaceModeValue,
   type EntitySurfacePlan,
   type EntitySurfaceRowPlan,
+  type EntitySurfaceRowRole,
   type EntitySurfaceValidationPlacementPolicy,
 } from "../entity-surface-plan.js";
 import type { RecordSurfaceFieldBinding } from "../record-surface.js";
@@ -82,6 +83,7 @@ export type EntitySurfaceFieldRow = {
   readonly predicate?: AnyEntitySurfacePredicateRef;
   readonly readOnly?: boolean;
   readonly renderEditor?: EntitySurfaceFieldEditorRenderer;
+  readonly role?: EntitySurfaceRowRole;
   readonly title?: string;
   readonly validationMessages?: readonly EntitySurfaceValidationMessage[];
   readonly validationPlacement?: EntitySurfaceModeValue<EntitySurfaceValidationPlacementPolicy>;
@@ -461,6 +463,34 @@ function CompactPredicateValue({
   return <PredicateValueView predicate={predicate} />;
 }
 
+function TitleRow({
+  mode,
+  pathLabel,
+  predicate,
+  validationMessages,
+  value,
+}: {
+  readonly mode: EntitySurfaceMode;
+  readonly pathLabel: string;
+  readonly predicate?: AnyEntitySurfacePredicateRef;
+  readonly validationMessages: readonly EntitySurfaceValidationMessage[];
+  readonly value?: ReactNode;
+}) {
+  return (
+    <div
+      data-entity-surface-title={pathLabel}
+      data-explorer-field-mode={mode}
+      data-explorer-field-path={pathLabel}
+      data-explorer-field-role="title"
+      data-explorer-field-validation-state={validationMessages.length > 0 ? "invalid" : "valid"}
+    >
+      <h1 className="text-foreground text-3xl leading-tight font-semibold tracking-normal">
+        {predicate ? <PredicateValueView predicate={predicate} /> : value}
+      </h1>
+    </div>
+  );
+}
+
 function CompactRow({
   fieldTitle,
   helperText,
@@ -541,6 +571,7 @@ export function PredicateRow({
   predicate,
   readOnly = false,
   renderEditor,
+  role = "body",
   title,
   validationMessages = [],
   validationPlacement = "auto",
@@ -558,6 +589,7 @@ export function PredicateRow({
   readonly predicate?: AnyEntitySurfacePredicateRef;
   readonly readOnly?: boolean;
   readonly renderEditor?: EntitySurfaceFieldEditorRenderer;
+  readonly role?: EntitySurfaceRowRole;
   readonly title?: string;
   readonly validationMessages?: readonly EntitySurfaceValidationMessage[];
   readonly validationPlacement?: EntitySurfaceModeValue<EntitySurfaceValidationPlacementPolicy>;
@@ -569,6 +601,18 @@ export function PredicateRow({
   const resolvedValidationPlacement = resolveModeValue(validationPlacement, mode, "auto");
   const shouldShowLabel = resolvedLabelVisibility !== "hide";
   const shouldShowInlineValidation = resolvedValidationPlacement !== "summary-only";
+
+  if (mode === "view" && role === "title") {
+    return (
+      <TitleRow
+        mode={mode}
+        pathLabel={pathLabel}
+        predicate={predicate}
+        validationMessages={validationMessages}
+        value={value}
+      />
+    );
+  }
 
   if (!predicate) {
     const issueLabel = validationMessages.length > 0 ? "invalid" : null;
@@ -797,7 +841,7 @@ export function buildEntitySurfaceFieldRows(
   rows: readonly EntitySurfaceRowPlan<AnyEntitySurfacePredicateRef>[],
 ): EntitySurfaceFieldRow[] {
   return rows.flatMap((row) => {
-    if (row.kind !== "predicate" || row.role === "hidden" || row.role === "title") {
+    if (row.kind !== "predicate" || row.role === "hidden") {
       return [];
     }
 
@@ -809,6 +853,7 @@ export function buildEntitySurfaceFieldRows(
         labelVisibility: row.chrome.labelVisibility,
         pathLabel: row.pathLabel,
         predicate: row.predicate,
+        role: row.role,
         ...(row.title ? { title: row.title } : {}),
         validationPlacement: row.chrome.validationPlacement,
       } satisfies EntitySurfaceFieldRow,
@@ -904,6 +949,7 @@ export function EntitySurfaceFieldSection({
             predicate={row.predicate}
             readOnly={row.readOnly}
             renderEditor={row.renderEditor ?? renderEditor}
+            role={row.role}
             title={row.title}
             validationMessages={[
               ...(row.validationMessages ?? []),

@@ -70,6 +70,12 @@ does not ship package-local CSS overrides for predicate editors or display
 rows; it imports the shared `@dpeek/graphle-web-ui/global.css` styles and uses
 the default shared surface rendering wherever possible.
 
+When the authenticated graph runtime is available, route preview resolves the
+current route item id back to a live graph ref and renders `siteItemViewSurface`
+through the lower-level entity-surface field section pieces in view mode. Public
+and unauthenticated hydration still uses the read-only DTO route projection
+because `/api/sync` is admin-only.
+
 There are no creation presets. The single `+` action creates a private
 `Untitled` routed item through the graph runtime, flushes the transaction
 through `/api/tx`, navigates to the new path, and enters edit mode.

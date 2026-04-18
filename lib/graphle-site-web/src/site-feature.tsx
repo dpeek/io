@@ -15,10 +15,19 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { compareSiteItems, siteItemSurface, type SiteIconPreset } from "@dpeek/graphle-module-site";
+import {
+  compareSiteItems,
+  siteItemSurface,
+  siteItemViewSurface,
+  type SiteIconPreset,
+} from "@dpeek/graphle-module-site";
 import { useGraphSyncState } from "@dpeek/graphle-react";
-import type { AnyEntitySurfaceEntityRef } from "@dpeek/graphle-surface";
-import { EntitySurface } from "@dpeek/graphle-surface/react-dom";
+import { buildLiveEntitySurfacePlan, type AnyEntitySurfaceEntityRef } from "@dpeek/graphle-surface";
+import {
+  buildEntitySurfaceFieldSections,
+  EntitySurface,
+  EntitySurfaceFieldSections,
+} from "@dpeek/graphle-surface/react-dom";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -169,7 +178,13 @@ function ErrorSurface({ message }: { readonly message: string }) {
   );
 }
 
-function RouteView({ route }: { readonly route: GraphleSiteRoute }) {
+function RouteView({
+  itemRef,
+  route,
+}: {
+  readonly itemRef?: GraphleSiteItemRef;
+  readonly route: GraphleSiteRoute;
+}) {
   if (route.kind !== "item") {
     return (
       <article className="flex flex-col gap-4" data-route-kind="not-found">
@@ -179,7 +194,28 @@ function RouteView({ route }: { readonly route: GraphleSiteRoute }) {
     );
   }
 
+  if (itemRef) return <GraphBackedItemView entity={itemRef} />;
+
   return <ItemView item={route.item} />;
+}
+
+function GraphBackedItemView({ entity }: { readonly entity: GraphleSiteItemRef }) {
+  const surfaceEntity = entity as unknown as AnyEntitySurfaceEntityRef;
+  const surfacePlan = useMemo(
+    () =>
+      buildLiveEntitySurfacePlan(surfaceEntity, {
+        mode: "view",
+        surface: siteItemViewSurface,
+      }),
+    [surfaceEntity],
+  );
+  const sections = useMemo(() => buildEntitySurfaceFieldSections(surfacePlan), [surfacePlan]);
+
+  return (
+    <article className="flex flex-col gap-4" data-route-kind="item">
+      <EntitySurfaceFieldSections chrome={false} mode="view" sections={sections} />
+    </article>
+  );
 }
 
 function ItemView({ item }: { readonly item: GraphleSiteItemView }) {
@@ -522,6 +558,10 @@ function ReadySitePreview({
   const activeItemRef =
     graphRuntime && editItemId ? findGraphleSiteItemRef(graphRuntime, editItemId) : undefined;
   const routeItemId = route.kind === "item" ? route.item.id : undefined;
+  const routeItemRef =
+    graphRuntime && route.kind === "item"
+      ? findGraphleSiteItemRef(graphRuntime, route.item.id)
+      : undefined;
   const isEditing =
     snapshot.session.authenticated && editItemId !== null && activeItem && activeItemRef;
 
@@ -598,7 +638,7 @@ function ReadySitePreview({
             {isEditing && activeItemRef && graphRuntime ? (
               <ItemEditor entity={activeItemRef} runtime={graphRuntime} />
             ) : (
-              <RouteView route={route} />
+              <RouteView itemRef={routeItemRef} route={route} />
             )}
           </main>
         </SidebarInset>

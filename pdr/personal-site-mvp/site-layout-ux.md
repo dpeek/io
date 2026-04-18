@@ -216,8 +216,8 @@ Refine ordering rules for this product surface:
 
 1. items with explicit `sortOrder` sort by ascending `sortOrder`
 2. items without `sortOrder` fall back to the current deterministic rules
-3. fallback ordering can still use pinned, published date, updated date, and
-   title as defined in `site-item-prd.md`
+3. fallback ordering can still use created date, updated date, and title as
+   defined in the `site:item` helpers
 4. once the admin drags the sidebar, normalize the whole visible item list to
    consecutive `sortOrder` values so future order is fully deterministic
 
@@ -297,10 +297,10 @@ Implemented in the MVP path on 2026-04-16:
   authenticated action menus for edit/delete.
 - The `+` action calls the blank-create intent; the local authority allocates
   unique private paths such as `/untitled` and `/untitled-2`.
-- Authenticated edit mode uses one `site:item` row plan backed by site predicate
-  metadata and `@dpeek/graphle-react` draft primitives.
+- Authenticated edit mode uses the authored `site:item` editor surface backed
+  by site predicate refs and shared entity-surface primitives.
 - Drag ordering uses `@dnd-kit/sortable` and persists normalized consecutive
-  `sortOrder` values through `PATCH /api/site/items/order`.
+  `sortOrder` values through graph transactions.
 - Deletion is exposed through `DELETE /api/site/items/:id` and confirmed in the
   browser before the request.
 - The theme helper persists `localStorage.graphle.theme`, supports
@@ -359,8 +359,8 @@ Implemented in the MVP path on 2026-04-16:
   - navigate to the returned path after creation
   - enter edit mode immediately
 - Replace the ad hoc site item form with a predicate-backed item surface:
-  - define a site item row plan for title, path, URL, excerpt, body,
-    visibility, icon, tags, pinned, sort order, and dates
+  - define authored site item surfaces for editor fields and route display
+    fields
   - reuse `@dpeek/graphle-react` predicate metadata, draft controller, and
     resolver contracts
   - extract any needed browser field widgets from the app path into the

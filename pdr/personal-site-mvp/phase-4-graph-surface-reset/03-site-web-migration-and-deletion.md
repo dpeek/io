@@ -67,6 +67,11 @@ The site module should own the authored structure for the item editor:
 `site:item.sortOrder` remains in the graph schema for sidebar drag-and-drop
 ordering, but it is intentionally omitted from the item editor surface.
 
+The site module should also own a separate authored read surface for route
+display. That view surface should use `title` as the title field and display
+`createdAt`, `tags`, and markdown `body` through the shared entity-surface view
+path.
+
 Use existing surface contracts from `@dpeek/graphle-module`; do not define a
 site-specific surface model.
 
@@ -222,6 +227,8 @@ None.
 
 - Added `siteItemSurface` as the module-owned `site:item` `RecordSurfaceSpec`
   and published it through `siteManifest.runtime.recordSurfaces`.
+- Added `siteItemViewSurface` for graph-backed route display and published it
+  beside the editor surface.
 - Mounted the site browser app on `createGraphleSiteHttpGraphClient(...)` for
   authenticated local admin sessions and wrapped the product frame in
   `GraphRuntimeProvider`.
@@ -231,6 +238,9 @@ None.
   the synced runtime.
 - Replaced the custom `site:item` editor switch with the shared
   `EntitySurface` from `@dpeek/graphle-surface/react-dom`.
+- Rendered authenticated graph-backed route preview through the shared
+  entity-surface view path while keeping the unauthenticated DTO projection
+  fallback.
 - Moved create, delete, reorder, field edits, and tag creation onto graph
   mutations flushed through `/api/tx`.
 - Deleted browser DTO write helpers and deleted local server content write
@@ -246,6 +256,8 @@ None.
   `/api/tx` for authenticated authoring.
 - `@dpeek/graphle-site-web` renders the selected item editor through the shared
   entity surface.
+- `@dpeek/graphle-site-web` renders authenticated route preview through the
+  authored item view surface when the graph runtime is available.
 - `site-feature.tsx` no longer has a field-key switch that maps `site:item`
   predicates to custom controls.
 - Markdown, tags, dates, URLs, booleans, numbers, enum/selects, and text fields

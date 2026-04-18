@@ -25,13 +25,17 @@ the personal-site MVP:
   body, visibility, optional icon preset, `core:tag` references, optional sort
   order, created-at timestamp, and updated-at timestamp
 
-The package exports the resolved `site` namespace, `siteItemSurface`, and
-`siteManifest`. `siteItemSurface` is the authored `RecordSurfaceSpec` for
-shared browser entity surfaces: icon/title/body/url/tags content fields,
-path/visibility route fields, and created/updated metadata fields.
+The package exports the resolved `site` namespace, `siteItemSurface`,
+`siteItemViewSurface`, and `siteManifest`. `siteItemSurface` is the authored
+`RecordSurfaceSpec` for shared browser editing surfaces: icon/title/body/url/tags
+content fields, path/visibility route fields, and created/updated metadata
+fields. `siteItemViewSurface` is the authored read surface for route display:
+title heading, created date, tags, and markdown body. The read surface keeps the
+site-local `createdAt` display format at `Month DD, YYYY` in UTC, for example
+`November 01, 2023`.
 `site:item.sortOrder` stays in the schema for sidebar drag-and-drop ordering,
 but it is intentionally not exposed in the item editor surface. The manifest
-publishes that surface through `runtime.recordSurfaces` beside the schema
+publishes both surfaces through `runtime.recordSurfaces` beside the schema
 contribution.
 
 Stable ids live in `../src/site.json`; package-local tests fail when authored

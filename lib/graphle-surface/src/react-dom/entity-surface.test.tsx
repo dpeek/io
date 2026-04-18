@@ -75,6 +75,7 @@ function createEntity(): AnyEntitySurfaceEntityRef {
 const testSurface = {
   key: "test:entity:surface",
   subject: "test:entity",
+  titleField: "name",
   sections: [
     {
       key: "content",
@@ -174,5 +175,22 @@ describe("entity surface react-dom", () => {
     expect(html).toContain("Content");
     expect(html).toContain('data-explorer-field-label="name"');
     expect(html).toContain("Name");
+  });
+
+  it("renders authored title fields as semantic headings in view mode", () => {
+    const html = renderToStaticMarkup(
+      <EntitySurface
+        entity={createEntity()}
+        mode="view"
+        showModeToggle={false}
+        surface={testSurface}
+      />,
+    );
+
+    expect(html).toContain("<h1");
+    expect(html).toContain('data-entity-surface-title="name"');
+    expect(html).toContain('data-explorer-field-role="title"');
+    expect(html).toContain("Alpha");
+    expect(html).not.toContain('data-explorer-field-label="name"');
   });
 });

@@ -134,12 +134,16 @@ Hosts can supply their own action footer through `renderActions(...)`.
 falls back to generic value formatting when unsupported. In edit mode it uses
 `PredicateFieldControl` for supported client-write predicates unless the host
 provides a custom editor override. Row-local mutation errors and submit-time
-validation messages are displayed together.
+validation messages are displayed together. View-mode rows with the planner
+role `title` render as semantic `h1` headings and do not render label chrome.
 
 `RecordSurfaceSpec` remains structural input only. Entity surfaces use it for
 title/subtitle hints, section chrome, and field order, then resolve live or
 draft predicate refs directly. Editing does not go through
-`resolveRecordSurfaceBinding(...)`.
+`resolveRecordSurfaceBinding(...)`. Hosts that need surface rendering without
+the `EntitySurface` card shell can compose `buildLiveEntitySurfacePlan(...)`,
+`buildEntitySurfaceFieldSections(...)`, and `EntitySurfaceFieldSections` with
+`chrome={false}`.
 
 ## Related collections
 
