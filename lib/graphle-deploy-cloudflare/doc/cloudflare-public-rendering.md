@@ -61,18 +61,25 @@ Worker module API. Upload metadata declares:
 - a one-run `GRAPHLE_DEPLOY_SECRET` secret binding
 - a first-deploy Durable Object SQLite migration tag
 
-The deployment path enables the Worker on `workers.dev`, reads the account
-subdomain, publishes the baseline through `publishPublicSiteBaseline(...)`, and
-verifies that `/api/health`, `/`, and any existing URL-only public item render
-from the remote Worker URL.
+The deployment path uploads the packaged `@dpeek/graphle-site-web` client asset
+files when the local runtime provides an asset root, binds them as `ASSETS`,
+sets `GRAPHLE_PUBLIC_SITE_STYLES` from the Vite manifest CSS entry, enables the
+Worker on `workers.dev`, reads the account subdomain, publishes the baseline
+through `publishPublicSiteBaseline(...)`, and verifies that `/api/health`, `/`,
+and any existing URL-only public item render from the remote Worker URL. The
+remote public Worker intentionally injects stylesheet tags only; the current
+site-web JavaScript entry is the local authoring shell, not a public hydration
+entry.
 
 `publishPublicSiteBaseline(...)` uses bounded retries around baseline
 replacement, health, and home verification because `workers.dev` can briefly
 serve the previous Worker after a successful upload. Replacement retries include
 400 and 401 responses so previous-version baseline validation or deploy secret
-mismatch can recover once the new Worker version reaches the subdomain. Final
-failures include the upstream HTTP status and a trimmed, secret-redacted
-response body.
+mismatch can recover once the new Worker version reaches the subdomain. The
+default retry window is deliberately over a minute because Cloudflare can report
+a successful upload before every `workers.dev` edge has the new validation code
+and deploy secret. Final failures include the upstream HTTP status and a
+trimmed, secret-redacted response body.
 
 Cloudflare API tokens are only process inputs. They are never returned in
 status payloads, logged, stored as graph facts, or persisted in deploy metadata.
@@ -114,11 +121,12 @@ immutable`
 - missing or incompatible baseline responses: `no-store`
 
 Rendered HTML includes the public baseline hash in a response header and a meta
-tag. If deploy attaches packaged site assets, it can pass comma-separated or
-JSON-array asset paths through `GRAPHLE_PUBLIC_SITE_STYLES` and
-`GRAPHLE_PUBLIC_SITE_SCRIPTS`; the Worker will include those tags and serve
-matching `/assets/*` responses through the `ASSETS` binding. Deploy and later
-sync publishers should still purge known public paths after baseline
+tag. Deploy attaches packaged site CSS by uploading `/assets/*` files through
+Cloudflare's static asset upload flow, binding them as `ASSETS`, and passing a
+JSON-array of stylesheet paths through `GRAPHLE_PUBLIC_SITE_STYLES`; the Worker
+will include those stylesheet tags and serve matching `/assets/*` responses
+through the `ASSETS` binding when the request reaches Worker code. Deploy and
+later sync publishers should still purge known public paths after baseline
 replacement for the MVP.
 
 ## Publish Handoff

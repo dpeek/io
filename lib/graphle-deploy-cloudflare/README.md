@@ -20,7 +20,8 @@ boundary for the personal-site MVP.
 - CDN cache headers for public HTML, missing routes, APIs, and static assets
 - Cloudflare input validation, deterministic Worker naming, Worker bundle
   generation, Worker script upload metadata, Durable Object binding/migration
-  metadata, workers.dev enablement, and account subdomain lookup
+  metadata, packaged public stylesheet asset upload, workers.dev enablement, and
+  account subdomain lookup
 - graph-backed nonsecret deploy metadata schema for local persistence
 - publish helpers that replace the remote baseline, verify health and `/`, and
   verify URL-only public item display when one exists, with bounded retries for

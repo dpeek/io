@@ -1,3 +1,7 @@
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
 import { createBootstrappedSnapshot } from "@dpeek/graphle-bootstrap";
 import { siteItemPublicProjectionSpec, siteVisibilityIdFor } from "@dpeek/graphle-module-site";
 import type { PublicSiteGraphBaseline } from "@dpeek/graphle-module-site";
@@ -10,6 +14,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   buildCloudflarePublicSiteWorkerBundle,
+  cloudflarePublicSiteAssetsBindingName,
   cloudflarePublicSiteDurableObjectBindingName,
   cloudflarePublicSiteDurableObjectClassName,
   cloudflarePublicSiteDurableObjectMigrationTag,
@@ -17,6 +22,7 @@ import {
   cloudflarePublicSiteWorkerMainModule,
   createCloudflarePublicSiteWorkerUploadMetadata,
   createCloudflareWorkerUploadFormData,
+  graphlePublicSiteStylesBindingName,
 } from "./cloudflare-api.js";
 import {
   deriveCloudflareWorkerName,
@@ -189,6 +195,46 @@ describe("Cloudflare deploy API requests", () => {
     expect(module).toBeInstanceOf(File);
   });
 
+  it("builds Worker upload metadata with static asset bindings", () => {
+    const metadata = createCloudflarePublicSiteWorkerUploadMetadata({
+      deploySecret: "deploy-secret",
+      includeDurableObjectMigration: false,
+      staticAssets: {
+        completionJwt: "completion-jwt",
+        styles: ["/assets/site.css"],
+      },
+    });
+
+    expect(metadata).toMatchObject({
+      main_module: cloudflarePublicSiteWorkerMainModule,
+      compatibility_date: cloudflarePublicSiteWorkerCompatibilityDate,
+      assets: {
+        jwt: "completion-jwt",
+      },
+      bindings: [
+        {
+          name: cloudflarePublicSiteDurableObjectBindingName,
+          type: "durable_object_namespace",
+          class_name: cloudflarePublicSiteDurableObjectClassName,
+        },
+        {
+          name: "GRAPHLE_DEPLOY_SECRET",
+          type: "secret_text",
+          text: "deploy-secret",
+        },
+        {
+          name: cloudflarePublicSiteAssetsBindingName,
+          type: "assets",
+        },
+        {
+          name: graphlePublicSiteStylesBindingName,
+          type: "plain_text",
+          text: JSON.stringify(["/assets/site.css"]),
+        },
+      ],
+    });
+  });
+
   it("provisions the Worker, publishes the baseline, and verifies URL-only items", async () => {
     const baseline = createTestBaseline();
     const requests: string[] = [];
@@ -307,5 +353,179 @@ describe("Cloudflare deploy API requests", () => {
         paths: ["/"],
       },
     });
+  });
+
+  it("uploads package client assets when an asset root is provided", async () => {
+    const baseline = createTestBaseline();
+    const assetRoot = await mkdtemp(join(tmpdir(), "graphle-cloudflare-assets-"));
+    await mkdir(join(assetRoot, "assets"), { recursive: true });
+    await mkdir(join(assetRoot, ".vite"), { recursive: true });
+    await writeFile(join(assetRoot, "assets", "main.css"), "body { color: black; }");
+    await writeFile(join(assetRoot, "assets", "main.js"), "console.log('site');");
+    await writeFile(
+      join(assetRoot, ".vite", "manifest.json"),
+      JSON.stringify({
+        "index.html": {
+          file: "assets/main.js",
+          isEntry: true,
+          css: ["assets/main.css"],
+        },
+      }),
+    );
+
+    const requests: string[] = [];
+    const metadataUploads: unknown[] = [];
+    const uploadedAssetPayloads: unknown[] = [];
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      requests.push(`${request.method} ${url.pathname}`);
+
+      if (url.pathname === "/client/v4/accounts/account-1/workers/scripts") {
+        return Response.json({
+          success: true,
+          result: [],
+        });
+      }
+
+      if (
+        url.pathname ===
+        "/client/v4/accounts/account-1/workers/scripts/graphle-assets/assets-upload-session"
+      ) {
+        const body = (await request.json()) as {
+          readonly manifest: Record<string, { readonly hash: string; readonly size: number }>;
+        };
+        expect(Object.keys(body.manifest).sort()).toEqual(["/assets/main.css", "/assets/main.js"]);
+        return Response.json({
+          success: true,
+          result: {
+            jwt: "upload-jwt",
+            buckets: [Object.values(body.manifest).map((entry) => entry.hash)],
+          },
+        });
+      }
+
+      if (url.pathname === "/client/v4/accounts/account-1/workers/assets/upload") {
+        expect(url.searchParams.get("base64")).toBe("true");
+        expect(request.headers.get("authorization")).toBe("Bearer upload-jwt");
+        const form = await request.formData();
+        const payload = JSON.parse(String(form.get("body"))) as Record<string, string>;
+        uploadedAssetPayloads.push(payload);
+        expect(Object.keys(payload)).toHaveLength(2);
+        return Response.json(
+          {
+            success: true,
+            result: {
+              jwt: "completion-jwt",
+            },
+          },
+          { status: 201 },
+        );
+      }
+
+      if (url.pathname === "/client/v4/accounts/account-1/workers/scripts/graphle-assets") {
+        const form = await request.formData();
+        const metadata = JSON.parse(String(form.get("metadata"))) as {
+          readonly assets?: { readonly jwt?: string };
+          readonly bindings?: readonly {
+            readonly name: string;
+            readonly type: string;
+            text?: string;
+          }[];
+        };
+        metadataUploads.push(metadata);
+        expect(metadata.assets?.jwt).toBe("completion-jwt");
+        expect(metadata.bindings).toContainEqual({
+          name: cloudflarePublicSiteAssetsBindingName,
+          type: "assets",
+        });
+        expect(metadata.bindings).toContainEqual({
+          name: graphlePublicSiteStylesBindingName,
+          type: "plain_text",
+          text: JSON.stringify(["/assets/main.css"]),
+        });
+        return Response.json({
+          success: true,
+          result: {
+            id: "graphle-assets",
+            migration_tag: cloudflarePublicSiteDurableObjectMigrationTag,
+          },
+        });
+      }
+
+      if (
+        url.pathname === "/client/v4/accounts/account-1/workers/scripts/graphle-assets/subdomain"
+      ) {
+        return Response.json({
+          success: true,
+          result: {
+            enabled: true,
+            previews_enabled: false,
+          },
+        });
+      }
+
+      if (url.pathname === "/client/v4/accounts/account-1/workers/subdomain") {
+        return Response.json({
+          success: true,
+          result: {
+            subdomain: "example",
+          },
+        });
+      }
+
+      if (url.pathname === graphlePublicSiteBaselinePath) {
+        return Response.json({ ok: true });
+      }
+
+      if (url.pathname === graphlePublicSiteHealthPath) {
+        return Response.json({ ok: true });
+      }
+
+      if (url.pathname === "/") {
+        return new Response("Home External link https://example.com/link");
+      }
+
+      return Response.json(
+        { success: false, errors: [{ message: `unexpected request ${url.pathname}` }] },
+        {
+          status: 500,
+        },
+      );
+    };
+
+    await deployCloudflarePublicSite({
+      input: {
+        projectId: "project-1",
+        accountId: "account-1",
+        apiToken: "token-1",
+        workerName: "graphle-assets",
+      },
+      baseline,
+      siteWebAssetsPath: assetRoot,
+      fetch: fetcher,
+      apiBaseUrl: "https://api.test/client/v4",
+      workerBundle: {
+        mainModule: cloudflarePublicSiteWorkerMainModule,
+        source: "export default {};",
+      },
+      generateDeploySecret: () => "deploy-secret",
+      now: () => new Date("2026-04-18T00:00:00.000Z"),
+    });
+
+    expect(requests).toEqual([
+      "GET /client/v4/accounts/account-1/workers/scripts",
+      "POST /client/v4/accounts/account-1/workers/scripts/graphle-assets/assets-upload-session",
+      "POST /client/v4/accounts/account-1/workers/assets/upload",
+      "PUT /client/v4/accounts/account-1/workers/scripts/graphle-assets",
+      "POST /client/v4/accounts/account-1/workers/scripts/graphle-assets/subdomain",
+      "GET /client/v4/accounts/account-1/workers/subdomain",
+      "PUT /api/baseline",
+      "GET /api/health",
+      "GET /",
+      "GET /",
+    ]);
+    expect(uploadedAssetPayloads).toHaveLength(1);
+    expect(metadataUploads).toHaveLength(1);
   });
 });

@@ -1,5 +1,5 @@
 Status: Implemented
-Last Updated: 2026-04-18
+Last Updated: 2026-04-19
 
 # Phase 5: Cloudflare deploy
 
@@ -371,6 +371,21 @@ None. This plan assumes Worker URL deployment only, credentials supplied by
   sidebar, and authenticated deploy controls.
 - `turbo build` passes.
 - `turbo check` passes.
+
+## Implementation Notes
+
+- Deploy now uploads packaged `@dpeek/graphle-site-web` `/assets/*` files
+  through Cloudflare's static asset upload flow, binds them as `ASSETS`, and
+  injects stylesheet paths from the Vite manifest into the remote public HTML.
+  The deployed public Worker does not inject the current site-web JavaScript
+  entry because that entry boots the local authoring shell rather than a public
+  hydration runtime.
+- Baseline publish retries include a longer workers.dev propagation window.
+  A previous Worker version can briefly answer `/api/baseline` after a
+  successful script upload and return errors like
+  `Validation failed for "type": Field "type" must reference an existing "Type" entity.`;
+  deploy treats those transient 400 responses as retryable before reporting a
+  sanitized final failure.
 
 ## Tasks
 

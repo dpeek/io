@@ -105,7 +105,15 @@ describe("markdown Plate value helpers", () => {
   it("deserializes fenced code blocks for later Plate rendering", () => {
     const value = deserializeMarkdownToPlateValue(["```ts", "const value = 1;", "```"].join("\n"));
 
-    expect(findNode(value, (node) => node.type === "code_block" && node.lang === "ts")).toBe(true);
+    expect(
+      findNode(
+        value,
+        (node) =>
+          node.type === "code_block" &&
+          node.lang === "typescript" &&
+          node.markdownLanguage === "ts",
+      ),
+    ).toBe(true);
     expect(
       findNode(value, (node) => node.type === "code_line" && nodeText(node) === "const value = 1;"),
     ).toBe(true);

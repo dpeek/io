@@ -20,6 +20,7 @@ import { publishPublicSiteBaseline } from "./publish.js";
 export interface DeployCloudflarePublicSiteOptions {
   readonly input: CloudflareDeployInput;
   readonly baseline: PublicSiteGraphBaseline;
+  readonly siteWebAssetsPath?: string;
   readonly fetch?: typeof fetch;
   readonly apiBaseUrl?: string;
   readonly workerBundle?: CloudflareWorkerBundle;
@@ -66,6 +67,7 @@ async function verifyUrlOnlyPublicItem({
 export async function deployCloudflarePublicSite({
   input,
   baseline,
+  siteWebAssetsPath,
   fetch: fetcher = fetch,
   apiBaseUrl,
   workerBundle,
@@ -83,6 +85,7 @@ export async function deployCloudflarePublicSite({
   const provisioned = await provisionCloudflarePublicSiteWorker({
     input: validation.value,
     deploySecret,
+    siteWebAssetsPath,
     workerBundle,
     apiBaseUrl,
     fetch: fetcher,

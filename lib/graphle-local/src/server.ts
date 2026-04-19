@@ -554,6 +554,7 @@ export function createGraphleLocalServer({
           const result = await deployCloudflarePublicSite({
             input,
             baseline,
+            siteWebAssetsPath,
             now,
           });
           await persistLocalCloudflareDeployMetadata(siteAuthority, result.metadata);

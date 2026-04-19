@@ -215,7 +215,8 @@ describe("@dpeek/graphle-module-core/react-dom generic field registry coverage",
     expect(textFieldMarkup).toContain("Headline");
     expect(textFieldMarkup).toContain('value="KS-1"');
     expect(markdownViewMarkup).toContain('data-web-field-kind="markdown"');
-    expect(markdownViewMarkup).toContain("<strong>markdown</strong>");
+    expect(markdownViewMarkup).toContain("<strong");
+    expect(markdownViewMarkup).toContain("markdown");
     expect(markdownEditorMarkup).toContain('data-web-field-kind="markdown"');
     expect(markdownEditorMarkup).toContain('data-web-markdown-source="textarea"');
     expect(svgViewMarkup).toContain('data-web-field-kind="svg"');

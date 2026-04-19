@@ -4,6 +4,7 @@ const LANGUAGE_ALIASES = {
   css: "css",
   cts: "typescript",
   diff: "diff",
+  htm: "html",
   html: "html",
   js: "javascript",
   json: "json",
@@ -14,19 +15,20 @@ const LANGUAGE_ALIASES = {
   mdx: "mdx",
   mjs: "javascript",
   mts: "typescript",
-  nohighlight: "text",
+  nohighlight: "plaintext",
   patch: "diff",
-  plain: "text",
-  plaintext: "text",
+  plain: "plaintext",
+  plaintext: "plaintext",
   scss: "scss",
   sh: "bash",
   shell: "bash",
   sql: "sql",
-  text: "text",
+  text: "plaintext",
   ts: "typescript",
   tsx: "tsx",
-  txt: "text",
+  txt: "plaintext",
   typescript: "typescript",
+  xml: "xml",
   yaml: "yaml",
   yml: "yaml",
   zsh: "bash",
@@ -43,11 +45,12 @@ const LANGUAGE_LABELS: Record<string, string> = {
   jsx: "JSX",
   markdown: "Markdown",
   mdx: "MDX",
+  plaintext: "Text",
   scss: "SCSS",
   sql: "SQL",
-  text: "Text",
   tsx: "TSX",
   typescript: "TypeScript",
+  xml: "XML",
   yaml: "YAML",
 };
 
@@ -58,18 +61,17 @@ const HIGHLIGHT_LANGUAGES = new Set([
   "html",
   "javascript",
   "json",
-  "jsonc",
   "jsx",
   "markdown",
-  "mdx",
   "scss",
   "sql",
   "tsx",
   "typescript",
+  "xml",
   "yaml",
 ]);
 
-const PLAIN_LANGUAGES = new Set(["text", "plain", "plaintext", "txt", "nohighlight"]);
+const PLAIN_LANGUAGES = new Set(["plaintext"]);
 
 const FILENAME_ATTRIBUTE_NAMES = ["filename", "file", "name", "title"];
 
@@ -122,6 +124,10 @@ export function parseMarkdownCodeInfo({ language, meta }: MarkdownCodeInfoInput)
 
 export function isSupportedHighlightLanguage(language: string | null | undefined): boolean {
   return highlightLanguageFromNormalized(language) !== null;
+}
+
+export function lowlightLanguageForMarkdownCode({ language, meta }: MarkdownCodeInfoInput): string {
+  return parseMarkdownCodeInfo({ language, meta }).highlightLanguage ?? "plaintext";
 }
 
 function parseFirstInfoToken(

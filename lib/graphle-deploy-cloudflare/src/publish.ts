@@ -22,7 +22,9 @@ export class CloudflarePublicSitePublishError extends CloudflareDeployError {
   }
 }
 
-export const defaultCloudflarePublishRetryDelaysMs = [500, 1000, 2000, 4000, 8000, 16000] as const;
+export const defaultCloudflarePublishRetryDelaysMs = [
+  1000, 2000, 4000, 8000, 16000, 30000, 45000,
+] as const;
 
 export interface PublishPublicSiteBaselineOptions {
   readonly workerUrl: string | URL;
