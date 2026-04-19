@@ -226,5 +226,8 @@ describe("@dpeek/graphle-module-core/react-dom generic field registry coverage",
     expect(svgViewMarkup).toContain('data-web-svg-preview="ready"');
     expect(svgEditorMarkup).toContain('data-web-field-kind="svg"');
     expect(svgEditorMarkup).toContain('data-web-svg-preview="ready"');
+    expect(svgEditorMarkup).toContain('data-web-source-preview-mode="preview"');
+    expect(svgEditorMarkup).not.toContain('data-web-svg-source="monaco"');
+    expect(svgEditorMarkup).not.toContain("Monaco");
   });
 });

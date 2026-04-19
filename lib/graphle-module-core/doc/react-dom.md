@@ -62,6 +62,9 @@ Important rules:
 - markdown controls use the shared Plate-backed `MarkdownEditor`, so view and
   edit modes share the `.graph-markdown` document skin while this layer keeps
   validation and graph mutation ownership
+- SVG controls use the shared source-preview shell with a plain textarea source
+  editor and sanitized preview; SVG editing does not use a rich markdown or code
+  editor
 
 ## Shared form composition
 

@@ -374,6 +374,9 @@ describe("@dpeek/graphle-module-core/react-dom", () => {
     expect(svgViewMarkup).toContain('data-web-svg-preview="ready"');
     expect(svgEditorMarkup).toContain('data-web-field-kind="svg"');
     expect(svgEditorMarkup).toContain('data-web-svg-preview="ready"');
+    expect(svgEditorMarkup).toContain('data-web-source-preview-mode="preview"');
+    expect(svgEditorMarkup).not.toContain('data-web-svg-source="monaco"');
+    expect(svgEditorMarkup).not.toContain("Monaco");
     expect(tagsViewMarkup).toContain('data-web-field-kind="entity-reference-list"');
     expect(tagsViewMarkup).toContain('data-web-reference-display="inert"');
     expect(tagsViewMarkup).toContain(`data-web-reference-chip="${fields.tagId}"`);

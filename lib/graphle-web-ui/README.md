@@ -11,10 +11,14 @@ used by browser shells and product-specific web surfaces.
 ## What It Owns
 
 - reusable browser UI primitives and layout components
-- shared Plate-backed markdown rendering/editing, plus Monaco and source-preview
-  shells for non-markdown source controls
+- shared Plate-backed markdown rendering/editing, plus plain source-preview
+  editing for SVG and other non-markdown source controls
 - shared styling, theme, and small browser utility hooks
 - browser-only building blocks that do not depend on graph runtime types
+
+Markdown editing is rich and Plate-backed. SVG source editing remains plain
+text through `SourceEditor` in `@dpeek/graphle-web-ui/source-preview`; this
+package does not depend on Monaco.
 
 ## What It Does Not Own
 

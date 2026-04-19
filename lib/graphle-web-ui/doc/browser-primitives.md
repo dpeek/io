@@ -34,6 +34,12 @@ nodes with Lowlight-backed syntax leaves, copy controls in read-only mode, and
 filename/language labels. The markdown code-block path is owned entirely by
 Plate and Lowlight.
 
+Non-markdown source editing is intentionally plain. `SourcePreviewFieldEditor`
+owns the source/preview shell, and `SourceEditor` provides the shared
+textarea-backed source control used by SVG editing. The source editor preserves
+stable attributes such as `data-web-svg-source="textarea"` for tests and
+debugging. The package has no Monaco dependency or `./monaco` subpath.
+
 The package exports source-level component subpaths such as
 `@dpeek/graphle-web-ui/button`, `@dpeek/graphle-web-ui/badge`, and
 `@dpeek/graphle-web-ui/markdown`. The root export re-exports the same primitive

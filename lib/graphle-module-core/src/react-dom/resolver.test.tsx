@@ -308,6 +308,7 @@ describe("@dpeek/graphle-module-core/react-dom resolver", () => {
     expect(controlMarkup).toContain("Probe notes");
     expect(controlMarkup).not.toContain('data-web-markdown-source="textarea"');
     expect(controlMarkup).not.toContain("Monaco");
+    expect(controlMarkup).not.toContain('data-web-markdown-source="monaco"');
     expect(controlMarkup).not.toContain("Preview");
     expect(controlMarkup).not.toContain("data-web-source-preview-toggle");
     expect(controlMarkup).not.toContain("data-web-markdown-preview");

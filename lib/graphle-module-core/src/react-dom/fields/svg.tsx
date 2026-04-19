@@ -4,8 +4,7 @@ import {
   usePredicateField,
   type PredicateFieldViewCapability,
 } from "@dpeek/graphle-react";
-import { MonacoSourceEditor, sourcePreviewMonacoOptions } from "@dpeek/graphle-web-ui/monaco";
-import { SourcePreviewFieldEditor } from "@dpeek/graphle-web-ui/source-preview";
+import { SourceEditor, SourcePreviewFieldEditor } from "@dpeek/graphle-web-ui/source-preview";
 import { useDeferredValue, useEffect, useState } from "react";
 
 import {
@@ -63,17 +62,13 @@ export function SvgFieldEditor({ onMutationError, onMutationSuccess, predicate }
       kind="svg"
       preview={<SvgPreview content={deferredDraft} />}
       source={
-        <div aria-invalid={isInvalid || undefined}>
-          <MonacoSourceEditor
-            height={360}
-            language="xml"
-            onChange={applyDraft}
-            options={sourcePreviewMonacoOptions}
-            placeholder={placeholder}
-            sourceKind="svg"
-            value={draft}
-          />
-        </div>
+        <SourceEditor
+          aria-invalid={isInvalid || undefined}
+          onChange={applyDraft}
+          placeholder={placeholder}
+          sourceKind="svg"
+          value={draft}
+        />
       }
     />
   );

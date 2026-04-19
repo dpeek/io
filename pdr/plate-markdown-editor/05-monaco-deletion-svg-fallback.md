@@ -1,5 +1,5 @@
-Status: Proposed
-Last Updated: 2026-04-18
+Status: Implemented
+Last Updated: 2026-04-19
 
 # 05: Monaco deletion and SVG fallback
 

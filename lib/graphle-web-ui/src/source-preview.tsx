@@ -1,5 +1,5 @@
 import { cn } from "@dpeek/graphle-web-ui/utils";
-import { useState, type ReactNode } from "react";
+import { useState, type AriaAttributes, type ReactNode } from "react";
 
 const sourcePreviewSurfaceClassName = "border-input bg-background rounded-xl border shadow-sm";
 
@@ -8,6 +8,41 @@ export const sourcePreviewEditorFrameClassName = `${sourcePreviewSurfaceClassNam
 export const sourcePreviewTextareaClassName = `${sourcePreviewSurfaceClassName} text-foreground min-h-[22rem] w-full px-4 py-3 text-sm leading-6 outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30`;
 
 export type SourcePreviewMode = "source" | "preview";
+
+export function SourceEditor({
+  "aria-invalid": ariaInvalid,
+  onChange,
+  placeholder,
+  readOnly = false,
+  sourceKind,
+  value,
+}: {
+  "aria-invalid"?: AriaAttributes["aria-invalid"];
+  onChange?(nextValue: string): void;
+  placeholder?: string;
+  readOnly?: boolean;
+  sourceKind: string;
+  value: string;
+}) {
+  const isReadOnly = readOnly || onChange === undefined;
+  const sourceData = {
+    [`data-web-${sourceKind}-source`]: "textarea",
+  } as Record<`data-${string}`, string>;
+
+  return (
+    <textarea
+      aria-invalid={ariaInvalid}
+      className={sourcePreviewTextareaClassName}
+      data-web-field-kind="textarea"
+      {...sourceData}
+      onChange={onChange ? (event) => onChange(event.currentTarget.value) : undefined}
+      placeholder={placeholder}
+      readOnly={isReadOnly}
+      spellCheck={false}
+      value={value}
+    />
+  );
+}
 
 export function SourcePreviewFieldEditor({
   defaultMode = "source",

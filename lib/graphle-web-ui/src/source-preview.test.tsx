@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   EmptyPreview,
+  SourceEditor,
   SourcePreviewFieldEditor,
   sourcePreviewEditorFrameClassName,
   sourcePreviewPanelClassName,
@@ -10,6 +11,32 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 
 describe("SourcePreviewFieldEditor", () => {
+  it("renders a textarea-backed source editor with stable source attributes", () => {
+    const markup = renderToStaticMarkup(
+      <SourceEditor
+        aria-invalid
+        onChange={() => undefined}
+        placeholder="Paste SVG"
+        sourceKind="svg"
+        value={'<svg viewBox="0 0 24 24" />'}
+      />,
+    );
+
+    expect(markup).toContain('data-web-svg-source="textarea"');
+    expect(markup).toContain('data-web-field-kind="textarea"');
+    expect(markup).toContain('aria-invalid="true"');
+    expect(markup).toContain('placeholder="Paste SVG"');
+    expect(markup).toContain("&lt;svg viewBox=&quot;0 0 24 24&quot; /&gt;</textarea>");
+  });
+
+  it("supports non-graph source kinds", () => {
+    const markup = renderToStaticMarkup(
+      <SourceEditor onChange={() => undefined} sourceKind="script" value="console.log('ok');" />,
+    );
+
+    expect(markup).toContain('data-web-script-source="textarea"');
+  });
+
   it("renders source mode by default", () => {
     const markup = renderToStaticMarkup(
       <SourcePreviewFieldEditor
